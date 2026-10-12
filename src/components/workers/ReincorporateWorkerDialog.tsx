@@ -1,8 +1,6 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
-import { ensureContractDocumentGenerated } from "@/lib/contract-automation"
 import {
   Dialog,
   DialogContent,
@@ -50,75 +48,18 @@ import {
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"
+import { updateJobWorkContent } from "@/domains/resolutions"
 import {
-  ensureResolutionDocumentGenerated,
-  updateJobWorkContent,
-} from "@/domains/resolutions"
+  loadTransitionWorkspace,
+  reincorporateWorkerWithContract,
+  reincorporateWorkerWithResolution,
+  requiresResolution,
+  validateReincorporationInput,
+  type ContractTypeOption,
+  type StaffingPosition,
+  type WorkerIdentity,
+} from "@/domains/people"
 import { AlertTriangle, FileSignature, UserPlus } from "lucide-react"
-
-interface PositionRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  // Fase 11A.3: información laboral del puesto (solo lectura)
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: {
-    id: string
-    name: string
-    is_principal_specialist: boolean
-    area: { id: string; name: string } | null
-    salary_group: { id: string; salary_scale_id: string; sequence_number: number } | null
-  } | null
-}
-
-// Forma cruda devuelta por PostgREST: las relaciones embebidas pueden llegar
-// como arreglo o como objeto antes de normalizarse en el mapeo.
-interface PositionQueryJobRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  is_principal_specialist: boolean
-  area: { id: string; name: string }[] | null
-  salary_group:
-    | { id: string; salary_scale_id: string; sequence_number: number }
-    | { id: string; salary_scale_id: string; sequence_number: number }[]
-    | null
-}
-
-interface PositionQueryRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: PositionQueryJobRow | PositionQueryJobRow[] | null
-}
-
-interface ContractType {
-  id: string
-  name: string
-  code: string
-}
-
-interface WorkerIdentity {
-  fullName: string
-  identification: string
-}
 
 interface ReincorporateWorkerDialogProps {
   open: boolean
@@ -143,9 +84,9 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
   onSuccess,
 }) => {
   const queryClient = useQueryClient()
-  const [positions, setPositions] = React.useState<PositionRow[]>([])
+  const [positions, setPositions] = React.useState<StaffingPosition[]>([])
   const [occupancy, setOccupancy] = React.useState<Record<string, number>>({})
-  const [contractTypes, setContractTypes] = React.useState<ContractType[]>([])
+  const [contractTypes, setContractTypes] = React.useState<ContractTypeOption[]>([])
   const [applicableScaleId, setApplicableScaleId] = React.useState<string | null>(null)
   const [salaryValuesByGroup, setSalaryValuesByGroup] = React.useState<
     Record<string, SalaryValue | null>
@@ -186,103 +127,28 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
     setLoading(true)
     setLoadError(null)
     try {
-      const { data: posData, error: posError } = await supabase
-        .from("organization_positions")
-        .select(
-          `id, name, code, is_active, authorized_quantity,
-           work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
-           job:organization_jobs(
-             id, name, code, is_active, area_id, is_principal_specialist,
-             area:organization_areas(id, name),
-             salary_group:salary_groups(id, salary_scale_id, sequence_number)
-           )`
-        )
-        .eq("organization_entity_id", entityId)
-        .order("name")
-      if (posError) throw posError
-
-      const mapped: PositionRow[] = ((posData as PositionQueryRow[]) || []).map((p: PositionQueryRow) => {
-        const job = Array.isArray(p.job) ? p.job[0] ?? null : p.job
-        return {
-          ...p,
-          job: job
-            ? {
-                ...job,
-                area: job.area
-                  ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null }
-                  : null,
-                salary_group: Array.isArray(job.salary_group)
-                  ? job.salary_group[0] ?? null
-                  : job.salary_group,
-              }
-            : null,
-        }
-      })
-      setPositions(mapped)
-
-      // Fase 11A.3: horarios habituales de los puestos (solo lectura)
-      setSegmentsByPosition(await fetchEntityScheduleSegments(entityId))
-
-      const { data: workersData, error: workersError } = await supabase
-        .from("workers")
-        .select(
-          "employment_status, assignments:worker_position_assignments(position_id, is_current, end_date)"
-        )
-        .eq("organization_entity_id", entityId)
-        .eq("employment_status", "active")
-      if (workersError) throw workersError
-
-      const counts: Record<string, number> = {}
-      ;((workersData as {
-        assignments: { position_id: string; is_current: boolean; end_date: string | null }[] | null
-      }[]) || []).forEach((w) => {
-        ;(w.assignments || []).forEach((a) => {
-          if (a.is_current && !a.end_date) {
-            counts[a.position_id] = (counts[a.position_id] || 0) + 1
-          }
-        })
-      })
-      setOccupancy(counts)
-
-      const { data: ctData, error: ctError } = await supabase
-        .from("employment_contract_types")
-        .select("id, name, code")
-        .eq("is_active", true)
-        .order("name")
-      if (ctError) throw ctError
-      setContractTypes((ctData as ContractType[]) || [])
-
-      // Identidad del trabajador para el resumen contractual
-      const { data: workerRow, error: workerError } = await supabase
-        .from("workers")
-        .select("first_name, first_surname, second_surname, identification")
-        .eq("id", workerId)
-        .maybeSingle()
-      if (workerError) throw workerError
-      if (workerRow) {
-        const row = workerRow as { first_name: string; first_surname: string; second_surname: string | null; identification: string }
-        setWorker({
-          fullName: [row.first_name, row.first_surname, row.second_surname]
-            .filter(Boolean)
-            .join(" "),
-          identification: row.identification,
-        })
-      }
+      // Caso de uso (lectura): puestos con su estructura y la ocupación vigente de la
+      // entidad, tipos de contrato activos, permiso de los datos contractuales e
+      // identidad del trabajador para el resumen.
+      const [workspace, segments] = await Promise.all([
+        loadTransitionWorkspace(entityId, { workerId }),
+        fetchEntityScheduleSegments(entityId),
+      ])
+      setPositions(workspace.positions)
+      setOccupancy(workspace.occupancy.counts)
+      setContractTypes(workspace.contractTypes)
+      setWorker(workspace.worker)
+      setCanManageOrganization(workspace.canManageContractData)
+      setSegmentsByPosition(segments)
 
       // Fase 11A.5: catálogo global de formas de pago
       setPaymentMethods(await fetchPaymentMethods())
 
       setApplicableScaleId(await resolveApplicableScaleId(entityId))
-      const groupIds = mapped
+      const groupIds = workspace.positions
         .map((p) => p.job?.salary_group?.id)
         .filter((id): id is string => !!id)
       setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
-
-      const { data: canManageOrg } = await supabase.rpc("can_access_entity", {
-              target_entity_id: entityId,
-              permission_code: "contract_data.manage",
-            })
-            setCanManageOrganization(!!canManageOrg)
     } catch (err) {
       console.error("Error loading reincorporation data:", err)
       setLoadError("No se pudieron cargar los puestos disponibles.")
@@ -327,7 +193,7 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
   )
 
   /** §45: si el Cargo destino es Especialista Principal, el documento es la Resolución. */
-  const isPrincipalSpecialist = selected?.job?.is_principal_specialist === true
+  const isPrincipalSpecialist = requiresResolution(selected?.job)
 
   const selectedGroup = selected?.job?.salary_group || null
   const selectedSalary = salaryForGroup(applicableScaleId, selectedGroup, salaryValuesByGroup)
@@ -351,12 +217,29 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
   const handleSubmit = async () => {
     setError(null)
 
-    if (!positionId) {
-      setError("Selecciona un nuevo puesto.")
-      return
-    }
-    if (!reincorporationDate) {
-      setError("La fecha de reincorporación es obligatoria.")
+    // Reglas del dominio: puesto y fecha de reincorporación, vigencia del contrato y
+    // condiciones formalizadas (no aplican si el documento es una Resolución).
+    const invalid = validateReincorporationInput({
+      positionId,
+      reincorporationDate,
+      resolutionDocument: isPrincipalSpecialist,
+      contractTypeId,
+      signatureDate,
+      formalization: {
+        representativeAssignmentId,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        paymentScheduleText: paymentSchedule,
+        hasInvalidComponents: hasInvalidComponent(components),
+        blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
+      },
+      isDetermined,
+      contractStartDate,
+      contractEndDate,
+    })
+    if (invalid) {
+      setError(invalid)
       return
     }
 
@@ -377,48 +260,25 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
           }
         }
 
-        const { data: reincData, error: rpcError } = await supabase.rpc("reincorporate_worker", {
-          p_worker_id: workerId,
-          p_new_position_id: positionId,
-          p_reincorporation_date: reincorporationDate,
-          p_contract_type_id: null,
-          p_contract_start_date: null,
-          p_contract_end_date: null,
-          p_notes: null,
-          p_representative_assignment_id: resolutionValues.representativeAssignmentId,
-          p_signature_date: null,
-          p_signature_place: null,
-          p_payment_method_id: null,
-          p_compensation_components: null,
-          p_payment_schedule_text: null,
-          p_resolution_date: resolutionValues.resolutionDate,
+        // Caso de uso: reactiva al trabajador (vuelve a Trabajadores) y genera la
+        // Resolución sustitutiva del contrato.
+        setProcessStage("Generando Resolución…")
+        const outcome = await reincorporateWorkerWithResolution({
+          workerId,
+          positionId,
+          reincorporationDate,
+          resolution: {
+            representativeAssignmentId: resolutionValues.representativeAssignmentId,
+            resolutionDate: resolutionValues.resolutionDate,
+          },
         })
-        if (rpcError) throw rpcError
-
-        const resolutionId = (reincData as { resolution_id?: string } | null)?.resolution_id
-        let documentWarning: string | null = null
-        if (resolutionId) {
-          setProcessStage("Generando Resolución…")
-          try {
-            const doc = await ensureResolutionDocumentGenerated(resolutionId)
-            if (!doc.skipped && !doc.generated) {
-              documentWarning =
-                doc.result?.error || "No se pudo generar la Resolución automáticamente."
-            }
-          } catch (genErr) {
-            documentWarning =
-              genErr instanceof Error
-                ? genErr.message
-                : "No se pudo generar la Resolución automáticamente."
-          }
-        }
 
         invalidateContractAlertData(queryClient)
         setProcessStage(null)
 
-        if (documentWarning) {
+        if (outcome.documentWarning) {
           showError(
-            `La reincorporación se realizó, pero la Resolución no se pudo generar: ${documentWarning}. Puede regenerarla desde la pestaña Documentos del trabajador.`
+            `La reincorporación se realizó, pero la Resolución no se pudo generar: ${outcome.documentWarning}. Puede regenerarla desde la pestaña Documentos del trabajador.`
           )
         } else {
           showSuccess(
@@ -439,92 +299,30 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
       return
     }
 
-    if (!contractTypeId) {
-      setError("Selecciona un tipo de contrato.")
-      return
-    }
-    if (!signatureDate) {
-      setError("La fecha de firma del contrato es obligatoria.")
-      return
-    }
-    if (!signaturePlace.trim()) {
-      setError("El lugar de firma es obligatorio.")
-      return
-    }
-    if (!paymentMethodId) {
-      setError("Selecciona la forma de pago.")
-      return
-    }
-    if (hasInvalidComponent(components)) {
-      setError(
-        "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)."
-      )
-      return
-    }
-    if (formalizationBlocked) {
-      setError(
-        `No se puede completar la formalización del contrato. Datos pendientes: ${(
-          pending || EMPTY_FORMALIZATION_PENDING
-        ).blocking.join(" · ")}`
-      )
-      return
-    }
-    if (isDetermined && !contractEndDate) {
-      setError("El contrato por tiempo determinado requiere una fecha de fin.")
-      return
-    }
-    if (contractEndDate && contractEndDate <= effectiveContractStart) {
-      setError("La fecha de fin del contrato debe ser posterior a su inicio.")
-      return
-    }
-    if (!representativeAssignmentId) {
-      setError(
-        "No hay representantes configurados para la fecha de firma seleccionada."
-      )
-      return
-    }
-
     setSubmitting(true)
     try {
-      const { data: reincData, error: rpcError } = await supabase.rpc("reincorporate_worker", {
-        p_worker_id: workerId,
-        p_new_position_id: positionId,
-        p_reincorporation_date: reincorporationDate,
-        p_contract_type_id: contractTypeId,
-        p_contract_start_date: effectiveContractStart,
-        p_contract_end_date: isDetermined ? contractEndDate || null : null,
-        p_notes: null,
-        p_representative_assignment_id: representativeAssignmentId,
-        p_signature_date: signatureDate,
-        p_signature_place: signaturePlace.trim(),
-        p_payment_method_id: paymentMethodId,
-        p_compensation_components: buildComponentsPayload(components),
-        p_payment_schedule_text: paymentSchedule.trim() || null,
+      // Caso de uso: nuevo período laboral, nuevo puesto y contrato con sus condiciones;
+      // el expediente y los contratos anteriores del trabajador se conservan.
+      const outcome = await reincorporateWorkerWithContract({
+        workerId,
+        positionId,
+        reincorporationDate,
+        contractTypeId,
+        contractStartDate,
+        contractEndDate,
+        isDetermined,
+        representativeAssignmentId,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        paymentScheduleText: paymentSchedule,
+        compensationComponents: buildComponentsPayload(components),
       })
-      if (rpcError) throw rpcError
-
-      // El contrato de la reincorporación produce su documento automáticamente (§13/§14).
-      const newContractId = (reincData as { contract_id?: string } | null)?.contract_id
-      let documentWarning: string | null = null
-      if (newContractId) {
-        try {
-          const doc = await ensureContractDocumentGenerated(newContractId)
-          if (!doc.skipped && !doc.generated) {
-            documentWarning =
-              doc.result?.error || "No se pudo generar el documento contractual automáticamente."
-          }
-        } catch (genErr) {
-          documentWarning =
-            genErr instanceof Error
-              ? genErr.message
-              : "No se pudo generar el documento contractual automáticamente."
-        }
-      }
 
       invalidateContractAlertData(queryClient)
       showSuccess(
-        documentWarning
-          ? `Reincorporación completada, pero no se pudo generar el documento contractual: ${documentWarning}`
+        outcome.documentWarning
+          ? `Reincorporación completada, pero no se pudo generar el documento contractual: ${outcome.documentWarning}`
           : "Reincorporación completada correctamente. El contrato y su documento fueron generados."
       )
       onOpenChange(false)

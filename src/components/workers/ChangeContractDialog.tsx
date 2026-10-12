@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import {
   Dialog,
   DialogContent,
@@ -14,7 +13,12 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
 import { showSuccess, showError } from "@/utils/toast"
-import { ensureContractDocumentGenerated } from "@/lib/contract-automation"
+import {
+  changeWorkerContract,
+  loadContractChangeWorkspace,
+  validateContractChangeInput,
+  type ContractTypeOption,
+} from "@/domains/people"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/domains/representatives"
@@ -37,12 +41,6 @@ import {
   type PaymentMethodOption,
 } from "@/lib/contract-conditions"
 import { FileSignature } from "lucide-react"
-
-interface ContractType {
-  id: string
-  name: string
-  code: string
-}
 
 export interface CurrentContractInfo {
   id: string
@@ -98,7 +96,7 @@ const ChangeContractDialog: React.FC<ChangeContractDialogProps> = ({
   baseSalaryCurrency = null,
   onSuccess,
 }) => {
-  const [contractTypes, setContractTypes] = React.useState<ContractType[]>([])
+  const [contractTypes, setContractTypes] = React.useState<ContractTypeOption[]>([])
   const [loading, setLoading] = React.useState(false)
   const [newContractTypeId, setNewContractTypeId] = React.useState("")
   const [effectiveDate, setEffectiveDate] = React.useState("")
@@ -140,27 +138,18 @@ const ChangeContractDialog: React.FC<ChangeContractDialogProps> = ({
     setError(null)
     setLoading(true)
 
-    supabase
-      .from("employment_contract_types")
-      .select("id, name, code")
-      .eq("is_active", true)
-      .order("name")
-      .then(({ data, error: err }) => {
-        if (err) {
-          console.error("Error loading contract types:", err)
-          setError("No se pudieron cargar los tipos de contrato.")
-        } else {
-          setContractTypes((data as ContractType[]) || [])
-        }
-        setLoading(false)
+    // Caso de uso (lectura): catálogo de tipos de contrato activos y permiso de los
+    // datos contractuales de la entidad.
+    loadContractChangeWorkspace(entityId)
+      .then((workspace) => {
+        setContractTypes(workspace.contractTypes)
+        setCanManageOrganization(workspace.canManageContractData)
       })
-
-    supabase
-          .rpc("can_access_entity", {
-            target_entity_id: entityId,
-            permission_code: "contract_data.manage",
-          })
-          .then(({ data }) => setCanManageOrganization(!!data))
+      .catch((err) => {
+        console.error("Error loading contract types:", err)
+        setError("No se pudieron cargar los tipos de contrato.")
+      })
+      .finally(() => setLoading(false))
 
     // Fase 11A.5: catálogo de formas de pago + condiciones del contrato vigente
     // precargadas como borrador revisable (no se heredan sin mostrar).
@@ -204,97 +193,54 @@ const ChangeContractDialog: React.FC<ChangeContractDialogProps> = ({
   const handleSubmit = async () => {
     setError(null)
 
-    if (!newContractTypeId) {
-      setError("Selecciona el nuevo tipo de contrato.")
-      return
-    }
-    if (!effectiveDate) {
-      setError("La fecha efectiva es obligatoria.")
-      return
-    }
-    if (current.startDate && effectiveDate <= current.startDate) {
-      setError("La fecha efectiva debe ser posterior al inicio del contrato vigente.")
-      return
-    }
-    if (isDetermined && !newEndDate) {
-      setError("El contrato por tiempo determinado requiere una fecha de finalización.")
-      return
-    }
-    if (newEndDate && newEndDate <= effectiveDate) {
-      setError("La fecha de finalización debe ser posterior a la fecha efectiva.")
-      return
-    }
-    if (!signatureDate) {
-      setError("La fecha de firma del contrato es obligatoria.")
-      return
-    }
-    if (!signaturePlace.trim()) {
-      setError("El lugar de firma es obligatorio.")
-      return
-    }
-    if (!paymentMethodId) {
-      setError("Selecciona la forma de pago.")
-      return
-    }
-    if (hasInvalidComponent(components)) {
-      setError(
-        "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)."
-      )
-      return
-    }
-    if (formalizationBlocked) {
-      setError(
-        `No se puede completar la formalización del contrato. Datos pendientes: ${(
-          pending || EMPTY_FORMALIZATION_PENDING
-        ).blocking.join(" · ")}`
-      )
-      return
-    }
-    if (!representativeAssignmentId) {
-      setError("No hay representantes configurados para la fecha de firma seleccionada.")
+    // Reglas del dominio: tipo nuevo, fecha efectiva posterior al contrato vigente,
+    // vigencia del contrato determinado y condiciones formalizadas.
+    const invalid = validateContractChangeInput({
+      newContractTypeId,
+      effectiveDate,
+      currentContractStartDate: current.startDate || null,
+      isDetermined,
+      newEndDate,
+      signatureDate,
+      formalization: {
+        representativeAssignmentId,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        paymentScheduleText: paymentSchedule,
+        hasInvalidComponents: hasInvalidComponent(components),
+        blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
+      },
+    })
+    if (invalid) {
+      setError(invalid)
       return
     }
 
     setSubmitting(true)
     try {
-      const { data: changeData, error: rpcError } = await supabase.rpc("change_worker_contract", {
-        p_worker_id: workerId,
-        p_new_contract_type_id: newContractTypeId,
-        p_effective_date: effectiveDate,
-        p_new_end_date: isDetermined ? newEndDate : null,
-        p_notes: notes.trim() || null,
-        p_representative_assignment_id: representativeAssignmentId,
-        p_signature_date: signatureDate,
-        p_signature_place: signaturePlace.trim(),
-        p_payment_method_id: paymentMethodId,
-        p_compensation_components: buildComponentsPayload(components),
-        p_payment_schedule_text: paymentSchedule.trim() || null,
+      // Caso de uso: cierra el contrato vigente, crea el nuevo con sus condiciones y
+      // genera su documento (devolviendo aviso si no se pudo generar).
+      const outcome = await changeWorkerContract({
+        workerId,
+        newContractTypeId,
+        effectiveDate,
+        newEndDate,
+        isDetermined,
+        notes,
+        representativeAssignmentId,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        paymentScheduleText: paymentSchedule,
+        compensationComponents: buildComponentsPayload(components),
       })
-      if (rpcError) throw rpcError
-
-      // El nuevo contrato formalizado produce su documento automáticamente (§13/§14).
-      const newContractId = (changeData as { new_contract_id?: string } | null)?.new_contract_id
-      let documentWarning: string | null = null
-      if (newContractId) {
-        try {
-          const doc = await ensureContractDocumentGenerated(newContractId)
-          if (!doc.skipped && !doc.generated) {
-            documentWarning =
-              doc.result?.error || "No se pudo generar el documento contractual automáticamente."
-          }
-        } catch (genErr) {
-          documentWarning =
-            genErr instanceof Error
-              ? genErr.message
-              : "No se pudo generar el documento contractual automáticamente."
-        }
-      }
 
       // El contrato vigente cambió: recalcular alertas de vencimiento y resumen.
       invalidateContractAlertData(queryClient)
       showSuccess(
-        documentWarning
-          ? `Cambio de contrato realizado, pero no se pudo generar su documento: ${documentWarning}`
+        outcome.documentWarning
+          ? `Cambio de contrato realizado, pero no se pudo generar su documento: ${outcome.documentWarning}`
           : "Cambio de contrato realizado correctamente. El contrato y su documento fueron generados."
       )
       onOpenChange(false)

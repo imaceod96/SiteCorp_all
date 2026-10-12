@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +15,12 @@ import { Label } from "@/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { showSuccess, showError } from "@/utils/toast"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
-import { ensurePayrollMovementDocumentGenerated } from "@/lib/payroll-movements"
+import {
+  loadSeparationReasons,
+  registerWorkerSeparation,
+  validateSeparationInput,
+  type SeparationReason,
+} from "@/domains/people"
 import { formatSalary } from "@/domains/organization-structure"
 import type { WorkerCurrentSituation } from "@/components/workers/ChangePositionDialog"
 import { AlertTriangle, UserMinus } from "lucide-react"
@@ -27,11 +31,6 @@ interface SeparateWorkerDialogProps {
   workerId: string
   current: WorkerCurrentSituation
   onSuccess: () => void
-}
-
-interface SeparationReason {
-  id: string
-  name: string
 }
 
 const groupLabel = (sequence: number | null | undefined) =>
@@ -60,54 +59,38 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
     setNotes("")
     setError(null)
     setLoading(true)
-    supabase
-      .from("worker_separation_reasons")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("sort_order")
-      .then(({ data, error: err }) => {
-        if (err) {
-          console.error("Error loading separation reasons:", err)
-          setError("No se pudieron cargar los motivos de baja.")
-        } else {
-          setReasons((data as SeparationReason[]) || [])
-        }
-        setLoading(false)
+    loadSeparationReasons()
+      .then((data) => setReasons(data))
+      .catch((err) => {
+        console.error("Error loading separation reasons:", err)
+        setError("No se pudieron cargar los motivos de baja.")
       })
+      .finally(() => setLoading(false))
   }, [open])
 
   const handleSubmit = async () => {
     setError(null)
 
-    if (!effectiveDate) {
-      setError("La fecha efectiva de baja es obligatoria.")
-      return
-    }
-    if (current.startDate && effectiveDate < current.startDate) {
-      setError("La fecha de baja no puede ser anterior al inicio del puesto actual.")
-      return
-    }
-    if (!reasonId) {
-      setError("Selecciona un motivo de baja.")
+    // Regla del dominio: fecha efectiva, motivo y no anterior al inicio del puesto actual.
+    const invalid = validateSeparationInput({
+      effectiveDate,
+      currentPositionStartDate: current.startDate,
+      separationReasonId: reasonId,
+    })
+    if (invalid) {
+      setError(invalid)
       return
     }
 
     setSubmitting(true)
     try {
-      const { error: rpcError } = await supabase.rpc("register_worker_separation", {
-        p_worker_id: workerId,
-        p_effective_date: effectiveDate,
-        p_separation_reason_id: reasonId,
-        p_notes: notes.trim() || null,
+      // Caso de uso: registra la baja (pasa a Reingresos) y su movimiento de nómina.
+      await registerWorkerSeparation({
+        workerId,
+        effectiveDate,
+        separationReasonId: reasonId,
+        notes,
       })
-      if (rpcError) throw rpcError
-
-      // Movimiento de Nómina (Baja) → documento en el expediente histórico del trabajador.
-      try {
-        await ensurePayrollMovementDocumentGenerated(workerId, "BAJA", effectiveDate)
-      } catch {
-        /* el movimiento ya quedó registrado; el documento puede regenerarse */
-      }
 
       // La baja cierra el contrato vigente: recalcular alertas de vencimiento.
       invalidateContractAlertData(queryClient)

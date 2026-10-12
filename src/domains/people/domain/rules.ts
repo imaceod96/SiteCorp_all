@@ -3,8 +3,10 @@
  *
  * Únicamente lógica independiente de React y de Supabase: la clasificación
  * excluyente de las tres vistas operativas, la regla de ficha completa, la exigencia
- * de especialidad por nivel educacional, la conversión de la fecha de nacimiento y las
- * precondiciones del alta de una persona como candidata.
+ * de especialidad por nivel educacional, la conversión de la fecha de nacimiento, las
+ * precondiciones del alta de una persona como candidata, el efecto esperado de cada
+ * transición laboral y las validaciones previas de contratación, baja, reincorporación,
+ * reubicación y cambio de contrato (con sus mensajes, que son los que ve el usuario).
  *
  * CLASIFICACIÓN — una persona solo puede estar en UNA vista:
  *
@@ -16,8 +18,9 @@
  *
  *   · Trabajador → fila de trabajador con `employment_status = 'active'`.
  *     `register_worker_separation` lo pasa a 'inactive' al dar la baja y
- *     `reincorporate_worker` lo devuelve a 'active'. Reubicar (`change_position`) o
- *     cambiar de contrato (`change_worker_contract`) NO tocan ese estado.
+ *     `hire_candidate` / `reincorporate_worker` lo devuelven a 'active'. Reubicar
+ *     (`change_worker_position`) o cambiar de contrato (`change_worker_contract`)
+ *     NO tocan ese estado.
  *
  *   · Reingreso  → fila de trabajador con la relación finalizada y NINGUNA otra
  *     relación vigente en el cliente.
@@ -40,11 +43,15 @@
 import { EMPLOYMENT_STATUS } from "./entities"
 import type {
   CandidateRegistrationInput,
+  ContractFormalizationInput,
   EmploymentIndex,
   EmploymentRecord,
   PersonCandidate,
   PersonDirectoryWorker,
   PersonIdentificationStatus,
+  ReadinessResult,
+  TransitionEffect,
+  WorkerTransitionKind,
 } from "./entities"
 
 /** Niveles educacionales que exigen especialidad. */
@@ -278,5 +285,431 @@ export function personRegistrationConflict(
   if ((status.candidate_count ?? 0) > 0) {
     return "Ya existe una persona con este número de identificación. Solo puede actualizar su información."
   }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Efecto esperado de cada transición laboral
+// ---------------------------------------------------------------------------
+
+/**
+ * Qué debe conseguir cada operación, en términos de la clasificación. Es la tabla que
+ * las pruebas de los cinco flujos comprueban y la que impide que una operación deje a la
+ * persona en dos vistas a la vez.
+ *
+ * Notas de negocio:
+ *   · Contratar a una persona que YA fue trabajador en el cliente es una
+ *     reincorporación: la RPC es la misma (`hire_candidate` resuelve la persona por su
+ *     `worker_id` y abre un período nuevo), por eso `hire` y `reincorporation` comparten
+ *     efecto: la persona vuelve a Trabajadores y NO se duplica su identidad.
+ *   · La baja NO elimina nada: cierra la asignación y el contrato vigentes y deja la
+ *     persona en Reingresos con todo su historial.
+ *   · Reubicar y cambiar de contrato son movimientos DENTRO de Trabajadores: la persona
+ *     no cambia de vista y su historial (asignaciones y contratos anteriores) se conserva.
+ */
+export const TRANSITION_EFFECTS: Record<WorkerTransitionKind, TransitionEffect> = {
+  hire: {
+    kind: "hire",
+    view: "workers",
+    assignment: "created",
+    contract: "created",
+    preservesHistory: true,
+  },
+  separation: {
+    kind: "separation",
+    view: "reentries",
+    assignment: "closed",
+    contract: "closed",
+    preservesHistory: true,
+  },
+  reincorporation: {
+    kind: "reincorporation",
+    view: "workers",
+    assignment: "created",
+    contract: "created",
+    preservesHistory: true,
+  },
+  position_change: {
+    kind: "position_change",
+    view: "workers",
+    assignment: "replaced",
+    contract: "kept",
+    preservesHistory: true,
+  },
+  contract_change: {
+    kind: "contract_change",
+    view: "workers",
+    assignment: "kept",
+    contract: "replaced",
+    preservesHistory: true,
+  },
+}
+
+export const transitionEffect = (kind: WorkerTransitionKind): TransitionEffect =>
+  TRANSITION_EFFECTS[kind]
+
+/**
+ * Movimiento de nómina que documenta cada transición en el expediente del trabajador.
+ * `null` cuando la operación no registra movimiento de nómina (reincorporación y cambio
+ * de contrato se documentan con el contrato o la Resolución).
+ */
+export const TRANSITION_MOVEMENT_DOCUMENT: Record<WorkerTransitionKind, string | null> = {
+  hire: "ALTA",
+  separation: "BAJA",
+  reincorporation: null,
+  position_change: "REUBICACION",
+  contract_change: null,
+}
+
+// ---------------------------------------------------------------------------
+// Documento sustitutivo del contrato (§44/§45)
+// ---------------------------------------------------------------------------
+
+interface JobDocumentRole {
+  is_cuadro?: boolean
+  is_principal_specialist?: boolean
+}
+
+/** El Cargo destino se documenta con una RESOLUCIÓN, nunca con un contrato. */
+export const requiresResolution = (job: JobDocumentRole | null | undefined): boolean =>
+  job?.is_principal_specialist === true
+
+/**
+ * Cargo Cuadro o Especialista Principal: el alta no genera contrato ni documento
+ * contractual alguno; la trayectoria del trabajador concluye ahí.
+ */
+export const isSpecialDocumentRole = (job: JobDocumentRole | null | undefined): boolean =>
+  job?.is_cuadro === true || job?.is_principal_specialist === true
+
+// ---------------------------------------------------------------------------
+// Preparación contractual: etiquetas y mensaje humano
+// ---------------------------------------------------------------------------
+
+/** Mapea los títulos técnicos de sección a las etiquetas de la lista de verificación. */
+export const READINESS_SECTION_LABELS: Record<string, string> = {
+  Entidad: "Entidad",
+  Representante: "Representante",
+  Candidato: "Datos personales",
+  Trabajador: "Datos personales",
+  Cargo: "Cargo",
+  Puesto: "Puesto y jornada",
+  Contrato: "Condiciones contractuales",
+}
+
+/** Orden en el que se presentan las secciones de la preparación contractual. */
+export const READINESS_SECTION_ORDER = [
+  "Candidato",
+  "Trabajador",
+  "Entidad",
+  "Representante",
+  "Cargo",
+  "Puesto",
+  "Contrato",
+]
+
+/**
+ * Construye el mensaje humano (§38) a partir de los datos faltantes que devuelve el
+ * validador del backend: agrupa por sección, sin repetir conceptos, en el orden
+ * canónico de secciones.
+ */
+export function formatReadinessMessage(
+  readiness: ReadinessResult | null | undefined,
+  title = "No se puede realizar la contratación."
+): string {
+  const missing = readiness?.missing
+  if (!missing || missing.length === 0) return ""
+
+  const grouped = new Map<string, string[]>()
+  for (const item of missing) {
+    const key = READINESS_SECTION_LABELS[item.section] || item.section
+    const list = grouped.get(key) || []
+    if (!list.includes(item.label)) list.push(item.label)
+    grouped.set(key, list)
+  }
+
+  const ordered = [...grouped.keys()].sort((a, b) => {
+    const ai = READINESS_SECTION_ORDER.findIndex(
+      (s) => (READINESS_SECTION_LABELS[s] || s) === a
+    )
+    const bi = READINESS_SECTION_ORDER.findIndex(
+      (s) => (READINESS_SECTION_LABELS[s] || s) === b
+    )
+    return ai - bi
+  })
+
+  let out = `${title}\n\nFalta completar:`
+  for (const section of ordered) {
+    out += `\n\n${section}`
+    for (const label of grouped.get(section) || []) {
+      out += `\n• ${label}`
+    }
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Validaciones previas de las transiciones
+//
+// Cada flujo conserva EXACTAMENTE el orden y los mensajes que ya mostraba su diálogo:
+// la regla vive aquí una sola vez y la aplican tanto el diálogo (para no lanzar la
+// operación) como el caso de uso (autoridad final).
+// ---------------------------------------------------------------------------
+
+const isBlank = (value: string | null | undefined): boolean => !value || !value.trim()
+
+export const MISSING_SIGNATURE_PLACE_MESSAGE = "El lugar de firma es obligatorio."
+export const MISSING_PAYMENT_METHOD_MESSAGE = "Selecciona la forma de pago."
+export const INVALID_COMPONENTS_MESSAGE =
+  "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)."
+export const MISSING_REPRESENTATIVE_MESSAGE =
+  "No hay representantes configurados para la fecha de firma seleccionada."
+export const MISSING_HIRING_REPRESENTATIVE_MESSAGE =
+  "No existe ningún representante autorizado configurado para la fecha del contrato. Configure los representantes de la entidad para continuar."
+
+/** Lugar de firma del contrato o del anexo. */
+export const validateSignaturePlace = (value: string): string | null =>
+  isBlank(value) ? MISSING_SIGNATURE_PLACE_MESSAGE : null
+
+/** Forma de pago (catálogo global A tiempo / A rendimiento). */
+export const validatePaymentMethod = (paymentMethodId: string): string | null =>
+  !paymentMethodId ? MISSING_PAYMENT_METHOD_MESSAGE : null
+
+/** Conceptos retributivos: descripción e importe (>= 0) en cada uno. */
+export const validateCompensationComponents = (hasInvalidComponents: boolean): string | null =>
+  hasInvalidComponents ? INVALID_COMPONENTS_MESSAGE : null
+
+/** Datos bloqueantes de la formalización (los calcula el backend). */
+export const validateFormalizationPending = (blocking: string[]): string | null =>
+  blocking.length > 0
+    ? `No se puede completar la formalización del contrato. Datos pendientes: ${blocking.join(" · ")}`
+    : null
+
+/** Representante que suscribe, autorizado en la fecha de firma. */
+export const validateRepresentative = (
+  assignmentId: string | null,
+  message: string = MISSING_REPRESENTATIVE_MESSAGE
+): string | null => (!assignmentId ? message : null)
+
+/** Vigencia del contrato: fecha de fin obligatoria para el tiempo determinado y posterior al inicio. */
+export function validateContractEndDate(input: {
+  isDetermined: boolean
+  endDate: string
+  startDate: string
+  requiredMessage: string
+  orderMessage: string
+}): string | null {
+  if (input.isDetermined && !input.endDate) return input.requiredMessage
+  if (input.endDate && input.endDate <= input.startDate) return input.orderMessage
+  return null
+}
+
+/** Validaciones comunes del bloque de condiciones formalizadas del contrato. */
+function validateFormalizationBlock(
+  formalization: ContractFormalizationInput
+): string | null {
+  return (
+    validateSignaturePlace(formalization.signaturePlace) ||
+    validatePaymentMethod(formalization.paymentMethodId) ||
+    validateCompensationComponents(formalization.hasInvalidComponents) ||
+    validateFormalizationPending(formalization.blocking)
+  )
+}
+
+// --- Contratación (alta y reincorporación de persona que ya fue trabajador) ---
+
+export interface HireValidationInput {
+  hasCandidate: boolean
+  positionId: string
+  hireDate: string
+  /** Cargo Cuadro o Especialista Principal: no genera contrato ni documento contractual. */
+  specialDocumentRole: boolean
+  contractTypeId: string
+  signatureDate: string
+  formalization: ContractFormalizationInput
+  /** Preparación contractual evaluada por el backend. */
+  readiness: ReadinessResult | null
+  /** Mensaje de plantilla documental ausente, si el cargo exige contrato. */
+  templateBlockedMessage: string | null
+  isDetermined: boolean
+  contractStartDate: string
+  contractEndDate: string
+}
+
+export function validateHireInput(input: HireValidationInput): string | null {
+  if (!input.hasCandidate) return "Selecciona la persona a contratar."
+  if (!input.positionId) return "Selecciona un puesto."
+  if (!input.hireDate) return "La fecha de incorporación es obligatoria."
+
+  if (!input.specialDocumentRole) {
+    if (!input.contractTypeId) return "Selecciona un tipo de contrato."
+    if (!input.signatureDate) return "La fecha de firma del contrato es obligatoria."
+  }
+
+  const formalization = validateFormalizationBlock(input.formalization)
+  if (formalization) return formalization
+
+  const representative = validateRepresentative(
+    input.formalization.representativeAssignmentId,
+    MISSING_HIRING_REPRESENTATIVE_MESSAGE
+  )
+  if (representative) return representative
+
+  if (input.readiness && !input.readiness.ready) return formatReadinessMessage(input.readiness)
+
+  if (!input.specialDocumentRole && input.templateBlockedMessage) {
+    return input.templateBlockedMessage
+  }
+
+  return validateContractEndDate({
+    isDetermined: input.isDetermined,
+    endDate: input.contractEndDate,
+    startDate: input.contractStartDate || input.hireDate,
+    requiredMessage: "El contrato por tiempo determinado requiere una fecha final.",
+    orderMessage: "La fecha final del contrato debe ser posterior a su inicio.",
+  })
+}
+
+// --- Reincorporación directa de un trabajador inactivo ---
+
+export interface ReincorporationValidationInput {
+  positionId: string
+  reincorporationDate: string
+  /**
+   * El Cargo destino es Especialista Principal: el documento es una Resolución y las
+   * condiciones del contrato NO aplican (las valida el formulario de Resolución).
+   */
+  resolutionDocument: boolean
+  contractTypeId: string
+  signatureDate: string
+  formalization: ContractFormalizationInput
+  isDetermined: boolean
+  contractStartDate: string
+  contractEndDate: string
+}
+
+export function validateReincorporationInput(
+  input: ReincorporationValidationInput
+): string | null {
+  if (!input.positionId) return "Selecciona un nuevo puesto."
+  if (!input.reincorporationDate) return "La fecha de reincorporación es obligatoria."
+  if (input.resolutionDocument) return null
+
+  if (!input.contractTypeId) return "Selecciona un tipo de contrato."
+  if (!input.signatureDate) return "La fecha de firma del contrato es obligatoria."
+
+  const formalization = validateFormalizationBlock(input.formalization)
+  if (formalization) return formalization
+
+  const endDate = validateContractEndDate({
+    isDetermined: input.isDetermined,
+    endDate: input.contractEndDate,
+    startDate: input.contractStartDate || input.reincorporationDate,
+    requiredMessage: "El contrato por tiempo determinado requiere una fecha de fin.",
+    orderMessage: "La fecha de fin del contrato debe ser posterior a su inicio.",
+  })
+  if (endDate) return endDate
+
+  return validateRepresentative(input.formalization.representativeAssignmentId)
+}
+
+// --- Baja del trabajador ---
+
+export interface SeparationValidationInput {
+  effectiveDate: string
+  currentPositionStartDate: string | null
+  separationReasonId: string
+}
+
+export function validateSeparationInput(input: SeparationValidationInput): string | null {
+  if (!input.effectiveDate) return "La fecha efectiva de baja es obligatoria."
+  if (input.currentPositionStartDate && input.effectiveDate < input.currentPositionStartDate) {
+    return "La fecha de baja no puede ser anterior al inicio del puesto actual."
+  }
+  if (!input.separationReasonId) return "Selecciona un motivo de baja."
+  return null
+}
+
+// --- Cambio de contrato ---
+
+export interface ContractChangeValidationInput {
+  newContractTypeId: string
+  effectiveDate: string
+  currentContractStartDate: string | null
+  isDetermined: boolean
+  newEndDate: string
+  signatureDate: string
+  formalization: ContractFormalizationInput
+}
+
+export function validateContractChangeInput(
+  input: ContractChangeValidationInput
+): string | null {
+  if (!input.newContractTypeId) return "Selecciona el nuevo tipo de contrato."
+  if (!input.effectiveDate) return "La fecha efectiva es obligatoria."
+  if (input.currentContractStartDate && input.effectiveDate <= input.currentContractStartDate) {
+    return "La fecha efectiva debe ser posterior al inicio del contrato vigente."
+  }
+
+  const endDate = validateContractEndDate({
+    isDetermined: input.isDetermined,
+    endDate: input.newEndDate,
+    startDate: input.effectiveDate,
+    requiredMessage: "El contrato por tiempo determinado requiere una fecha de finalización.",
+    orderMessage: "La fecha de finalización debe ser posterior a la fecha efectiva.",
+  })
+  if (endDate) return endDate
+
+  if (!input.signatureDate) return "La fecha de firma del contrato es obligatoria."
+
+  const formalization = validateFormalizationBlock(input.formalization)
+  if (formalization) return formalization
+
+  return validateRepresentative(input.formalization.representativeAssignmentId)
+}
+
+// --- Reubicación (cambio de puesto) ---
+
+export interface PositionChangeValidationInput {
+  newPositionId: string
+  effectiveDate: string
+  currentPositionStartDate: string | null
+  addendum: {
+    /** El cambio genera anexo al contrato vigente. */
+    create: boolean
+    /** El anexo se formaliza en esta misma operación. */
+    formalize: boolean
+    /** Las diferencias contractuales todavía se están calculando. */
+    previewLoading: boolean
+    signatureDate: string
+    signaturePlace: string
+    representativeAssignmentId: string | null
+    /** Plantilla documental del anexo ausente o ambigua. */
+    templateBlockedMessage: string | null
+  }
+}
+
+export function validatePositionChangeInput(
+  input: PositionChangeValidationInput
+): string | null {
+  if (!input.newPositionId) return "Selecciona un nuevo puesto."
+  if (!input.effectiveDate) return "La fecha efectiva es obligatoria."
+  if (input.currentPositionStartDate && input.effectiveDate <= input.currentPositionStartDate) {
+    return "La fecha efectiva debe ser posterior al inicio del puesto actual."
+  }
+  if (input.addendum.previewLoading) {
+    return "Espere a que se calculen las diferencias contractuales."
+  }
+  if (!input.addendum.create || !input.addendum.formalize) return null
+
+  if (!input.addendum.signatureDate) {
+    return "La fecha de firma es obligatoria para formalizar el anexo."
+  }
+  if (isBlank(input.addendum.signaturePlace)) {
+    return "El lugar de firma es obligatorio para formalizar el anexo."
+  }
+  if (!input.addendum.representativeAssignmentId) {
+    return "Seleccione el representante vigente en la fecha de firma del anexo."
+  }
+  if (input.addendum.templateBlockedMessage) return input.addendum.templateBlockedMessage
   return null
 }

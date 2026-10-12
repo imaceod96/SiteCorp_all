@@ -194,3 +194,357 @@ export interface CandidateRegistrationInput {
   criminal_record_check_file: File | null
   disciplinary_document: File | null
 }
+
+/* ------------------------------------------------------------------------- */
+/* Estructura de plantilla (proyección de lectura para los flujos de personal) */
+/* ------------------------------------------------------------------------- */
+
+export interface SalaryGroupRef {
+  id: string
+  salary_scale_id: string
+  sequence_number: number
+}
+
+export interface PositionJobRef {
+  id: string
+  name: string
+  is_cuadro?: boolean
+  is_principal_specialist?: boolean
+  area: { id: string; name: string } | null
+  salary_group: SalaryGroupRef | null
+}
+
+/**
+ * Puesto con su estructura (cargo, área y grupo salarial) tal y como lo necesitan la
+ * contratación y las transiciones. Es una proyección de lectura: la autoridad sobre la
+ * plantilla sigue siendo la del dominio de estructura organizativa.
+ */
+export interface StaffingPosition {
+  id: string
+  name: string
+  code: string | null
+  is_active: boolean
+  authorized_quantity: number
+  work_location: string | null
+  daily_hours: number | null
+  weekly_hours: number | null
+  monthly_hours: number | null
+  break_minutes: number | null
+  schedule_notes: string | null
+  job: PositionJobRef | null
+}
+
+/** Ocupante vigente de un puesto (asignación actual sin fecha de fin). */
+export interface PositionOccupant {
+  workerId: string
+  name: string
+  code: string
+}
+
+/** Ocupación de la entidad: cuántos trabajadores activos ocupan cada puesto y quiénes. */
+export interface EntityOccupancy {
+  counts: Record<string, number>
+  occupants: Record<string, PositionOccupant[]>
+}
+
+export interface ContractTypeOption {
+  id: string
+  name: string
+  code: string
+}
+
+/** Identidad de la persona para los resúmenes contractuales. */
+export interface WorkerIdentity {
+  workerId: string
+  fullName: string
+  identification: string
+}
+
+export interface SeparationReason {
+  id: string
+  name: string
+}
+
+/** Vínculo de una persona con su expediente laboral (aunque esté inactivo). */
+export interface EmploymentLink {
+  id: string
+  code: string
+  employment_status: string
+}
+
+/**
+ * Persona candidata tal y como la necesita la contratación: sus datos de identificación
+ * y —si ya tuvo expediente en el cliente— el vínculo con su trabajador. Tener vínculo
+ * inactivo significa que el alta será una RECONTRATACIÓN: vuelve a Trabajadores sin
+ * duplicar la persona.
+ */
+export interface HireablePerson {
+  id: string
+  first_name: string
+  first_surname: string
+  second_surname: string | null
+  identification: string
+  email: string | null
+  phone: string | null
+  worker: EmploymentLink | null
+}
+
+/* ------------------------------------------------------------------------- */
+/* Preparación contractual (integridad antes de formalizar)                    */
+/* ------------------------------------------------------------------------- */
+
+export interface ReadinessItem {
+  code: string
+  label: string
+  source: string | null
+  sourceId: string | null
+  section: string
+}
+
+export interface ReadinessSection {
+  key: string
+  label: string
+  ready: boolean
+  missing: ReadinessItem[]
+}
+
+export interface ReadinessResult {
+  ready: boolean
+  missing: ReadinessItem[]
+  sections?: ReadinessSection[]
+}
+
+/** Datos que el backend evalúa con `validate_hiring_readiness`. */
+export interface ContractReadinessParams {
+  candidateId?: string | null
+  workerId?: string | null
+  positionId?: string | null
+  signatureDate?: string | null
+  contractTypeId?: string | null
+  signaturePlace?: string | null
+  paymentMethodId?: string | null
+  representativeAssignmentId?: string | null
+  contractStartDate?: string | null
+  contractEndDate?: string | null
+}
+
+/* ------------------------------------------------------------------------- */
+/* Transiciones del vínculo laboral                                           */
+/* ------------------------------------------------------------------------- */
+
+export type WorkerTransitionKind =
+  | "hire"
+  | "separation"
+  | "reincorporation"
+  | "position_change"
+  | "contract_change"
+
+/** Resultado esperado de una transición sobre la vista donde aparece la persona. */
+export interface TransitionEffect {
+  kind: WorkerTransitionKind
+  /** Vista operativa a la que pertenece la persona DESPUÉS de la transición. */
+  view: PeopleView
+  /** Qué ocurre con la asignación de puesto. */
+  assignment: "created" | "closed" | "replaced" | "kept"
+  /** Qué ocurre con el contrato vigente. */
+  contract: "created" | "closed" | "replaced" | "kept"
+  /** La trayectoria laboral anterior se conserva siempre: nunca se borra ni se duplica. */
+  preservesHistory: true
+}
+
+/** Condiciones formalizadas de un contrato: comunes a contratación y reincorporación. */
+export interface ContractFormalizationInput {
+  representativeAssignmentId: string | null
+  signatureDate: string | null
+  signaturePlace: string
+  paymentMethodId: string
+  paymentScheduleText: string
+  /** Conceptos retributivos ya validados por el formulario. */
+  hasInvalidComponents: boolean
+  /** Datos bloqueantes de la formalización (los calcula el backend). */
+  blocking: string[]
+}
+
+/** Concepto retributivo ya construido para el backend (nunca el total). */
+export interface CompensationComponentPayload {
+  component_type: string
+  description: string
+  amount: number
+}
+
+/** Alta o reincorporación del Cargo «Especialista Principal»: el documento es una Resolución. */
+export interface ResolutionFormalizationInput {
+  representativeAssignmentId: string | null
+  resolutionDate: string | null
+}
+
+/** Alta de una persona como trabajadora (`hire_candidate`, vía contrato). */
+export interface CandidateHireInput {
+  candidateId: string
+  positionId: string
+  hireDate: string
+  notes: string
+  contractTypeId: string
+  contractStartDate: string
+  contractEndDate: string
+  isDetermined: boolean
+  /** Cargo Cuadro o Especialista Principal: el alta no genera contrato ni documento. */
+  specialDocumentRole: boolean
+  representativeAssignmentId: string | null
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  paymentScheduleText: string
+  compensationComponents: CompensationComponentPayload[]
+}
+
+/** Alta de una persona como trabajadora (`hire_candidate`, vía Resolución). */
+export interface CandidateHireWithResolutionInput {
+  candidateId: string
+  positionId: string
+  hireDate: string
+  notes: string
+  resolution: ResolutionFormalizationInput
+}
+
+/** Reincorporación directa de un trabajador inactivo (`reincorporate_worker`, vía contrato). */
+export interface WorkerReincorporationInput {
+  workerId: string
+  positionId: string
+  reincorporationDate: string
+  contractTypeId: string
+  contractStartDate: string
+  contractEndDate: string
+  isDetermined: boolean
+  representativeAssignmentId: string | null
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  paymentScheduleText: string
+  compensationComponents: CompensationComponentPayload[]
+}
+
+/** Reincorporación directa hacia un Cargo Especialista Principal (vía Resolución). */
+export interface WorkerReincorporationWithResolutionInput {
+  workerId: string
+  positionId: string
+  reincorporationDate: string
+  resolution: ResolutionFormalizationInput
+}
+
+/** Baja del trabajador: cierra puesto y contrato vigentes y lo deja inactivo. */
+export interface WorkerSeparationInput {
+  workerId: string
+  effectiveDate: string
+  separationReasonId: string
+  notes: string
+}
+
+/** Cambio de tipo de contrato: cierra el vigente y crea uno nuevo con sus condiciones. */
+export interface WorkerContractChangeInput {
+  workerId: string
+  newContractTypeId: string
+  effectiveDate: string
+  newEndDate: string
+  isDetermined: boolean
+  notes: string
+  representativeAssignmentId: string | null
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  paymentScheduleText: string
+  compensationComponents: CompensationComponentPayload[]
+}
+
+/** Reubicación del trabajador: nueva asignación y, si procede, anexo al contrato vigente. */
+export interface WorkerPositionChangeInput {
+  workerId: string
+  newPositionId: string
+  effectiveDate: string
+  reason: string
+  notes: string
+  /** Sólo cuando el cambio genera anexo al contrato vigente (§21/§22). */
+  addendum?: {
+    /** Se registra anexo en la misma transacción del movimiento. */
+    create: boolean
+    /** El anexo se formaliza ahora (fecha de firma, lugar y representante). */
+    formalize: boolean
+    signatureDate: string
+    signaturePlace: string
+    representativeAssignmentId: string | null
+  }
+  /** Fecha de la Resolución cuando el Cargo destino es Especialista Principal (§45). */
+  resolutionDate?: string | null
+}
+
+/** Diferencia contractual detectada por el backend entre dos condiciones. */
+export interface ContractualChange {
+  id?: string
+  field_code: string
+  old_value: string | null
+  new_value: string | null
+  old_display_value: string | null
+  new_display_value: string | null
+  display_order: number
+  old_reference_id?: string | null
+  new_reference_id?: string | null
+}
+
+/** Resultado de `position_change_preview` (diferencias contractuales del movimiento). */
+export interface PositionChangePreview {
+  worker_id: string
+  employment_contract_id: string | null
+  current_assignment_id: string | null
+  current_position_id: string | null
+  new_position_id: string
+  effective_date: string
+  currency_code: string | null
+  salary_before: number | null
+  salary_after: number | null
+  total_before: number | null
+  total_after: number | null
+  components_total: number
+  payment_method_id: string | null
+  payment_method_name: string | null
+  before: Record<string, unknown>
+  after: Record<string, unknown>
+  changes: ContractualChange[]
+  has_contractual_changes: boolean
+}
+
+/** Anexo creado (o preparado) por el cambio de puesto. */
+export interface PositionChangeAddendum {
+  status: string
+  addendum_id?: string
+  addendum_number?: number | null
+  addendum_status?: string
+  changes?: number
+  pending?: string[]
+}
+
+/** Resultado de `change_worker_position` (movimiento + anexo en la misma transacción). */
+export interface WorkerPositionChangeResult {
+  previous_assignment_id: string
+  new_assignment_id: string
+  employment_contract_id: string | null
+  salary_history_id: string | null
+  changes: ContractualChange[]
+  has_contractual_changes: boolean
+  is_principal_specialist: boolean
+  resolution_id: string | null
+  /** 'NO_CONTRACT' cuando el cambio no registró anexo por falta de contrato vigente. */
+  addendum_skipped: string | null
+  addendum: PositionChangeAddendum | null
+}
+
+/** Resultado del alta o de la reincorporación (`hire_candidate` / `reincorporate_worker`). */
+export interface WorkerEngagementResult {
+  workerId: string | null
+  contractId: string | null
+  resolutionId: string | null
+}
+
+/** Resultado del cambio de contrato (`change_worker_contract`). */
+export interface WorkerContractChangeResult {
+  newContractId: string | null
+}

@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
 import {
@@ -29,21 +28,26 @@ import { RepresentativeSelect } from "@/components/representatives/Representativ
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"
+import { updateJobWorkContent } from "@/domains/resolutions"
 import {
-  ensureResolutionDocumentGenerated,
-  updateJobWorkContent,
-} from "@/domains/resolutions"
-import { ensurePayrollMovementDocumentGenerated } from "@/lib/payroll-movements"
+  checkHiringReadiness,
+  formatReadinessMessage,
+  hireCandidateWithContract,
+  hireCandidateWithResolution,
+  isSpecialDocumentRole,
+  loadHiringWorkspace,
+  requiresResolution,
+  validateHireInput,
+  type ContractTypeOption,
+  type EmploymentLink,
+  type HireablePerson,
+  type ReadinessResult,
+  type StaffingPosition,
+} from "@/domains/people"
 import { AlertTriangle, UserPlus, RefreshCw, Search } from "lucide-react"
 import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
 import { ContractReadinessChecklist } from "@/components/contracts/ContractReadinessChecklist"
 import {
-  validateHiringReadiness,
-  formatReadinessMessage,
-  type ReadinessResult,
-} from "@/lib/contract-readiness"
-import {
-  ensureContractDocumentGenerated,
   missingContractTemplateMessage,
   resolveContractTemplateAvailability,
   type TemplateAvailability,
@@ -70,90 +74,12 @@ import {
   type PaymentMethodOption,
 } from "@/lib/contract-conditions"
 
-interface PositionRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  // Fase 11A.3: información laboral del puesto (solo lectura)
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: {
-    id: string
-    name: string
-    is_cuadro: boolean
-    is_principal_specialist: boolean
-    area: { id: string; name: string } | null
-    salary_group: { id: string; salary_scale_id: string; sequence_number: number } | null
-  } | null
-}
-
-// Forma cruda devuelta por PostgREST: las relaciones embebidas pueden llegar
-// como arreglo o como objeto antes de normalizarse en el mapeo.
-interface PositionQueryJobRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  is_cuadro: boolean
-  is_principal_specialist: boolean
-  area: { id: string; name: string }[] | null
-  salary_group:
-    | { id: string; salary_scale_id: string; sequence_number: number }
-    | { id: string; salary_scale_id: string; sequence_number: number }[]
-    | null
-}
-
-interface PositionQueryRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: PositionQueryJobRow | PositionQueryJobRow[] | null
-}
-
-interface ContractType {
-  id: string
-  name: string
-  code: string
-}
-
-interface LinkedWorker {
-  id: string
-  code: string
-  employment_status: string
-}
-
-interface CandidateRow {
-  id: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  email: string | null
-  phone: string | null
-  worker: LinkedWorker | null
-}
-
 export interface HireCandidateTarget {
   id: string
   fullName: string
   identification: string
   /** Trabajador vinculado (si la persona ya tuvo un expediente laboral) */
-  worker?: LinkedWorker | null
+  worker?: EmploymentLink | null
 }
 
 interface HireCandidateDialogProps {
@@ -192,10 +118,10 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
   presetPositionId = null,
   onSuccess,
 }) => {
-  const [positions, setPositions] = React.useState<PositionRow[]>([])
+  const [positions, setPositions] = React.useState<StaffingPosition[]>([])
   const [occupancy, setOccupancy] = React.useState<Record<string, number>>({})
-  const [candidates, setCandidates] = React.useState<CandidateRow[]>([])
-  const [contractTypes, setContractTypes] = React.useState<ContractType[]>([])
+  const [candidates, setCandidates] = React.useState<HireablePerson[]>([])
+  const [contractTypes, setContractTypes] = React.useState<ContractTypeOption[]>([])
   const [applicableScaleId, setApplicableScaleId] = React.useState<string | null>(null)
   const [salaryValuesByGroup, setSalaryValuesByGroup] = React.useState<
     Record<string, SalaryValue | null>

@@ -3,8 +3,11 @@
  *
  * Punto único de entrada para los consumidores (páginas y componentes):
  *   · domain/entities.ts        → identidad de persona, filas de cada vista y comandos
- *   · domain/rules.ts           → clasificación excluyente, ficha y validación del alta
- *   · application/              → casos de uso de las tres vistas y del alta
+ *   · domain/rules.ts           → clasificación excluyente, ficha, validación del alta y
+ *                                 reglas de las transiciones laborales (efecto esperado y
+ *                                 validaciones previas con sus mensajes)
+ *   · application/              → casos de uso de las tres vistas, del alta y de la
+ *                                 contratación y las transiciones
  *   · infrastructure/           → repositorios (consultas Supabase, RPC y Storage)
  *
  * El dominio NO importa de `@/lib/*` ni de la presentación: la dependencia va siempre en
@@ -13,8 +16,9 @@
  * consultas ni repiten el criterio de clasificación.
  *
  * Alcance de este bloque: registro y ciclo laboral de Personas (Candidatos · Trabajadores
- * · Reingresos). El expediente detallado, la contratación y las transiciones
- * (reubicación, cambio de contrato, baja y reincorporación) siguen en su módulo actual.
+ * · Reingresos), contratación y transiciones laborales (baja, reincorporación, reubicación
+ * y cambio de contrato). Los expedientes detallados (ficha de candidato y de trabajador)
+ * siguen en su módulo actual.
  */
 
 /* Entidades, estados y comandos */
@@ -32,6 +36,38 @@ export type {
   PersonRegistryCatalogs,
   PersonIdentificationStatus,
   CandidateRegistrationInput,
+  SalaryGroupRef,
+  PositionJobRef,
+  StaffingPosition,
+  PositionOccupant,
+  EntityOccupancy,
+  ContractTypeOption,
+  WorkerIdentity,
+  SeparationReason,
+  EmploymentLink,
+  HireablePerson,
+  ReadinessItem,
+  ReadinessSection,
+  ReadinessResult,
+  ContractReadinessParams,
+  WorkerTransitionKind,
+  TransitionEffect,
+  ContractFormalizationInput,
+  CompensationComponentPayload,
+  ResolutionFormalizationInput,
+  CandidateHireInput,
+  CandidateHireWithResolutionInput,
+  WorkerReincorporationInput,
+  WorkerReincorporationWithResolutionInput,
+  WorkerSeparationInput,
+  WorkerContractChangeInput,
+  WorkerPositionChangeInput,
+  ContractualChange,
+  PositionChangePreview,
+  PositionChangeAddendum,
+  WorkerPositionChangeResult,
+  WorkerEngagementResult,
+  WorkerContractChangeResult,
 } from "./domain/entities"
 
 export { EMPLOYMENT_STATUS } from "./domain/entities"
@@ -54,6 +90,38 @@ export {
   convertDisplayDateToISO,
   validateCandidateRegistration,
   personRegistrationConflict,
+  TRANSITION_EFFECTS,
+  transitionEffect,
+  TRANSITION_MOVEMENT_DOCUMENT,
+  requiresResolution,
+  isSpecialDocumentRole,
+  READINESS_SECTION_LABELS,
+  READINESS_SECTION_ORDER,
+  formatReadinessMessage,
+  validateSignaturePlace,
+  validatePaymentMethod,
+  validateCompensationComponents,
+  validateFormalizationPending,
+  validateRepresentative,
+  validateContractEndDate,
+  validateHireInput,
+  validateReincorporationInput,
+  validateSeparationInput,
+  validateContractChangeInput,
+  validatePositionChangeInput,
+  MISSING_SIGNATURE_PLACE_MESSAGE,
+  MISSING_PAYMENT_METHOD_MESSAGE,
+  INVALID_COMPONENTS_MESSAGE,
+  MISSING_REPRESENTATIVE_MESSAGE,
+  MISSING_HIRING_REPRESENTATIVE_MESSAGE,
+} from "./domain/rules"
+
+export type {
+  HireValidationInput,
+  ReincorporationValidationInput,
+  SeparationValidationInput,
+  ContractChangeValidationInput,
+  PositionChangeValidationInput,
 } from "./domain/rules"
 
 /* Casos de uso (lectura) */
@@ -69,6 +137,48 @@ export {
   loadEntityReentriesView,
   loadCandidateRegistryCatalogs,
 } from "./application/people.queries"
+
+/* Casos de uso (contratación y transiciones) */
+export type {
+  EntityStaffingBoard,
+  TransitionWorkspace,
+  ContractChangeWorkspace,
+  HiringWorkspace,
+} from "./application/staffing.queries"
+
+export {
+  CONTRACT_DATA_PERMISSION,
+  loadEntityStaffingBoard,
+  loadTransitionWorkspace,
+  loadContractChangeWorkspace,
+  loadHiringWorkspace,
+  previewPositionChange,
+  loadSeparationReasons,
+} from "./application/staffing.queries"
+
+export {
+  checkHiringReadiness,
+  checkCandidateContractReadiness,
+  checkPositionContractReadiness,
+} from "./application/contract-readiness.queries"
+
+export type { EngagementOutcome } from "./application/hiring.commands"
+
+export { hireCandidateWithContract, hireCandidateWithResolution } from "./application/hiring.commands"
+
+export type {
+  ReincorporationOutcome,
+  PositionChangeOutcome,
+  ContractChangeOutcome,
+} from "./application/worker-transitions.commands"
+
+export {
+  registerWorkerSeparation,
+  reincorporateWorkerWithContract,
+  reincorporateWorkerWithResolution,
+  changeWorkerPosition,
+  changeWorkerContract,
+} from "./application/worker-transitions.commands"
 
 /* Casos de uso (escritura) */
 export type { RegisterCandidateCommand } from "./application/people.commands"

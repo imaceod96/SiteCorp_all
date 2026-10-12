@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
 import {
   Dialog,
@@ -33,12 +32,13 @@ import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import {
   changeWorkerPosition,
+  loadTransitionWorkspace,
   previewPositionChange,
+  validatePositionChangeInput,
   type PositionChangePreview,
-} from "@/lib/addendums"
-import { ensurePayrollMovementDocumentGenerated } from "@/lib/payroll-movements"
+  type StaffingPosition,
+} from "@/domains/people"
 import {
-  ensureAddendumDocumentGenerated,
   MISSING_ADDENDUM_TEMPLATE_MESSAGE,
   resolveAddendumTemplateAvailability,
   type TemplateAvailability,
@@ -47,63 +47,7 @@ import { formatConditionDate } from "@/lib/contract-conditions"
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"
-import {
-  ensureResolutionDocumentGenerated,
-  updateJobWorkContent,
-} from "@/domains/resolutions"
-
-interface PositionRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  // Fase 11A.3: información laboral del puesto (solo lectura)
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: {
-    id: string
-    name: string
-    is_principal_specialist: boolean
-    area: { id: string; name: string } | null
-    salary_group: { id: string; salary_scale_id: string; sequence_number: number } | null
-  } | null
-}
-
-// Forma cruda devuelta por PostgREST: las relaciones embebidas pueden llegar
-// como arreglo o como objeto antes de normalizarse en el mapeo.
-interface PositionQueryJobRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  is_principal_specialist: boolean
-  area: { id: string; name: string }[] | null
-  salary_group:
-    | { id: string; salary_scale_id: string; sequence_number: number }
-    | { id: string; salary_scale_id: string; sequence_number: number }[]
-    | null
-}
-
-interface PositionQueryRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: PositionQueryJobRow | PositionQueryJobRow[] | null
-}
+import { updateJobWorkContent } from "@/domains/resolutions"
 
 export interface WorkerCurrentSituation {
   positionId: string | null
@@ -148,7 +92,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
   current,
   onSuccess,
 }) => {
-  const [positions, setPositions] = React.useState<PositionRow[]>([])
+  const [positions, setPositions] = React.useState<StaffingPosition[]>([])
   const [occupancy, setOccupancy] = React.useState<Record<string, number>>({})
   const [applicableScaleId, setApplicableScaleId] = React.useState<string | null>(null)
   const [salaryValuesByGroup, setSalaryValuesByGroup] = React.useState<
@@ -190,67 +134,20 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
     setLoading(true)
     setLoadError(null)
     try {
-      const { data, error: posError } = await supabase
-        .from("organization_positions")
-        .select(
-          `id, name, code, is_active, authorized_quantity,
-           work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
-           job:organization_jobs(
-             id, name, code, is_active, area_id, is_principal_specialist,
-             area:organization_areas(id, name),
-             salary_group:salary_groups(id, salary_scale_id, sequence_number)
-           )`
-        )
-        .eq("organization_entity_id", entityId)
-        .order("name")
-      if (posError) throw posError
-
-      const mapped: PositionRow[] = ((data as PositionQueryRow[]) || []).map((p: PositionQueryRow) => {
-        const job = Array.isArray(p.job) ? p.job[0] ?? null : p.job
-        return {
-          ...p,
-          job: job
-            ? {
-                ...job,
-                area: job.area
-                  ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null }
-                  : null,
-                salary_group: Array.isArray(job.salary_group)
-                  ? job.salary_group[0] ?? null
-                  : job.salary_group,
-              }
-            : null,
-        }
-      })
-      setPositions(mapped)
+      // Caso de uso (lectura): puestos con su estructura y la ocupación vigente de la
+      // entidad (asignación actual con trabajador activo, igual que la Plantilla Operativa).
+      const [workspace, segments] = await Promise.all([
+        loadTransitionWorkspace(entityId),
+        fetchEntityScheduleSegments(entityId),
+      ])
+      setPositions(workspace.positions)
+      setOccupancy(workspace.occupancy.counts)
 
       // Fase 11A.3: horarios habituales de los puestos (solo lectura)
-      setSegmentsByPosition(await fetchEntityScheduleSegments(entityId))
-
-      // Ocupación: asignación actual con trabajador activo (mismo patrón que la Plantilla Operativa)
-      const { data: workersData, error: workersError } = await supabase
-        .from("workers")
-        .select(
-          "employment_status, assignments:worker_position_assignments(position_id, is_current, end_date)"
-        )
-        .eq("organization_entity_id", entityId)
-        .eq("employment_status", "active")
-      if (workersError) throw workersError
-
-      const counts: Record<string, number> = {}
-      ;((workersData as {
-        assignments: { position_id: string; is_current: boolean; end_date: string | null }[] | null
-      }[]) || []).forEach((w) => {
-        ;(w.assignments || []).forEach((a) => {
-          if (a.is_current && !a.end_date) {
-            counts[a.position_id] = (counts[a.position_id] || 0) + 1
-          }
-        })
-      })
-      setOccupancy(counts)
+      setSegmentsByPosition(segments)
 
       setApplicableScaleId(await resolveApplicableScaleId(entityId))
-      const groupIds = mapped
+      const groupIds = workspace.positions
         .map((p) => p.job?.salary_group?.id)
         .filter((id): id is string => !!id)
       setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
@@ -377,16 +274,39 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
   const handleSubmit = async () => {
     setError(null)
 
-    if (!selectedPositionId) {
-      setError("Selecciona un nuevo puesto.")
-      return
-    }
-    if (!effectiveDate) {
-      setError("La fecha efectiva es obligatoria.")
-      return
-    }
-    if (current.startDate && effectiveDate <= current.startDate) {
-      setError("La fecha efectiva debe ser posterior al inicio del puesto actual.")
+    const withAddendum = createAddendum && !!preview?.has_contractual_changes
+    const formalizeAddendumNow = withAddendum && formalizeNow
+
+    // Reglas del dominio: puesto destino, fecha efectiva posterior al inicio del puesto
+    // actual y —en la vía de contrato— diferencias contractuales y formalización del anexo.
+    const invalid = validatePositionChangeInput({
+      newPositionId: selectedPositionId,
+      effectiveDate,
+      currentPositionStartDate: current.startDate,
+      addendum: isPrincipalSpecialist
+        ? {
+            create: false,
+            formalize: false,
+            previewLoading: false,
+            signatureDate: "",
+            signaturePlace: "",
+            representativeAssignmentId: null,
+            templateBlockedMessage: null,
+          }
+        : {
+            create: withAddendum,
+            formalize: formalizeAddendumNow,
+            previewLoading,
+            signatureDate,
+            signaturePlace,
+            representativeAssignmentId,
+            templateBlockedMessage: addendumTemplateBlocked
+              ? MISSING_ADDENDUM_TEMPLATE_MESSAGE
+              : null,
+          },
+    })
+    if (invalid) {
+      setError(invalid)
       return
     }
 
@@ -406,46 +326,23 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
           }
         }
 
+        // Caso de uso: movimiento formal hacia un Cargo Especialista Principal. La
+        // Resolución es su documento sustitutivo y se genera en la misma operación,
+        // junto con el movimiento de nómina de la reubicación.
+        setProcessStage("Generando Resolución…")
         const result = await changeWorkerPosition({
           workerId,
           newPositionId: selectedPositionId,
           effectiveDate,
-          reason: reason.trim() || null,
-          notes: notes.trim() || null,
-          createAddendum: false,
-          reasonCode: "POSITION_CHANGE",
-          representativeAssignmentId: resolutionValues.representativeAssignmentId,
+          reason,
+          notes,
           resolutionDate: resolutionValues.resolutionDate,
         })
-
-        let documentWarning: string | null = null
-        if (result.resolution_id) {
-          setProcessStage("Generando Resolución…")
-          try {
-            const doc = await ensureResolutionDocumentGenerated(result.resolution_id)
-            if (!doc.skipped && !doc.generated) {
-              documentWarning =
-                doc.result?.error || "No se pudo generar la Resolución automáticamente."
-            }
-          } catch (genErr) {
-            documentWarning =
-              genErr instanceof Error
-                ? genErr.message
-                : "No se pudo generar la Resolución automáticamente."
-          }
-        }
-
-        // Movimiento de Nómina (Reubicación) → documento en el expediente del trabajador.
-        try {
-          await ensurePayrollMovementDocumentGenerated(workerId, "REUBICACION", effectiveDate)
-        } catch {
-          /* el movimiento ya quedó registrado; el documento puede regenerarse */
-        }
 
         invalidateContractAlertData(queryClient)
         setProcessStage(null)
 
-        if (documentWarning) {
+        if (result.documentWarning) {
           showError(
             `El movimiento se realizó, pero la Resolución no se pudo generar: ${documentWarning}. Puede regenerarla desde la pestaña Documentos del trabajador.`
           )
@@ -468,82 +365,40 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
       return
     }
 
-    if (previewLoading) {
-      setError("Espere a que se calculen las diferencias contractuales.")
-      return
-    }
-    const withAddendum = createAddendum && !!preview?.has_contractual_changes
-    if (withAddendum && formalizeNow) {
-      if (!signatureDate) {
-        setError("La fecha de firma es obligatoria para formalizar el anexo.")
-        return
-      }
-      if (!signaturePlace.trim()) {
-        setError("El lugar de firma es obligatorio para formalizar el anexo.")
-        return
-      }
-      if (!representativeAssignmentId) {
-        setError("Seleccione el representante vigente en la fecha de firma del anexo.")
-        return
-      }
-      if (addendumTemplateBlocked) {
-        setError(MISSING_ADDENDUM_TEMPLATE_MESSAGE)
-        return
-      }
-    }
-
     setSubmitting(true)
     try {
+      // §42/§65: al formalizarlo, el documento del anexo se genera automáticamente.
+      if (formalizeAddendumNow) setProcessStage("Generando documento del anexo…")
+
+      // Caso de uso: cierra la asignación actual, crea la nueva, registra el anexo en la
+      // misma transacción y genera los documentos (aviso si alguno no se pudo generar).
       const result = await changeWorkerPosition({
         workerId,
         newPositionId: selectedPositionId,
         effectiveDate,
-        reason: reason.trim() || null,
-        notes: notes.trim() || null,
-        createAddendum: withAddendum,
-        reasonCode: "POSITION_CHANGE",
-        signatureDate: withAddendum && formalizeNow ? signatureDate : null,
-        signaturePlace: withAddendum && formalizeNow ? signaturePlace : null,
-        representativeAssignmentId: withAddendum && formalizeNow ? representativeAssignmentId : null,
-        requireFormalized: withAddendum && formalizeNow,
+        reason,
+        notes,
+        addendum: withAddendum
+          ? {
+              create: true,
+              formalize: formalizeAddendumNow,
+              signatureDate,
+              signaturePlace,
+              representativeAssignmentId,
+            }
+          : undefined,
       })
 
       const addendumStatus = result.addendum?.addendum_status
       const addendumNumber = result.addendum?.addendum_number
-      const addendumId = result.addendum?.addendum_id
-
-      // §42/§65: el documento del anexo se genera AUTOMÁTICAMENTE al formalizarlo.
-      let documentWarning: string | null = null
-      if (addendumStatus === "FORMALIZED" && addendumId) {
-        setProcessStage("Generando documento del anexo…")
-        try {
-          const doc = await ensureAddendumDocumentGenerated(addendumId)
-          if (!doc.skipped && !doc.generated) {
-            documentWarning =
-              doc.result?.error || "No se pudo generar el documento del anexo automáticamente."
-          }
-        } catch (genErr) {
-          documentWarning =
-            genErr instanceof Error
-              ? genErr.message
-              : "No se pudo generar el documento del anexo automáticamente."
-        }
-      }
-
-      // Movimiento de Nómina (Reubicación, con o sin anexo) → documento individual.
-      try {
-        await ensurePayrollMovementDocumentGenerated(workerId, "REUBICACION", effectiveDate)
-      } catch {
-        /* el movimiento ya quedó registrado; el documento puede regenerarse */
-      }
 
       invalidateContractAlertData(queryClient)
       setProcessStage(null)
 
       if (addendumStatus === "FORMALIZED") {
         showSuccess(
-          documentWarning
-            ? `Cambio de puesto realizado. Anexo Nº ${addendumNumber} formalizado, pero el documento no se pudo generar: ${documentWarning}`
+          result.documentWarning
+            ? `Cambio de puesto realizado. Anexo Nº ${addendumNumber} formalizado, pero el documento no se pudo generar: ${result.documentWarning}`
             : `Cambio aplicado correctamente. Se generó automáticamente el Anexo Nº ${addendumNumber} y su documento.`
         )
       } else {
