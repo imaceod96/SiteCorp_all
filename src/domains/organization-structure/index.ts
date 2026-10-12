@@ -52,6 +52,22 @@ export {
 export type { PositionHierarchyEntry } from "./infrastructure/positions.repository"
 export { fetchEntityPositionHierarchy } from "./infrastructure/positions.repository"
 
+// --- Plantilla operativa: entidad y cargos ---
+export type { EntityStaffingJob } from "./infrastructure/entity-staffing.repository"
+export {
+  fetchEntityName,
+  fetchEntityStaffingJobs,
+} from "./infrastructure/entity-staffing.repository"
+
+// --- Plantilla operativa: plazas y vacantes (reglas puras) ---
+export type { PositionCapacity } from "./domain/staffing.rules"
+export {
+  sumAuthorizedPlazas,
+  vacantPlazas,
+  capacityFromRows,
+  buildPositionCapacity,
+} from "./domain/staffing.rules"
+
 // --- Salario: tipos ---
 export type { SalaryValue } from "./domain/entities"
 export type { SalaryGroupRef } from "./domain/entities"

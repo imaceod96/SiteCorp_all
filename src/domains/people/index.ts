@@ -323,3 +323,58 @@ export {
   downloadWorkerDocument,
   deleteWorkerDocument,
 } from "./application/worker-documents.commands"
+
+/* Plantilla operativa: trabajadores con su trayectoria de puestos y ocupación */
+export type { StaffingWorkerAssignment, StaffingWorkerRow } from "./domain/entities"
+
+export {
+  isCurrentStaffingAssignment,
+  currentStaffingAssignment,
+  isActiveStaffingWorker,
+  activeStaffingWorkers,
+  pendingStaffingWorkers,
+  occupiedStaffingWorkers,
+  countAssignmentsByPosition,
+} from "./domain/staffing.rules"
+
+export type { EntityStaffingWorkspace } from "./application/staffing.queries"
+export { loadEntityStaffingWorkspace } from "./application/staffing.queries"
+
+/* Carga inicial de trabajadores (migración) */
+export type {
+  MigrationRow,
+  MigrationPreviewRow,
+  MigrationBatchRow,
+  MigrationBatchHistory,
+  WorkerMigrationCatalogs,
+  WorkerMigrationImportResult,
+  WorkerMigrationCreatedWorker,
+  WorkerMigrationLinkedWorker,
+} from "./domain/entities"
+
+export type { MigrationCatalogIndexes, MigrationCatalogMaps } from "./domain/worker-migration.rules"
+
+export {
+  MIGRATION_IDENTIFICATION_PATTERN,
+  MIGRATION_VACATION_BALANCE_MIN,
+  MIGRATION_VACATION_BALANCE_MAX,
+  MIGRATION_HISTORY_LIMIT,
+  migrationCatalogIndexes,
+  migrationCatalogMaps,
+  mapMigrationCatalogValue,
+  mapMigrationRowValues,
+  validateMigrationRow,
+  buildMigrationBatchHistory,
+} from "./domain/worker-migration.rules"
+
+export {
+  mapMigrationRows,
+  validateWorkerMigration,
+  loadEntityMigrationHistory,
+} from "./application/worker-migration.queries"
+
+export {
+  importWorkerMigration,
+  createMigratedWorker,
+  linkMigratedWorker,
+} from "./application/worker-migration.commands"

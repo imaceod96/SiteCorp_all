@@ -2,7 +2,6 @@ import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { Download, FileSpreadsheet, Loader2, Upload, AlertTriangle, AlertCircle, CheckCircle2, XCircle, ClipboardCheck, UserPlus } from "lucide-react"
-import { supabase } from "@/lib/supabase"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -14,25 +13,23 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { MigratedWorkerDialog } from "@/components/migration/MigratedWorkerDialog"
+// Formato del archivo (plantilla y lectura del Excel): lo aporta el módulo del formato.
 import {
   buildWorkerMigrationTemplate,
   downloadWorkerMigrationTemplate,
-  importWorkerMigration,
-  mapMigrationRows,
   readWorkerMigrationExcel,
-  validateWorkerMigration,
   WorkerMigrationTemplateError,
   type MigrationPreviewRow,
   type MigrationRow,
 } from "@/lib/worker-migration"
-
-interface BatchHistory {
-  batchId: string
-  migratedAt: string
-  total: number
-  linked: number
-  pending: number
-}
+// Catálogos, validación por fila, importación e historial: casos de uso del dominio Personas.
+import {
+  importWorkerMigration,
+  loadEntityMigrationHistory,
+  mapMigrationRows,
+  validateWorkerMigration,
+  type MigrationBatchHistory,
+} from "@/domains/people"
 
 interface ImportSummary {
   created: number
@@ -92,7 +89,7 @@ const EntitySettingsInitialImport = () => {
   const [preview, setPreview] = React.useState<MigrationPreviewRow[]>([])
   const [isValidated, setIsValidated] = React.useState(false)
   const [validating, setValidating] = React.useState(false)
-  const [history, setHistory] = React.useState<BatchHistory[]>([])
+  const [history, setHistory] = React.useState<MigrationBatchHistory[]>([])
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState("")
   const [validationError, setValidationError] = React.useState<ValidationFailure | null>(null)
@@ -106,23 +103,9 @@ const EntitySettingsInitialImport = () => {
 
   const loadHistory = React.useCallback(async () => {
     if (!entityId) return
-    const { data, error: queryError } = await supabase.from("workers")
-      .select("migration_batch_id,migrated_at,employment_status,worker_position_assignments(id,is_current,end_date)")
-      .eq("organization_entity_id", entityId)
-      .not("migration_batch_id", "is", null)
-      .order("migrated_at", { ascending: false })
-    if (queryError) throw queryError
-    const groups = new Map<string, BatchHistory>()
-    for (const worker of data || []) {
-      const batchId = worker.migration_batch_id as string
-      const group = groups.get(batchId) || { batchId, migratedAt: worker.migrated_at, total: 0, linked: 0, pending: 0 }
-      group.total += 1
-      const assigned = (worker.worker_position_assignments || []).some((assignment: { is_current: boolean | null; end_date: string | null }) => assignment.is_current && !assignment.end_date)
-      if (worker.employment_status === "active" && assigned) group.linked += 1
-      else if (worker.employment_status === "active") group.pending += 1
-      groups.set(batchId, group)
-    }
-    setHistory([...groups.values()].slice(0, 20))
+    // Caso de uso del dominio Personas: los lotes se agrupan con la misma regla que la
+    // vinculación a plantilla (trabajador activo con Assignment vigente = vinculado).
+    setHistory(await loadEntityMigrationHistory(entityId))
   }, [entityId])
 
   React.useEffect(() => {

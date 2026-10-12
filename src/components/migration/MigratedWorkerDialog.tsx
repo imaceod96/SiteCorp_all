@@ -1,10 +1,11 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
-import { createMigratedWorker, type MigrationRow } from "@/lib/worker-migration"
 import {
+  createMigratedWorker,
   loadCandidateRegistryCatalogs,
   loadPersonIdentificationStatus,
+  type MigrationRow,
 } from "@/domains/people"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button } from "@/components/ui/sitecorp-button"

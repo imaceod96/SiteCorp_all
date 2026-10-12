@@ -1,7 +1,6 @@
 import * as React from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -30,9 +29,16 @@ import {
 } from "lucide-react"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import {
-  fetchStaffingExportRows,
+  buildPositionCapacity,
+  capacityFromRows,
   buildStaffingWorkbookBlob,
+  fetchStaffingExportRows,
   saveStaffingExcelBlob,
+  sumAuthorizedPlazas,
+  vacantPlazas,
+  type PositionCapacity,
+  type PositionScheduleSegment,
+  type SalaryValue,
   type StaffingExportRow,
 } from "@/domains/organization-structure"
 import {
@@ -41,121 +47,16 @@ import {
   type WorkerEditingData,
 } from "@/components/workers/WorkerForm"
 import {
-  resolveApplicableScaleId,
-  fetchSalaryValuesForGroups,
-  type SalaryValue,
-} from "@/domains/organization-structure"
-import {
-  fetchEntityScheduleSegments,
-  type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+  activeStaffingWorkers,
+  countAssignmentsByPosition,
+  loadEntityStaffingWorkspace,
+  occupiedStaffingWorkers,
+  pendingStaffingWorkers,
+  type StaffingPosition,
+  type StaffingWorkerRow,
+} from "@/domains/people"
 
-interface SalaryGroupRef {
-  id: string
-  salary_scale_id: string
-  sequence_number: number
-}
-
-interface JobRef {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  area: { id: string; name: string } | null
-  salary_group: SalaryGroupRef | null
-}
-
-interface PositionRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  job_id: string
-  authorized_quantity: number
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: JobRef | null
-}
-
-// Forma cruda devuelta por PostgREST: las relaciones embebidas pueden llegar
-// como arreglo o como objeto antes de normalizarse en el mapeo.
-interface JobQueryRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  area: { id: string; name: string }[] | null
-  salary_group: SalaryGroupRef | SalaryGroupRef[] | null
-}
-
-interface PositionQueryJobRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  area: { id: string; name: string }[] | null
-  salary_group: SalaryGroupRef | SalaryGroupRef[] | null
-}
-
-interface PositionQueryRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  job_id: string
-  authorized_quantity: number
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: PositionQueryJobRow | PositionQueryJobRow[] | null
-}
-
-interface WorkerRow {
-  id: string
-  code: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  hire_date: string
-  employment_start_date?: string | null
-  employment_status: string
-  // Campos personales opcionales (la consulta usa `*`; no están en el resumen de plantilla)
-  birth_date?: string | null
-  gender_id?: string | null
-  marital_status_id?: string | null
-  education_level_id?: string | null
-  specialty?: string | null
-  has_masters_degree?: boolean | null
-  has_doctorate_degree?: boolean | null
-  profession_or_trade?: string | null
-  skin_color_id?: string | null
-  address?: string | null
-  province?: string | null
-  municipality?: string | null
-  phone?: string | null
-  email?: string | null
-  assignments: {
-    id: string
-    position_id: string
-    start_date: string
-    end_date: string | null
-    is_current: boolean
-    position: PositionRow | null
-  }[] | null
-}
-
-const fullName = (w: WorkerRow) =>
+const fullName = (w: StaffingWorkerRow) =>
   [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
 
 const formatAmount = (value: number | null): string =>
@@ -202,11 +103,11 @@ const EntityStaffing = () => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
 
-  const [positions, setPositions] = React.useState<PositionRow[]>([])
+  const [positions, setPositions] = React.useState<StaffingPosition[]>([])
   const [segmentsByPosition, setSegmentsByPosition] = React.useState<
     Record<string, PositionScheduleSegment[]>
   >({})
-  const [workers, setWorkers] = React.useState<WorkerRow[]>([])
+  const [workers, setWorkers] = React.useState<StaffingWorkerRow[]>([])
   const [exportRows, setExportRows] = React.useState<StaffingExportRow[]>([])
   const [applicableScaleId, setApplicableScaleId] = React.useState<string | null>(null)
   const [salaryValuesByGroup, setSalaryValuesByGroup] = React.useState<Record<string, SalaryValue | null>>({})
@@ -229,9 +130,6 @@ const EntityStaffing = () => {
     setTimeout(() => setNotice(null), 5000)
   }
 
-  const currentAssignment = (w: WorkerRow) =>
-    (w.assignments || []).find(a => a.is_current && !a.end_date && a.position?.is_active) || null
-
   const loadData = React.useCallback(async () => {
     if (!entityId) {
       setError("Parámetros de URL no válidos")
@@ -243,108 +141,24 @@ const EntityStaffing = () => {
     setError(null)
 
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.view",
-      })
-      const { data: canViewManage } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.manage",
-      })
-      if (!canView && !canViewManage) {
+      // Caso de uso del dominio Personas: permisos de trabajadores, entidad y cargos
+      // (estructura organizativa), puestos, trabajadores con su trayectoria, capacidades
+      // de la plantilla (misma fuente que el Anexo14B), jornadas por puesto, escala
+      // aplicable y valores salariales. La pantalla no compone ninguna consulta.
+      const workspace = await loadEntityStaffingWorkspace(entityId)
+      if (!workspace.authorized) {
         setError("No tiene permiso para ver la plantilla operativa de esta entidad")
         return
       }
-      setCanManage(!!canViewManage)
 
-      const { data: entityData } = await supabase
-        .from("organization_entities")
-        .select("name")
-        .eq("id", entityId)
-        .maybeSingle()
-      setEntityName((entityData as { name: string } | null)?.name || "")
-
-      const { data: jobsData, error: jobsError } = await supabase
-        .from("organization_jobs")
-        .select(`
-          id, name, code, is_active, area_id,
-          area:organization_areas(id, name),
-          salary_group:salary_groups(id, salary_scale_id, sequence_number)
-        `)
-        .eq("organization_entity_id", entityId)
-        .order("name")
-      if (jobsError) throw jobsError
-      const jobsRows: JobRef[] = (jobsData as JobQueryRow[])?.map((j: JobQueryRow) => ({
-        ...j,
-        area: j.area ? { id: j.area[0]?.id || null, name: j.area[0]?.name || null } : null,
-        salary_group: Array.isArray(j.salary_group) ? j.salary_group[0] ?? null : j.salary_group,
-      })) || []
-
-      const { data: positionsData, error: positionsError } = await supabase
-        .from("organization_positions")
-        .select(`
-          id, name, code, is_active, job_id, authorized_quantity,
-          work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
-          job:organization_jobs(
-            id, name, code, is_active, area_id,
-            area:organization_areas(id, name),
-            salary_group:salary_groups(id, salary_scale_id, sequence_number)
-          )
-        `)
-        .eq("organization_entity_id", entityId)
-        .order("name")
-      if (positionsError) throw positionsError
-      const positionsRows: PositionRow[] = (positionsData as PositionQueryRow[])?.map((p: PositionQueryRow) => {
-        const job = Array.isArray(p.job) ? p.job[0] ?? null : p.job
-        return {
-          ...p,
-          job: job
-            ? {
-                ...job,
-                area: job.area
-                  ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null }
-                  : null,
-                salary_group: Array.isArray(job.salary_group)
-                  ? job.salary_group[0] ?? null
-                  : job.salary_group,
-              }
-            : null,
-        }
-      }) || []
-      setPositions(positionsRows)
-
-      setSegmentsByPosition(await fetchEntityScheduleSegments(entityId))
-
-      const { data: workersData, error: workersError } = await supabase
-        .from("workers")
-        .select(`
-          *,
-          assignments:worker_position_assignments(
-            id, position_id, start_date, end_date, is_current,
-            position:organization_positions(
-              id, name, code, is_active, job_id,
-              job:organization_jobs(
-                id, name, code, is_active, area_id,
-                area:organization_areas(id, name),
-                salary_group:salary_groups(id, salary_scale_id, sequence_number)
-              )
-            )
-          )
-        `)
-        .eq("organization_entity_id", entityId)
-        .order("created_at", { ascending: false })
-      if (workersError) throw workersError
-      setWorkers((workersData as WorkerRow[]) || [])
-
-      // Estructura de plantilla (misma fuente que el Anexo 14).
-      setExportRows(await fetchStaffingExportRows(entityId))
-
-      setApplicableScaleId(await resolveApplicableScaleId(entityId))
-
-      const groupIds = jobsRows
-        .map(j => j.salary_group?.id)
-        .filter((id): id is string => !!id)
-      setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
+      setCanManage(workspace.canManage)
+      setEntityName(workspace.entityName)
+      setPositions(workspace.positions)
+      setWorkers(workspace.workers)
+      setExportRows(workspace.exportRows)
+      setSegmentsByPosition(workspace.segmentsByPosition)
+      setApplicableScaleId(workspace.applicableScaleId)
+      setSalaryValuesByGroup(workspace.salaryValuesByGroup)
     } catch (err) {
       console.error("Error loading plantilla operativa:", err)
       setError(err instanceof Error ? err.message : "Error al cargar la plantilla operativa")
@@ -359,37 +173,29 @@ const EntityStaffing = () => {
 
   // ---------- Derivaciones (KPIs + diálogos) ----------
 
-  const activeWorkers = React.useMemo(
-    () => workers.filter(w => w.employment_status === "active"),
-    [workers]
-  )
+  // Trabajadores, ocupación y pendientes de vinculación: reglas del dominio Personas.
+  const activeWorkers = React.useMemo(() => activeStaffingWorkers(workers), [workers])
 
   const activePositions = React.useMemo(
     () => positions.filter(p => p.is_active),
     [positions]
   )
 
-  const assignmentsPerPosition = React.useMemo(() => {
-    const counts = new Map<string, number>()
-    activeWorkers.forEach(w => {
-      const a = currentAssignment(w)
-      if (a) counts.set(a.position_id, (counts.get(a.position_id) || 0) + 1)
-    })
-    return counts
-  }, [activeWorkers])
-
-  const pendingWorkers = React.useMemo(
-    () => activeWorkers.filter((worker) => currentAssignment(worker) === null),
+  const assignmentsPerPosition = React.useMemo(
+    () => countAssignmentsByPosition(activeWorkers),
     [activeWorkers]
   )
+
+  const pendingWorkers = React.useMemo(() => pendingStaffingWorkers(activeWorkers), [activeWorkers])
 
   const occupiedCount = React.useMemo(
-    () => activeWorkers.filter(w => currentAssignment(w) !== null).length,
+    () => occupiedStaffingWorkers(activeWorkers).length,
     [activeWorkers]
   )
 
+  // Plazas autorizadas, ocupadas y vacantes: reglas del dominio de estructura.
   const totalAuthorized = React.useMemo(
-    () => activePositions.reduce((sum, p) => sum + (p.authorized_quantity || 0), 0),
+    () => sumAuthorizedPlazas(activePositions),
     [activePositions]
   )
 
@@ -399,7 +205,7 @@ const EntityStaffing = () => {
       activePositions: activePositions.length,
       totalAuthorized,
       occupied: occupiedCount,
-      vacant: Math.max(0, totalAuthorized - occupiedCount),
+      vacant: vacantPlazas(totalAuthorized, occupiedCount),
     }),
     [activePositions.length, totalAuthorized, occupiedCount, activeWorkers.length]
   )
@@ -411,9 +217,9 @@ const EntityStaffing = () => {
         name: p.name,
         code: p.code,
         is_active: p.is_active,
-        occupied: (assignmentsPerPosition.get(p.id) || 0) > 0,
+        occupied: (assignmentsPerPosition[p.id] || 0) > 0,
         authorized_quantity: p.authorized_quantity,
-        currentAssignments: assignmentsPerPosition.get(p.id) || 0,
+        currentAssignments: assignmentsPerPosition[p.id] || 0,
         work_location: p.work_location,
         daily_hours: p.daily_hours,
         weekly_hours: p.weekly_hours,
@@ -528,19 +334,13 @@ const EntityStaffing = () => {
   const filters = useEntityFilters(exportRows, filterDefinitions)
   const visibleRows = filters.result
 
-  // Recuentos ESTRUCTURALES por puesto (sobre TODAS las capacidades, no las
-  // filtradas): Autorizados = filas de capacidad; Ocupados = con trabajador.
-  const structuralByPosition = React.useMemo(() => {
-    const map = new Map<string, { authorized: number; occupied: number }>()
-    exportRows.forEach(row => {
-      if (!row.position_id) return
-      const entry = map.get(row.position_id) ?? { authorized: 0, occupied: 0 }
-      entry.authorized += 1
-      if (row.worker_id) entry.occupied += 1
-      map.set(row.position_id, entry)
-    })
-    return map
-  }, [exportRows])
+  // Recuentos ESTRUCTURALES por puesto (sobre TODAS las capacidades, no las filtradas):
+  // Autorizados = capacidades del puesto; Ocupados = capacidades con trabajador; Vacantes
+  // = la diferencia. Regla del dominio de estructura, reutilizada por la exportación.
+  const positionCapacity = React.useMemo<Record<string, PositionCapacity>>(
+    () => buildPositionCapacity(exportRows),
+    [exportRows]
+  )
 
   // Agrupación Área → Puesto respetando el orden organizativo del backend.
   const groupedRows = React.useMemo(() => {
@@ -590,7 +390,7 @@ const EntityStaffing = () => {
     setWorkerDialogOpen(true)
   }
 
-  const openEditWorkerDialog = (w: WorkerRow) => {
+  const openEditWorkerDialog = (w: StaffingWorkerRow) => {
     setEditingWorker({
       id: w.id,
       code: w.code,
@@ -828,11 +628,8 @@ const EntityStaffing = () => {
                         </thead>
                         <tbody>
                           {area.positions.map(position => {
-                            const counts = structuralByPosition.get(position.positionId) ?? {
-                              authorized: position.rows.length,
-                              occupied: position.rows.filter(r => r.worker_id).length,
-                            }
-                            const vacancies = Math.max(0, counts.authorized - counts.occupied)
+                            const counts = positionCapacity[position.positionId] ?? capacityFromRows(position.rows)
+                            const vacancies = counts.vacant
                             return (
                               <React.Fragment key={position.positionId}>
                                 <tr className="border-t border-border bg-sitecorp-primary/5">

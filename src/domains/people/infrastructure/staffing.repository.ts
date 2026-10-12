@@ -8,15 +8,17 @@ import type {
   PositionOccupant,
   SeparationReason,
   StaffingPosition,
+  StaffingWorkerRow,
   WorkerIdentity,
 } from "../domain/entities"
 
 /**
  * Personas — Repositorio de plantilla para los flujos de personal (infraestructura).
  *
- * Lecturas compartidas por la contratación y las transiciones laborales: puestos con su
- * estructura, ocupación vigente de la entidad, personas candidatas con su vínculo
- * laboral, tipos de contrato, identidad del trabajador y motivos de baja.
+ * Lecturas compartidas por la contratación, las transiciones laborales y la Plantilla
+ * operativa: puestos con su estructura, trabajadores con su trayectoria de puestos,
+ * ocupación vigente de la entidad, personas candidatas con su vínculo laboral, tipos de
+ * contrato, identidad del trabajador y motivos de baja.
  *
  * Antes cada diálogo repetía estas consultas (y la normalización de las relaciones
  * embebidas de PostgREST, que llegan como objeto o como arreglo). Aquí viven una sola vez
@@ -107,6 +109,115 @@ export async function fetchEntityStaffingPositions(
   if (error) throw error
 
   return ((data as RawPositionRow[] | null) || []).map(toStaffingPosition)
+}
+
+interface RawStaffingAssignmentRow {
+  id: string
+  position_id: string
+  start_date: string
+  end_date: string | null
+  is_current: boolean
+  position: RawPositionRow | RawPositionRow[] | null
+}
+
+interface RawStaffingWorkerRow {
+  id: string
+  code: string
+  first_name: string
+  first_surname: string
+  second_surname: string | null
+  identification: string
+  hire_date: string
+  employment_start_date: string | null
+  employment_status: string
+  birth_date: string | null
+  gender_id: string | null
+  marital_status_id: string | null
+  education_level_id: string | null
+  specialty: string | null
+  has_masters_degree: boolean | null
+  has_doctorate_degree: boolean | null
+  profession_or_trade: string | null
+  skin_color_id: string | null
+  address: string | null
+  province: string | null
+  municipality: string | null
+  phone: string | null
+  email: string | null
+  assignments: RawStaffingAssignmentRow[] | RawStaffingAssignmentRow | null
+}
+
+/**
+ * Columnas de la Plantilla operativa: la fila del trabajador con su trayectoria de puestos
+ * (puesto → cargo → área y grupo salarial). Es EXACTAMENTE la consulta que ya usaba la
+ * pantalla, con las mismas columnas y la misma ordenación.
+ */
+const STAFFING_WORKER_COLUMNS = `id, code, first_name, first_surname, second_surname, identification,
+   hire_date, employment_start_date, employment_status,
+   birth_date, gender_id, marital_status_id, education_level_id, specialty,
+   has_masters_degree, has_doctorate_degree, profession_or_trade, skin_color_id,
+   address, province, municipality, phone, email,
+   assignments:worker_position_assignments(
+     id, position_id, start_date, end_date, is_current,
+     position:organization_positions(
+       id, name, code, is_active, job_id,
+       job:organization_jobs(
+         id, name, code, is_active, area_id,
+         area:organization_areas(id, name),
+         salary_group:salary_groups(id, salary_scale_id, sequence_number)
+       )
+     )
+   )`
+
+const toStaffingWorker = (row: RawStaffingWorkerRow): StaffingWorkerRow => ({
+  id: row.id,
+  code: row.code,
+  first_name: row.first_name,
+  first_surname: row.first_surname,
+  second_surname: row.second_surname ?? null,
+  identification: row.identification,
+  hire_date: row.hire_date,
+  employment_start_date: row.employment_start_date ?? null,
+  employment_status: row.employment_status,
+  birth_date: row.birth_date ?? null,
+  gender_id: row.gender_id ?? null,
+  marital_status_id: row.marital_status_id ?? null,
+  education_level_id: row.education_level_id ?? null,
+  specialty: row.specialty ?? null,
+  has_masters_degree: row.has_masters_degree ?? null,
+  has_doctorate_degree: row.has_doctorate_degree ?? null,
+  profession_or_trade: row.profession_or_trade ?? null,
+  skin_color_id: row.skin_color_id ?? null,
+  address: row.address ?? null,
+  province: row.province ?? null,
+  municipality: row.municipality ?? null,
+  phone: row.phone ?? null,
+  email: row.email ?? null,
+  assignments: (Array.isArray(row.assignments) ? row.assignments : []).map((assignment) => {
+    const position = firstOrSelf(assignment.position)
+    return {
+      id: assignment.id,
+      position_id: assignment.position_id,
+      start_date: assignment.start_date,
+      end_date: assignment.end_date,
+      is_current: assignment.is_current,
+      position: position ? toStaffingPosition(position) : null,
+    }
+  }),
+})
+
+/** Trabajadores de la entidad con su trayectoria de puestos, para la Plantilla operativa. */
+export async function fetchEntityStaffingWorkers(
+  entityId: string
+): Promise<StaffingWorkerRow[]> {
+  const { data, error } = await supabase
+    .from("workers")
+    .select(STAFFING_WORKER_COLUMNS)
+    .eq("organization_entity_id", entityId)
+    .order("created_at", { ascending: false })
+  if (error) throw error
+
+  return ((data as RawStaffingWorkerRow[] | null) || []).map(toStaffingWorker)
 }
 
 interface RawOccupancyWorkerRow {

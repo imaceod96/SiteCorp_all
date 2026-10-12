@@ -1,9 +1,23 @@
 import {
+  fetchEntityName,
+  fetchEntityScheduleSegments,
+  fetchEntityStaffingJobs,
+  fetchSalaryValuesForGroups,
+  fetchStaffingExportRows,
+  resolveApplicableScaleId,
+} from "@/domains/organization-structure"
+import type {
+  PositionScheduleSegment,
+  SalaryValue,
+  StaffingExportRow,
+} from "@/domains/organization-structure"
+import {
   fetchActiveContractTypes,
   fetchEntityHireablePeople,
   fetchEntityOccupancy,
   fetchEntityPermission,
   fetchEntityStaffingPositions,
+  fetchEntityStaffingWorkers,
   fetchSeparationReasons,
   fetchWorkerIdentity,
 } from "../infrastructure/staffing.repository"
@@ -15,6 +29,7 @@ import type {
   PositionChangePreview,
   SeparationReason,
   StaffingPosition,
+  StaffingWorkerRow,
   WorkerIdentity,
 } from "../domain/entities"
 
@@ -24,11 +39,13 @@ import type {
  * Casos de uso de LECTURA que necesitan las pantallas del bloque: el tablero de
  * contratación de la entidad (plantilla, ocupación y permisos), el espacio de trabajo de
  * las transiciones (puestos con su ocupación, tipos de contrato y contexto del
- * trabajador) y las diferencias contractuales de una reubicación.
+ * trabajador), las diferencias contractuales de una reubicación y la PLANTILLA OPERATIVA
+ * (los trabajadores de la entidad con su trayectoria de puestos).
  *
  * Las consultas y su ámbito son los mismos que ya usaban las pantallas; lo que cambia es
- * que viven una sola vez. Las lecturas de OTROS dominios (jornadas del puesto, escala
- * salarial aplicable, formas de pago) siguen siendo de sus dueños y no se duplican aquí.
+ * que viven una sola vez. Las lecturas de OTROS dominios (cargos, jornadas del puesto,
+ * escala salarial aplicable, plantilla del Anexo14B) siguen siendo de sus dueños y no se
+ * duplican aquí: se piden a `organization-structure`, dueño de la estructura.
  */
 
 /** Permiso interno que habilita la configuración de representantes de la entidad. */
@@ -145,4 +162,85 @@ export async function previewPositionChange(input: {
 /** Motivos de baja activos que puede elegir quien registra la baja. */
 export async function loadSeparationReasons(): Promise<SeparationReason[]> {
   return fetchSeparationReasons()
+}
+
+/**
+ * Plantilla operativa de la entidad: TODO lo que necesita la pantalla en una sola lectura.
+ *
+ *   · Permiso de trabajadores (sin él no se lee plantilla alguna).
+ *   · Nombre de la entidad y sus cargos (estructura organizativa: son suyos el área, el
+ *     cargo y el grupo salarial).
+ *   · Puestos con su estructura y trabajadores con su trayectoria de puestos (personas).
+ *   · Capacidades del Anexo14B, jornadas por puesto, escala aplicable y valores salariales.
+ *
+ * El aislamiento es el de siempre: entidad (`organization_entity_id`) + RLS por
+ * `company_client_id`; `company_client_id` y `organization_entity_id` nunca se mezclan.
+ */
+export interface EntityStaffingWorkspace {
+  /** La entidad se puede ver o gestionar: sin permiso no se lee plantilla alguna. */
+  authorized: boolean
+  canManage: boolean
+  entityName: string
+  /** Puestos de la entidad (activos e inactivos: la pantalla decide cuáles muestra). */
+  positions: StaffingPosition[]
+  /** Trabajadores de la entidad con su trayectoria de puestos. */
+  workers: StaffingWorkerRow[]
+  /** Capacidades de la plantilla (misma fuente que el Anexo14B). */
+  exportRows: StaffingExportRow[]
+  segmentsByPosition: Record<string, PositionScheduleSegment[]>
+  applicableScaleId: string | null
+  /** Valor salarial vigente por grupo salarial de los cargos de la entidad. */
+  salaryValuesByGroup: Record<string, SalaryValue | null>
+}
+
+const emptyStaffingWorkspace = (canManage = false): EntityStaffingWorkspace => ({
+  authorized: false,
+  canManage,
+  entityName: "",
+  positions: [],
+  workers: [],
+  exportRows: [],
+  segmentsByPosition: {},
+  applicableScaleId: null,
+  salaryValuesByGroup: {},
+})
+
+export async function loadEntityStaffingWorkspace(
+  entityId: string
+): Promise<EntityStaffingWorkspace> {
+  const [canView, canManage] = await Promise.all([
+    fetchEntityPermission(entityId, "workers.view"),
+    fetchEntityPermission(entityId, "workers.manage"),
+  ])
+  if (!canView && !canManage) return emptyStaffingWorkspace(canManage)
+
+  const [entityName, jobs, positions] = await Promise.all([
+    fetchEntityName(entityId),
+    fetchEntityStaffingJobs(entityId),
+    fetchEntityStaffingPositions(entityId),
+  ])
+
+  const [workers, exportRows, segmentsByPosition, applicableScaleId] = await Promise.all([
+    fetchEntityStaffingWorkers(entityId),
+    fetchStaffingExportRows(entityId),
+    fetchEntityScheduleSegments(entityId),
+    resolveApplicableScaleId(entityId),
+  ])
+
+  const groupIds = jobs
+    .map((job) => job.salary_group?.id)
+    .filter((id): id is string => !!id)
+  const salaryValuesByGroup = await fetchSalaryValuesForGroups(groupIds)
+
+  return {
+    authorized: true,
+    canManage,
+    entityName,
+    positions,
+    workers,
+    exportRows,
+    segmentsByPosition,
+    applicableScaleId,
+    salaryValuesByGroup,
+  }
 }

@@ -1,12 +1,24 @@
-import { supabase } from "@/lib/supabase"
-import { ciToBirthDate } from "@/utils/ci"
+import type { MigrationRow } from "@/domains/people"
 import type { Workbook, Cell, Row } from "exceljs"
+
+/**
+ * Plantilla y lectura del Excel de la Carga inicial de trabajadores.
+ *
+ * Este módulo es SOLO el formato del archivo: construye la plantilla oficial, la descarga y
+ * lee el .xlsx que sube el usuario. El formato de las columnas NO cambia.
+ *
+ * La resolución de catálogos, la validación por fila, el historial de lotes y las RPC de la
+ * migración son casos de uso del dominio Personas (`@/domains/people`): las filas que
+ * produce esta lectura son las mismas que consumen esos casos de uso.
+ */
 
 /** Tipado mínimo del módulo ExcelJS usado por esta exportación (solo `Workbook`). */
 type ExcelJSModule = {
   Workbook: typeof Workbook
   default?: { Workbook: typeof Workbook }
 }
+
+export type { MigrationRow, MigrationPreviewRow } from "@/domains/people"
 
 // Plantilla simplificada de Carga inicial. No incluye "Fecha nacimiento"
 // (se deriva de la identificación) ni "Código Puesto" (la carga inicial no
@@ -19,51 +31,6 @@ export const MIGRATION_HEADERS = [
   "Nivel educacional", "Especialidad", "Profesión u oficio",
   "Tiene licencia", "Categorías licencia",
 ] as const
-
-export interface MigrationRow {
-  identification: string
-  first_name: string
-  first_surname: string
-  second_surname: string
-  birth_date: string
-  gender_id: string
-  marital_status_id: string
-  skin_color_id: string
-  phone: string
-  email: string
-  address: string
-  province: string
-  municipality: string
-  employment_start_date: string
-  education_level_id: string
-  specialty: string
-  profession_or_trade: string
-  driving_license_category_ids: string[]
-  position_code: string
-  position_id?: string
-  initial_vacation_balance: string
-  vacation_cutoff_date: string
-}
-
-export interface MigrationPreviewRow {
-  index: number
-  status: "VALID" | "WARNING" | "ERROR"
-  messages: string[]
-  position_id: string | null
-  position_label: string | null
-}
-
-const catalogMaps = (options: { id: string; name: string; code?: string | null }[]) => {
-  const byName = new Map<string, string>()
-  options.forEach((option) => {
-    byName.set(option.name.trim().toLocaleLowerCase(), option.id)
-    if (option.code) byName.set(option.code.trim().toLocaleLowerCase(), option.id)
-  })
-  return byName
-}
-
-const mapCatalogValue = (value: string, map: Map<string, string>) =>
-  map.get(value.trim().toLocaleLowerCase()) || value
 
 const excelDate = (value: unknown): string => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
@@ -242,137 +209,4 @@ export async function readWorkerMigrationExcel(file: File): Promise<MigrationRow
   }
   if (!rows.length) throw new Error("No se encontraron filas de trabajadores para validar.")
   return rows
-}
-
-export async function mapMigrationRows(rows: MigrationRow[]): Promise<MigrationRow[]> {
-  const [genders, marital, skin, education, licenses] = await Promise.all([
-    supabase.from("genders").select("id,name"),
-    supabase.from("marital_statuses").select("id,name"),
-    supabase.from("skin_colors").select("id,name"),
-    supabase.from("education_levels").select("id,name"),
-    supabase.from("driving_license_categories").select("id,name,code"),
-  ])
-  for (const result of [genders, marital, skin, education, licenses]) if (result.error) throw result.error
-  const genderMap = catalogMaps(genders.data || [])
-  const maritalMap = catalogMaps(marital.data || [])
-  const skinMap = catalogMaps(skin.data || [])
-  const educationMap = catalogMaps(education.data || [])
-  const licenseMap = catalogMaps(licenses.data || [])
-  return rows.map((row) => ({
-    ...row,
-    // Reutiliza la lógica existente de SiteCorp (ciToBirthDate) para derivar la
-    // fecha de nacimiento de la identificación. Nunca inventa una fecha.
-    birth_date: row.birth_date || ciToBirthDate(row.identification) || "",
-    gender_id: mapCatalogValue(row.gender_id, genderMap),
-    marital_status_id: mapCatalogValue(row.marital_status_id, maritalMap),
-    skin_color_id: mapCatalogValue(row.skin_color_id, skinMap),
-    education_level_id: mapCatalogValue(row.education_level_id, educationMap),
-    driving_license_category_ids: row.driving_license_category_ids.map((value) => mapCatalogValue(value, licenseMap)),
-  }))
-}
-
-export async function validateWorkerMigration(entityId: string, rows: MigrationRow[]): Promise<MigrationPreviewRow[]> {
-  const [backend, genders, marital, skins, education, licenses] = await Promise.all([
-    supabase.rpc("migration_validate_rows", { p_entity_id: entityId, p_rows: rows }),
-    supabase.from("genders").select("id"),
-    supabase.from("marital_statuses").select("id"),
-    supabase.from("skin_colors").select("id"),
-    supabase.from("education_levels").select("id"),
-    supabase.from("driving_license_categories").select("id"),
-  ])
-  if (backend.error) throw backend.error
-  for (const result of [genders, marital, skins, education, licenses]) if (result.error) throw result.error
-  const catalogs = {
-    gender_id: new Set((genders.data || []).map((item) => item.id)),
-    marital_status_id: new Set((marital.data || []).map((item) => item.id)),
-    skin_color_id: new Set((skins.data || []).map((item) => item.id)),
-    education_level_id: new Set((education.data || []).map((item) => item.id)),
-    driving_license_category_ids: new Set((licenses.data || []).map((item) => item.id)),
-  }
-  const result = (backend.data || []) as MigrationPreviewRow[]
-  return result.map((item, index) => {
-    const row = rows[index]
-    const errors: string[] = []
-    const warnings: string[] = []
-    const addCatalogError = (key: "gender_id" | "marital_status_id" | "skin_color_id" | "education_level_id", label: string) => {
-      const value = row[key]
-      if (value && !catalogs[key].has(value)) errors.push(`${label} no existe en el catálogo.`)
-    }
-    addCatalogError("gender_id", "Sexo")
-    addCatalogError("marital_status_id", "Estado civil")
-    addCatalogError("skin_color_id", "Color de piel")
-    addCatalogError("education_level_id", "Nivel educacional")
-    if (row.driving_license_category_ids.some((id) => !catalogs.driving_license_category_ids.has(id))) {
-      errors.push("Una o más categorías de licencia no existen en el catálogo.")
-    }
-    // Número de Identificación: exactamente 11 dígitos (0-9), como texto.
-    if (!/^[0-9]{11}$/.test(String(row.identification || "").trim())) {
-      errors.push("El número de identificación debe contener exactamente 11 dígitos.")
-    }
-    for (const [date, label] of [[row.birth_date, "Fecha de nacimiento"], [row.employment_start_date, "Fecha de incorporación"], [row.vacation_cutoff_date, "Fecha de corte de vacaciones"]]) {
-      if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) errors.push(`${label} inválida.`)
-    }
-    if (row.initial_vacation_balance) {
-      const amount = Number(row.initial_vacation_balance)
-      if (!Number.isFinite(amount) || amount < 0 || amount > 24) errors.push("Saldo inicial de vacaciones inválido; debe estar entre 0 y 24 días.")
-    }
-
-    // Información que puede completarse posteriormente. No bloquea la carga.
-    const incomplete: string[] = []
-    if (!row.birth_date) incomplete.push("fecha de nacimiento")
-    if (!row.gender_id) incomplete.push("sexo")
-    if (!row.marital_status_id) incomplete.push("estado civil")
-    if (!row.skin_color_id) incomplete.push("color de piel")
-    if (!row.address) incomplete.push("dirección")
-    if (incomplete.length) {
-      warnings.push(`Información incompleta: falta ${incomplete.join(", ")}. Podrá completarse después desde Trabajadores.`)
-    }
-
-    const messages = [...item.messages, ...errors, ...warnings]
-    // El aviso de "pendiente de vinculación" del backend es el estado normal de
-    // la carga inicial: no degrada la fila a advertencia por sí mismo.
-    const status: MigrationPreviewRow["status"] =
-      item.status === "ERROR" || errors.length > 0
-        ? "ERROR"
-        : warnings.length > 0
-          ? "WARNING"
-          : "VALID"
-    return { ...item, status, messages }
-  })
-}
-
-export interface WorkerMigrationImportResult {
-  total_rows: number
-  imported: number
-  worker_ids: string[]
-  /** Identificaciones repetidas dentro del archivo o ya existentes en el workspace.
-   * La carga NO se bloqueó por ellas: las personas se crearon y solo deben corregirse. */
-  duplicate_identifications: string[]
-}
-
-export async function importWorkerMigration(entityId: string, rows: MigrationRow[], batchId: string) {
-  const { data, error } = await supabase.rpc("migration_import_rows", {
-    p_entity_id: entityId,
-    p_rows: rows,
-    p_batch_id: batchId,
-  })
-  if (error) throw error
-  const result = data as WorkerMigrationImportResult
-  return { ...result, duplicate_identifications: result.duplicate_identifications || [] }
-}
-
-export async function createMigratedWorker(entityId: string, row: MigrationRow) {
-  const { data, error } = await supabase.rpc("migration_create_single_worker", { p_entity_id: entityId, p_row: row })
-  if (error) throw error
-  return data as { worker_id: string; code: string; assignment_id: string | null; contract_id: string | null }
-}
-
-export async function linkMigratedWorker(workerId: string, positionId: string) {
-  const { data, error } = await supabase.rpc("link_worker_to_position", {
-    p_worker_id: workerId,
-    p_position_id: positionId,
-    p_start_date: null,
-  })
-  if (error) throw error
-  return data as { assignment_id: string; position_id: string; position_name: string; start_date: string }
 }

@@ -1037,3 +1037,144 @@ export interface WorkerContractFormalizationInput {
   compensationComponents: CompensationComponentPayload[]
   paymentScheduleText: string | null
 }
+
+/* ------------------------------------------------------------------------- */
+/* Plantilla operativa (proyección de lectura de los trabajadores)             */
+/* ------------------------------------------------------------------------- */
+
+/** Asignación de puesto de un trabajador de la plantilla, con el puesto al que apunta. */
+export interface StaffingWorkerAssignment {
+  id: string
+  position_id: string
+  start_date: string
+  end_date: string | null
+  is_current: boolean
+  position: StaffingPosition | null
+}
+
+/**
+ * Trabajador de la Plantilla operativa: su fila de `workers` (los datos personales y
+ * laborales que edita el formulario) con su trayectoria de puestos. La autoridad sobre la
+ * estructura del puesto sigue siendo la del dominio de estructura organizativa.
+ */
+export interface StaffingWorkerRow {
+  id: string
+  code: string
+  first_name: string
+  first_surname: string
+  second_surname: string | null
+  identification: string
+  hire_date: string
+  employment_start_date: string | null
+  employment_status: string
+  birth_date: string | null
+  gender_id: string | null
+  marital_status_id: string | null
+  education_level_id: string | null
+  specialty: string | null
+  has_masters_degree: boolean | null
+  has_doctorate_degree: boolean | null
+  profession_or_trade: string | null
+  skin_color_id: string | null
+  address: string | null
+  province: string | null
+  municipality: string | null
+  phone: string | null
+  email: string | null
+  assignments: StaffingWorkerAssignment[] | null
+}
+
+/* ------------------------------------------------------------------------- */
+/* Carga inicial de trabajadores (migración)                                  */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Fila de la carga inicial tal y como la produce la plantilla Excel. Los catálogos llegan
+ * con el texto del archivo y se resuelven a identificador antes de validar o importar.
+ */
+export interface MigrationRow {
+  identification: string
+  first_name: string
+  first_surname: string
+  second_surname: string
+  birth_date: string
+  gender_id: string
+  marital_status_id: string
+  skin_color_id: string
+  phone: string
+  email: string
+  address: string
+  province: string
+  municipality: string
+  employment_start_date: string
+  education_level_id: string
+  specialty: string
+  profession_or_trade: string
+  driving_license_category_ids: string[]
+  position_code: string
+  position_id?: string
+  initial_vacation_balance: string
+  vacation_cutoff_date: string
+}
+
+/** Resultado por fila de `migration_validate_rows`, con los mensajes que ve el usuario. */
+export interface MigrationPreviewRow {
+  index: number
+  status: "VALID" | "WARNING" | "ERROR"
+  messages: string[]
+  position_id: string | null
+  position_label: string | null
+}
+
+/** Catálogos globales que resuelven y validan los valores de la carga inicial. */
+export interface WorkerMigrationCatalogs {
+  genders: CatalogRow[]
+  maritalStatuses: CatalogRow[]
+  skinColors: CatalogRow[]
+  educationLevels: CatalogRow[]
+  drivingLicenseCategories: CatalogOption[]
+}
+
+export interface WorkerMigrationImportResult {
+  total_rows: number
+  imported: number
+  worker_ids: string[]
+  /**
+   * Identificaciones repetidas dentro del archivo o ya existentes en el workspace.
+   * La carga NO se bloqueó por ellas: las personas se crearon y solo deben corregirse.
+   */
+  duplicate_identifications: string[]
+}
+
+/** Trabajador creado por la migración individual (`migration_create_single_worker`). */
+export interface WorkerMigrationCreatedWorker {
+  worker_id: string
+  code: string
+  assignment_id: string | null
+  contract_id: string | null
+}
+
+/** Asignación creada al vincular un trabajador migrado a un puesto vacante. */
+export interface WorkerMigrationLinkedWorker {
+  assignment_id: string
+  position_id: string
+  position_name: string
+  start_date: string
+}
+
+/** Fila cruda de un trabajador migrado, para agrupar el historial de lotes. */
+export interface MigrationBatchRow {
+  migration_batch_id: string | null
+  migrated_at: string | null
+  employment_status: string | null
+  worker_position_assignments: { is_current: boolean | null; end_date: string | null }[] | null
+}
+
+/** Lote de carga inicial con su total, sus trabajadores vinculados y los pendientes. */
+export interface MigrationBatchHistory {
+  batchId: string
+  migratedAt: string
+  total: number
+  linked: number
+  pending: number
+}
