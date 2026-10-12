@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
-import { columnName } from "@/integrations/supabase/schema-target"
+import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -74,10 +74,11 @@ const Organization = () => {
       setError(null)
       setLoading(true)
       
-      // El nombre de la columna lo resuelve la frontera de nomenclatura.
+      // El nombre de la columna lo resuelve la frontera de nomenclatura. El alias
+      // `tenant_id:company_client_id` mantiene la clave JS que usa la app.
       const entitiesResult = await supabase
         .from("organization_entities")
-        .select("*")
+        .select(selectQuery(`*, ${selectColumn("clientId")}`))
         .eq(columnName("clientId"), currentCompanyClientId)
         .order("name")
       

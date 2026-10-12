@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { supabase } from "@/lib/supabase"
+import { selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
@@ -44,9 +45,12 @@ const EntityRouteWrapper = () => {
         setLoading(true)
         setError(null)
 
+        // El alias mantiene la clave JS `tenant_id` que consumen los módulos
+        // internos (p. ej. `currentEntity.tenant_id`), cuya columna física pasó a
+        // llamarse `company_client_id`.
         const { data, error: fetchError } = await supabase
           .from("organization_entities")
-          .select("*")
+          .select(selectQuery(`*, ${selectColumn("clientId")}`))
           .eq("id", entityId)
           .single()
 

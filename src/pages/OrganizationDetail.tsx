@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
-import { columnName } from "@/integrations/supabase/schema-target"
+import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -140,9 +140,10 @@ const OrganizationDetail = () => {
       setLoading(true)
       
       // Fetch entity details
+      // El alias mantiene la clave JS `tenant_id` (columna física `company_client_id`).
       const entityResult = await supabase
         .from("organization_entities")
-        .select("*")
+        .select(selectQuery(`*, ${selectColumn("clientId")}`))
         .eq("id", entityId)
         .single()
       
@@ -164,7 +165,7 @@ const OrganizationDetail = () => {
       // Fetch all entities of the owning company client (ancestor path + switcher)
       const tenantEntitiesResult = await supabase
         .from("organization_entities")
-        .select("*")
+        .select(selectQuery(`*, ${selectColumn("clientId")}`))
         .eq(columnName("clientId"), entityData.tenant_id)
         .order("name")
       
@@ -190,7 +191,7 @@ const OrganizationDetail = () => {
       // Fetch children
       const childrenResult = await supabase
         .from("organization_entities")
-        .select("*")
+        .select(selectQuery(`*, ${selectColumn("clientId")}`))
         .eq("parent_id", entityId)
         .order("name")
       
@@ -211,7 +212,7 @@ const OrganizationDetail = () => {
             if (currentCompanyClientId && currentCompanyClientId !== entityData.tenant_id) {
               const otherTenantEntitiesResult = await supabase
                 .from("organization_entities")
-                .select("*")
+                .select(selectQuery(`*, ${selectColumn("clientId")}`))
                 .eq(columnName("clientId"), currentCompanyClientId)
                 .order("name")
               

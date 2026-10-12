@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { supabase } from "@/lib/supabase"
-import { tableName } from "@/integrations/supabase/schema-target"
+import { selectColumn, selectQuery, tableName } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -144,7 +144,14 @@ const Organizations = () => {
       // físico de la tabla lo resuelve la frontera de nomenclatura.
       const [companyClientResult, entityResult] = await Promise.all([
         supabase.from(tableName("clients")).select("*").order("name"),
-        supabase.from("organization_entities").select("*").order("name"),
+        // `*` devuelve los nombres FÍSICOS de columna. Tras la migración, la columna
+        // propietaria se llama `company_client_id`, pero el modelo de la app la lee
+        // como `tenant_id`. Sin el alias, `entity.tenant_id` queda `undefined` y la
+        // agrupación de la jerarquía (grupos → empresas → UEB) no encuentra raíces.
+        supabase
+          .from("organization_entities")
+          .select(selectQuery(`*, ${selectColumn("clientId")}`))
+          .order("name"),
       ])
 
       if (companyClientResult.error) throw companyClientResult.error
