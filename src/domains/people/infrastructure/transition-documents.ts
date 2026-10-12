@@ -5,6 +5,7 @@ import {
 } from "@/lib/contract-automation"
 import { ensurePayrollMovementDocumentGenerated } from "@/lib/payroll-movements"
 import { ensureResolutionDocumentGenerated } from "@/domains/resolutions"
+import type { PayrollMovementType } from "../domain/entities"
 
 /**
  * Personas — Documentos que produce una transición laboral (infraestructura).
@@ -41,7 +42,7 @@ const resolutionWarning = (result: DocumentAutomationResult): string | null =>
  */
 export async function ensureMovementDocument(
   workerId: string,
-  movementType: string,
+  movementType: PayrollMovementType,
   effectiveDate: string
 ): Promise<void> {
   try {

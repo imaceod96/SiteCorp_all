@@ -132,7 +132,11 @@ export async function changeWorkerPosition(
     reasonCode: "POSITION_CHANGE",
     signatureDate: formalizeNow ? addendum?.signatureDate || null : null,
     signaturePlace: formalizeNow ? addendum?.signaturePlace || null : null,
-    representativeAssignmentId: formalizeNow ? addendum?.representativeAssignmentId || null : null,
+    // El representante del anexo cuando se formaliza; el de la Resolución en la vía de
+    // Cargo Especialista Principal (§45). En el resto no se envía ninguno.
+    representativeAssignmentId: formalizeNow
+      ? addendum?.representativeAssignmentId || null
+      : input.representativeAssignmentId ?? null,
     requireFormalized: formalizeNow,
     resolutionDate: input.resolutionDate ?? null,
   })

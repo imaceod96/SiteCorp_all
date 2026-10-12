@@ -179,28 +179,6 @@ export interface AddendumPending {
   status: string
 }
 
-/** Resultado de `change_worker_position` (cambio de puesto + anexo en la misma transacción). */
-export interface ChangeWorkerPositionResult {
-  previous_assignment_id: string
-  new_assignment_id: string
-  employment_contract_id: string | null
-  salary_history_id: string | null
-  changes: AddendumChange[]
-  has_contractual_changes: boolean
-  is_principal_specialist: boolean
-  resolution_id: string | null
-  /** 'NO_CONTRACT' cuando el cambio no pudo registrar anexo por falta de contrato vigente */
-  addendum_skipped: string | null
-  addendum: {
-    status: string
-    addendum_id?: string
-    addendum_number?: number | null
-    addendum_status?: string
-    changes?: number
-    pending?: string[]
-  } | null
-}
-
 /** Resultado de `create_contract_addendum` (anexo manual). */
 export interface ManualAddendumResult {
   status: string
@@ -284,27 +262,6 @@ export interface WorkerContractualConditions {
     }[]
   }[]
   pending_difference: number | null
-}
-
-export interface PositionChangePreview {
-  worker_id: string
-  employment_contract_id: string | null
-  current_assignment_id: string | null
-  current_position_id: string | null
-  new_position_id: string
-  effective_date: string
-  currency_code: string | null
-  salary_before: number | null
-  salary_after: number | null
-  total_before: number | null
-  total_after: number | null
-  components_total: number
-  payment_method_id: string | null
-  payment_method_name: string | null
-  before: Record<string, unknown>
-  after: Record<string, unknown>
-  changes: AddendumChange[]
-  has_contractual_changes: boolean
 }
 
 const toNumber = (value: unknown): number | null => {
@@ -393,65 +350,6 @@ export const fetchWorkerContractualConditions = async (
     pending_difference: toNumber(result.pending_difference),
     pending_addendums: result.pending_addendums || [],
   }
-}
-
-/** Diferencias contractuales de un cambio de puesto, calculadas en el backend (§21/§22). */
-export const previewPositionChange = async (input: {
-  workerId: string
-  newPositionId: string
-  effectiveDate: string
-}): Promise<PositionChangePreview> => {
-  const { data, error } = await supabase.rpc("position_change_preview", {
-    p_worker_id: input.workerId,
-    p_new_position_id: input.newPositionId,
-    p_effective_date: input.effectiveDate,
-  })
-  if (error) throw error
-
-  const result = data as PositionChangePreview
-  return {
-    ...result,
-    changes: (result?.changes || [])
-      .slice()
-      .sort((a, b) => (a.display_order || 0) - (b.display_order || 0)),
-  }
-}
-
-/**
- * Cambio de puesto (operación existente) + anexo contractual en la MISMA
- * transacción cuando el cambio altera condiciones representables.
- */
-export const changeWorkerPosition = async (input: {
-  workerId: string
-  newPositionId: string
-  effectiveDate: string
-  reason?: string | null
-  notes?: string | null
-  createAddendum?: boolean
-  reasonCode?: AddendumReasonCode | null
-  signatureDate?: string | null
-  signaturePlace?: string | null
-  representativeAssignmentId?: string | null
-  requireFormalized?: boolean
-  /** Fecha de la Resolución cuando el Cargo destino es Especialista Principal. */
-  resolutionDate?: string | null
-}): Promise<ChangeWorkerPositionResult> => {
-  const { data, error } = await supabase.rpc("change_worker_position", {
-    p_worker_id: input.workerId,
-    p_new_position_id: input.newPositionId,
-    p_effective_date: input.effectiveDate,
-    p_reason: input.reason?.trim() || null,
-    p_notes: input.notes?.trim() || null,
-    p_create_addendum: input.createAddendum ?? true,
-    p_reason_code: input.reasonCode || null,
-    p_signature_date: input.signatureDate || null,
-    p_signature_place: input.signaturePlace?.trim() || null,
-    p_representative_assignment_id: input.representativeAssignmentId || null,
-    p_require_formalized: input.requireFormalized ?? false,
-    p_resolution_date: input.resolutionDate || null,
-  })
-  if (error) throw error
-  return data as ChangeWorkerPositionResult
 }
 
 /** Anexo manual: condiciones retributivas, forma de pago, lugar y jornada (§63/§64). */

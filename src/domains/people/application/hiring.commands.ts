@@ -48,7 +48,9 @@ export async function hireCandidateWithContract(
     candidateId: input.candidateId,
     positionId: input.positionId,
     hireDate: input.hireDate,
-    contractTypeId: input.contractTypeId,
+    // §24/§25/§30: para Cargo Cuadro / Especialista Principal el alta NO crea contrato,
+    // así que el tipo de contrato no se envía (el backend recibe null, como siempre).
+    contractTypeId: input.specialDocumentRole ? null : input.contractTypeId,
     contractStartDate: input.contractStartDate || input.hireDate,
     contractEndDate: input.isDetermined ? input.contractEndDate || null : null,
     notes: input.notes,

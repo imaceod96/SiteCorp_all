@@ -31,7 +31,6 @@ import ResolutionForm, {
 import { updateJobWorkContent } from "@/domains/resolutions"
 import {
   checkHiringReadiness,
-  formatReadinessMessage,
   hireCandidateWithContract,
   hireCandidateWithResolution,
   isSpecialDocumentRole,
@@ -103,7 +102,7 @@ const groupLabel = (sequence: number | null | undefined) =>
   sequence == null ? "—" : `Grupo ${toRomanNumeral(sequence)}`
 
 const hasAvailableCapacity = (
-  position: PositionRow | null,
+  position: StaffingPosition | null,
   occupancy: Record<string, number>
 ) => {
   if (!position || !position.is_active) return false
@@ -170,103 +169,27 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     setLoading(true)
     setLoadError(null)
     try {
-      const { data, error: posError } = await supabase
-        .from("organization_positions")
-        .select(
-          `id, name, code, is_active, authorized_quantity,
-           work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
-           job:organization_jobs(
-             id, name, code, is_active, area_id, is_cuadro, is_principal_specialist,
-             area:organization_areas(id, name),
-             salary_group:salary_groups(id, salary_scale_id, sequence_number)
-           )`
-        )
-        .eq("organization_entity_id", entityId)
-        .order("name")
-      if (posError) throw posError
-
-      const mapped: PositionRow[] = ((data as PositionQueryRow[]) || []).map((p: PositionQueryRow) => {
-        const job = Array.isArray(p.job) ? p.job[0] ?? null : p.job
-        return {
-          ...p,
-          job: job
-            ? {
-                ...job,
-                area: job.area
-                  ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null }
-                  : null,
-                salary_group: Array.isArray(job.salary_group)
-                  ? job.salary_group[0] ?? null
-                  : job.salary_group,
-              }
-            : null,
-        }
-      })
-      setPositions(mapped)
+      // Caso de uso (lectura): puestos con su estructura y ocupación vigente, personas
+      // candidatas con su vínculo laboral, tipos de contrato activos y permiso de los
+      // datos contractuales de la entidad.
+      const [workspace, segments] = await Promise.all([
+        loadHiringWorkspace(entityId),
+        fetchEntityScheduleSegments(entityId),
+      ])
+      setPositions(workspace.positions)
+      setOccupancy(workspace.occupancy.counts)
+      setCandidates(workspace.people)
+      setContractTypes(workspace.contractTypes)
+      setCanManageOrganization(workspace.canManageContractData)
 
       // Fase 11A.3: horarios habituales de los puestos (solo lectura)
-      setSegmentsByPosition(await fetchEntityScheduleSegments(entityId))
-
-      const { data: workersData, error: workersError } = await supabase
-        .from("workers")
-        .select(
-          "employment_status, assignments:worker_position_assignments(position_id, is_current, end_date)"
-        )
-        .eq("organization_entity_id", entityId)
-        .eq("employment_status", "active")
-      if (workersError) throw workersError
-
-      const counts: Record<string, number> = {}
-      ;((workersData as {
-        assignments: { position_id: string; is_current: boolean; end_date: string | null }[] | null
-      }[]) || []).forEach((w) => {
-        ;(w.assignments || []).forEach((a) => {
-          if (a.is_current && !a.end_date) {
-            counts[a.position_id] = (counts[a.position_id] || 0) + 1
-          }
-        })
-      })
-      setOccupancy(counts)
-
-      // Personas disponibles: se excluyen las que ya son trabajadores activos.
-      const { data: candidatesData, error: candidatesError } = await supabase
-        .from("candidates")
-        .select(
-          `id, first_name, first_surname, second_surname, identification, email, phone,
-           worker:workers(id, code, employment_status)`
-        )
-        .eq("organization_entity_id", entityId)
-        .order("first_surname")
-        .order("first_name")
-      if (candidatesError) throw candidatesError
-      setCandidates(
-        (((candidatesData as (Omit<CandidateRow, "worker"> & { worker: LinkedWorker | LinkedWorker[] | null })[]) || []).map((c) => ({
-          ...c,
-          worker: Array.isArray(c.worker) ? c.worker[0] || null : c.worker || null,
-        })) as CandidateRow[]) || []
-      )
-
-      const { data: ctData, error: ctError } = await supabase
-        .from("employment_contract_types")
-        .select("id, name, code")
-        .eq("is_active", true)
-        .order("name")
-      if (ctError) throw ctError
-      setContractTypes((ctData as ContractType[]) || [])
-
-      // El enlace «Configurar representantes» lleva a los datos contractuales de la
-            // entidad: se habilita con el permiso interno de esos datos, no con organization.*
-            const { data: canManageOrg } = await supabase.rpc("can_access_entity", {
-              target_entity_id: entityId,
-              permission_code: "contract_data.manage",
-            })
-            setCanManageOrganization(!!canManageOrg)
+      setSegmentsByPosition(segments)
 
       // Fase 11A.5: catálogo global de formas de pago (A tiempo / A rendimiento)
       setPaymentMethods(await fetchPaymentMethods())
 
       setApplicableScaleId(await resolveApplicableScaleId(entityId))
-      const groupIds = mapped
+      const groupIds = workspace.positions
         .map((p) => p.job?.salary_group?.id)
         .filter((id): id is string => !!id)
       setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
@@ -353,7 +276,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
    * §44: si el Cargo destino es Especialista Principal, el documento es una
    * RESOLUCIÓN (nunca un contrato). El comportamiento de Cuadro NO se modifica.
    */
-  const isPrincipalSpecialist = selected?.job?.is_principal_specialist === true
+  const isPrincipalSpecialist = requiresResolution(selected?.job)
   const selectedType = contractTypes.find((t) => t.id === contractTypeId) || null
   const isDetermined = selectedType?.code === "DETERMINADO"
   const vacancies = selected
@@ -385,7 +308,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     }
     let active = true
     setReadinessLoading(true)
-    validateHiringReadiness({
+    checkHiringReadiness({
       candidateId: selectedCandidate?.id || null,
       workerId: selectedCandidate?.worker?.id || null,
       positionId: positionId || null,
@@ -461,18 +384,42 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
   const handleSubmit = async () => {
     setError(null)
 
-    if (!selectedCandidate) {
-      setError("Selecciona la persona a contratar.")
+    const specialDocumentRole = isSpecialDocumentRole(selected?.job)
+
+    // Reglas del dominio: persona, puesto, fecha, vigencia del contrato, condiciones
+    // formalizadas, preparación contractual, plantilla documental y representante.
+    const invalid = validateHireInput({
+      hasCandidate: !!selectedCandidate,
+      positionId,
+      hireDate,
+      resolutionDocument: isPrincipalSpecialist,
+      skipsContractTerms: specialDocumentRole,
+      contractTypeId,
+      signatureDate,
+      formalization: {
+        representativeAssignmentId,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        paymentScheduleText: paymentSchedule,
+        hasInvalidComponents: hasInvalidComponent(components),
+        blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
+      },
+      readiness,
+      templateBlockedMessage: templateBlocked
+        ? missingContractTemplateMessage(selectedType?.name || null)
+        : null,
+      isDetermined,
+      contractStartDate,
+      contractEndDate,
+    })
+    if (invalid) {
+      setError(invalid)
       return
     }
-    if (!positionId) {
-      setError("Selecciona un puesto.")
-      return
-    }
-    if (!hireDate) {
-      setError("La fecha de incorporación es obligatoria.")
-      return
-    }
+
+    const candidateId = selectedCandidate?.id as string
+
     // §44: Cargo Especialista Principal → formulario de RESOLUCIÓN (no contrato).
     if (isPrincipalSpecialist) {
       if (!resolutionValues || !resolutionValues.valid) {
@@ -489,60 +436,28 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
             /* best-effort: el snapshot conserva el valor introducido */
           }
         }
-        const { data, error: rpcError } = await supabase.rpc("hire_candidate", {
-          p_candidate_id: selectedCandidate.id,
-          p_position_id: positionId,
-          p_hire_date: hireDate,
-          p_contract_type_id: null,
-          p_contract_start_date: null,
-          p_contract_end_date: null,
-          p_notes: notes.trim() || null,
-          p_representative_assignment_id: resolutionValues.representativeAssignmentId,
-          p_signature_date: null,
-          p_signature_place: null,
-          p_payment_method_id: null,
-          p_compensation_components: null,
-          p_payment_schedule_text: null,
-          p_resolution_date: resolutionValues.resolutionDate,
+
+        // Caso de uso: alta hacia un Cargo Especialista Principal. Si la persona ya tuvo
+        // expediente, la misma operación la reincorpora sin duplicarla.
+        setProcessStage("Generando Resolución…")
+        const outcome = await hireCandidateWithResolution({
+          candidateId,
+          positionId,
+          hireDate,
+          notes,
+          resolution: {
+            representativeAssignmentId: resolutionValues.representativeAssignmentId,
+            resolutionDate: resolutionValues.resolutionDate,
+          },
         })
-        if (rpcError) throw rpcError
-
-        const payload = (data || {}) as { worker_id?: string | null; resolution_id?: string | null; contract_id?: string | null }
-        const workerId = payload.worker_id as string | undefined
-        const resolutionId = payload.resolution_id as string | undefined
-
-        let documentWarning: string | null = null
-        if (resolutionId) {
-          setProcessStage("Generando Resolución…")
-          try {
-            const doc = await ensureResolutionDocumentGenerated(resolutionId)
-            if (!doc.skipped && !doc.generated) {
-              documentWarning =
-                doc.result?.error || "No se pudo generar la Resolución automáticamente."
-            }
-          } catch (genErr) {
-            documentWarning =
-              genErr instanceof Error
-                ? genErr.message
-                : "No se pudo generar la Resolución automáticamente."
-          }
-        }
-
-        // Movimiento de Nómina (Alta) → documento en el expediente del trabajador.
-        if (workerId) {
-          try {
-            await ensurePayrollMovementDocumentGenerated(workerId, "ALTA", hireDate)
-          } catch {
-            /* el movimiento ya quedó registrado; el documento puede regenerarse */
-          }
-        }
+        const workerId = outcome.workerId || undefined
 
         invalidateContractAlertData(queryClient)
         setProcessStage(null)
 
-        if (documentWarning) {
+        if (outcome.documentWarning) {
           showError(
-            `La Resolución se registró, pero el documento no se pudo generar: ${documentWarning}. Puede regenerarlo desde la pestaña Documentos del trabajador.`
+            `La Resolución se registró, pero el documento no se pudo generar: ${outcome.documentWarning}. Puede regenerarlo desde la pestaña Documentos del trabajador.`
           )
         } else {
           showSuccess(
@@ -565,124 +480,45 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       return
     }
 
-    const specialDocumentRole = selected?.job?.is_cuadro || selected?.job?.is_principal_specialist
-    if (!specialDocumentRole && !contractTypeId) {
-      setError("Selecciona un tipo de contrato.")
-      return
-    }
-    if (!specialDocumentRole && !signatureDate) {
-      setError("La fecha de firma del contrato es obligatoria.")
-      return
-    }
-    if (!signaturePlace.trim()) {
-      setError("El lugar de firma es obligatorio.")
-      return
-    }
-    if (!paymentMethodId) {
-      setError("Selecciona la forma de pago.")
-      return
-    }
-    if (hasInvalidComponent(components)) {
-      setError(
-        "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)."
-      )
-      return
-    }
-    if (formalizationBlocked) {
-      setError(
-        `No se puede completar la formalización del contrato. Datos pendientes: ${(
-          pending || EMPTY_FORMALIZATION_PENDING
-        ).blocking.join(" · ")}`
-      )
-      return
-    }
-    if (!representativeAssignmentId) {
-      setError(
-        "No existe ningún representante autorizado configurado para la fecha del contrato. Configure los representantes de la entidad para continuar."
-      )
-      return
-    }
-    if (readiness && !readiness.ready) {
-      setError(formatReadinessMessage(readiness))
-      return
-    }
-    if (!specialDocumentRole && templateBlocked) {
-      setError(missingContractTemplateMessage(selectedType?.name ?? null))
-      return
-    }
-
-    const effectiveContractStart = contractStartDate || hireDate
-    if (isDetermined && !contractEndDate) {
-      setError("El contrato por tiempo determinado requiere una fecha final.")
-      return
-    }
-    if (contractEndDate && contractEndDate <= effectiveContractStart) {
-      setError("La fecha final del contrato debe ser posterior a su inicio.")
-      return
-    }
-
     setSubmitting(true)
     try {
-      const { data, error: rpcError } = await supabase.rpc("hire_candidate", {
-        p_candidate_id: selectedCandidate.id,
-        p_position_id: positionId,
-        p_hire_date: hireDate,
-        p_contract_type_id: specialDocumentRole ? null : contractTypeId,
-        p_contract_start_date: effectiveContractStart,
-        p_contract_end_date: isDetermined ? contractEndDate || null : null,
-        p_notes: notes.trim() || null,
-        p_representative_assignment_id: representativeAssignmentId,
-        p_signature_date: signatureDate,
-        p_signature_place: signaturePlace.trim(),
-        p_payment_method_id: paymentMethodId,
-        p_compensation_components: buildComponentsPayload(components),
-        p_payment_schedule_text: paymentSchedule.trim() || null,
+      // §13/§14/§62: el documento contractual se genera automáticamente tras formalizar
+      // la contratación. No hay paso manual de «Generar contrato». Para cargos Cuadro /
+      // Especialista Principal no se genera contrato ni documento alguno (§24/§25/§30).
+      if (!specialDocumentRole) setProcessStage("Generando documento contractual…")
+
+      // Caso de uso: alta con contrato formalizado. Si la persona ya tenía expediente en
+      // el cliente es una recontratación: la misma operación la devuelve a Trabajadores
+      // sin duplicar su identidad ni su historial. Registra además el Movimiento de
+      // Nómina (Alta) en el expediente del trabajador.
+      const outcome = await hireCandidateWithContract({
+        candidateId,
+        positionId,
+        hireDate,
+        notes,
+        contractTypeId,
+        contractStartDate,
+        contractEndDate,
+        isDetermined,
+        specialDocumentRole,
+        representativeAssignmentId,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        paymentScheduleText: paymentSchedule,
+        compensationComponents: buildComponentsPayload(components),
       })
-      if (rpcError) throw rpcError
-
-      const payload = (data || {}) as { worker_id?: string | null; resolution_id?: string | null; contract_id?: string | null }
-      const workerId = payload.worker_id as string | undefined
-      const contractId = payload.contract_id as string | undefined
-
-      // §13/§14/§62: el documento contractual se genera automáticamente tras
-      // formalizar la contratación. No hay paso manual de «Generar contrato».
-      // Para cargos Cuadro / Especialista Principal no se genera contrato ni
-      // documento alguno (§24/§25/§30): el alta del trabajador concluye aquí.
-      let documentWarning: string | null = null
-      if (contractId && !specialDocumentRole) {
-        setProcessStage("Generando documento contractual…")
-        try {
-          const doc = await ensureContractDocumentGenerated(contractId)
-          if (!doc.skipped && !doc.generated) {
-            documentWarning =
-              doc.result?.error || "No se pudo generar el documento contractual automáticamente."
-          }
-        } catch (genErr) {
-          documentWarning =
-            genErr instanceof Error
-              ? genErr.message
-              : "No se pudo generar el documento contractual automáticamente."
-        }
-      }
-
-      // Movimiento de Nómina (Alta) → documento individual (no aplica a reincorporaciones).
-      if (workerId) {
-        try {
-          await ensurePayrollMovementDocumentGenerated(workerId, "ALTA", hireDate)
-        } catch {
-          /* el movimiento ya quedó registrado; el documento puede regenerarse */
-        }
-      }
+      const workerId = outcome.workerId || undefined
 
       // Contratación/reincorporación crea el contrato vigente: recalcular alertas.
       invalidateContractAlertData(queryClient)
       setProcessStage(null)
 
-      if (documentWarning && workerId) {
+      if (outcome.documentWarning && workerId) {
         // §67: no se presenta como completada sin documento, pero el contrato queda
         // registrado y su documento puede regenerarse desde la ficha del trabajador.
         showError(
-          `La contratación se completó, pero no se pudo generar el documento contractual: ${documentWarning}. Puede regenerarlo desde la pestaña Contratación del trabajador.`
+          `La contratación se completó, pero no se pudo generar el documento contractual: ${outcome.documentWarning}. Puede regenerarlo desde la pestaña Contratación del trabajador.`
         )
         onOpenChange(false)
         onSuccess(workerId)

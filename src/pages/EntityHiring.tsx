@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -34,70 +33,19 @@ import {
 import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
-
-interface JobRef {
-  id: string
-  name: string
-  area: { id: string; name: string } | null
-  salary_group: { id: string; salary_scale_id: string; sequence_number: number } | null
-}
-
-interface PositionRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  job: JobRef | null
-}
-
-// Forma cruda devuelta por PostgREST: las relaciones embebidas pueden llegar
-// como arreglo o como objeto antes de normalizarse en el mapeo.
-interface PositionQueryJobRow {
-  id: string
-  name: string
-  area_id: string
-  area: { id: string; name: string }[] | null
-  salary_group:
-    | { id: string; salary_scale_id: string; sequence_number: number }
-    | { id: string; salary_scale_id: string; sequence_number: number }[]
-    | null
-}
-
-interface PositionQueryRow {
-  id: string
-  name: string
-  code: string | null
-  is_active: boolean
-  authorized_quantity: number
-  job: PositionQueryJobRow | PositionQueryJobRow[] | null
-}
-
-interface WorkerRow {
-  id: string
-  code: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  assignments: { position_id: string; is_current: boolean; end_date: string | null }[] | null
-}
-
-interface Occupant {
-  workerId: string
-  name: string
-  code: string
-}
-
-const fullName = (w: WorkerRow) =>
-  [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
+import {
+  loadEntityStaffingBoard,
+  type PositionOccupant,
+  type StaffingPosition,
+} from "@/domains/people"
 
 const EntityHiring = () => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
 
-  const [positions, setPositions] = React.useState<PositionRow[]>([])
+  const [positions, setPositions] = React.useState<StaffingPosition[]>([])
   const [occupancy, setOccupancy] = React.useState<Record<string, number>>({})
-  const [occupants, setOccupants] = React.useState<Record<string, Occupant[]>>({})
+  const [occupants, setOccupants] = React.useState<Record<string, PositionOccupant[]>>({})
   const [applicableScaleId, setApplicableScaleId] = React.useState<string | null>(null)
   const [salaryValuesByGroup, setSalaryValuesByGroup] = React.useState<
     Record<string, SalaryValue | null>
@@ -123,82 +71,21 @@ const EntityHiring = () => {
     setError(null)
 
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.view",
-      })
-      const { data: canViewManage } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.manage",
-      })
-      if (!canView && !canViewManage) {
+      // Caso de uso (lectura): puestos activos, ocupación vigente y permisos de la
+      // entidad. Sin permiso de ver ni de gestionar no se lee plantilla alguna.
+      const board = await loadEntityStaffingBoard(entityId)
+      if (!board.authorized) {
         setError("No tiene permiso para ver la contratación de esta entidad")
         return
       }
-      setCanManage(!!canViewManage)
+      setCanManage(board.canManage)
 
-      const { data: positionsData, error: positionsError } = await supabase
-        .from("organization_positions")
-        .select(
-          `id, name, code, is_active, authorized_quantity,
-           job:organization_jobs(
-             id, name, area_id,
-             area:organization_areas(id, name),
-             salary_group:salary_groups(id, salary_scale_id, sequence_number)
-           )`
-        )
-        .eq("organization_entity_id", entityId)
-        .eq("is_active", true)
-        .order("name")
-      if (positionsError) throw positionsError
-
-      const positionRows: PositionRow[] = ((positionsData as PositionQueryRow[]) || []).map(
-        (p: PositionQueryRow) => {
-          const job = Array.isArray(p.job) ? p.job[0] ?? null : p.job
-          return {
-            ...p,
-            job: job
-              ? {
-                  ...job,
-                  area: job.area
-                    ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null }
-                    : null,
-                  salary_group: Array.isArray(job.salary_group)
-                    ? job.salary_group[0] ?? null
-                    : job.salary_group,
-                }
-              : null,
-          }
-        }
-      )
-      setPositions(positionRows)
-
-      const { data: workersData, error: workersError } = await supabase
-        .from("workers")
-        .select(
-          `id, code, first_name, first_surname, second_surname, employment_status,
-           assignments:worker_position_assignments(position_id, is_current, end_date)`
-        )
-        .eq("organization_entity_id", entityId)
-        .eq("employment_status", "active")
-      if (workersError) throw workersError
-
-      const counts: Record<string, number> = {}
-      const occupantMap: Record<string, Occupant[]> = {}
-      ;((workersData as WorkerRow[]) || []).forEach((w) => {
-        const current = (w.assignments || []).find((a) => a.is_current && !a.end_date)
-        if (!current) return
-        counts[current.position_id] = (counts[current.position_id] || 0) + 1
-        occupantMap[current.position_id] = [
-          ...(occupantMap[current.position_id] || []),
-          { workerId: w.id, name: fullName(w), code: w.code },
-        ]
-      })
-      setOccupancy(counts)
-      setOccupants(occupantMap)
+      setPositions(board.positions)
+      setOccupancy(board.occupancy.counts)
+      setOccupants(board.occupancy.occupants)
 
       setApplicableScaleId(await resolveApplicableScaleId(entityId))
-      const groupIds = positionRows
+      const groupIds = board.positions
         .map((p) => p.job?.salary_group?.id)
         .filter((id): id is string => !!id)
       setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
@@ -215,13 +102,13 @@ const EntityHiring = () => {
   }, [loadData])
 
   const vacanciesOf = React.useCallback(
-    (position: PositionRow) =>
+    (position: StaffingPosition) =>
       Math.max(0, (position.authorized_quantity || 0) - (occupancy[position.id] || 0)),
     [occupancy]
   )
 
   const salaryForPosition = React.useCallback(
-    (position: PositionRow | null): SalaryValue | null =>
+    (position: StaffingPosition | null): SalaryValue | null =>
       salaryForGroup(applicableScaleId, position?.job?.salary_group, salaryValuesByGroup),
     [applicableScaleId, salaryValuesByGroup]
   )
@@ -254,14 +141,14 @@ const EntityHiring = () => {
         label: "Área",
         type: "select",
         options: areas.map((a) => ({ value: a.id, label: a.name })),
-        getValue: (p: PositionRow) => p.job?.area?.id,
+        getValue: (p: StaffingPosition) => p.job?.area?.id,
       },
       {
         key: "job",
         label: "Cargo",
         type: "select",
         options: jobOptions,
-        getValue: (p: PositionRow) => p.job?.id,
+        getValue: (p: StaffingPosition) => p.job?.id,
       },
       {
         key: "coverage",
@@ -271,7 +158,7 @@ const EntityHiring = () => {
           { value: "with-vacancies", label: "Con vacantes" },
           { value: "covered", label: "Cubiertos" },
         ],
-        getValue: (p: PositionRow) => (vacanciesOf(p) > 0 ? "with-vacancies" : "covered"),
+        getValue: (p: StaffingPosition) => (vacanciesOf(p) > 0 ? "with-vacancies" : "covered"),
       },
     ],
     [areas, jobOptions, vacanciesOf]

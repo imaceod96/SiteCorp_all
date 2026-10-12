@@ -336,6 +336,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
           effectiveDate,
           reason,
           notes,
+          representativeAssignmentId: resolutionValues.representativeAssignmentId,
           resolutionDate: resolutionValues.resolutionDate,
         })
 
@@ -344,7 +345,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
 
         if (result.documentWarning) {
           showError(
-            `El movimiento se realizó, pero la Resolución no se pudo generar: ${documentWarning}. Puede regenerarla desde la pestaña Documentos del trabajador.`
+            `El movimiento se realizó, pero la Resolución no se pudo generar: ${result.documentWarning}. Puede regenerarla desde la pestaña Documentos del trabajador.`
           )
         } else {
           showSuccess(

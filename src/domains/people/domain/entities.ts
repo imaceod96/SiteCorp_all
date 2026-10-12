@@ -340,6 +340,9 @@ export type WorkerTransitionKind =
   | "contract_change"
 
 /** Resultado esperado de una transición sobre la vista donde aparece la persona. */
+/** Movimiento de nómina del expediente del trabajador (mismo vocabulario que el backend). */
+export type PayrollMovementType = "ALTA" | "BAJA" | "REUBICACION"
+
 export interface TransitionEffect {
   kind: WorkerTransitionKind
   /** Vista operativa a la que pertenece la persona DESPUÉS de la transición. */
@@ -473,6 +476,11 @@ export interface WorkerPositionChangeInput {
     signaturePlace: string
     representativeAssignmentId: string | null
   }
+  /**
+   * Representante que suscribe la Resolución, cuando el Cargo destino es Especialista
+   * Principal (§45). En la vía de contrato el representante es el del anexo.
+   */
+  representativeAssignmentId?: string | null
   /** Fecha de la Resolución cuando el Cargo destino es Especialista Principal (§45). */
   resolutionDate?: string | null
 }

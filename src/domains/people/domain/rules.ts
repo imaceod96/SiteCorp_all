@@ -49,6 +49,7 @@ import type {
   PersonCandidate,
   PersonDirectoryWorker,
   PersonIdentificationStatus,
+  PayrollMovementType,
   ReadinessResult,
   TransitionEffect,
   WorkerTransitionKind,
@@ -353,7 +354,10 @@ export const transitionEffect = (kind: WorkerTransitionKind): TransitionEffect =
  * `null` cuando la operación no registra movimiento de nómina (reincorporación y cambio
  * de contrato se documentan con el contrato o la Resolución).
  */
-export const TRANSITION_MOVEMENT_DOCUMENT: Record<WorkerTransitionKind, string | null> = {
+export const TRANSITION_MOVEMENT_DOCUMENT: Record<
+  WorkerTransitionKind,
+  PayrollMovementType | null
+> = {
   hire: "ALTA",
   separation: "BAJA",
   reincorporation: null,
@@ -521,8 +525,13 @@ export interface HireValidationInput {
   hasCandidate: boolean
   positionId: string
   hireDate: string
-  /** Cargo Cuadro o Especialista Principal: no genera contrato ni documento contractual. */
-  specialDocumentRole: boolean
+  /**
+   * El Cargo destino es Especialista Principal: el documento es una Resolución, así que
+   * las condiciones del contrato NO se validan (las valida el formulario de Resolución).
+   */
+  resolutionDocument: boolean
+  /** Cargo Cuadro o Especialista Principal: no exige tipo de contrato ni plantilla. */
+  skipsContractTerms: boolean
   contractTypeId: string
   signatureDate: string
   formalization: ContractFormalizationInput
@@ -539,8 +548,9 @@ export function validateHireInput(input: HireValidationInput): string | null {
   if (!input.hasCandidate) return "Selecciona la persona a contratar."
   if (!input.positionId) return "Selecciona un puesto."
   if (!input.hireDate) return "La fecha de incorporación es obligatoria."
+  if (input.resolutionDocument) return null
 
-  if (!input.specialDocumentRole) {
+  if (!input.skipsContractTerms) {
     if (!input.contractTypeId) return "Selecciona un tipo de contrato."
     if (!input.signatureDate) return "La fecha de firma del contrato es obligatoria."
   }
@@ -556,7 +566,7 @@ export function validateHireInput(input: HireValidationInput): string | null {
 
   if (input.readiness && !input.readiness.ready) return formatReadinessMessage(input.readiness)
 
-  if (!input.specialDocumentRole && input.templateBlockedMessage) {
+  if (!input.skipsContractTerms && input.templateBlockedMessage) {
     return input.templateBlockedMessage
   }
 
