@@ -1,5 +1,14 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
+import {
+  deleteWorkerDocument,
+  downloadWorkerDocument,
+  loadWorkerDocumentsView,
+  openWorkerDocument,
+  uploadWorkerDocument,
+  type DocumentTypeOption,
+  type WorkerDocumentContractRef,
+  type WorkerDocumentRow,
+} from "@/domains/people"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
@@ -21,50 +30,27 @@ import {
   formatDocumentDate,
   formatFileSize,
   isViewableDocument,
-  sanitizeFileName,
   validateDocumentFile,
 } from "@/lib/documents"
-
-interface WorkerDocument {
-  id: string
-  worker_id: string
-  document_type_id: string
-  employment_contract_id: string | null
-  file_name: string
-  storage_path: string
-  mime_type: string | null
-  file_size: number | null
-  description: string | null
-  source: string
-  uploaded_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface DocumentType {
-  id: string
-  name: string
-  sort_order: number | null
-}
-
-interface ContractRef {
-  id: string
-  start_date: string
-  contract_type: { name: string } | null
-}
 
 interface WorkerDocumentsTabProps {
   workerId: string
   canManage: boolean
 }
 
-const BUCKET = "documents"
-
+/**
+ * Pestaña «Documentos» del expediente del trabajador.
+ *
+ * La pantalla no compone ninguna consulta: pide el expediente documental al caso de uso del
+ * dominio Personas (`loadWorkerDocumentsView`) y las escrituras a sus comandos. El catálogo
+ * de tipos, los documentos, el autor y el contrato referenciado llegan ya resueltos, y el
+ * archivo se sirve con enlace temporal firmado.
+ */
 export const WorkerDocumentsTab: React.FC<WorkerDocumentsTabProps> = ({ workerId, canManage }) => {
-  const [documents, setDocuments] = React.useState<WorkerDocument[]>([])
-  const [documentTypes, setDocumentTypes] = React.useState<DocumentType[]>([])
+  const [documentTypes, setDocumentTypes] = React.useState<DocumentTypeOption[]>([])
+  const [documents, setDocuments] = React.useState<WorkerDocumentRow[]>([])
   const [uploaderNames, setUploaderNames] = React.useState<Record<string, string>>({})
-  const [contractsById, setContractsById] = React.useState<Record<string, ContractRef>>({})
+  const [contractsById, setContractsById] = React.useState<Record<string, WorkerDocumentContractRef>>({})
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [busyId, setBusyId] = React.useState<string | null>(null)
@@ -82,63 +68,11 @@ export const WorkerDocumentsTab: React.FC<WorkerDocumentsTabProps> = ({ workerId
     setLoading(true)
     setError(null)
     try {
-      const [typesRes, docsRes] = await Promise.all([
-        supabase
-          .from("document_types")
-          .select("id, name, sort_order")
-          .order("sort_order", { ascending: true }),
-        supabase
-          .from("worker_documents")
-          .select("*")
-          .eq("worker_id", workerId)
-          .order("created_at", { ascending: false }),
-      ])
-      if (typesRes.error) throw typesRes.error
-      if (docsRes.error) throw docsRes.error
-
-      setDocumentTypes((typesRes.data as DocumentType[]) || [])
-      const docs = (docsRes.data as WorkerDocument[]) || []
-      setDocuments(docs)
-
-      // Resolver nombres de quienes subieron (best-effort, sujeto a RLS de profiles)
-      const uploaderIds = Array.from(
-        new Set(docs.map((d) => d.uploaded_by).filter((id): id is string => !!id))
-      )
-      if (uploaderIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, full_name, username")
-          .in("id", uploaderIds)
-        const map: Record<string, string> = {}
-        ;(profiles || []).forEach((p: { id: string; full_name: string | null; username: string | null }) => {
-          map[p.id] = p.full_name || p.username || ""
-        })
-        setUploaderNames(map)
-      } else {
-        setUploaderNames({})
-      }
-
-      // Referencia opcional a contratos laborales (documentos generados en el futuro)
-      const contractIds = Array.from(
-        new Set(docs.map((d) => d.employment_contract_id).filter((id): id is string => !!id))
-      )
-      if (contractIds.length > 0) {
-        const { data: contracts } = await supabase
-          .from("employment_contracts")
-          .select("id, start_date, contract_type:employment_contract_types(name)")
-          .in("id", contractIds)
-        const map: Record<string, ContractRef> = {}
-        ;(contracts || []).forEach((c: { id: string; start_date: string; contract_type: { name: string } | { name: string }[] | null }) => {
-          map[c.id] = {
-            id: c.id,
-            start_date: c.start_date,
-            contract_type: Array.isArray(c.contract_type) ? c.contract_type[0] || null : c.contract_type,
-          }
-        })
-        setContractsById(map)
-      } else {
-        setContractsById({})
-      }
+      const view = await loadWorkerDocumentsView(workerId)
+      setDocumentTypes(view.documentTypes)
+      setDocuments(view.documents)
+      setUploaderNames(view.uploaderNames)
+      setContractsById(view.contractsById)
     } catch (err) {
       console.error("Error loading worker documents:", err)
       setError(err instanceof Error ? err.message : "Error al cargar los documentos")
@@ -173,36 +107,15 @@ export const WorkerDocumentsTab: React.FC<WorkerDocumentsTabProps> = ({ workerId
     setUploading(true)
     setUploadError(null)
 
-    const documentId = crypto.randomUUID()
-    const storagePath = `workers/${workerId}/${documentId}/${sanitizeFileName(selectedFile.name)}`
-
     try {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) throw new Error("Usuario no autenticado")
-
-      // 1) Subir a Storage privado
-      const { error: storageError } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, selectedFile, { cacheControl: "3600", upsert: false })
-      if (storageError) throw storageError
-
-      // 2) Crear el registro. Si falla, limpiar el archivo para no dejar huérfanos.
-      const { error: dbError } = await supabase.from("worker_documents").insert({
-        id: documentId,
-        worker_id: workerId,
-        document_type_id: selectedType,
-        file_name: selectedFile.name,
-        storage_path: storagePath,
-        mime_type: selectedFile.type || null,
-        file_size: selectedFile.size,
+      // Subida + registro en una sola operación del dominio (con limpieza del archivo si
+      // fallara el registro, para no dejar huérfanos).
+      await uploadWorkerDocument({
+        workerId,
+        documentTypeId: selectedType,
+        file: selectedFile,
         description: description.trim() || null,
-        source: "MANUAL",
-        uploaded_by: userData.user.id,
       })
-      if (dbError) {
-        await supabase.storage.from(BUCKET).remove([storagePath])
-        throw dbError
-      }
 
       setUploadDialogOpen(false)
       setSelectedFile(null)
@@ -218,14 +131,10 @@ export const WorkerDocumentsTab: React.FC<WorkerDocumentsTabProps> = ({ workerId
     }
   }
 
-  const handleView = async (doc: WorkerDocument) => {
+  const handleView = async (doc: WorkerDocumentRow) => {
     setBusyId(doc.id)
     try {
-      const { data, error: signedError } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(doc.storage_path, 60)
-      if (signedError) throw signedError
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+      await openWorkerDocument(doc.storage_path)
     } catch (err) {
       console.error("Error viewing document:", err)
       showError("No se pudo abrir el documento")
@@ -234,22 +143,10 @@ export const WorkerDocumentsTab: React.FC<WorkerDocumentsTabProps> = ({ workerId
     }
   }
 
-  const handleDownload = async (doc: WorkerDocument) => {
+  const handleDownload = async (doc: WorkerDocumentRow) => {
     setBusyId(doc.id)
     try {
-      const { data, error: downloadError } = await supabase.storage
-        .from(BUCKET)
-        .download(doc.storage_path)
-      if (downloadError) throw downloadError
-
-      const url = window.URL.createObjectURL(data)
-      const a = window.document.createElement("a")
-      a.href = url
-      a.download = doc.file_name
-      window.document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      window.document.body.removeChild(a)
+      await downloadWorkerDocument({ storagePath: doc.storage_path, fileName: doc.file_name })
     } catch (err) {
       console.error("Error downloading document:", err)
       showError("No se pudo descargar el documento")
@@ -258,19 +155,13 @@ export const WorkerDocumentsTab: React.FC<WorkerDocumentsTabProps> = ({ workerId
     }
   }
 
-  const handleDelete = async (doc: WorkerDocument) => {
+  const handleDelete = async (doc: WorkerDocumentRow) => {
     if (!confirm("¿Está seguro de que desea eliminar este documento? Esta acción no se puede deshacer.")) {
       return
     }
     setBusyId(doc.id)
     try {
-      // Eliminar primero el archivo (evita archivos huérfanos) y luego el registro
-      const { error: storageError } = await supabase.storage.from(BUCKET).remove([doc.storage_path])
-      if (storageError) throw storageError
-
-      const { error: dbError } = await supabase.from("worker_documents").delete().eq("id", doc.id)
-      if (dbError) throw dbError
-
+      await deleteWorkerDocument(doc)
       await loadDocuments()
       showSuccess("Documento eliminado correctamente")
     } catch (err) {

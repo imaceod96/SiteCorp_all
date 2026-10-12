@@ -2,7 +2,7 @@ import {
   ensureAddendumDocumentGenerated,
   ensureContractDocumentGenerated,
   type DocumentAutomationResult,
-} from "@/lib/contract-automation"
+} from "@/domains/contracts"
 import { ensurePayrollMovementDocumentGenerated } from "@/lib/payroll-movements"
 import { ensureResolutionDocumentGenerated } from "@/domains/resolutions"
 import type { PayrollMovementType } from "../domain/entities"

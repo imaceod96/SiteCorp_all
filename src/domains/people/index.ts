@@ -136,6 +136,9 @@ export {
   loadEntityWorkersDirectory,
   loadEntityReentriesView,
   loadCandidateRegistryCatalogs,
+  loadEntityActiveWorkerOptions,
+  loadMigrationTemplateData,
+  loadPersonIdentificationStatus,
 } from "./application/people.queries"
 
 /* Casos de uso (contratación y transiciones) */
@@ -296,3 +299,27 @@ export {
   createWorkerExpediente,
   registerWorkerExpedienteContract,
 } from "./application/worker-expediente.commands"
+
+/* Expediente DOCUMENTAL del trabajador (pestaña «Documentos» del expediente) */
+export type {
+  WorkerDocumentRow,
+  WorkerDocumentContractRef,
+  WorkerDocumentsView,
+  NewWorkerDocumentRecord,
+  EntityWorkerOption,
+  MigrationTemplateData,
+  MigrationTemplateCatalogItem,
+  MigrationTemplateJob,
+  MigrationTemplatePosition,
+  MigrationTemplateRepresentative,
+} from "./domain/entities"
+
+export { loadWorkerDocumentsView } from "./application/worker-documents.queries"
+
+export {
+  EXPEDIENTE_SIGNED_URL_TTL,
+  uploadWorkerDocument,
+  openWorkerDocument,
+  downloadWorkerDocument,
+  deleteWorkerDocument,
+} from "./application/worker-documents.commands"

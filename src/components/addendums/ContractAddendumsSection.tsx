@@ -11,11 +11,11 @@ import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
-  isAddendumPending,
   type ContractAddendum,
   type FormalizedConditions,
   type WorkerContractualConditions,
 } from "@/lib/addendums"
+import { isAddendumPending } from "@/domains/contracts"
 import { ArrowRight, FilePlus2, UserCheck } from "lucide-react"
 
 interface ContractRow {

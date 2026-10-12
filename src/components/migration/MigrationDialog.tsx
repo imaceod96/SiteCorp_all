@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { loadMigrationTemplateData, type MigrationTemplateData } from "@/domains/people"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -55,47 +55,11 @@ interface MigrationRow {
   representative_assignment_id: string
 }
 
-/**
+/*
  * Contrato del RPC `get_migration_template_data` (ver
- * `src/db/migrations/20261020_02_worker_migration_rpcs.sql`). Cada catálogo es un
- * `jsonb_agg(jsonb_build_object(...))`, por lo que las claves son exactamente las
- * que aparecen aquí.
+ * `src/db/migrations/20261020_02_worker_migration_rpcs.sql`): el modelo `MigrationTemplateData`
+ * del dominio Personas describe cada catálogo, tal y como llega del backend.
  */
-interface MigrationCatalogItem {
-  id: string
-  name: string
-  code: string
-}
-
-interface MigrationTemplateJob {
-  id: string
-  name: string
-  code: string
-  area_id: string
-}
-
-interface MigrationTemplatePosition {
-  id: string
-  name: string
-  code: string
-  job_id: string
-  authorized_quantity: number
-}
-
-interface MigrationTemplateRepresentative {
-  id: string
-  person_name: string
-  title: string | null
-}
-
-interface MigrationTemplate {
-  areas: MigrationCatalogItem[]
-  jobs: MigrationTemplateJob[]
-  positions: MigrationTemplatePosition[]
-  contract_types: MigrationCatalogItem[]
-  payment_methods: MigrationCatalogItem[]
-  representatives: MigrationTemplateRepresentative[]
-}
 
 export const MigrationDialog: React.FC<MigrationDialogProps> = ({
   entityId,
@@ -105,7 +69,7 @@ export const MigrationDialog: React.FC<MigrationDialogProps> = ({
 }) => {
   const [step, setStep] = useState<'upload' | 'preview' | 'confirm'>('upload')
   const [file, setFile] = useState<File | null>(null)
-  const [template, setTemplate] = useState<MigrationTemplate | null>(null)
+  const [template, setTemplate] = useState<MigrationTemplateData | null>(null)
   const [previewData, setPreviewData] = useState<MigrationRow[]>([])
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -122,15 +86,8 @@ export const MigrationDialog: React.FC<MigrationDialogProps> = ({
     setError(null)
 
     try {
-      // Load template data
-      const { data: templateData, error: templateError } = await supabase.rpc(
-        'get_migration_template_data',
-        { entity_id: entityId, migration_type: migrationType }
-      )
-
-      if (templateError) throw templateError
-
-      setTemplate(templateData)
+      // Datos de referencia de la carga inicial: caso de uso del dominio Personas.
+      setTemplate(await loadMigrationTemplateData(entityId, migrationType))
 
       // Parse Excel file
       const formData = new FormData()

@@ -8,18 +8,28 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
-import { Users, ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, Upload } from "lucide-react"
 import { SelectItem } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
 import type { CatalogOption } from "@/lib/catalogs"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
+  PeopleRuleError,
+  candidateRequiresSpecialty,
   loadCandidateFormCatalogs,
   loadCandidateFormData,
+  registerCandidate,
   specialtyForEducationLevel,
   updateCandidateExpediente,
   validateCandidateRegistration,
@@ -133,19 +143,56 @@ const EDUCATION_LEVEL_ORDER = [
   "Superior",
 ]
 
+/** `page` = ficha completa con tarjetas; `dialog` = mismas secciones dentro de un diálogo. */
+export type CandidateFormVariant = "page" | "dialog"
+
 interface CandidateFormProps {
   candidateId?: string
   entityId?: string
   mode?: "create" | "edit"
+  /** Presentación: página del expediente (por defecto) o dentro de un diálogo. */
+  variant?: CandidateFormVariant
   onSuccess?: () => void
   onCancel?: () => void
 }
 
-const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onSuccess, onCancel }: CandidateFormProps) => {
+/**
+ * Sección del formulario. En la ficha va dentro de una tarjeta; dentro de un diálogo se
+ * muestra como bloque, conservando exactamente el mismo encabezado y la misma rejilla.
+ */
+const FormSection: React.FC<{
+  title: string
+  variant: CandidateFormVariant
+  children: React.ReactNode
+}> = ({ title, variant, children }) => {
+  const body = (
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold text-ink border-b pb-2">{title}</h3>
+      {children}
+    </div>
+  )
+  return variant === "dialog" ? body : <SiteCorpCard>{body}</SiteCorpCard>
+}
+
+/**
+ * UNA sola ficha de candidato para las dos pantallas: el alta desde el listado de Candidatos
+ * (diálogo) y la edición del expediente (página). Los campos, las validaciones, los permisos
+ * y los documentos son los mismos; las reglas las aplica el dominio Personas.
+ */
+const CandidateForm = ({
+  candidateId,
+  entityId: propEntityId,
+  mode = "edit",
+  variant = "page",
+  onSuccess,
+  onCancel,
+}: CandidateFormProps) => {
   const { entityId: contextEntityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
   const effectiveEntityId = propEntityId || contextEntityId
+  const isCreate = mode === "create"
+  const inDialog = variant === "dialog"
 
   const [candidate, setCandidate] = React.useState<Candidate | null>(null)
   const [genders, setGenders] = React.useState<Gender[]>([])
@@ -160,12 +207,16 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
   const [formSubmitting, setFormSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [formSuccess, setFormSuccess] = React.useState(false)
-  const [loading, setLoading] = React.useState(true)
-    const [error, setError] = React.useState<string | null>(null)
-    const [hasManagePermission, setHasManagePermission] = React.useState(false)
-    // Documentos de verificación existentes, reconstruidos desde candidate_documents.
-    const [existingPreEmploymentDoc, setExistingPreEmploymentDoc] = React.useState<{ original_file_name: string } | null>(null)
-    const [existingCriminalRecordDoc, setExistingCriminalRecordDoc] = React.useState<{ original_file_name: string } | null>(null)
+  const [loading, setLoading] = React.useState(!isCreate)
+  const [error, setError] = React.useState<string | null>(null)
+  const [hasManagePermission, setHasManagePermission] = React.useState(false)
+  // Documentos de verificación existentes, reconstruidos desde candidate_documents.
+  const [existingPreEmploymentDoc, setExistingPreEmploymentDoc] = React.useState<{ original_file_name: string } | null>(null)
+  const [existingCriminalRecordDoc, setExistingCriminalRecordDoc] = React.useState<{ original_file_name: string } | null>(null)
+
+  // Medidas disciplinarias: el archivo se conserva en memoria y viaja con el alta.
+  const [disciplinaryDialogOpen, setDisciplinaryDialogOpen] = React.useState(false)
+  const [disciplinaryDocument, setDisciplinaryDocument] = React.useState<File | null>(null)
 
   // Fetch reference data
   React.useEffect(() => {
@@ -222,9 +273,9 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
         // depender de un booleano independiente que pueda quedar desincronizado.
         setExistingPreEmploymentDoc(verificationDocuments.preEmployment)
         setExistingCriminalRecordDoc(verificationDocuments.criminalRecord)
-        
-                // Pre-populate form
-                setFormData({
+
+        // Pre-populate form
+        setFormData({
           first_name: data.first_name,
           first_surname: data.first_surname,
           second_surname: data.second_surname || "",
@@ -247,14 +298,14 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
           has_disciplinary_measures: data.has_disciplinary_measures || false,
           skin_color_id: data.skin_color_id || "",
           driving_license_ids: drivingLicenseIds,
-                    has_pre_employment_check: !!verificationDocuments.preEmployment,
-                    has_criminal_record_check: !!verificationDocuments.criminalRecord,
+          has_pre_employment_check: !!verificationDocuments.preEmployment,
+          has_criminal_record_check: !!verificationDocuments.criminalRecord,
           pre_employment_check_file: null,
-                    criminal_record_check_file: null,
-                    disciplinary_document: null,
-                  })
-          
-                  if (data.province && MUNICIPIOS_BY_PROVINCE_FULL[data.province]) {
+          criminal_record_check_file: null,
+          disciplinary_document: null,
+        })
+
+        if (data.province && MUNICIPIOS_BY_PROVINCE_FULL[data.province]) {
           setMunicipalities(MUNICIPIOS_BY_PROVINCE_FULL[data.province].map(name => ({ id: name, name })))
         }
       } catch (err) {
@@ -269,23 +320,23 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
   }, [effectiveEntityId, candidateId, mode])
 
   const handleFormChange = (field: keyof CandidateFormData, value: string | boolean | File | null) => {
-      setFormData(prev => ({ ...prev, [field]: value }))
-    }
-  
-    // Al cambiar el Nivel educacional: si el nuevo nivel no requiere especialidad,
-    // se limpia el valor para que se guarde como NULL.
-    const handleEducationLevelChange = (value: string) => {
-      const levelId = value === "__placeholder__" ? "" : value
-      const level = educationLevels.find(l => l.id === levelId)
-      const needsSpecialty = ["Obrero Calificado", "Técnico Medio", "Superior"].includes(level?.name || "")
-      setFormData(prev => ({
-        ...prev,
-        education_level_id: levelId,
-        specialty: needsSpecialty ? prev.specialty : "",
-      }))
-    }
-  
-    const handleDrivingLicensesChange = (licenseIds: string[]) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  // Al cambiar el Nivel educacional: si el nuevo nivel no requiere especialidad,
+  // se limpia el valor para que se guarde como NULL.
+  const handleEducationLevelChange = (value: string) => {
+    const levelId = value === "__placeholder__" ? "" : value
+    const level = educationLevels.find(l => l.id === levelId)
+    const needsSpecialty = candidateRequiresSpecialty(level?.name)
+    setFormData(prev => ({
+      ...prev,
+      education_level_id: levelId,
+      specialty: needsSpecialty ? prev.specialty : "",
+    }))
+  }
+
+  const handleDrivingLicensesChange = (licenseIds: string[]) => {
     setFormData(prev => ({ ...prev, driving_license_ids: licenseIds }))
   }
 
@@ -349,10 +400,16 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
     has_criminal_record_check: formData.has_criminal_record_check,
     pre_employment_check_file: formData.pre_employment_check_file,
     criminal_record_check_file: formData.criminal_record_check_file,
-    disciplinary_document: formData.disciplinary_document,
+    disciplinary_document: disciplinaryDocument,
     pre_employment_check_present: !!existingPreEmploymentDoc,
     criminal_record_check_present: !!existingCriminalRecordDoc,
   })
+
+  const resetForm = () => {
+    setFormData(emptyFormData)
+    setDisciplinaryDocument(null)
+    setMunicipalities([])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -371,32 +428,53 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
     setFormSubmitting(true)
     setFormError(null)
 
-    const updatedCandidate: CandidateExpedienteInput = {
-      first_name: formData.first_name.trim(),
-      first_surname: formData.first_surname.trim(),
-      second_surname: formData.second_surname.trim() || null,
-      identification: formData.identification.trim(),
-      birth_date: formData.birth_date || null,
-      gender_id: formData.gender_id || null,
-      marital_status_id: formData.marital_status_id || null,
-      phone: formData.phone.trim() || null,
-      email: formData.email.trim() || null,
-      address: formData.address.trim() || null,
-      municipality: formData.municipality.trim() || null,
-      province: formData.province.trim() || null,
-      education_level_id: formData.education_level_id || null,
-      // La especialidad solo se conserva en los niveles educacionales que la exigen.
-      specialty: specialtyForEducationLevel(educationLevelName(), formData.specialty),
-      has_masters_degree: formData.has_masters_degree,
-      has_doctorate_degree: formData.has_doctorate_degree,
-      profession_or_trade: formData.profession_or_trade.trim() || null,
-      political_affiliation: formData.political_affiliation || null,
-      is_retired_or_rehired: formData.is_retired_or_rehired === "yes",
-      has_disciplinary_measures: formData.has_disciplinary_measures,
-      skin_color_id: formData.skin_color_id || null,
-    }
-
     try {
+      if (isCreate) {
+        // Alta: validación, unicidad de identidad (backend), inserción, licencias y
+        // documentos, todo el caso de uso, sin reglas duplicadas en la vista.
+        if (!effectiveEntityId) throw new Error("No se pudo determinar la entidad actual.")
+
+        await registerCandidate({
+          entityId: effectiveEntityId,
+          companyClientId: currentEntity?.tenant_id,
+          registration: buildRegistrationInput(),
+        })
+
+        resetForm()
+        if (onSuccess) {
+          onSuccess()
+        } else {
+          setFormSuccess(true)
+          setTimeout(() => setFormSuccess(false), 3000)
+        }
+        return
+      }
+
+      const updatedCandidate: CandidateExpedienteInput = {
+        first_name: formData.first_name.trim(),
+        first_surname: formData.first_surname.trim(),
+        second_surname: formData.second_surname.trim() || null,
+        identification: formData.identification.trim(),
+        birth_date: formData.birth_date || null,
+        gender_id: formData.gender_id || null,
+        marital_status_id: formData.marital_status_id || null,
+        phone: formData.phone.trim() || null,
+        email: formData.email.trim() || null,
+        address: formData.address.trim() || null,
+        municipality: formData.municipality.trim() || null,
+        province: formData.province.trim() || null,
+        education_level_id: formData.education_level_id || null,
+        // La especialidad solo se conserva en los niveles educacionales que la exigen.
+        specialty: specialtyForEducationLevel(educationLevelName(), formData.specialty),
+        has_masters_degree: formData.has_masters_degree,
+        has_doctorate_degree: formData.has_doctorate_degree,
+        profession_or_trade: formData.profession_or_trade.trim() || null,
+        political_affiliation: formData.political_affiliation || null,
+        is_retired_or_rehired: formData.is_retired_or_rehired === "yes",
+        has_disciplinary_measures: formData.has_disciplinary_measures,
+        skin_color_id: formData.skin_color_id || null,
+      }
+
       // Guardado del expediente: ficha, licencias y documentos verificadores en una sola
       // operación del dominio (los documentos conservan su regla de conservación).
       const refreshed = await updateCandidateExpediente({
@@ -424,8 +502,14 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
         }
       }, 1500)
     } catch (err) {
-      console.error("Error updating candidate:", err)
-      setFormError("Error al actualizar el candidato. Inténtalo de nuevo.")
+      console.error(isCreate ? "Error creating candidate:" : "Error updating candidate:", err)
+      setFormError(
+        err instanceof PeopleRuleError
+          ? err.message
+          : isCreate
+            ? "Error al guardar el candidato. Inténtalo de nuevo."
+            : "Error al actualizar el candidato. Inténtalo de nuevo."
+      )
     } finally {
       setFormSubmitting(false)
     }
@@ -434,9 +518,9 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
   const handleCancel = () => {
     if (onCancel) {
       onCancel()
-    } else {
-      navigate(`/entity/${effectiveEntityId}/candidates/${candidateId}`)
+      return
     }
+    navigate(`/entity/${effectiveEntityId}/candidates/${candidateId}`)
   }
 
   if (loading) {
@@ -462,7 +546,7 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
     )
   }
 
-  if (!candidate) {
+  if (!isCreate && !candidate) {
     return (
       <div className="space-y-6 p-6">
         <SiteCorpPageHeader title="Candidato no encontrado" description="El candidato solicitado no existe o no tiene acceso" />
@@ -476,16 +560,341 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
     )
   }
 
-  const requiresSpecialty = ["Obrero Calificado", "Técnico Medio", "Superior"].includes(
-    educationLevels.find(l => l.id === formData.education_level_id)?.name || ""
+  const requiresSpecialty = candidateRequiresSpecialty(educationLevelName())
+
+  const form = (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Section 1: Identificación */}
+      <FormSection title="Identificación" variant={variant}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Nombre *</Label>
+            <SiteCorpInput type="text" placeholder="Nombre" value={formData.first_name} onChange={(e) => handleFormChange("first_name", e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Primer apellido *</Label>
+            <SiteCorpInput type="text" placeholder="Primer apellido" value={formData.first_surname} onChange={(e) => handleFormChange("first_surname", e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Segundo apellido</Label>
+            <SiteCorpInput type="text" placeholder="Segundo apellido" value={formData.second_surname} onChange={(e) => handleFormChange("second_surname", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Identificación *</Label>
+            <SiteCorpInput type="text" inputMode="numeric" placeholder="11 dígitos" value={formData.identification} onChange={(e) => handleIdentificationChange(e.target.value)} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Fecha de nacimiento (dd/mm/aaaa) *</Label>
+            <SiteCorpInput type="text" placeholder="dd/mm/aaaa" value={formData.birth_date} required onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, "").substring(0, 8)
+              let formatted = val
+              if (val.length > 4) formatted = `${val.substring(0, 2)}/${val.substring(2, 4)}/${val.substring(4, 8)}`
+              else if (val.length > 2) formatted = `${val.substring(0, 2)}/${val.substring(2)}`
+              handleFormChange("birth_date", formatted)
+            }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sexo</Label>
+            <SiteCorpSelect value={formData.gender_id || undefined} onValueChange={(value) => handleFormChange("gender_id", value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {genders.map(gender => (
+                <SelectItem key={gender.id} value={gender.id}>{gender.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Color de piel</Label>
+            <SiteCorpSelect value={formData.skin_color_id || undefined} onValueChange={(value) => handleFormChange("skin_color_id", value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {skinColors.map(color => (
+                <SelectItem key={color.id} value={color.id}>{color.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+        </div>
+      </FormSection>
+
+      {/* Section 2: Datos personales */}
+      <FormSection title="Datos personales" variant={variant}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Estado civil</Label>
+            <SiteCorpSelect value={formData.marital_status_id || undefined} onValueChange={(value) => handleFormChange("marital_status_id", value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {maritalStatuses.map(status => (
+                <SelectItem key={status.id} value={status.id}>{status.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Afiliación política</Label>
+            <SiteCorpSelect value={formData.political_affiliation || undefined} onValueChange={(value) => handleFormChange("political_affiliation", value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {POLITICAL_AFFILIATIONS.map(aff => (
+                <SelectItem key={aff.id} value={aff.id}>{aff.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Retirado o Recontratado</Label>
+            <SiteCorpSelect value={formData.is_retired_or_rehired || undefined} onValueChange={(value) => handleFormChange("is_retired_or_rehired", value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {RETIRED_REHIRED_OPTIONS.map(opt => (
+                <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+        </div>
+      </FormSection>
+
+      {/* Section 3: Contacto y dirección */}
+      <FormSection title="Contacto y dirección" variant={variant}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Teléfono</Label>
+            <SiteCorpInput type="tel" placeholder="+51 999 999 999" value={formData.phone} onChange={(e) => handleFormChange("phone", e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Email</Label>
+            <SiteCorpInput type="email" placeholder="correo@ejemplo.com" value={formData.email} onChange={(e) => handleFormChange("email", e.target.value)} />
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label>Dirección particular *</Label>
+            <Textarea placeholder="Dirección completa" value={formData.address} onChange={(e) => handleFormChange("address", e.target.value)} rows={2} required />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Provincia *</Label>
+            <SiteCorpSelect value={formData.province || undefined} onValueChange={(value) => handleProvinceChange(value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {provinces.map(province => (
+                <SelectItem key={province.id} value={province.id}>{province.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Municipio *</Label>
+            <SiteCorpSelect value={formData.municipality || undefined} onValueChange={(value) => handleFormChange("municipality", value === "__placeholder__" ? "" : value)} disabled={!formData.province}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {municipalities.map(muni => (
+                <SelectItem key={muni.id} value={muni.id}>{muni.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+        </div>
+      </FormSection>
+
+      {/* Section 4: Formación */}
+      <FormSection title="Formación" variant={variant}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Nivel educacional</Label>
+            <SiteCorpSelect value={formData.education_level_id || undefined} onValueChange={handleEducationLevelChange}>
+              <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
+              {EDUCATION_LEVEL_ORDER
+                .map(name => educationLevels.find(level => level.name === name))
+                .filter((level): level is EducationLevel => Boolean(level))
+                .map(level => (
+                  <SelectItem key={level.id} value={level.id}>{level.name}</SelectItem>
+                ))}
+            </SiteCorpSelect>
+          </div>
+          {requiresSpecialty && (
+            <div className="space-y-1.5">
+              <Label>Especialidad *</Label>
+              <SiteCorpInput type="text" placeholder="Especialidad" value={formData.specialty} onChange={(e) => handleFormChange("specialty", e.target.value)} required />
+            </div>
+          )}
+        </div>
+
+        {/* Formación académica adicional: indicadores independientes (no excluyentes) */}
+        <div className="space-y-3 border-t pt-4">
+          <div>
+            <p className="text-sm font-medium text-ink">Formación académica adicional</p>
+            <p className="text-xs text-muted-foreground">
+              Marque los estudios de postgrado obtenidos. Puede marcar ambos.
+            </p>
+          </div>
+          <AcademicDegreeCheckboxes
+            hasMastersDegree={formData.has_masters_degree}
+            hasDoctorateDegree={formData.has_doctorate_degree}
+            onMastersChange={(checked) => handleFormChange("has_masters_degree", checked)}
+            onDoctorateChange={(checked) => handleFormChange("has_doctorate_degree", checked)}
+            disabled={formSubmitting}
+          />
+        </div>
+      </FormSection>
+
+      {/* Section 5: Información profesional (propia de la persona) */}
+      <FormSection title="Información profesional" variant={variant}>
+        <div className="space-y-1.5">
+          <Label>Profesión u oficio *</Label>
+          <SiteCorpInput
+            type="text"
+            placeholder="Ej.: Chofer profesional, Albañil, Técnico en redes"
+            value={formData.profession_or_trade}
+            onChange={(e) => handleFormChange("profession_or_trade", e.target.value)}
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            Dato propio de la persona. No sustituye al cargo ni al puesto que ocupe.
+          </p>
+        </div>
+
+        <DrivingLicenseSelector
+          categories={drivingLicenseCategories}
+          value={formData.driving_license_ids}
+          onChange={handleDrivingLicensesChange}
+          hint="Seleccione todas las categorías vigentes. Puede dejarlo vacío si no conduce."
+        />
+      </FormSection>
+
+      {/* Section 6: Verificaciones y medidas disciplinarias */}
+      <FormSection title="Verificaciones y medidas disciplinarias" variant={variant}>
+        {/* Chequeo Preempleo */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData.has_pre_employment_check}
+              onChange={(e) => handleFormChange("has_pre_employment_check", e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span className="text-sm font-medium text-ink">Chequeo Preempleo</span>
+          </label>
+          {formData.has_pre_employment_check && (
+            <div className="space-y-2 pl-6">
+              <label className="block text-sm font-medium">Documento de Chequeo Preempleo</label>
+              {existingPreEmploymentDoc && !formData.pre_employment_check_file && (
+                <p className="text-xs text-muted-foreground">
+                  Documento actual: {existingPreEmploymentDoc.original_file_name}
+                </p>
+              )}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={(e) => handleFormChange("pre_employment_check_file", e.target.files?.[0] || null)}
+                className="block w-full text-sm text-muted-foreground"
+              />
+              {formData.pre_employment_check_file && (
+                <p className="text-xs text-muted-foreground">{formData.pre_employment_check_file.name}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Antecedentes Penales */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData.has_criminal_record_check}
+              onChange={(e) => handleFormChange("has_criminal_record_check", e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span className="text-sm font-medium text-ink">Antecedentes Penales</span>
+          </label>
+          {formData.has_criminal_record_check && (
+            <div className="space-y-2 pl-6">
+              <label className="block text-sm font-medium">Documento de Antecedentes Penales</label>
+              {existingCriminalRecordDoc && !formData.criminal_record_check_file && (
+                <p className="text-xs text-muted-foreground">
+                  Documento actual: {existingCriminalRecordDoc.original_file_name}
+                </p>
+              )}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={(e) => handleFormChange("criminal_record_check_file", e.target.files?.[0] || null)}
+                className="block w-full text-sm text-muted-foreground"
+              />
+              {formData.criminal_record_check_file && (
+                <p className="text-xs text-muted-foreground">{formData.criminal_record_check_file.name}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Medida disciplinaria */}
+        <div className="space-y-3 border-t pt-4">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={formData.has_disciplinary_measures}
+              onChange={(e) => handleFormChange("has_disciplinary_measures", e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <span className="text-sm text-ink">Sí, tiene medidas disciplinarias</span>
+          </label>
+          {formData.has_disciplinary_measures && (
+            <div className="space-y-2 pl-6">
+              <SiteCorpButton
+                type="button"
+                variant="outline"
+                onClick={() => setDisciplinaryDialogOpen(true)}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Subir documento disciplinario
+              </SiteCorpButton>
+              {disciplinaryDocument && (
+                <p className="text-xs text-muted-foreground">
+                  Archivo seleccionado: {disciplinaryDocument.name}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </FormSection>
+
+      {/* Form error */}
+      {formError && (
+        <SiteCorpAlert type="danger">{formError}</SiteCorpAlert>
+      )}
+
+      {/* Form footer */}
+      {inDialog ? (
+        <DialogFooter className="gap-2">
+          <SiteCorpButton type="button" variant="outline" onClick={handleCancel} disabled={formSubmitting}>
+            Cancelar
+          </SiteCorpButton>
+          <SiteCorpButton type="submit" disabled={formSubmitting}>
+            {formSubmitting ? "Guardando..." : "Guardar candidato"}
+          </SiteCorpButton>
+        </DialogFooter>
+      ) : (
+        <div className="flex justify-end gap-2">
+          <SiteCorpButton type="button" variant="outline" onClick={handleCancel} disabled={formSubmitting}>
+            Cancelar
+          </SiteCorpButton>
+          <SiteCorpButton type="submit" disabled={formSubmitting}>
+            <Save className="mr-2 h-4 w-4" />
+            {formSubmitting ? "Guardando..." : "Guardar cambios"}
+          </SiteCorpButton>
+        </div>
+      )}
+    </form>
   )
+
+  if (inDialog) {
+    return (
+      <>
+        {form}
+        <DisciplinaryDocumentDialog
+          open={disciplinaryDialogOpen}
+          onOpenChange={setDisciplinaryDialogOpen}
+          document={disciplinaryDocument}
+          onSelect={setDisciplinaryDocument}
+          onCancel={handleCancel}
+        />
+      </>
+    )
+  }
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <SiteCorpPageHeader
-          title={mode === "edit" ? `Editar: ${candidate.first_name} ${candidate.first_surname}` : "Nuevo candidato"}
-          description={`${mode === "edit" ? "Editando" : "Creando"} candidato en ${currentEntity?.name}`}
+          title={isCreate ? "Nuevo candidato" : `Editar: ${candidate?.first_name} ${candidate?.first_surname}`}
+          description={`${isCreate ? "Creando" : "Editando"} candidato en ${currentEntity?.name}`}
         />
         <SiteCorpButton variant="outline" onClick={handleCancel}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Volver a candidato
@@ -493,311 +902,74 @@ const CandidateForm = ({ candidateId, entityId: propEntityId, mode = "edit", onS
       </div>
 
       {formSuccess && (
-        <SiteCorpAlert type="success">Candidato actualizado exitosamente</SiteCorpAlert>
+        <SiteCorpAlert type="success">
+          {isCreate ? "Candidato creado exitosamente" : "Candidato actualizado exitosamente"}
+        </SiteCorpAlert>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Section 1: Identificación */}
-        <SiteCorpCard>
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-ink border-b pb-2">Identificación</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Nombre *</Label>
-                <SiteCorpInput type="text" placeholder="Nombre" value={formData.first_name} onChange={(e) => handleFormChange("first_name", e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Primer apellido *</Label>
-                <SiteCorpInput type="text" placeholder="Primer apellido" value={formData.first_surname} onChange={(e) => handleFormChange("first_surname", e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Segundo apellido</Label>
-                <SiteCorpInput type="text" placeholder="Segundo apellido" value={formData.second_surname} onChange={(e) => handleFormChange("second_surname", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Identificación *</Label>
-                <SiteCorpInput type="text" inputMode="numeric" placeholder="11 dígitos" value={formData.identification} onChange={(e) => handleIdentificationChange(e.target.value)} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Fecha de nacimiento (dd/mm/aaaa) *</Label>
-                <SiteCorpInput type="text" placeholder="dd/mm/aaaa" value={formData.birth_date} required onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "").substring(0, 8)
-                  let formatted = val
-                  if (val.length > 4) formatted = `${val.substring(0, 2)}/${val.substring(2, 4)}/${val.substring(4, 8)}`
-                  else if (val.length > 2) formatted = `${val.substring(0, 2)}/${val.substring(2)}`
-                  handleFormChange("birth_date", formatted)
-                }} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Sexo</Label>
-                <SiteCorpSelect value={formData.gender_id || undefined} onValueChange={(value) => handleFormChange("gender_id", value === "__placeholder__" ? "" : value)}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {genders.map(gender => (
-                    <SelectItem key={gender.id} value={gender.id}>{gender.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Color de piel</Label>
-                <SiteCorpSelect value={formData.skin_color_id || undefined} onValueChange={(value) => handleFormChange("skin_color_id", value === "__placeholder__" ? "" : value)}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {skinColors.map(color => (
-                    <SelectItem key={color.id} value={color.id}>{color.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-            </div>
-          </div>
-        </SiteCorpCard>
+      {form}
 
-        {/* Section 2: Datos personales */}
-        <SiteCorpCard>
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-ink border-b pb-2">Datos personales</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Estado civil</Label>
-                <SiteCorpSelect value={formData.marital_status_id || undefined} onValueChange={(value) => handleFormChange("marital_status_id", value === "__placeholder__" ? "" : value)}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {maritalStatuses.map(status => (
-                    <SelectItem key={status.id} value={status.id}>{status.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Afiliación política</Label>
-                <SiteCorpSelect value={formData.political_affiliation || undefined} onValueChange={(value) => handleFormChange("political_affiliation", value === "__placeholder__" ? "" : value)}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {POLITICAL_AFFILIATIONS.map(aff => (
-                    <SelectItem key={aff.id} value={aff.id}>{aff.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Retirado o Recontratado</Label>
-                <SiteCorpSelect value={formData.is_retired_or_rehired || undefined} onValueChange={(value) => handleFormChange("is_retired_or_rehired", value === "__placeholder__" ? "" : value)}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {RETIRED_REHIRED_OPTIONS.map(opt => (
-                    <SelectItem key={opt.id} value={opt.id}>{opt.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-            </div>
-          </div>
-        </SiteCorpCard>
+      <DisciplinaryDocumentDialog
+        open={disciplinaryDialogOpen}
+        onOpenChange={setDisciplinaryDialogOpen}
+        document={disciplinaryDocument}
+        onSelect={setDisciplinaryDocument}
+        onCancel={handleCancel}
+      />
+    </div>
+  )
+}
 
-        {/* Section 3: Contacto y dirección */}
-        <SiteCorpCard>
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-ink border-b pb-2">Contacto y dirección</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Teléfono</Label>
-                <SiteCorpInput type="tel" placeholder="+51 999 999 999" value={formData.phone} onChange={(e) => handleFormChange("phone", e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Email</Label>
-                <SiteCorpInput type="email" placeholder="correo@ejemplo.com" value={formData.email} onChange={(e) => handleFormChange("email", e.target.value)} />
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label>Dirección particular *</Label>
-                <Textarea placeholder="Dirección completa" value={formData.address} onChange={(e) => handleFormChange("address", e.target.value)} rows={2} required />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Provincia *</Label>
-                <SiteCorpSelect value={formData.province || undefined} onValueChange={(value) => handleProvinceChange(value === "__placeholder__" ? "" : value)}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {provinces.map(province => (
-                    <SelectItem key={province.id} value={province.id}>{province.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Municipio *</Label>
-                <SiteCorpSelect value={formData.municipality || undefined} onValueChange={(value) => handleFormChange("municipality", value === "__placeholder__" ? "" : value)} disabled={!formData.province}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {municipalities.map(muni => (
-                    <SelectItem key={muni.id} value={muni.id}>{muni.name}</SelectItem>
-                  ))}
-                </SiteCorpSelect>
-              </div>
-            </div>
-          </div>
-        </SiteCorpCard>
+/**
+ * Documento disciplinario: el archivo se selecciona aquí y viaja con el alta o la edición del
+ * candidato (no se sube por separado, para que quede ligado a su entidad).
+ */
+const DisciplinaryDocumentDialog: React.FC<{
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  document: File | null
+  onSelect: (file: File | null) => void
+  onCancel: () => void
+}> = ({ open, onOpenChange, document: selected, onSelect, onCancel }) => (
+  <Dialog open={open} onOpenChange={onOpenChange}>
+    <DialogContent className="max-w-sm">
+      <DialogHeader>
+        <DialogTitle>Subir documento disciplinario</DialogTitle>
+      </DialogHeader>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Seleccione el documento disciplinario (PDF, JPG, PNG)
+        </p>
+        <input
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              onSelect(e.target.files[0])
+            }
+          }}
+          className="block w-full text-sm text-muted-foreground"
+        />
+        {selected && (
+          <p className="mt-2 text-sm text-muted-foreground">
+            Archivo seleccionado: {selected.name}
+          </p>
+        )}
+      </div>
+      <DialogFooter>
+        <SiteCorpButton type="button" variant="outline" onClick={onCancel}>
+          Cancelar
+        </SiteCorpButton>
+        <SiteCorpButton
+          type="button"
+          onClick={() => onOpenChange(false)}
+          disabled={!selected}
+        >
+          Subir documento
+        </SiteCorpButton>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+)
 
-        {/* Section 4: Formación */}
-        <SiteCorpCard>
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-ink border-b pb-2">Formación</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>Nivel educacional</Label>
-                <SiteCorpSelect value={formData.education_level_id || undefined} onValueChange={handleEducationLevelChange}>
-                  <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
-                  {EDUCATION_LEVEL_ORDER
-                                      .map(name => educationLevels.find(level => level.name === name))
-                                      .filter((level): level is EducationLevel => Boolean(level))
-                                      .map(level => (
-                                        <SelectItem key={level.id} value={level.id}>{level.name}</SelectItem>
-                                      ))}
-                </SiteCorpSelect>
-              </div>
-              {requiresSpecialty && (
-                <div className="space-y-1.5">
-                  <Label>Especialidad *</Label>
-                  <SiteCorpInput type="text" placeholder="Especialidad" value={formData.specialty} onChange={(e) => handleFormChange("specialty", e.target.value)} required />
-                </div>
-              )}
-            </div>
-
-            {/* Formación académica adicional: indicadores independientes (no excluyentes) */}
-            <div className="space-y-3 border-t pt-4">
-              <div>
-                <p className="text-sm font-medium text-ink">Formación académica adicional</p>
-                <p className="text-xs text-muted-foreground">
-                  Marque los estudios de postgrado obtenidos. Puede marcar ambos.
-                </p>
-              </div>
-              <AcademicDegreeCheckboxes
-                hasMastersDegree={formData.has_masters_degree}
-                hasDoctorateDegree={formData.has_doctorate_degree}
-                onMastersChange={(checked) => handleFormChange("has_masters_degree", checked)}
-                onDoctorateChange={(checked) => handleFormChange("has_doctorate_degree", checked)}
-                disabled={formSubmitting}
-              />
-            </div>
-          </div>
-        </SiteCorpCard>
-
-        {/* Section 5: Información profesional (propia de la persona) */}
-        <SiteCorpCard>
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-ink border-b pb-2">Información profesional</h3>
-            <div className="space-y-1.5">
-              <Label>Profesión u oficio *</Label>
-              <SiteCorpInput
-                type="text"
-                placeholder="Ej.: Chofer profesional, Albañil, Técnico en redes"
-                value={formData.profession_or_trade}
-                onChange={(e) => handleFormChange("profession_or_trade", e.target.value)}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Dato propio de la persona. No sustituye al cargo ni al puesto que ocupe.
-              </p>
-            </div>
-
-            <DrivingLicenseSelector
-              categories={drivingLicenseCategories}
-              value={formData.driving_license_ids}
-              onChange={handleDrivingLicensesChange}
-              hint="Seleccione todas las categorías vigentes. Puede dejarlo vacío si no conduce."
-            />
-          </div>
-        </SiteCorpCard>
-
-        {/* Section 6: Verificaciones y medidas disciplinarias */}
-                        <SiteCorpCard>
-                          <div className="space-y-4">
-                            <h3 className="text-sm font-semibold text-ink border-b pb-2">Verificaciones y medidas disciplinarias</h3>
-        
-                            {/* Chequeo Preempleo */}
-                            <div className="space-y-3">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.has_pre_employment_check}
-                                  onChange={(e) => handleFormChange("has_pre_employment_check", e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                <span className="text-sm font-medium text-ink">Chequeo Preempleo</span>
-                              </label>
-                              {formData.has_pre_employment_check && (
-                                <div className="space-y-2 pl-6">
-                                  <label className="block text-sm font-medium">Documento de Chequeo Preempleo</label>
-                                  {existingPreEmploymentDoc && !formData.pre_employment_check_file && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Documento actual: {existingPreEmploymentDoc.original_file_name}
-                                    </p>
-                                  )}
-                                  <input
-                                    type="file"
-                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                    onChange={(e) => handleFormChange("pre_employment_check_file", e.target.files?.[0] || null)}
-                                    className="block w-full text-sm text-muted-foreground"
-                                  />
-                                  {formData.pre_employment_check_file && (
-                                    <p className="text-xs text-muted-foreground">{formData.pre_employment_check_file.name}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-        
-                            {/* Antecedentes Penales */}
-                            <div className="space-y-3">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.has_criminal_record_check}
-                                  onChange={(e) => handleFormChange("has_criminal_record_check", e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                <span className="text-sm font-medium text-ink">Antecedentes Penales</span>
-                              </label>
-                              {formData.has_criminal_record_check && (
-                                <div className="space-y-2 pl-6">
-                                  <label className="block text-sm font-medium">Documento de Antecedentes Penales</label>
-                                  {existingCriminalRecordDoc && !formData.criminal_record_check_file && (
-                                    <p className="text-xs text-muted-foreground">
-                                      Documento actual: {existingCriminalRecordDoc.original_file_name}
-                                    </p>
-                                  )}
-                                  <input
-                                    type="file"
-                                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                    onChange={(e) => handleFormChange("criminal_record_check_file", e.target.files?.[0] || null)}
-                                    className="block w-full text-sm text-muted-foreground"
-                                  />
-                                  {formData.criminal_record_check_file && (
-                                    <p className="text-xs text-muted-foreground">{formData.criminal_record_check_file.name}</p>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-        
-                            {/* Medida disciplinaria */}
-                            <div className="border-t pt-4">
-                              <label className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.has_disciplinary_measures}
-                                  onChange={(e) => handleFormChange("has_disciplinary_measures", e.target.checked)}
-                                  className="rounded border-gray-300"
-                                />
-                                <span className="text-sm text-ink">Sí, tiene medidas disciplinarias</span>
-                              </label>
-                            </div>
-                          </div>
-                        </SiteCorpCard>
-                
-                        {/* Form error */}
-                {formError && (
-                  <SiteCorpAlert type="danger">{formError}</SiteCorpAlert>
-                )}
-        
-                {/* Form footer */}
-                <div className="flex justify-end gap-2">
-                  <SiteCorpButton type="button" variant="outline" onClick={handleCancel} disabled={formSubmitting}>
-                    Cancelar
-                  </SiteCorpButton>
-                  <SiteCorpButton type="submit" disabled={formSubmitting}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {formSubmitting ? "Guardando..." : "Guardar cambios"}
-                  </SiteCorpButton>
-                </div>
-              </form>
-            </div>
-          )
-        }
-        
-        export default CandidateForm
+export default CandidateForm

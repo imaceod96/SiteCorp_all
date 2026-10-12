@@ -44,6 +44,18 @@ export async function downloadExpedienteFile(storagePath: string): Promise<Blob>
   return data
 }
 
+/** Enlace temporal de lectura del archivo (bucket privado), con caducidad explícita. */
+export async function createExpedienteSignedUrl(
+  storagePath: string,
+  expiresInSeconds: number
+): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from(EXPEDIENTE_BUCKET)
+    .createSignedUrl(storagePath, expiresInSeconds)
+  if (error) throw error
+  return data.signedUrl
+}
+
 export async function removeExpedienteFiles(storagePaths: string[]): Promise<void> {
   const paths = storagePaths.filter(Boolean)
   if (paths.length === 0) return

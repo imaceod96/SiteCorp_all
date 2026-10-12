@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useState, useCallback } from "react"
-import { supabase } from "@/lib/supabase"
+import { loadMigrationTemplateData } from "@/domains/people"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -44,9 +44,8 @@ interface ImportResult {
   preview: ParsedRow[]
 }
 
-interface MigrationTemplateData {
-  positions?: { id: string; name: string }[]
-}
+/** Puestos ofrecidos por la plantilla, para nombrar el puesto de cada fila. */
+type MigrationTemplatePositions = { positions: { id: string; name: string }[] }
 
 export const ExcelImportDialog: React.FC<ExcelImportDialogProps> = ({
   entityId,
@@ -60,7 +59,7 @@ export const ExcelImportDialog: React.FC<ExcelImportDialogProps> = ({
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [step, setStep] = useState<'upload' | 'preview' | 'importing' | 'complete'>('upload')
   const [progress, setProgress] = useState(0)
-  const [template, setTemplate] = useState<MigrationTemplateData | null>(null)
+  const [template, setTemplate] = useState<MigrationTemplatePositions | null>(null)
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
@@ -93,15 +92,9 @@ export const ExcelImportDialog: React.FC<ExcelImportDialogProps> = ({
     setProgress(0)
 
     try {
-      // Load template data
-      const { data: templateData, error: templateError } = await supabase.rpc(
-        'get_migration_template_data',
-        { entity_id: entityId, migration_type: 'basic' }
-      )
-
-      if (templateError) throw templateError
-
-      setTemplate(templateData)
+      // Datos de referencia de la carga inicial: caso de uso del dominio Personas.
+      const migrationTemplate = await loadMigrationTemplateData(entityId, 'basic')
+      setTemplate({ positions: migrationTemplate.positions })
 
       // Parse Excel file using server-side API
       const formData = new FormData()

@@ -22,7 +22,7 @@ import {
   type SalaryChangeApplyResult,
   type SalaryChangeImpactRow,
   type SalaryChangePreview,
-} from "@/lib/salary-changes"
+} from "@/domains/contracts"
 import {
   AlertTriangle,
   ArrowDownRight,

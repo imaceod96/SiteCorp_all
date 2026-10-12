@@ -31,8 +31,6 @@ import { ContractFormalizationSummary } from "@/components/contracts/ContractFor
 import {
   EMPTY_FORMALIZATION_PENDING,
   buildComponentsPayload,
-  fetchContractConditions,
-  fetchPaymentMethods,
   formatConditionDate,
   hasInvalidComponent,
   toComponentDrafts,
@@ -40,6 +38,7 @@ import {
   type ContractFormalizationPending,
   type PaymentMethodOption,
 } from "@/lib/contract-conditions"
+import { fetchContractConditions, fetchPaymentMethods } from "@/domains/contracts"
 import { FileSignature } from "lucide-react"
 
 export interface CurrentContractInfo {

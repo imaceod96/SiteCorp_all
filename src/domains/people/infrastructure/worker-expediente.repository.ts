@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { fetchWorkerDrivingLicenseIds, saveWorkerDrivingLicenseIds } from "@/lib/catalogs"
+import { sanitizeFileName } from "@/lib/documents"
 import {
   fetchEducationLevels,
   fetchGenders,
@@ -7,15 +8,20 @@ import {
 } from "./people.repository"
 import { fetchActiveContractTypes } from "./staffing.repository"
 import {
+  removeExpedienteFiles,
   requireCurrentUserId,
   storageFileName,
   uploadExpedienteFile,
 } from "./expediente-storage"
 import type {
+  DocumentTypeOption,
+  NewWorkerDocumentRecord,
   NewWorkerInput,
   TenurePaymentRule,
   WorkerContractFormalizationInput,
   WorkerContractRow,
+  WorkerDocumentContractRef,
+  WorkerDocumentRow,
   WorkerEmploymentMovement,
   WorkerExpediente,
   WorkerExpedienteCatalogs,
@@ -408,5 +414,137 @@ export async function uploadWorkerVerificationDocument(
     source: "MANUAL",
     uploaded_by: uploadedBy,
   })
+  if (error) throw error
+}
+
+// ---------------------------------------------------------------------------
+// Expediente DOCUMENTAL de la pestaña «Documentos» del trabajador
+// ---------------------------------------------------------------------------
+
+/** Catálogo global de tipos de documento, en el orden del catálogo. */
+export async function fetchDocumentTypeOptions(): Promise<DocumentTypeOption[]> {
+  const { data, error } = await supabase
+    .from("document_types")
+    .select("id, name, sort_order")
+    .order("sort_order", { ascending: true })
+  if (error) throw error
+  return (data as DocumentTypeOption[]) || []
+}
+
+/** Documentos del trabajador, del más reciente al más antiguo. */
+export async function fetchWorkerDocumentRows(workerId: string): Promise<WorkerDocumentRow[]> {
+  const { data, error } = await supabase
+    .from("worker_documents")
+    .select("*")
+    .eq("worker_id", workerId)
+    .order("created_at", { ascending: false })
+  if (error) throw error
+  return (data as WorkerDocumentRow[]) || []
+}
+
+/**
+ * Nombre visible de quienes subieron los documentos. Lectura AUXILIAR y tolerante: está
+ * sujeta a la RLS de `profiles` y su fallo nunca debe vaciar el expediente.
+ */
+export async function fetchUploaderDisplayNames(
+  uploaderIds: string[]
+): Promise<Record<string, string>> {
+  const ids = Array.from(new Set(uploaderIds.filter((id): id is string => !!id)))
+  if (ids.length === 0) return {}
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, username")
+    .in("id", ids)
+  if (error) return {}
+
+  const names: Record<string, string> = {}
+  ;((data || []) as { id: string; full_name: string | null; username: string | null }[]).forEach(
+    (profile) => {
+      names[profile.id] = profile.full_name || profile.username || ""
+    }
+  )
+  return names
+}
+
+/**
+ * Referencia al contrato de los documentos generados. Lectura AUXILIAR y tolerante: un
+ * documento manual (origen MANUAL) no tiene contrato y su ausencia no es un error.
+ */
+export async function fetchContractReferences(
+  contractIds: string[]
+): Promise<Record<string, WorkerDocumentContractRef>> {
+  const ids = Array.from(new Set(contractIds.filter((id): id is string => !!id)))
+  if (ids.length === 0) return {}
+
+  const { data, error } = await supabase
+    .from("employment_contracts")
+    .select("id, start_date, contract_type:employment_contract_types(name)")
+    .in("id", ids)
+  if (error) return {}
+
+  const references: Record<string, WorkerDocumentContractRef> = {}
+  ;(
+    (data || []) as {
+      id: string
+      start_date: string
+      contract_type: { name: string } | { name: string }[] | null
+    }[]
+  ).forEach((contract) => {
+    references[contract.id] = {
+      id: contract.id,
+      start_date: contract.start_date,
+      contract_type: Array.isArray(contract.contract_type)
+        ? contract.contract_type[0] || null
+        : contract.contract_type,
+    }
+  })
+  return references
+}
+
+/**
+ * Sube un documento del expediente al Storage privado y lo registra en `worker_documents`
+ * (origen MANUAL). Si el registro falla, el archivo se retira para no dejar huérfanos: es
+ * la MISMA secuencia y la MISMA ruta (`workers/{workerId}/{documentId}/{archivo}`) que ya
+ * usaba la pestaña.
+ */
+export async function uploadWorkerDocument(input: NewWorkerDocumentRecord): Promise<void> {
+  const uploadedBy = await requireCurrentUserId()
+  const storagePath = `workers/${input.workerId}/${input.documentId}/${sanitizeFileName(
+    input.file.name
+  )}`
+
+  await uploadExpedienteFile(storagePath, input.file)
+
+  const { error } = await supabase.from("worker_documents").insert({
+    id: input.documentId,
+    worker_id: input.workerId,
+    document_type_id: input.documentTypeId,
+    file_name: input.file.name,
+    storage_path: storagePath,
+    mime_type: input.file.type || null,
+    file_size: input.file.size,
+    description: input.description,
+    source: "MANUAL",
+    uploaded_by: uploadedBy,
+  })
+
+  if (error) {
+    // El archivo se retira para no dejar huérfanos, pero el error que ve el usuario es el
+    // del registro (la limpieza nunca lo sustituye).
+    try {
+      await removeExpedienteFiles([storagePath])
+    } catch (cleanupError) {
+      console.warn("[worker-documents] no se pudo retirar el archivo huérfano", cleanupError)
+    }
+    throw error
+  }
+}
+
+/** Elimina el archivo y luego la fila del documento (en ese orden, como ya se hacía). */
+export async function deleteWorkerDocument(document: WorkerDocumentRow): Promise<void> {
+  await removeExpedienteFiles([document.storage_path])
+
+  const { error } = await supabase.from("worker_documents").delete().eq("id", document.id)
   if (error) throw error
 }

@@ -9,7 +9,6 @@
 
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import {
   Dialog,
   DialogContent,
@@ -23,14 +22,9 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
 import { createMedicalCertificate } from "@/domains/vacations-licenses/medical-certificates"
+import { loadEntityActiveWorkerOptions, type EntityWorkerOption } from "@/domains/people"
 import { invalidateMedicalCertificateData } from "@/hooks/use-medical-certificates"
 import { Loader2, X } from "lucide-react"
-
-interface WorkerOption {
-  id: string
-  full_name: string
-  identification: string
-}
 
 interface MedicalCertificateFormDialogProps {
   open: boolean
@@ -69,7 +63,7 @@ export default function MedicalCertificateFormDialog({
   const [submitting, setSubmitting] = React.useState(false)
 
   // Contexto global: trabajadores activos de la entidad (RLS gobierna el acceso).
-  const [workers, setWorkers] = React.useState<WorkerOption[]>([])
+  const [workers, setWorkers] = React.useState<EntityWorkerOption[]>([])
   const [workersLoading, setWorkersLoading] = React.useState(false)
 
   React.useEffect(() => {
@@ -88,24 +82,10 @@ export default function MedicalCertificateFormDialog({
     const loadWorkers = async () => {
       setWorkersLoading(true)
       try {
-        const { data, error } = await supabase
-          .from("workers")
-          .select("id, first_name, first_surname, second_surname, identification")
-          .eq("organization_entity_id", entityId)
-          .eq("employment_status", "active")
-          .order("first_surname")
-        if (error) throw error
-        if (!cancelled) {
-          setWorkers(
-            ((data || []) as { id: string; first_name: string; first_surname: string; second_surname: string | null; identification: string }[]).map((w) => ({
-              id: w.id,
-              full_name: [w.first_name, w.first_surname, w.second_surname]
-                .filter(Boolean)
-                .join(" "),
-              identification: w.identification,
-            }))
-          )
-        }
+        // Trabajadores activos de la entidad: caso de uso del dominio Personas (la misma
+        // lectura que usan los demás formularios que eligen trabajador).
+        const options = await loadEntityActiveWorkerOptions(entityId)
+        if (!cancelled) setWorkers(options)
       } catch (err) {
         console.error("Error loading entity workers:", err)
         if (!cancelled) setWorkers([])

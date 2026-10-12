@@ -1,9 +1,12 @@
 import { isPendingCandidate, isReentryWorker } from "../domain/rules"
+import { fetchPersonIdentificationStatus } from "../infrastructure/candidate-registration.repository"
+import { rpcMigrationTemplateData } from "../infrastructure/worker-migration.repository"
 import {
   canAccessEntityPermission,
   fetchCandidatesWithLicense,
   fetchClientEmploymentIndex,
   fetchEducationLevels,
+  fetchEntityActiveWorkerOptions,
   fetchEntityActiveWorkers,
   fetchEntityCandidates,
   fetchEntityReentryWorkers,
@@ -17,8 +20,11 @@ import {
 import type {
   CatalogOption,
   CatalogRow,
+  EntityWorkerOption,
+  MigrationTemplateData,
   PersonCandidate,
   PersonDirectoryWorker,
+  PersonIdentificationStatus,
   PersonRegistryCatalogs,
   PersonReentryWorker,
   PersonSeparation,
@@ -195,4 +201,39 @@ export async function loadCandidateRegistryCatalogs(): Promise<PersonRegistryCat
     ])
 
   return { genders, maritalStatuses, educationLevels, skinColors, licenseCategories }
+}
+
+/**
+ * Datos de referencia de la carga inicial (`get_migration_template_data`): áreas, cargos,
+ * puestos, tipos de contrato, formas de pago y representantes. La migración no compone esta
+ * consulta en la pantalla.
+ */
+export async function loadMigrationTemplateData(
+  entityId: string,
+  migrationType: string
+): Promise<MigrationTemplateData> {
+  return rpcMigrationTemplateData(entityId, migrationType)
+}
+
+/**
+ * Trabajadores activos de la entidad (id, nombre completo e identificación) para los
+ * selectores del expediente. Una sola lectura para todos los formularios que eligen
+ * trabajador: no se repite la consulta en cada diálogo.
+ */
+export async function loadEntityActiveWorkerOptions(
+  entityId: string
+): Promise<EntityWorkerOption[]> {
+  return fetchEntityActiveWorkerOptions(entityId)
+}
+
+/**
+ * Estado de identificación de la persona en el cliente (`person_identification_status`).
+ * Es la comprobación que impide duplicar una persona; los mensajes que se muestran al
+ * usuario los decide cada pantalla a partir de este resultado.
+ */
+export async function loadPersonIdentificationStatus(
+  entityId: string,
+  identification: string
+): Promise<PersonIdentificationStatus> {
+  return fetchPersonIdentificationStatus(entityId, identification.trim())
 }

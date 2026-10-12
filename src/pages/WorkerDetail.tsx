@@ -92,8 +92,6 @@ import type { RepresentativePositionRow } from "@/domains/representatives"
 import {
   EMPTY_FORMALIZATION_PENDING,
   buildComponentsPayload,
-  fetchComponentsByContract,
-  fetchPaymentMethods,
   formatConditionDate,
   formatContractMoney,
   hasInvalidComponent,
@@ -111,19 +109,23 @@ import {
 } from "@/domains/organization-structure"
 import {
   SALARY_CHANGE_TYPE_LABELS,
-  fetchWorkerSalaryHistory,
   type WorkerSalaryHistoryEntry,
 } from "@/lib/worker-salary"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
-  fetchWorkerAddendums,
-  fetchWorkerContractualConditions,
-  isAddendumPending,
   type ContractAddendum,
   type WorkerContractualConditions,
 } from "@/lib/addendums"
+import {
+  fetchComponentsByContract,
+  fetchPaymentMethods,
+  fetchWorkerAddendums,
+  fetchWorkerContractualConditions,
+  fetchWorkerSalaryHistory,
+  isAddendumPending,
+} from "@/domains/contracts"
 import { ContractAddendumsSection } from "@/components/addendums/ContractAddendumsSection"
 import {
   CONTRACT_ALERT_META,

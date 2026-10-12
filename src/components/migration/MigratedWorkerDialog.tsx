@@ -1,8 +1,11 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
 import { createMigratedWorker, type MigrationRow } from "@/lib/worker-migration"
+import {
+  loadCandidateRegistryCatalogs,
+  loadPersonIdentificationStatus,
+} from "@/domains/people"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
@@ -34,18 +37,21 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
   const [error, setError] = React.useState("")
 
   React.useEffect(() => {
-    Promise.all([
-      supabase.from("genders").select("id,name").order("name"),
-      supabase.from("marital_statuses").select("id,name").order("name"),
-      supabase.from("skin_colors").select("id,name").order("name"),
-      supabase.from("education_levels").select("id,name").order("name"),
-      supabase.from("driving_license_categories").select("id,name,code").order("name"),
-    ]).then(([genders, marital, skins, education, licenses]) => {
-      const failed = [genders, marital, skins, education, licenses].find((item) => item.error)
-      if (failed?.error) throw failed.error
-      setCatalogs({ gender_id: genders.data || [], marital_status_id: marital.data || [], skin_color_id: skins.data || [], education_level_id: education.data || [] })
-      setLicenseCategories((licenses.data || []).map((row: { id: string; name: string; code?: string }) => ({ id: row.id, name: row.name, code: row.code })))
-    }).catch((cause) => setError(cause instanceof Error ? cause.message : "No se cargaron los catálogos."))
+    // Catálogos de persona: caso de uso del dominio Personas (la misma lectura que el alta de
+    // candidatos; ningún formulario compone ya sus propios catálogos).
+    loadCandidateRegistryCatalogs()
+      .then((catalogs) => {
+        setCatalogs({
+          gender_id: catalogs.genders,
+          marital_status_id: catalogs.maritalStatuses,
+          skin_color_id: catalogs.skinColors,
+          education_level_id: catalogs.educationLevels,
+        })
+        setLicenseCategories(catalogs.licenseCategories)
+      })
+      .catch((cause) =>
+        setError(cause instanceof Error ? cause.message : "No se cargaron los catálogos.")
+      )
   }, [])
 
   const set = (key: keyof typeof form, value: string) => setForm((previous) => ({ ...previous, [key]: value }))
@@ -88,13 +94,9 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
         initial_vacation_balance: balance,
       }
       // UNICIDAD DE PERSONAS (§27–§33): la migración individual no puede duplicar a
-      // una persona ya existente (Candidato, Trabajador o Reingreso) por CI.
-      const { data: personStatus, error: checkError } = await supabase.rpc(
-        "person_identification_status",
-        { p_entity_id: entityId, p_identification: form.identification.trim() }
-      )
-      if (checkError) throw checkError
-      const existingPerson = (personStatus || {}) as { worker_id?: string | null; worker_status?: string | null; candidate_count?: number | null }
+      // una persona ya existente (Candidato, Trabajador o Reingreso) por CI. La
+      // comprobación la resuelve el backend a través del caso de uso del dominio.
+      const existingPerson = await loadPersonIdentificationStatus(entityId, form.identification)
       if (existingPerson.worker_id) {
         throw new Error(
           existingPerson.worker_status === "active"

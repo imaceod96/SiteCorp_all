@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { linkMigratedWorker } from "@/lib/worker-migration"
+import { fetchEntityPositionHierarchy } from "@/domains/organization-structure"
 import type { WorkerPositionOption } from "@/components/workers/WorkerForm"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button } from "@/components/ui/sitecorp-button"
@@ -11,20 +11,6 @@ import { Label } from "@/components/ui/label"
 
 interface Props { workerId: string; positions: WorkerPositionOption[]; onSuccess: () => void; onCancel: () => void }
 
-interface PositionHierarchyArea {
-  name: string | null
-}
-
-interface PositionHierarchyJob {
-  name: string | null
-  area: PositionHierarchyArea | PositionHierarchyArea[] | null
-}
-
-interface PositionHierarchyRow {
-  id: string
-  job: PositionHierarchyJob | PositionHierarchyJob[] | null
-}
-
 export function LinkWorkerToPositionDialog({ workerId, positions, onSuccess, onCancel }: Props) {
   const { entityId } = useParams<{ entityId: string }>()
   const [positionId, setPositionId] = React.useState("")
@@ -33,18 +19,10 @@ export function LinkWorkerToPositionDialog({ workerId, positions, onSuccess, onC
   const [hierarchy, setHierarchy] = React.useState<Record<string, { area: string; job: string }>>({})
   React.useEffect(() => {
     if (!entityId) return
-    const load = async () => {
-      const { data, error: queryError } = await supabase.from("organization_positions").select("id,job:organization_jobs(name,area:organization_areas(name))").eq("organization_entity_id", entityId)
-      if (queryError) throw queryError
-      const result: Record<string, { area: string; job: string }> = {}
-      for (const item of (data || []) as PositionHierarchyRow[]) {
-        const job = Array.isArray(item.job) ? item.job[0] : item.job
-        const area = Array.isArray(job?.area) ? job.area[0] : job?.area
-        result[item.id] = { area: area?.name || "—", job: job?.name || "—" }
-      }
-      setHierarchy(result)
-    }
-    load().catch((cause) => setError(cause instanceof Error ? cause.message : "No se pudo cargar la estructura."))
+    // Jerarquía de los puestos de la entidad: lectura del dominio de estructura organizativa.
+    fetchEntityPositionHierarchy(entityId)
+      .then(setHierarchy)
+      .catch((cause) => setError(cause instanceof Error ? cause.message : "No se pudo cargar la estructura."))
   }, [entityId])
   const available = positions.filter((position) => position.is_active && position.currentAssignments < position.authorized_quantity)
   const selected = positions.find((position) => position.id === positionId)

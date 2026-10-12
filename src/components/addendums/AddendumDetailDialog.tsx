@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
-import { ensureAddendumDocumentGenerated } from "@/lib/contract-automation"
+import { ensureAddendumDocumentGenerated } from "@/domains/contracts"
 import {
   Dialog,
   DialogContent,
@@ -22,13 +22,15 @@ import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
+  type AddendumPending,
+  type ContractAddendum,
+} from "@/lib/addendums"
+import {
   cancelAddendum,
   fetchAddendumPending,
   formalizeAddendum,
   isAddendumPending,
-  type AddendumPending,
-  type ContractAddendum,
-} from "@/lib/addendums"
+} from "@/domains/contracts"
 import { showError, showSuccess } from "@/utils/toast"
 import { AlertTriangle, CheckCircle2, FileSignature, XCircle } from "lucide-react"
 

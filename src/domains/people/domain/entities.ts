@@ -156,6 +156,51 @@ export interface PersonIdentificationStatus {
   candidate_count?: number | null
 }
 
+/** Elemento de catálogo de la plantilla de carga inicial (área, tipo de contrato…). */
+export interface MigrationTemplateCatalogItem {
+  id: string
+  name: string
+  code: string
+}
+
+/** Cargo de la entidad dentro de la plantilla de carga inicial. */
+export interface MigrationTemplateJob {
+  id: string
+  name: string
+  code: string
+  area_id: string
+}
+
+/** Puesto de la entidad dentro de la plantilla de carga inicial. */
+export interface MigrationTemplatePosition {
+  id: string
+  name: string
+  code: string
+  job_id: string
+  authorized_quantity: number
+}
+
+/** Representante vigente ofrecido por la plantilla de carga inicial. */
+export interface MigrationTemplateRepresentative {
+  id: string
+  person_name: string
+  title: string | null
+}
+
+/**
+ * Datos de referencia de la carga inicial de trabajadores
+ * (`get_migration_template_data`). Cada catálogo llega como `jsonb_agg(...)`, de modo que las
+ * claves son exactamente las que aparecen aquí.
+ */
+export interface MigrationTemplateData {
+  areas: MigrationTemplateCatalogItem[]
+  jobs: MigrationTemplateJob[]
+  positions: MigrationTemplatePosition[]
+  contract_types: MigrationTemplateCatalogItem[]
+  payment_methods: MigrationTemplateCatalogItem[]
+  representatives: MigrationTemplateRepresentative[]
+}
+
 /**
  * Datos capturados en el alta de una persona como candidata.
  * El dominio solo comprueba la PRESENCIA de los documentos (`File | null`): subirlos
@@ -609,6 +654,60 @@ export interface ExpedienteDocumentRef {
   id: string
   original_file_name: string
   storage_path: string
+}
+
+/**
+ * Documento del expediente LABORAL: fila de `worker_documents` más su archivo en el Storage
+ * privado. `source` distingue el documento subido a mano (MANUAL) del generado por el motor
+ * documental (GENERATED), que además referencia su contrato.
+ */
+export interface WorkerDocumentRow {
+  id: string
+  worker_id: string
+  document_type_id: string
+  employment_contract_id: string | null
+  file_name: string
+  storage_path: string
+  mime_type: string | null
+  file_size: number | null
+  description: string | null
+  source: string
+  uploaded_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Referencia mínima al contrato de un documento generado (solo para mostrar). */
+export interface WorkerDocumentContractRef {
+  id: string
+  start_date: string
+  contract_type: { name: string } | null
+}
+
+/** Todo lo que necesita la pestaña «Documentos» del trabajador en una sola lectura. */
+export interface WorkerDocumentsView {
+  documentTypes: DocumentTypeOption[]
+  documents: WorkerDocumentRow[]
+  /** Nombre visible de quien subió cada documento (lectura auxiliar). */
+  uploaderNames: Record<string, string>
+  /** Contratos referenciados por los documentos generados (lectura auxiliar). */
+  contractsById: Record<string, WorkerDocumentContractRef>
+}
+
+/** Documento nuevo del expediente laboral (identificador y ruta ya resueltos). */
+export interface NewWorkerDocumentRecord {
+  documentId: string
+  workerId: string
+  documentTypeId: string
+  file: File
+  description: string | null
+}
+
+/** Trabajador activo de la entidad, para los selectores del expediente. */
+export interface EntityWorkerOption {
+  id: string
+  full_name: string
+  identification: string
 }
 
 /** Experiencia laboral declarada por la persona (fila de `candidate_work_experiences`). */

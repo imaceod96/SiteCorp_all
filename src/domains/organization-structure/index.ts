@@ -48,6 +48,10 @@ export {
   fetchPositionScheduleSegments,
 } from "./infrastructure/schedule.repository"
 
+// --- Puestos: jerarquía (Área → Cargo → Puesto) ---
+export type { PositionHierarchyEntry } from "./infrastructure/positions.repository"
+export { fetchEntityPositionHierarchy } from "./infrastructure/positions.repository"
+
 // --- Salario: tipos ---
 export type { SalaryValue } from "./domain/entities"
 export type { SalaryGroupRef } from "./domain/entities"

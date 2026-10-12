@@ -38,11 +38,11 @@ import {
   type PositionChangePreview,
   type StaffingPosition,
 } from "@/domains/people"
+import { MISSING_ADDENDUM_TEMPLATE_MESSAGE } from "@/lib/contract-automation"
 import {
-  MISSING_ADDENDUM_TEMPLATE_MESSAGE,
   resolveAddendumTemplateAvailability,
   type TemplateAvailability,
-} from "@/lib/contract-automation"
+} from "@/domains/contracts"
 import { formatConditionDate } from "@/lib/contract-conditions"
 import ResolutionForm, {
   type ResolutionFormValues,

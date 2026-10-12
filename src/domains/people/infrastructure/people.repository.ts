@@ -8,10 +8,12 @@ import {
   filterReentryWorkers,
   filterUnlinkedCandidates,
 } from "../domain/rules"
+import { EMPLOYMENT_STATUS } from "../domain/entities"
 import type {
   CatalogOption,
   CatalogRow,
   EmploymentIndex,
+  EntityWorkerOption,
   PersonCandidate,
   PersonDirectoryWorker,
   PersonReentryWorker,
@@ -110,6 +112,38 @@ export async function fetchEntityActiveWorkers(
 
   if (error) throw error
   return (data as PersonDirectoryWorker[]) || []
+}
+
+/**
+ * Trabajadores ACTIVOS de la entidad para los selectores del expediente (nombre e
+ * identificación). El error se propaga: sin esta lista el selector no puede funcionar y el
+ * usuario debe saberlo.
+ */
+export async function fetchEntityActiveWorkerOptions(
+  entityId: string
+): Promise<EntityWorkerOption[]> {
+  const { data, error } = await supabase
+    .from("workers")
+    .select("id, first_name, first_surname, second_surname, identification")
+    .eq("organization_entity_id", entityId)
+    .eq("employment_status", EMPLOYMENT_STATUS.active)
+    .order("first_surname", { ascending: true })
+
+  if (error) throw error
+
+  return ((data || []) as {
+    id: string
+    first_name: string
+    first_surname: string
+    second_surname: string | null
+    identification: string
+  }[]).map((worker) => ({
+    id: worker.id,
+    full_name: [worker.first_name, worker.first_surname, worker.second_surname]
+      .filter(Boolean)
+      .join(" "),
+    identification: worker.identification,
+  }))
 }
 
 /**
