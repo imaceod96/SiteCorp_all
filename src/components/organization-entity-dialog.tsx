@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
+import { columnName } from "@/integrations/supabase/schema-target"
 import { Button as SiteCorpButton } from "@/components/ui/button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
@@ -297,8 +298,8 @@ export const OrganizationEntityDialog = ({
         })
       } else {
         // El cliente solo se fija al crear: proviene del cliente desde el que se
-        // abre el formulario. `tenant_id` es la columna FÍSICA de Supabase.
-        const insertData = { ...entityData, tenant_id: effectiveCompanyClientId }
+        // abre el formulario. La clave es el nombre FÍSICO de columna activo.
+        const insertData = { ...entityData, [columnName("clientId")]: effectiveCompanyClientId }
         entityPayload = insertData
 
         const { error } = await supabase

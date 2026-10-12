@@ -1,6 +1,11 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
+import {
+  columnName,
+  selectColumn,
+  selectQuery,
+} from "@/integrations/supabase/schema-target"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -77,7 +82,7 @@ const EntitySettingsGoverningDocuments = () => {
       const [entityRes, documentsRes] = await Promise.all([
         supabase
           .from("organization_entities")
-          .select("name, tenant_id")
+          .select(selectQuery(`name, ${selectColumn("clientId")}`))
           .eq("id", entityId)
           .maybeSingle(),
         supabase
@@ -155,10 +160,10 @@ const EntitySettingsGoverningDocuments = () => {
         .upload(storagePath, selectedFile, { cacheControl: "3600", upsert: false })
       if (storageError) throw storageError
 
-      // `tenant_id` es la columna FÍSICA de Supabase (contrato legacy intacto).
+      // La clave del insert es el nombre FÍSICO de columna del estado activo.
       const { error: dbError } = await supabase.from("governing_documents").insert({
         id: documentId,
-        tenant_id: companyClientId,
+        [columnName("clientId")]: companyClientId,
         organization_entity_id: entityId,
         name: documentName.trim(),
         file_name: selectedFile.name,

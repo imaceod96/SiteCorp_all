@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { supabase } from "@/lib/supabase"
+import { tableName } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -139,10 +140,10 @@ const Organizations = () => {
       setError(null)
       setLoading(true)
 
-      // `tenants` es el nombre FÍSICO de la tabla en Supabase (contrato legacy
-      // intacto). Es una lectura de LISTA: no se sustituye por lecturas unitarias.
+      // Es una lectura de LISTA: no se sustituye por lecturas unitarias. El nombre
+      // físico de la tabla lo resuelve la frontera de nomenclatura.
       const [companyClientResult, entityResult] = await Promise.all([
-        supabase.from("tenants").select("*").order("name"),
+        supabase.from(tableName("clients")).select("*").order("name"),
         supabase.from("organization_entities").select("*").order("name"),
       ])
 

@@ -2,6 +2,11 @@ import * as React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
+import {
+  columnName,
+  selectQuery,
+  tableName,
+} from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -52,9 +57,9 @@ const CompanyClientInvitations = () => {
       if (!currentCompanyClient) return
 
       const { data, error: fetchError } = await supabase
-        .from("tenant_invitations")
-        .select("*, tenant_role:tenant_roles(name)")
-        .eq("tenant_id", currentCompanyClient.id)
+        .from(tableName("invitations"))
+        .select(selectQuery(`*, tenant_role:${tableName("roles")}(name)`))
+        .eq(columnName("clientId"), currentCompanyClient.id)
         .order("created_at", { ascending: false })
 
       if (fetchError) throw fetchError
@@ -94,11 +99,11 @@ const CompanyClientInvitations = () => {
 
     setSending(true)
     try {
-      // `tenant_id` es la columna FÍSICA de Supabase (contrato legacy intacto).
-      const { error } = await supabase.from("tenant_invitations").insert({
-        tenant_id: currentCompanyClient.id,
+      // Las claves del insert son los nombres FÍSICOS de columna del estado activo.
+      const { error } = await supabase.from(tableName("invitations")).insert({
+        [columnName("clientId")]: currentCompanyClient.id,
         email,
-        tenant_role_id: selectedRole || null,
+        [columnName("roleId")]: selectedRole || null,
         invited_by: (await supabase.auth.getUser()).data.user?.id,
         status: "pending",
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
@@ -120,7 +125,7 @@ const CompanyClientInvitations = () => {
   const cancelInvitation = async (id: string) => {
     try {
       const { error } = await supabase
-        .from("tenant_invitations")
+        .from(tableName("invitations"))
         .update({ status: "cancelled" })
         .eq("id", id)
       if (error) throw error
@@ -134,7 +139,7 @@ const CompanyClientInvitations = () => {
   const resendInvitation = async (id: string) => {
     try {
       const { error } = await supabase
-        .from("tenant_invitations")
+        .from(tableName("invitations"))
         .update({ status: "pending" })
         .eq("id", id)
       if (error) throw error

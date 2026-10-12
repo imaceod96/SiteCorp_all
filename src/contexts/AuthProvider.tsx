@@ -1,5 +1,6 @@
 import * as React from "react"
 import { supabase } from "@/lib/supabase"
+import { rpcName, selectQuery, tableName } from "@/integrations/supabase/schema-target"
 import type { User } from "@supabase/supabase-js"
 import {
   AuthContext,
@@ -59,8 +60,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // Load memberships
           const { data: membershipsData } = await supabase
-            .from("tenant_memberships")
-            .select("*, tenant:tenants(*)")
+            .from(tableName("memberships"))
+            .select(selectQuery(`*, tenant:${tableName("clients")}(*)`))
             .eq("user_id", session.user.id)
             .eq("is_active", true)
 
@@ -107,8 +108,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsPlatformUser(!!platformUserData || !!superAdminData)
 
             const { data: membershipsData } = await supabase
-              .from("tenant_memberships")
-              .select("*, tenant:tenants(*)")
+              .from(tableName("memberships"))
+              .select(selectQuery(`*, tenant:${tableName("clients")}(*)`))
               .eq("user_id", session.user.id)
               .eq("is_active", true)
             setMemberships(membershipsData || [])
@@ -152,7 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasTenantPermission = async (code: string): Promise<boolean> => {
     try {
       if (isPlatformSuperAdmin) return true
-      const { data, error } = await supabase.rpc("has_tenant_permission", {
+      const { data, error } = await supabase.rpc(rpcName("hasClientPermission"), {
+        // Parámetro PRESERVADO por la migración SQL (decisión nº 2).
         permission_code: code,
       })
       if (error) return false

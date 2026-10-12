@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
+import { columnName } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -164,7 +165,7 @@ const OrganizationDetail = () => {
       const tenantEntitiesResult = await supabase
         .from("organization_entities")
         .select("*")
-        .eq("tenant_id", entityData.tenant_id)
+        .eq(columnName("clientId"), entityData.tenant_id)
         .order("name")
       
       if (tenantEntitiesResult.error) throw tenantEntitiesResult.error
@@ -211,7 +212,7 @@ const OrganizationDetail = () => {
               const otherTenantEntitiesResult = await supabase
                 .from("organization_entities")
                 .select("*")
-                .eq("tenant_id", currentCompanyClientId)
+                .eq(columnName("clientId"), currentCompanyClientId)
                 .order("name")
               
               if (otherTenantEntitiesResult.error) throw otherTenantEntitiesResult.error

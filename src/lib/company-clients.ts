@@ -1,13 +1,19 @@
 import { supabase } from "@/lib/supabase"
+import { rpcName, tableName } from "@/integrations/supabase/schema-target"
 
 /**
  * Company Client — Adaptador de ESCRITURA y operaciones administrativas.
  *
- * Este módulo es la frontera de compatibilidad con el backend LEGACY, que
- * todavía NO está migrado: la tabla física es `tenants`, las RPC son
- * `create_workspace`, `workspace_deletion_summary` y `delete_workspace`, y la
- * Edge Function es `delete-workspace`. Esos nombres físicos se envían
- * EXACTAMENTE como están (no se traducen aquí).
+ * Este módulo es la frontera de compatibilidad con el backend: la tabla física y
+ * los nombres de RPC los resuelve la frontera de nomenclatura
+ * (`@/integrations/supabase/schema-target`), que conoce los dos estados —
+ * el actual (`tenants`, `create_workspace`, `workspace_deletion_summary`,
+ * `delete_workspace`) y el definitivo (`company_clients`,
+ * `create_company_client`, `company_client_deletion_summary`,
+ * `delete_company_client`).
+ *
+ * Los ARGUMENTOS y las CLAVES JSON de las RPC se conservan tal cual: la migración
+ * SQL preserva sus parámetros y columnas de salida (decidido en la Fase 2).
  *
  * La API pública de este módulo sí usa la nomenclatura de dominio
  * (`companyClientId`, `CompanyClient*`), porque es lo que consume la interfaz.
@@ -48,8 +54,8 @@ export const companyClientNameError = (err: unknown): string => {
 export async function createCompanyClient(
   input: CompanyClientInput,
 ): Promise<CompanyClientRecord> {
-  // Contrato físico: RPC `create_workspace` (nombre legacy intacto).
-  const { data, error } = await supabase.rpc("create_workspace", {
+  // Los nombres de los argumentos NO cambian (la migración SQL los preserva).
+  const { data, error } = await supabase.rpc(rpcName("createClient"), {
     p_name: input.name.trim(),
     p_description: input.description?.trim() || null,
     p_is_active: input.isActive ?? true,
@@ -67,9 +73,9 @@ export async function updateCompanyClient(
   companyClientId: string,
   input: CompanyClientInput,
 ): Promise<void> {
-  // Tabla física: `tenants` (nombre legacy intacto).
+  // Tabla física: resuelta por la frontera de nomenclatura.
   const { error } = await supabase
-    .from("tenants")
+    .from(tableName("clients"))
     .update({
       name: input.name.trim(),
       description: input.description?.trim() || null,
@@ -124,8 +130,8 @@ const deletionError = (err: unknown): string => {
 export async function getCompanyClientDeletionSummary(
   companyClientId: string,
 ): Promise<CompanyClientDeletionSummary> {
-  // Contrato físico: RPC `workspace_deletion_summary` (nombre legacy intacto).
-  const { data, error } = await supabase.rpc("workspace_deletion_summary", {
+  // El nombre del argumento NO cambia (la migración SQL lo preserva).
+  const { data, error } = await supabase.rpc(rpcName("deletionSummary"), {
     p_tenant_id: companyClientId,
   })
 
@@ -144,9 +150,10 @@ export async function getCompanyClientDeletionSummary(
  * Elimina definitivamente el cliente.
  *
  * La autorización, la confirmación por nombre y el borrado en base de datos se
- * ejecutan en una única transacción dentro de `delete_workspace`; la función
- * backend además limpia del Storage privado exclusivamente los objetos del
- * cliente eliminado y reporta cualquier fallo parcial.
+ * ejecutan en una única transacción dentro de la RPC de borrado
+ * (`delete_workspace` / `delete_company_client`); la función backend además
+ * limpia del Storage privado exclusivamente los objetos del cliente eliminado y
+ * reporta cualquier fallo parcial.
  */
 export async function deleteCompanyClient(
   companyClientId: string,

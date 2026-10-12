@@ -1,5 +1,11 @@
 import * as React from "react"
 import { supabase } from "@/lib/supabase"
+import {
+  columnName,
+  selectColumn,
+  selectQuery,
+  tableName,
+} from "@/integrations/supabase/schema-target"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
@@ -243,7 +249,7 @@ export const RolesManager = ({
       const rolesRequest = isPlatform
         ? supabase.from("platform_roles").select("*").order("name")
         : supabase
-            .from("tenant_roles")
+            .from(tableName("roles"))
             .select("*")
             .eq("organization_entity_id", organizationEntityId as string)
             .order("name")
@@ -270,9 +276,9 @@ export const RolesManager = ({
                 .select("platform_role_id,platform_permission_id")
                 .in("platform_role_id", roleIds)
             : supabase
-                .from("tenant_role_permissions")
-                .select("tenant_role_id,tenant_permission_id")
-                .in("tenant_role_id", roleIds)
+                .from(tableName("rolePermissions"))
+                .select(selectQuery(`${selectColumn("roleId")},${selectColumn("permissionId")}`))
+                .in(columnName("roleId"), roleIds)
 
       const mappingsResult = await mappingsRequest
       if (mappingsResult.error) throw mappingsResult.error
@@ -294,12 +300,12 @@ export const RolesManager = ({
           const [entityAssignments, legacyAssignments] = await Promise.all([
             supabase
               .from("entity_user_access")
-              .select("tenant_role_id,tenant_membership_id")
-              .in("tenant_role_id", roleIds),
+              .select(selectQuery(`${selectColumn("roleId")},${selectColumn("membershipId")}`))
+              .in(columnName("roleId"), roleIds),
             supabase
-              .from("tenant_user_roles")
-              .select("tenant_role_id,tenant_membership_id")
-              .in("tenant_role_id", roleIds),
+              .from(tableName("userRoles"))
+              .select(selectQuery(`${selectColumn("roleId")},${selectColumn("membershipId")}`))
+              .in(columnName("roleId"), roleIds),
           ])
           if (entityAssignments.error) throw entityAssignments.error
           if (legacyAssignments.error) throw legacyAssignments.error

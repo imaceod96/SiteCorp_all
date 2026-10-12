@@ -1,11 +1,13 @@
 import { supabase } from "@/lib/supabase"
+import { tableName } from "@/integrations/supabase/schema-target"
 
 /**
  * Catálogo GLOBAL de permisos INTERNOS de entidad.
  *
  * Decisión de arquitectura (fase «roles y permisos internos independientes por entidad»):
- *   - la DEFINICIÓN del permiso es global (catálogo único, tabla `tenant_permissions`);
- *   - el ROL es propiedad de UNA entidad (`tenant_roles.organization_entity_id`).
+ *   - la DEFINICIÓN del permiso es global (catálogo único, tabla física resuelta por
+ *     la frontera de nomenclatura: `tenant_permissions` → `company_client_permissions`);
+ *   - el ROL es propiedad de UNA entidad (`organization_entity_id`).
  *
  * Este catálogo es exclusivamente el de los módulos internos de una entidad SiteCorp.
  * Nunca se mezcla con el catálogo de plataforma (`platform_permissions`), que se
@@ -133,7 +135,7 @@ export const entityPermissionLabel = (permission: {
 /** Permisos internos desde el catálogo global, excluyendo los códigos legacy. */
 export async function fetchEntityPermissions(): Promise<EntityPermission[]> {
   const { data, error } = await supabase
-    .from("tenant_permissions")
+    .from(tableName("permissions"))
     .select("id,code,description")
     .order("code")
 

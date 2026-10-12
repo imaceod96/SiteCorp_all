@@ -5,10 +5,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
  * Eliminación definitiva de un Workspace.
  *
  * 1. Verifica la identidad del llamante con su JWT.
- * 2. Ejecuta la eliminación de base de datos llamando a `delete_workspace` CON EL
+ * 2. Ejecuta la eliminación de base de datos llamando a la RPC de borrado CON EL
  *    TOKEN DEL USUARIO: la autorización (auth.uid() + permiso de plataforma
  *    `tenants.delete`, o SuperAdmin) y la confirmación por nombre se comprueban
- *    dentro de la función SQL, en una única transacción.
+ *    dentro de la función SQL, en una única transacción. La migración
+ *    Tenant → CompanyClient renombra la función (`delete_workspace` →
+ *    `delete_company_client`) preservando sus parámetros y sus columnas de salida,
+ *    así que el CUERPO de la petición y de la respuesta no cambia.
  * 3. Limpia con el rol de servicio EXCLUSIVAMENTE los objetos privados que la
  *    función autorizada devolvió (rutas exactas + carpetas por id de trabajador,
  *    candidato y entidad). Nunca se borra por prefijo ambiguo.
@@ -26,6 +29,22 @@ const corsHeaders = {
 const DOCUMENTS_BUCKET = "documents"
 const TEMPLATES_BUCKET = "document-templates"
 const REMOVE_CHUNK = 50
+
+/**
+ * Nombre de la RPC de borrado. Esta Edge Function no comparte código con el
+ * frontend, así que su correspondencia de nombres es deliberadamente explícita:
+ * intenta primero el nombre DEFINITIVO y cae al ACTUAL solo si PostgREST todavía
+ * no conoce la función (PGRST202). Es una compatibilidad de transición: eliminar
+ * el fallback cuando la Fase 3 esté cerrada.
+ */
+const DELETE_RPC_COMPANY_CLIENT = "delete_company_client"
+const DELETE_RPC_LEGACY = "delete_workspace"
+
+/** ¿El error significa «esa función no existe» (y por tanto hay que usar el otro nombre)? */
+const isMissingFunction = (error: { code?: string; message?: string } | null | undefined) =>
+  Boolean(error) &&
+  (error?.code === "PGRST202" ||
+    /could not find the function|function .* does not exist/i.test(error?.message ?? ""))
 
 interface DeleteWorkspaceRequest {
   tenant_id?: string
@@ -137,10 +156,23 @@ serve(async (req) => {
       return json({ error: "El workspace es obligatorio." }, 400)
     }
 
-    const { data: result, error: rpcError } = await userClient.rpc("delete_workspace", {
-      p_tenant_id: tenantId,
-      p_confirmation_name: confirmationName,
-    })
+    // Los ARGUMENTOS no cambian: la migración SQL preserva los nombres de parámetro.
+    const callDelete = (name: string) =>
+      userClient.rpc(name, {
+        p_tenant_id: tenantId,
+        p_confirmation_name: confirmationName,
+      })
+
+    let { data: result, error: rpcError } = await callDelete(DELETE_RPC_COMPANY_CLIENT)
+
+    if (isMissingFunction(rpcError)) {
+      console.warn("[delete-workspace] RPC definitiva no disponible; se usa la actual", {
+        code: rpcError?.code,
+      })
+      const legacy = await callDelete(DELETE_RPC_LEGACY)
+      result = legacy.data
+      rpcError = legacy.error
+    }
 
     if (rpcError) {
       console.error("[delete-workspace] database deletion rejected", {

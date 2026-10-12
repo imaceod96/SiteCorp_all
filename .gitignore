@@ -29,3 +29,10 @@ dist-ssr
 /playwright/.cache/
 .last-run.json
 .dyad/
+
+# Playwright test artifacts
+/e2e-tests/fixtures/dyad/preview-dns.cjs
+
+# Playwright test artifacts
+/e2e-tests/fixtures/dyad/
+/e2e-tests/tsconfig.json

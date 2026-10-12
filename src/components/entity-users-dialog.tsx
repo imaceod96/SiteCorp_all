@@ -1,6 +1,12 @@
 import * as React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
+import {
+  columnName,
+  selectColumn,
+  selectQuery,
+  tableName,
+} from "@/integrations/supabase/schema-target"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
@@ -149,14 +155,14 @@ export const EntityUsersDialog = ({
         await Promise.all([
           supabase.rpc("list_entity_user_access", { target_entity_id: entity.id }),
           supabase
-            .from("tenant_memberships")
-            .select("id,user_id,tenant_id,is_active")
-            .eq("tenant_id", entity.tenant_id)
+            .from(tableName("memberships"))
+            .select(selectQuery(`id,user_id,${selectColumn("clientId")},is_active`))
+            .eq(columnName("clientId"), entity.tenant_id)
             .eq("is_active", true),
           // Sólo los roles PROPIOS de esta entidad: un rol de otra entidad del
           // mismo cliente no puede asignarse aquí (el backend lo rechaza además).
           supabase
-            .from("tenant_roles")
+            .from(tableName("roles"))
             .select("id,name,is_active")
             .eq("organization_entity_id", entity.id)
             .eq("is_active", true)
@@ -232,9 +238,9 @@ export const EntityUsersDialog = ({
       setSuccess(null)
 
       const { error: assignError } = await supabase.from("entity_user_access").insert({
-        tenant_membership_id: membershipId,
+        [columnName("membershipId")]: membershipId,
         organization_entity_id: entity.id,
-        tenant_role_id: roleId,
+        [columnName("roleId")]: roleId,
         access_scope: scope,
         is_active: true,
         assigned_by: user.id,
@@ -287,10 +293,10 @@ export const EntityUsersDialog = ({
       setError(null)
       setSuccess(null)
 
-      const { error: inviteError } = await supabase.from("tenant_invitations").insert({
-        tenant_id: entity.tenant_id,
+      const { error: inviteError } = await supabase.from(tableName("invitations")).insert({
+        [columnName("clientId")]: entity.tenant_id,
         email: inviteEmail.trim(),
-        tenant_role_id: inviteRoleId,
+        [columnName("roleId")]: inviteRoleId,
         organization_entity_id: entity.id,
         access_scope: inviteScope,
         invited_by: user.id,

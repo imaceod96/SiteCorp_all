@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import type {
   EntityMedicalCertificatesResult,
   WorkerMedicalCertificatesResult,
@@ -129,10 +130,10 @@ export async function createMedicalCertificate(params: {
 
   const documentId = await uploadCertificateDocument(params.worker_id, params.document)
 
-  // Obtener tenant_id y organization_entity_id del trabajador
+  // Obtener el cliente propietario y la entidad del trabajador
   const { data: workerData, error: workerError } = await supabase
     .from("workers")
-    .select("tenant_id, organization_entity_id")
+    .select(selectQuery(`${selectColumn("clientId")}, organization_entity_id`))
     .eq("id", params.worker_id)
     .single()
 

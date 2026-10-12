@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { supabase } from "@/lib/supabase"
+import { columnName } from "@/integrations/supabase/schema-target"
 import { useNavigate } from "react-router-dom"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -643,7 +644,7 @@ const EntityCandidates = () => {
       }
 
       const newCandidate = {
-              tenant_id: currentEntity?.tenant_id,
+              [columnName("clientId")]: currentEntity?.tenant_id,
               organization_entity_id: entityId,
               first_name: formData.first_name.trim(),
               first_surname: formData.first_surname.trim(),

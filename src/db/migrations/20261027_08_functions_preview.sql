@@ -28,8 +28,11 @@
 --   2. Los SEGMENTOS PRESERVADOS (literales '…', dollar-quotes $…$, identificadores
 --      "…", comentarios -- y /* */) se extraen y se recomponen idénticos; el preview
 --      COMPARA su lista antes/después y marca bloqueada la función si difiere.
---   3. Los TOKENS LEGACY que queden en zona de código tras la reescritura se listan y
---      bloquean la función (semáforo). Nada pasa al fichero 11 sin revisión.
+--   3. Los TOKENS LEGACY que queden en el CUERPO reescrito se listan y bloquean la
+--      función (semáforo). Nada pasa al fichero 11 sin revisión.
+--      La cabecera NO se evalúa con el semáforo porque conserva a propósito los
+--      nombres de parámetro y de columna de salida (decisión nº 2): en su lugar se
+--      comprueba que solo cambia el nombre de la función (Control 1).
 --
 -- DECISIONES APROBADAS QUE ESTE FICHERO RESPETA
 --   nº 1  tenant_permissions → company_client_permissions ............ grupo TABLA
@@ -465,18 +468,29 @@ BEGIN
 
     v_new_def := v_new_head || v_new_body || v_old_tail;
 
-    -- Control 1: la cabecera no debe contener ningún token legacy, salvo el propio
-    -- nombre ya sustituido (se elimina del texto antes de comprobar).
-    v_head_check := regexp_replace(v_new_head, '\m' || v_target || '\M', '', 'g');
-    v_sig_ok := (phase2_migration.legacy_in_code(v_head_check) = '');
+    -- Control 1 (CORREGIDO): la cabecera se copia VERBATIM y solo cambia el NOMBRE
+    -- de la función. Por tanto NO se puede exigir que la cabecera esté libre de
+    -- nomenclatura legacy: hay firmas que la CONSERVAN a propósito (decisión nº 2).
+    --   Evidencia real: `list_entity_user_access` declara las columnas de salida
+    --   `tenant_membership_id` y `tenant_role_id`; `can_use_tenant_permission`
+    --   declara el parámetro `target_tenant_id`. Se comprueba lo que de verdad
+    --   importa: que NADA de la cabecera cambie salvo ese nombre.
+    v_head_check := regexp_replace(v_new_head, '\m' || v_target || '\M', '@@NOMBRE@@', 'g');
+    v_sig_ok := (
+      v_head_check = regexp_replace(v_old_head, '\m' || r.proname || '\M', '@@NOMBRE@@', 'g')
+    );
 
     -- Control 2: los segmentos preservados (literales, comentarios, comillas) deben
     -- ser EXACTAMENTE los mismos, en el mismo orden y con el mismo contenido.
     v_lit_ok := (phase2_migration.preserved_segments(r.definition)
                  = phase2_migration.preserved_segments(v_new_def));
 
-    -- Control 3: no debe quedar ningún token legacy en zona de código.
-    v_remaining := phase2_migration.legacy_in_code(v_new_def);
+    -- Control 3 (CORREGIDO): no debe quedar ningún token legacy en la zona de código
+    -- REESCRITA, que es el CUERPO. La cabecera queda fuera porque conserva
+    -- deliberadamente los nombres de parámetro y de columna de salida (decisión
+    -- nº 2); incluirla marcaba `list_entity_user_access` como bloqueada y habría
+    -- impedido arrancar el fichero 11 (guardia de 0 bloqueadas).
+    v_remaining := phase2_migration.legacy_in_code(v_new_body);
 
     -- Control 4: un identificador ENTRECOMILLADO ("tenant_id") es zona preservada y
     -- por tanto no lo reescribe el motor; si contuviera nomenclatura legacy sería un
@@ -500,13 +514,13 @@ BEGIN
       v_notes := v_notes || 'Renombrado de función (coordinado con la aplicación) ¶';
     END IF;
     IF NOT v_sig_ok THEN
-      v_notes := v_notes || 'ATENCIÓN: token legacy en la cabecera ¶';
+      v_notes := v_notes || 'ATENCIÓN: la cabecera cambió más allá del nombre de la función ¶';
     END IF;
     IF NOT v_lit_ok THEN
       v_notes := v_notes || 'ATENCIÓN: han cambiado segmentos preservados ¶';
     END IF;
     IF v_remaining <> '' THEN
-      v_notes := v_notes || 'ATENCIÓN: quedan tokens legacy en código ¶';
+      v_notes := v_notes || 'ATENCIÓN: quedan tokens legacy en el cuerpo ¶';
     END IF;
 
     INSERT INTO phase2_migration.function_rewrite_preview

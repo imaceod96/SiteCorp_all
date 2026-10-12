@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
+import { tableName } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -20,10 +21,9 @@ const Admin = () => {
   React.useEffect(() => {
     const loadMetrics = async () => {
       try {
-        // `tenants` es el nombre FÍSICO de la tabla en Supabase (contrato legacy
-        // intacto). Es una lectura de LISTA para métricas: no se sustituye por
-        // lecturas unitarias.
-        const { data: companyClients } = await supabase.from("tenants").select("*")
+        // Es una lectura de LISTA para métricas: no se sustituye por lecturas
+        // unitarias. El nombre físico de la tabla lo resuelve la frontera.
+        const { data: companyClients } = await supabase.from(tableName("clients")).select("*")
         if (companyClients) {
           setMetrics({
             total: companyClients.length,

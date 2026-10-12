@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
+import { columnName } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -51,11 +52,11 @@ const CompanyClientRoles = () => {
         setError(null)
         setLoading(true)
 
-        // `tenant_id` es la columna FÍSICA de Supabase (contrato legacy intacto).
+        // El nombre de la columna lo resuelve la frontera de nomenclatura.
         const { data, error: entitiesError } = await supabase
           .from("organization_entities")
           .select("id, name, code, entity_type, is_active")
-          .eq("tenant_id", currentCompanyClientId)
+          .eq(columnName("clientId"), currentCompanyClientId)
           .order("name")
 
         if (entitiesError) throw entitiesError

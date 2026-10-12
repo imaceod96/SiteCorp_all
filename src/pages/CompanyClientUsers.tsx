@@ -3,6 +3,13 @@ import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { supabase } from "@/lib/supabase"
+import {
+  columnName,
+  selectColumn,
+  selectEmbed,
+  selectQuery,
+  tableName,
+} from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -49,9 +56,9 @@ const CompanyClientUsers = () => {
       if (!currentCompanyClient) return
 
       const { data: membersData, error: membersError } = await supabase
-        .from("tenant_memberships")
-        .select("id,user_id,tenant_id,is_active,created_at")
-        .eq("tenant_id", currentCompanyClient.id)
+        .from(tableName("memberships"))
+        .select(selectQuery(`id,user_id,${selectColumn("clientId")},is_active,created_at`))
+        .eq(columnName("clientId"), currentCompanyClient.id)
 
       if (membersError) throw membersError
 
@@ -65,9 +72,13 @@ const CompanyClientUsers = () => {
           : Promise.resolve({ data: [], error: null }),
         membershipIds.length
           ? supabase
-              .from("tenant_user_roles")
-              .select("tenant_membership_id,tenant_role_id,tenant_roles(name)")
-              .in("tenant_membership_id", membershipIds)
+              .from(tableName("userRoles"))
+              .select(
+                selectQuery(
+                  `${selectColumn("membershipId")},${selectColumn("roleId")},${selectEmbed("roles", "tenant_roles")}(name)`,
+                ),
+              )
+              .in(columnName("membershipId"), membershipIds)
           : Promise.resolve({ data: [], error: null }),
       ])
 
@@ -147,9 +158,9 @@ const CompanyClientUsers = () => {
     try {
       if (!currentCompanyClient) return
       const { error } = await supabase
-        .from("tenant_memberships")
+        .from(tableName("memberships"))
         .update({ is_active: !user.is_active })
-        .eq("tenant_id", currentCompanyClient.id)
+        .eq(columnName("clientId"), currentCompanyClient.id)
         .eq("user_id", user.id)
       if (error) throw error
       await loadUsers()
