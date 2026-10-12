@@ -1,6 +1,5 @@
 import * as React from "react"
 import { Link, useParams, useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -10,8 +9,13 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import ReincorporateWorkerDialog from "@/components/workers/ReincorporateWorkerDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
-import { filterReentryWorkers, isReentryWorker } from "@/lib/people-classification"
-import { fetchClientEmploymentIndex } from "@/lib/people-employment"
+import {
+  loadEntityReentriesView,
+  personFullName,
+  type CatalogRow,
+  type PersonReentryWorker,
+  type PersonSeparation,
+} from "@/domains/people"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
 
@@ -23,40 +27,18 @@ import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
  * puede reingresarse reutilizando el expediente existente (nunca se crea otro Worker).
  */
 
-interface ReentryRow {
-  id: string
-  code: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  gender_id: string | null
-  education_level_id: string | null
-  employment_status: string
-  hire_date: string
-  employment_start_date: string | null
-}
-
-interface CatalogRow {
-  id: string
-  name: string
-}
-
-interface BajaInfo {
-  effective_date: string
-  reason: string | null
-}
-
-const fullName = (w: ReentryRow) =>
-  [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
+/**
+ * El contrato de fila, el nombre completo y la regla de clasificación viven en el
+ * dominio de personas (`@/domains/people`): la vista no declara tipos ni reglas propias.
+ */
 
 const EntityReentries = () => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
 
-  const [workers, setWorkers] = React.useState<ReentryRow[]>([])
-  const [bajas, setBajas] = React.useState<Record<string, BajaInfo>>({})
+  const [workers, setWorkers] = React.useState<PersonReentryWorker[]>([])
+  const [bajas, setBajas] = React.useState<Record<string, PersonSeparation>>({})
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [canManage, setCanManage] = React.useState(false)
@@ -73,92 +55,27 @@ const EntityReentries = () => {
     setLoading(true)
     setError(null)
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.view",
+      // Caso de uso del dominio de personas: permiso efectivo, clasificación
+      // (relación laboral finalizada y sin otra vigente en el cliente) y los datos
+      // accesorios de la vista (catálogos y última baja) en una sola operación. Al
+      // reincorporar a la persona vuelve a Trabajadores y sale de aquí.
+      const view = await loadEntityReentriesView({
+        entityId,
+        companyClientId: currentEntity?.tenant_id,
       })
-      const { data: canManageWorkers } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.manage",
-      })
-      if (!canView && !canManageWorkers) {
+
+      if (!view.canView && !view.canManage) {
         setError("No tiene permiso para ver los reingresos de esta entidad")
         return
       }
-      setCanManage(!!canManageWorkers)
+      setCanManage(view.canManage)
 
-      // Criterio compartido de clasificación: antiguos trabajadores sin relación
-      // laboral vigente (`@/lib/people-classification`). Al reincorporarlos vuelven
-      // a Trabajadores y salen de aquí.
-      const { data, error: workersError } = await filterReentryWorkers(
-        supabase
-          .from("workers")
-          .select(
-            `id, code, first_name, first_surname, second_surname, identification,
-           gender_id, education_level_id,
-           employment_status, hire_date, employment_start_date`
-          )
-          .eq("organization_entity_id", entityId)
-      )
-        .order("first_surname", { ascending: true })
-        .order("first_name", { ascending: true })
-      if (workersError) throw workersError
-
-      const rows = (data as ReentryRow[]) || []
-
-      // Clasificación compartida: si la persona mantiene OTRA relación laboral vigente
-      // en el cliente (aunque sea en otra entidad), no es un reingreso.
-      const employmentIndex = await fetchClientEmploymentIndex(
-        currentEntity?.tenant_id,
-        rows.map((row) => row.identification)
-      )
-      const reentryRows = rows.filter((row) => isReentryWorker(row, employmentIndex))
-      setWorkers(reentryRows)
-
-      const [genders, education] = await Promise.all([
-        supabase.from("genders").select("id, name").order("name"),
-        supabase.from("education_levels").select("id, name").order("name"),
-      ])
+      setWorkers(view.workers)
       setCatalogs({
-        gender: (genders.data as CatalogRow[]) || [],
-        education: (education.data as CatalogRow[]) || [],
+        gender: view.catalogs.genders,
+        education: view.catalogs.educationLevels,
       })
-
-      // Última baja registrada por trabajador (bitácora de movimientos).
-      if (reentryRows.length > 0) {
-        const { data: movData } = await supabase
-          .from("worker_employment_movements")
-          .select(
-            `worker_id, effective_date, reason, movement_type,
-             separation_reason:worker_separation_reasons(name)`
-          )
-          .in(
-            "worker_id",
-            reentryRows.map((w) => w.id)
-          )
-          .eq("movement_type", "BAJA")
-          .order("effective_date", { ascending: false })
-
-        const map: Record<string, BajaInfo> = {}
-        ;((movData as {
-          worker_id: string
-          effective_date: string
-          reason: string | null
-          separation_reason: { name: string | null } | { name: string | null }[] | null
-        }[]) || []).forEach((m) => {
-          if (map[m.worker_id]) return
-          const reason = Array.isArray(m.separation_reason)
-            ? m.separation_reason[0]?.name
-            : m.separation_reason?.name
-          map[m.worker_id] = {
-            effective_date: m.effective_date,
-            reason: reason || m.reason || null,
-          }
-        })
-        setBajas(map)
-      } else {
-        setBajas({})
-      }
+      setBajas(view.separations)
     } catch (err) {
       console.error("Error loading reentries:", err)
       setError(err instanceof Error ? err.message : "Error al cargar los reingresos")
@@ -184,27 +101,27 @@ const EntityReentries = () => {
         label: "Sexo",
         type: "select",
         options: (catalogs.gender || []).map((row) => ({ value: row.id, label: row.name })),
-        getValue: (w: ReentryRow) => w.gender_id,
+        getValue: (w: PersonReentryWorker) => w.gender_id,
       },
       {
         key: "education",
         label: "Nivel educacional",
         type: "select",
         options: (catalogs.education || []).map((row) => ({ value: row.id, label: row.name })),
-        getValue: (w: ReentryRow) => w.education_level_id,
+        getValue: (w: PersonReentryWorker) => w.education_level_id,
       },
       {
         key: "bajaDate",
         label: "Fecha de baja",
         type: "daterange",
-        getValue: (w: ReentryRow) => bajas[w.id]?.effective_date ?? null,
+        getValue: (w: PersonReentryWorker) => bajas[w.id]?.effective_date ?? null,
       },
       {
         key: "bajaReason",
         label: "Motivo de baja",
         type: "select",
         options: reasonOptions,
-        getValue: (w: ReentryRow) => bajas[w.id]?.reason ?? null,
+        getValue: (w: PersonReentryWorker) => bajas[w.id]?.reason ?? null,
       },
     ]
   }, [catalogs, bajas])
@@ -315,7 +232,7 @@ const EntityReentries = () => {
                         to={`/entity/${entityId}/workers/${w.id}`}
                         className="text-sm font-medium text-ink underline-offset-2 hover:text-sitecorp-primary hover:underline"
                       >
-                        {fullName(w)}
+                        {personFullName(w)}
                       </Link>
                       <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {w.code}

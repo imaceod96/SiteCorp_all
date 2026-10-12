@@ -6,7 +6,7 @@ import {
   summarizeContractAlerts,
   type ContractAlertSummary,
 } from "@/lib/contract-alerts"
-import { hasLinkedWorker } from "@/lib/people-classification"
+import { hasLinkedWorker } from "@/domains/people"
 
 /**
  * Dashboard REAL de una entidad (pantalla Resumen).

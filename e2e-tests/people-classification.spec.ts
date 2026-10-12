@@ -8,13 +8,15 @@ import {
   isPendingCandidate,
   isReentryWorker,
   type PeopleView,
-} from "../src/lib/people-classification"
+} from "../src/domains/people/domain/rules"
 
 /**
  * CLASIFICACIÓN DE PERSONAS — Candidatos · Trabajadores · Reingresos.
  *
  * Comprueba la lógica compartida de las tres vistas operativas: cada persona
- * pertenece EXACTAMENTE a una de ellas.
+ * pertenece EXACTAMENTE a una de ellas. La regla vive en el DOMINIO
+ * (`src/domains/people/domain/rules.ts`), que no importa nada y por eso puede
+ * verificarse de forma aislada.
  *
  * La identidad de persona es (cliente, identificación) —la misma que usan
  * `person_identification_status` y el trigger `candidates_prevent_duplicate_person`—

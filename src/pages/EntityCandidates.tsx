@@ -1,9 +1,15 @@
 import * as React from "react"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { supabase } from "@/lib/supabase"
-import { columnName } from "@/integrations/supabase/schema-target"
-import { filterUnlinkedCandidates, isPendingCandidate } from "@/lib/people-classification"
-import { fetchClientEmploymentIndex } from "@/lib/people-employment"
+import {
+  PeopleRuleError,
+  candidateRequiresSpecialty,
+  loadCandidateRegistryCatalogs,
+  loadEntityCandidatesView,
+  registerCandidate,
+  type CandidateRegistrationInput,
+  type CatalogOption,
+  type PersonCandidate,
+} from "@/domains/people"
 import { useNavigate } from "react-router-dom"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -27,48 +33,10 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  fetchPersonCatalogs,
-  saveCandidateDrivingLicenseIds,
-  type CatalogOption,
-} from "@/lib/catalogs"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
-import { isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
-
-interface Candidate {
-  id: string
-  tenant_id: string
-  organization_entity_id: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  birth_date: string | null
-  gender_id: string | null
-  marital_status_id: string | null
-  phone: string | null
-  email: string | null
-  address: string | null
-  municipality: string | null
-  province: string | null
-  education_level_id: string | null
-  specialty: string | null
-  skin_color_id: string | null
-  profession_or_trade: string | null
-  has_masters_degree: boolean | null
-  has_doctorate_degree: boolean | null
-  political_affiliation: string | null
-  is_retired_or_rehired: boolean | null
-  has_disciplinary_measures: boolean | null
-  /** Vínculo con el trabajador creado al contratar (NULL = nunca contratada). */
-  worker_id: string | null
-  status: "active" | "archived"
-  created_at: string
-  updated_at: string
-}
 
 interface Gender {
   id: string
@@ -200,32 +168,12 @@ const EDUCATION_LEVEL_ORDER = [
   "Superior",
 ]
 
-// Niveles que requieren Especialidad.
-const SPECIALTY_EDUCATION_LEVELS = ["Obrero Calificado", "Técnico Medio", "Superior"]
-
-// Convert dd/mm/aaaa display format to ISO yyyy-mm-dd for storage
-const convertDisplayDateToISO = (value: string): string | null => {
-  const trimmed = value.trim()
-  if (!trimmed) return null
-  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trimmed)
-  if (match) {
-    const day = Number(match[1])
-    const month = Number(match[2])
-    const year = Number(match[3])
-    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-    }
-    return null
-  }
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
-  return null
-}
 
 const EntityCandidates = () => {
   const { currentEntity } = useCurrentEntity()
   const entityId = currentEntity?.id
 
-  const [candidates, setCandidates] = React.useState<Candidate[]>([])
+  const [candidates, setCandidates] = React.useState<PersonCandidate[]>([])
   const [genders, setGenders] = React.useState<Gender[]>([])
   const [maritalStatuses, setMaritalStatuses] = React.useState<MaritalStatus[]>([])
   const [educationLevels, setEducationLevels] = React.useState<EducationLevel[]>([])
@@ -259,23 +207,13 @@ const EntityCandidates = () => {
   React.useEffect(() => {
     const fetchReferenceData = async () => {
       try {
-        const [personCatalogs, gendersData, maritalStatusesData, educationLevelsData] = await Promise.all([
-          // Catálogos globales de la persona (color de piel y licencias de conducción)
-          fetchPersonCatalogs(),
-          supabase.from("genders").select("id, name").order("name"),
-          supabase.from("marital_statuses").select("id, name").order("name"),
-          supabase.from("education_levels").select("id, name").order("name")
-        ])
+        const catalogs = await loadCandidateRegistryCatalogs()
 
-        if (gendersData.error) throw gendersData.error
-        if (maritalStatusesData.error) throw maritalStatusesData.error
-        if (educationLevelsData.error) throw educationLevelsData.error
-
-        setGenders(gendersData.data || [])
-        setMaritalStatuses(maritalStatusesData.data || [])
-        setEducationLevels(educationLevelsData.data || [])
-        setSkinColors(personCatalogs.skinColors)
-        setLicenseCategories(personCatalogs.licenseCategories)
+        setGenders(catalogs.genders)
+        setMaritalStatuses(catalogs.maritalStatuses)
+        setEducationLevels(catalogs.educationLevels)
+        setSkinColors(catalogs.skinColors)
+        setLicenseCategories(catalogs.licenseCategories)
 
         // Set provinces from Cuba list
         setProvinces(CUBA_PROVINCES.map(name => ({ id: name, name })))
@@ -303,48 +241,15 @@ const EntityCandidates = () => {
       setError(null)
 
       try {
-        // Se cargan las PERSONAS PENDIENTES de la entidad (nunca contratadas) y se
-        // filtran en el cliente con el constructor de filtros común (filtros
-        // acumulativos). La búsqueda textual también se resuelve aquí para que
-        // filtros + búsqueda sean consistentes.
-        // El criterio de clasificación es el compartido (`@/lib/people-classification`):
-        // quien ya tiene trabajador vinculado pertenece a Trabajadores o Reingresos,
-        // no a Candidatos.
-        const { data, error } = await filterUnlinkedCandidates(
-          supabase
-            .from("candidates")
-            .select("*")
-            .eq("organization_entity_id", entityId)
-        ).order("created_at", { ascending: false })
-
-        if (error) throw error
-        const rows = (data as Candidate[]) || []
-
-        // Clasificación compartida: una persona ya contratada NO es candidata, aunque
-        // conserve una fila en `candidates` (p. ej. una fila antigua sin vincular). La
-        // identidad de persona es (cliente, identificación), la misma que usan el
-        // backend y el trigger de unicidad.
-        const employmentIndex = await fetchClientEmploymentIndex(
-          currentEntity?.tenant_id,
-          rows.map((row) => row.identification)
-        )
-        const pendingRows = rows.filter((row) => isPendingCandidate(row, employmentIndex))
-        setCandidates(pendingRows)
-
-        // Licencia de conducción (criterio booleano): qué candidatos tienen al
-        // menos una categoría de licencia registrada.
-        const ids = pendingRows.map((c) => c.id)
-        if (ids.length > 0) {
-          const { data: licenses } = await supabase
-            .from("candidate_driving_license_categories")
-            .select("candidate_id")
-            .in("candidate_id", ids)
-          const set = new Set<string>()
-          ;((licenses as { candidate_id: string }[] | null) || []).forEach((l) => set.add(l.candidate_id))
-          setCandidatesWithLicense(set)
-        } else {
-          setCandidatesWithLicense(new Set())
-        }
+        // Caso de uso del dominio de personas: filas de la entidad + clasificación por
+        // identidad (cliente, identificación) + licencias de conducción. La búsqueda y
+        // los filtros se resuelven sobre el resultado ya clasificado.
+        const view = await loadEntityCandidatesView({
+          entityId,
+          companyClientId: currentEntity?.tenant_id,
+        })
+        setCandidates(view.candidates)
+        setCandidatesWithLicense(view.candidatesWithLicense)
       } catch (err) {
         console.error("Error fetching candidates:", err)
         setError("Error al cargar los candidatos")
@@ -368,36 +273,36 @@ const EntityCandidates = () => {
         label: "Sexo",
         type: "select",
         options: genders.map((g) => ({ value: g.id, label: g.name })),
-        getValue: (c: Candidate) => c.gender_id,
+        getValue: (c: PersonCandidate) => c.gender_id,
       },
       {
         key: "marital",
         label: "Estado civil",
         type: "select",
         options: maritalStatuses.map((m) => ({ value: m.id, label: m.name })),
-        getValue: (c: Candidate) => c.marital_status_id,
+        getValue: (c: PersonCandidate) => c.marital_status_id,
       },
       {
         key: "skin",
         label: "Color de piel",
         type: "select",
         options: skinColors.map((s) => ({ value: s.id, label: s.name })),
-        getValue: (c: Candidate) => c.skin_color_id,
+        getValue: (c: PersonCandidate) => c.skin_color_id,
       },
       {
         key: "education",
         label: "Nivel educacional",
         type: "select",
         options: educationLevels.map((e) => ({ value: e.id, label: e.name })),
-        getValue: (c: Candidate) => c.education_level_id,
+        getValue: (c: PersonCandidate) => c.education_level_id,
       },
-      { key: "specialty", label: "Especialidad", type: "text", placeholder: "Especialidad", getValue: (c: Candidate) => c.specialty },
-      { key: "profession", label: "Profesión u oficio", type: "text", placeholder: "Profesión u oficio", getValue: (c: Candidate) => c.profession_or_trade },
-      { key: "province", label: "Provincia", type: "text", placeholder: "Provincia", getValue: (c: Candidate) => c.province },
-      { key: "municipality", label: "Municipio", type: "text", placeholder: "Municipio", getValue: (c: Candidate) => c.municipality },
-      { key: "license", label: "Licencia de conducción", type: "boolean", getValue: (c: Candidate) => candidatesWithLicense.has(c.id) },
-      { key: "masters", label: "Máster", type: "boolean", getValue: (c: Candidate) => c.has_masters_degree },
-      { key: "doctorate", label: "Doctorado", type: "boolean", getValue: (c: Candidate) => c.has_doctorate_degree },
+      { key: "specialty", label: "Especialidad", type: "text", placeholder: "Especialidad", getValue: (c: PersonCandidate) => c.specialty },
+      { key: "profession", label: "Profesión u oficio", type: "text", placeholder: "Profesión u oficio", getValue: (c: PersonCandidate) => c.profession_or_trade },
+      { key: "province", label: "Provincia", type: "text", placeholder: "Provincia", getValue: (c: PersonCandidate) => c.province },
+      { key: "municipality", label: "Municipio", type: "text", placeholder: "Municipio", getValue: (c: PersonCandidate) => c.municipality },
+      { key: "license", label: "Licencia de conducción", type: "boolean", getValue: (c: PersonCandidate) => candidatesWithLicense.has(c.id) },
+      { key: "masters", label: "Máster", type: "boolean", getValue: (c: PersonCandidate) => c.has_masters_degree },
+      { key: "doctorate", label: "Doctorado", type: "boolean", getValue: (c: PersonCandidate) => c.has_doctorate_degree },
       {
         key: "status",
         label: "Estado",
@@ -406,7 +311,7 @@ const EntityCandidates = () => {
           { value: "active", label: "Activo" },
           { value: "archived", label: "Archivado" },
         ],
-        getValue: (c: Candidate) => c.status,
+        getValue: (c: PersonCandidate) => c.status,
       },
     ],
     [genders, maritalStatuses, educationLevels, skinColors, candidatesWithLicense]
@@ -447,7 +352,7 @@ const EntityCandidates = () => {
       const handleEducationLevelChange = (value: string) => {
         const levelId = value === "__placeholder__" ? "" : value
         const level = educationLevels.find(l => l.id === levelId)
-        const needsSpecialty = SPECIALTY_EDUCATION_LEVELS.includes(level?.name || "")
+        const needsSpecialty = candidateRequiresSpecialty(level?.name)
         setFormData(prev => ({
           ...prev,
           education_level_id: levelId,
@@ -455,8 +360,8 @@ const EntityCandidates = () => {
         }))
       }
   
-      const requiresSpecialty = SPECIALTY_EDUCATION_LEVELS.includes(
-        educationLevels.find(l => l.id === formData.education_level_id)?.name || ""
+      const requiresSpecialty = candidateRequiresSpecialty(
+        educationLevels.find(l => l.id === formData.education_level_id)?.name
       )
   
       // Navigation
@@ -514,268 +419,66 @@ const EntityCandidates = () => {
             }
           }
       
-        // Sube un documento de verificación del candidato (Chequeo Preempleo / Antecedentes
-        // Penales) al Storage privado y lo registra en candidate_documents. Se invoca DESPUÉS
-        // de crear el candidato, cuando ya existe candidate_id (nunca un documento huérfano).
-        const uploadCandidateVerificationDocument = async (
-          candidateId: string,
-          documentTypeId: string,
-          file: File,
-          description: string
-        ) => {
-          const fileExt = file.name.split(".").pop() || "pdf"
-          const storagePath = `candidates/${candidateId}/${documentTypeId}_${Date.now()}.${fileExt}`
-      
-          const { error: uploadError } = await supabase.storage
-            .from("documents")
-            .upload(storagePath, file)
-          if (uploadError) throw uploadError
-      
-          const { error: docError } = await supabase
-            .from("candidate_documents")
-            .insert({
-              candidate_id: candidateId,
-              document_type_id: documentTypeId,
-              original_file_name: file.name,
-              storage_path: storagePath,
-              mime_type: file.type,
-              file_size: file.size,
-              description,
-              uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-            })
-          if (docError) throw docError
-        }
-      
         const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    // Validation
-    if (!formData.first_name.trim()) {
-      setFormError("El nombre es obligatorio")
-      return
-    }
-    if (!formData.first_surname.trim()) {
-      setFormError("El primer apellido es obligatorio")
-      return
-    }
-    if (!formData.identification.trim()) {
-      setFormError("La identificación es obligatoria")
-      return
-    }
-    if (!isValidIdentification(formData.identification)) {
-      setFormError(IDENTIFICATION_ERROR_MESSAGE)
-      return
-    }
-    // Integridad contractual: datos personales indispensables para formalizar
-    // correctamente un contrato laboral.
-    if (!formData.birth_date.trim()) {
-      setFormError("La fecha de nacimiento es obligatoria")
-      return
-    }
-    if (!formData.profession_or_trade.trim()) {
-      setFormError("La profesión u oficio es obligatoria")
-      return
-    }
-    if (!formData.address.trim()) {
-      setFormError("La dirección particular es obligatoria")
-      return
-    }
-    if (!formData.province.trim()) {
-      setFormError("La provincia es obligatoria")
-      return
-    }
-    if (!formData.municipality.trim()) {
-      setFormError("El municipio es obligatorio")
-      return
-    }
-
-    // Validar especialidad para niveles que la requieren
-        if (formData.education_level_id) {
-          const educationLevel = educationLevels.find(level => level.id === formData.education_level_id)
-          const requiresSpecialty = ["Obrero Calificado", "Técnico Medio", "Superior"].includes(educationLevel?.name || "")
-          if (requiresSpecialty && !formData.specialty.trim()) {
-                      setFormError(`La especialidad es obligatoria para ${educationLevel?.name}`)
-                      return
-                    }
-                  }
-          
-              // Chequeo Preempleo / Antecedentes Penales: el documento es obligatorio mientras
-              // el checkbox esté activado para un nuevo registro.
-              if (formData.has_pre_employment_check && !formData.pre_employment_check_file) {
-                setFormError("Debe seleccionar el documento de Chequeo Preempleo")
-                return
-              }
-              if (formData.has_criminal_record_check && !formData.criminal_record_check_file) {
-                setFormError("Debe seleccionar el documento de Antecedentes Penales")
-                return
-              }
-          
-              // Validar formato de email si se proporciona
-    if (formData.email.trim()) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-      if (!emailRegex.test(formData.email.trim())) {
-        setFormError("El formato del email no es válido")
-        return
-      }
-    }
-
-    // Validar y convertir fecha de nacimiento si se proporciona
-    let birthDateISO: string | null = null
-    if (formData.birth_date.trim()) {
-      birthDateISO = convertDisplayDateToISO(formData.birth_date)
-      if (!birthDateISO) {
-        setFormError("El formato de la fecha de nacimiento no es válido (dd/mm/aaaa)")
-        return
-      }
+    const registration: CandidateRegistrationInput = {
+      first_name: formData.first_name,
+      first_surname: formData.first_surname,
+      second_surname: formData.second_surname,
+      identification: formData.identification,
+      birth_date: formData.birth_date,
+      gender_id: formData.gender_id,
+      marital_status_id: formData.marital_status_id,
+      skin_color_id: formData.skin_color_id,
+      education_level_id: formData.education_level_id,
+      education_level_name: educationLevels.find((level) => level.id === formData.education_level_id)?.name || "",
+      specialty: formData.specialty,
+      phone: formData.phone,
+      email: formData.email,
+      address: formData.address,
+      municipality: formData.municipality,
+      province: formData.province,
+      profession_or_trade: formData.profession_or_trade,
+      political_affiliation: formData.political_affiliation,
+      has_masters_degree: formData.has_masters_degree,
+      has_doctorate_degree: formData.has_doctorate_degree,
+      is_retired_or_rehired: formData.is_retired_or_rehired,
+      has_disciplinary_measures: formData.has_disciplinary_measures,
+      driving_license_ids: formData.driving_license_ids,
+      has_pre_employment_check: formData.has_pre_employment_check,
+      has_criminal_record_check: formData.has_criminal_record_check,
+      pre_employment_check_file: formData.pre_employment_check_file,
+      criminal_record_check_file: formData.criminal_record_check_file,
+      disciplinary_document: disciplinaryDocument,
     }
 
     setFormSubmitting(true)
     setFormError(null)
 
     try {
-      // UNICIDAD DE PERSONAS (§27–§33): una misma persona (por Número de
-      // Identificación) no puede duplicarse entre Candidatos, Trabajadores y
-      // Reingresos del mismo workspace. La comprobación se resuelve en el backend
-      // (misma autoridad que RLS) y también está protegida por constraints/triggers.
-      const identificationToCheck = formData.identification.trim()
-      const { data: personStatus, error: checkError } = await supabase.rpc(
-        "person_identification_status",
-        { p_entity_id: entityId, p_identification: identificationToCheck }
-      )
-      if (checkError) throw checkError
+      // Validación, unicidad de identidad (backend), inserción, licencias y documentos:
+      // todo el caso de uso, sin reglas duplicadas en la vista.
+      await registerCandidate({
+        entityId,
+        companyClientId: currentEntity?.tenant_id,
+        registration,
+      })
 
-      const existingPerson = (personStatus || {}) as { worker_id?: string | null; worker_status?: string | null; candidate_count?: number | null }
-      if (existingPerson.worker_id) {
-        setFormError(
-          existingPerson.worker_status === "active"
-            ? "Esta persona ya está registrada como trabajador. Solo puede actualizar su información."
-            : "Esta persona ya existe y actualmente se encuentra en Reingresos. Debe utilizar el expediente existente."
-        )
-        setFormSubmitting(false)
-        return
-      }
-      if ((existingPerson.candidate_count ?? 0) > 0) {
-        setFormError(
-          "Ya existe una persona con este número de identificación. Solo puede actualizar su información."
-        )
-        setFormSubmitting(false)
-        return
-      }
-
-      const newCandidate = {
-              [columnName("clientId")]: currentEntity?.tenant_id,
-              organization_entity_id: entityId,
-              first_name: formData.first_name.trim(),
-              first_surname: formData.first_surname.trim(),
-              second_surname: formData.second_surname.trim() || null,
-              identification: formData.identification.trim(),
-              birth_date: birthDateISO,
-              gender_id: formData.gender_id || null,
-              marital_status_id: formData.marital_status_id || null,
-              phone: formData.phone.trim() || null,
-              email: formData.email.trim() || null,
-              address: formData.address.trim() || null,
-              municipality: formData.municipality.trim() || null,
-              province: formData.province.trim() || null,
-              education_level_id: formData.education_level_id || null,
-                            specialty: requiresSpecialty ? (formData.specialty.trim() || null) : null,
-                            has_masters_degree: formData.has_masters_degree,
-                            has_doctorate_degree: formData.has_doctorate_degree,
-                            profession_or_trade: formData.profession_or_trade.trim() || null,
-              skin_color_id: formData.skin_color_id || null,
-              political_affiliation: formData.political_affiliation || null,
-              is_retired_or_rehired: formData.is_retired_or_rehired === "yes",
-              has_disciplinary_measures: formData.has_disciplinary_measures,
-              status: "active" as const,
-            }
-
-      const { data: candidateData, error: insertError } = await supabase
-              .from("candidates")
-              .insert(newCandidate)
-              .select("id")
-              .single()
-      
-            if (insertError) throw insertError
-      
-            // Licencias de conducción de la persona (relación 0..N) — reemplazo atómico
-            if (candidateData?.id) {
-              await saveCandidateDrivingLicenseIds(candidateData.id, formData.driving_license_ids)
-            }
-      
-            // If there's a disciplinary document selected, upload it under the
-                        // candidate's own folder and register it in candidate_documents
-                        if (disciplinaryDocument && candidateData?.id) {
-                          try {
-                            const fileExt = disciplinaryDocument.name.split(".").pop() || "pdf"
-                            const storagePath = `candidates/${candidateData.id}/disciplinary_${Date.now()}.${fileExt}`
-            
-                            const { error: uploadError } = await supabase.storage
-                              .from("documents")
-                              .upload(storagePath, disciplinaryDocument)
-            
-                            if (uploadError) throw uploadError
-            
-                            const { error: docError } = await supabase
-                              .from("candidate_documents")
-                              .insert({
-                                candidate_id: candidateData.id,
-                                document_type_id: "DISCIPLINARY_DOCUMENT",
-                                original_file_name: disciplinaryDocument.name,
-                                storage_path: storagePath,
-                                mime_type: disciplinaryDocument.type,
-                                file_size: disciplinaryDocument.size,
-                                description: "Documento disciplinario subido durante la creación del candidato",
-                                uploaded_by: (await supabase.auth.getUser()).data.user?.id,
-                              })
-            
-                            if (docError) throw docError
-                          } catch (docError) {
-                                                      console.error("Error saving disciplinary document reference:", docError)
-                                                      // Don't throw, the candidate was created successfully
-                                                    }
-                                                  }
-                                
-                                      // Chequeo Preempleo / Antecedentes Penales: se suben tras crear el candidato,
-                                      // cuando candidate_id ya existe, y se registran en candidate_documents.
-                                      if (candidateData?.id) {
-                                        if (formData.has_pre_employment_check && formData.pre_employment_check_file) {
-                                          try {
-                                            await uploadCandidateVerificationDocument(
-                                              candidateData.id,
-                                              "PRE_EMPLOYMENT_CHECK",
-                                              formData.pre_employment_check_file,
-                                              "Chequeo Preempleo"
-                                            )
-                                          } catch (verificationError) {
-                                            console.error("Error saving pre-employment check document:", verificationError)
-                                          }
-                                        }
-                                        if (formData.has_criminal_record_check && formData.criminal_record_check_file) {
-                                          try {
-                                            await uploadCandidateVerificationDocument(
-                                              candidateData.id,
-                                              "CRIMINAL_RECORD",
-                                              formData.criminal_record_check_file,
-                                              "Antecedentes Penales"
-                                            )
-                                          } catch (verificationError) {
-                                            console.error("Error saving criminal record document:", verificationError)
-                                          }
-                                        }
-                                      }
-                                
-                                      // Reset form and close
-            setFormData(emptyFormData)
-            setDisciplinaryDocument(null)
-                        setDisciplinaryDocumentName(null)
-            setFormSuccess(true)
-            setFormOpen(false)
-      
-            // Refresh candidates list
-            setTimeout(() => setFormSuccess(false), 3000)
+      // Reset form and close
+      setFormData(emptyFormData)
+      setDisciplinaryDocument(null)
+      setDisciplinaryDocumentName(null)
+      setFormSuccess(true)
+      setFormOpen(false)
+      setTimeout(() => setFormSuccess(false), 3000)
     } catch (err) {
       console.error("Error creating candidate:", err)
-      setFormError("Error al guardar el candidato. Inténtalo de nuevo.")
+      setFormError(
+        err instanceof PeopleRuleError
+          ? err.message
+          : "Error al guardar el candidato. Inténtalo de nuevo."
+      )
     } finally {
       setFormSubmitting(false)
     }

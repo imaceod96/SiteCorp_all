@@ -1,6 +1,5 @@
 import * as React from "react"
 import { Link, useParams, useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -10,7 +9,13 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
-import { filterActiveWorkers } from "@/lib/people-classification"
+import {
+  loadEntityWorkersDirectory,
+  missingPersonProfileFields,
+  personFullName,
+  type CatalogRow,
+  type PersonDirectoryWorker,
+} from "@/domains/people"
 import { ArrowLeft, Search, Users, UserCheck, AlertTriangle } from "lucide-react"
 
 /**
@@ -25,46 +30,10 @@ import { ArrowLeft, Search, Users, UserCheck, AlertTriangle } from "lucide-react
  * Cargo/Puesto, se puede filtrar por ellos cuando sea útil).
  */
 
-interface WorkerRow {
-  id: string
-  code: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  gender_id: string | null
-  marital_status_id: string | null
-  skin_color_id: string | null
-  education_level_id: string | null
-  phone: string | null
-  email: string | null
-  birth_date: string | null
-  province: string | null
-  municipality: string | null
-  address: string | null
-  employment_start_date: string | null
-  has_masters_degree: boolean | null
-  has_doctorate_degree: boolean | null
-}
-
-interface CatalogRow {
-  id: string
-  name: string
-}
-
-const fullName = (w: WorkerRow) =>
-  [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
-
-const missingFields = (w: WorkerRow): string[] => {
-  const fields: string[] = []
-  if (!w.birth_date) fields.push("fecha de nacimiento")
-  if (!w.gender_id) fields.push("sexo")
-  if (!w.marital_status_id) fields.push("estado civil")
-  if (!w.skin_color_id) fields.push("color de piel")
-  if (!w.address) fields.push("dirección")
-  if (!w.employment_start_date) fields.push("fecha de incorporación")
-  return fields
-}
+/**
+ * El contrato de fila, el nombre completo y la regla de «ficha completa» viven en el
+ * dominio de personas (`@/domains/people`): la vista no declara tipos ni reglas propias.
+ */
 
 const toOptions = (rows: CatalogRow[]) =>
   rows.map((row) => ({ value: row.id, label: row.name })).sort((a, b) => a.label.localeCompare(b.label))
@@ -73,7 +42,7 @@ const EntityWorkers = () => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
 
-  const [workers, setWorkers] = React.useState<WorkerRow[]>([])
+  const [workers, setWorkers] = React.useState<PersonDirectoryWorker[]>([])
   const [catalogs, setCatalogs] = React.useState<Record<string, CatalogRow[]>>({})
   const [linkedWorkerIds, setLinkedWorkerIds] = React.useState<Set<string>>(new Set())
   const [loading, setLoading] = React.useState(true)
@@ -89,67 +58,25 @@ const EntityWorkers = () => {
     setLoading(true)
     setError(null)
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.view",
-      })
-      const { data: canManage } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.manage",
-      })
-      if (!canView && !canManage) {
+      // Caso de uso del dominio de personas: permiso efectivo, clasificación por
+      // relación laboral vigente y datos accesorios de la vista (catálogos y
+      // vinculación a plantilla) en una sola operación. Quien causó baja pasa a
+      // Reingresos: nunca aparece en las dos vistas a la vez.
+      const view = await loadEntityWorkersDirectory(entityId)
+
+      if (!view.canView && !view.canManage) {
         setError("No tiene permiso para ver los trabajadores de esta entidad")
         return
       }
 
-      // Criterio compartido de clasificación: relación laboral vigente
-      // (`@/lib/people-classification`). Quien causó baja pasa a Reingresos.
-      const { data, error: workersError } = await filterActiveWorkers(
-        supabase
-          .from("workers")
-          .select(
-            `id, code, first_name, first_surname, second_surname, identification,
-           gender_id, marital_status_id, skin_color_id, education_level_id,
-           phone, email, birth_date, province, municipality, address,
-           employment_start_date, has_masters_degree, has_doctorate_degree`
-          )
-          .eq("organization_entity_id", entityId)
-      )
-        .order("first_surname", { ascending: true })
-        .order("first_name", { ascending: true })
-      if (workersError) throw workersError
-      const rows = (data as WorkerRow[]) || []
-      setWorkers(rows)
-
-      const [genders, marital, skins, education] = await Promise.all([
-        supabase.from("genders").select("id, name").order("name"),
-        supabase.from("marital_statuses").select("id, name").order("name"),
-        supabase.from("skin_colors").select("id, name").order("name"),
-        supabase.from("education_levels").select("id, name").order("name"),
-      ])
+      setWorkers(view.workers)
       setCatalogs({
-        gender: (genders.data as CatalogRow[]) || [],
-        marital: (marital.data as CatalogRow[]) || [],
-        skin: (skins.data as CatalogRow[]) || [],
-        education: (education.data as CatalogRow[]) || [],
+        gender: view.catalogs.genders,
+        marital: view.catalogs.maritalStatuses,
+        skin: view.catalogs.skinColors,
+        education: view.catalogs.educationLevels,
       })
-
-      // Vinculación: trabajadores con Assignment actual (para el filtro
-      // Vinculado / Pendiente). No se muestra como columna; solo se usa para filtrar.
-      const ids = rows.map((row) => row.id)
-      if (ids.length > 0) {
-        const { data: assignments } = await supabase
-          .from("worker_position_assignments")
-          .select("worker_id, is_current, end_date")
-          .in("worker_id", ids)
-          .eq("is_current", true)
-          .is("end_date", null)
-        const linked = new Set<string>()
-        ;((assignments as { worker_id: string }[] | null) || []).forEach((a) => linked.add(a.worker_id))
-        setLinkedWorkerIds(linked)
-      } else {
-        setLinkedWorkerIds(new Set())
-      }
+      setLinkedWorkerIds(view.linkedWorkerIds)
     } catch (err) {
       console.error("Error loading workers directory:", err)
       setError(err instanceof Error ? err.message : "Error al cargar los trabajadores")
@@ -169,60 +96,60 @@ const EntityWorkers = () => {
         label: "Sexo",
         type: "select",
         options: toOptions(catalogs.gender || []),
-        getValue: (w: WorkerRow) => w.gender_id,
+        getValue: (w: PersonDirectoryWorker) => w.gender_id,
       },
       {
         key: "marital",
         label: "Estado civil",
         type: "select",
         options: toOptions(catalogs.marital || []),
-        getValue: (w: WorkerRow) => w.marital_status_id,
+        getValue: (w: PersonDirectoryWorker) => w.marital_status_id,
       },
       {
         key: "skin",
         label: "Color de piel",
         type: "select",
         options: toOptions(catalogs.skin || []),
-        getValue: (w: WorkerRow) => w.skin_color_id,
+        getValue: (w: PersonDirectoryWorker) => w.skin_color_id,
       },
       {
         key: "education",
         label: "Nivel educacional",
         type: "select",
         options: toOptions(catalogs.education || []),
-        getValue: (w: WorkerRow) => w.education_level_id,
+        getValue: (w: PersonDirectoryWorker) => w.education_level_id,
       },
       {
         key: "province",
         label: "Provincia",
         type: "text",
         placeholder: "Provincia",
-        getValue: (w: WorkerRow) => w.province,
+        getValue: (w: PersonDirectoryWorker) => w.province,
       },
       {
         key: "municipality",
         label: "Municipio",
         type: "text",
         placeholder: "Municipio",
-        getValue: (w: WorkerRow) => w.municipality,
+        getValue: (w: PersonDirectoryWorker) => w.municipality,
       },
       {
         key: "masters",
         label: "Máster",
         type: "boolean",
-        getValue: (w: WorkerRow) => w.has_masters_degree,
+        getValue: (w: PersonDirectoryWorker) => w.has_masters_degree,
       },
       {
         key: "doctorate",
         label: "Doctorado",
         type: "boolean",
-        getValue: (w: WorkerRow) => w.has_doctorate_degree,
+        getValue: (w: PersonDirectoryWorker) => w.has_doctorate_degree,
       },
       {
         key: "complete",
         label: "Ficha completa",
         type: "boolean",
-        getValue: (w: WorkerRow) => missingFields(w).length === 0,
+        getValue: (w: PersonDirectoryWorker) => missingPersonProfileFields(w).length === 0,
       },
       {
         key: "linked",
@@ -232,7 +159,7 @@ const EntityWorkers = () => {
           { value: "linked", label: "Vinculado a plantilla" },
           { value: "pending", label: "Pendiente de vinculación" },
         ],
-        getValue: (w: WorkerRow) => (linkedWorkerIds.has(w.id) ? "linked" : "pending"),
+        getValue: (w: PersonDirectoryWorker) => (linkedWorkerIds.has(w.id) ? "linked" : "pending"),
       },
     ],
     [catalogs, linkedWorkerIds]
@@ -335,7 +262,7 @@ const EntityWorkers = () => {
           ) : (
             <div className="space-y-2">
               {filtered.map((w) => {
-                const missing = missingFields(w)
+                const missing = missingPersonProfileFields(w)
                 return (
                   <Link
                     key={w.id}
@@ -343,7 +270,7 @@ const EntityWorkers = () => {
                     className="flex flex-col gap-2 rounded-xl border border-border bg-white p-4 transition-colors hover:border-sitecorp-primary/40 hover:bg-sitecorp-primary/5 lg:flex-row lg:items-center lg:justify-between"
                   >
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="text-sm font-medium text-ink">{fullName(w)}</span>
+                      <span className="text-sm font-medium text-ink">{personFullName(w)}</span>
                       <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                         {w.code}
                       </span>
