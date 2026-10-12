@@ -73,7 +73,6 @@ export interface CandidateExpedienteView {
   linkedWorker: EmploymentLink | null
   drivingLicenseIds: string[]
   catalogs: CandidateExpedienteCatalogs
-  related: CandidateExpedienteRelated
 }
 
 const emptyRelated = (): CandidateExpedienteRelated => ({
@@ -144,16 +143,16 @@ export async function loadCandidateExpedienteView(input: {
         licenseCategories: [],
         documentTypes: [],
       },
-      related: emptyRelated(),
     }
   }
 
   const candidate = await fetchCandidateExpediente(input.entityId, input.candidateId)
 
-  const [licenseIds, link, related, reference] = await Promise.all([
-    optional<string>(() => fetchCandidateLicenseIds(input.candidateId)),
+  const [licenseIds, link, reference] = await Promise.all([
+    // Las licencias SÍ propagan su error, como ya hacía la ficha: sin ellas el expediente
+    // no se puede editar correctamente.
+    fetchCandidateLicenseIds(input.candidateId),
     candidate.worker_id ? fetchCandidateEmploymentLink(candidate.worker_id) : Promise.resolve(null),
-    loadCandidateExpedienteRelated(input.candidateId),
     loadCandidateExpedienteReferenceData(),
   ])
 
@@ -163,7 +162,6 @@ export async function loadCandidateExpedienteView(input: {
     linkedWorker: link,
     drivingLicenseIds: licenseIds,
     catalogs: reference,
-    related,
   }
 }
 
@@ -228,7 +226,7 @@ export async function loadCandidateFormData(input: {
   const candidate = await fetchCandidateExpediente(input.entityId, input.candidateId)
 
   const [licenseIds, verificationDocuments] = await Promise.all([
-    optional<string>(() => fetchCandidateLicenseIds(input.candidateId)),
+    fetchCandidateLicenseIds(input.candidateId),
     fetchCandidateVerificationDocuments(input.candidateId),
   ])
 

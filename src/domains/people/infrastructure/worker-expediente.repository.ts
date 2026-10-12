@@ -5,7 +5,7 @@ import {
   fetchGenders,
   fetchMaritalStatuses,
 } from "./people.repository"
-import { fetchActiveContractTypes, fetchEntityPermission } from "./staffing.repository"
+import { fetchActiveContractTypes } from "./staffing.repository"
 import {
   requireCurrentUserId,
   storageFileName,
@@ -409,15 +409,4 @@ export async function uploadWorkerVerificationDocument(
     uploaded_by: uploadedBy,
   })
   if (error) throw error
-}
-
-/**
- * Permiso efectivo para operar sobre los datos personales del trabajador. Es la
- * comprobación que ya hacía la pantalla (sin propagar fallos: solo habilita la edición).
- */
-export async function fetchWorkerExpedientePermission(
-  entityId: string,
-  permissionCode: string
-): Promise<boolean> {
-  return fetchEntityPermission(entityId, permissionCode)
 }

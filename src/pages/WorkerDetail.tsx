@@ -39,13 +39,19 @@ import { calculateTenure, calculateAge, ageRange } from "@/lib/tenure"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
 import { WorkerForm } from "@/components/workers/WorkerForm"
 import { WorkerDocumentsTab } from "@/components/workers/WorkerDocumentsTab"
+import { drivingLicenseLabels, type CatalogOption } from "@/lib/catalogs"
 import {
-  fetchPersonCatalogs,
-  fetchWorkerDrivingLicenseIds,
-  saveWorkerDrivingLicenseIds,
-  drivingLicenseLabels,
-  type CatalogOption,
-} from "@/lib/catalogs"
+  loadWorkerExpedienteView,
+  registerWorkerExpedienteContract,
+  saveWorkerExpedienteLicenseIds,
+  saveWorkerExpedientePersonalData,
+  validatePersonProfileFields,
+  validateWorkerContractInput,
+  type CatalogRow,
+  type WorkerEmploymentMovement,
+  type WorkerExpediente as WorkerDetail,
+  type WorkerExpedienteInput,
+} from "@/domains/people"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
@@ -82,7 +88,6 @@ import { ContractRetributionSummary } from "@/components/contracts/ContractRetri
 import { CurrentContractSummary } from "@/components/contracts/CurrentContractSummary"
 import { ContractualTimeline } from "@/components/contracts/ContractualTimeline"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
-import { ensureContractDocumentGenerated } from "@/lib/contract-automation"
 import type { RepresentativePositionRow } from "@/domains/representatives"
 import {
   EMPTY_FORMALIZATION_PENDING,
@@ -99,7 +104,6 @@ import {
 } from "@/lib/contract-conditions"
 import { SelectItem } from "@/components/ui/select"
 import {
-  resolveApplicableScaleId,
   fetchSalaryValuesForGroups,
   salaryForGroup,
   formatSalary,
@@ -129,232 +133,12 @@ import {
   type ContractAlertRow,
 } from "@/lib/contract-alerts"
 
-interface WorkerDetail {
-  id: string
-  code: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  birth_date: string | null
-  gender_id: string | null
-  marital_status_id: string | null
-  education_level_id: string | null
-  specialty: string | null
-  // Formación académica adicional (indicadores independientes, no excluyentes)
-  has_masters_degree: boolean
-  has_doctorate_degree: boolean
-  profession_or_trade: string | null
-  skin_color_id: string | null
-  address: string | null
-  province: string | null
-  municipality: string | null
-  phone: string | null
-  email: string | null
-  hire_date: string
-  employment_start_date: string | null
-  employment_status: string
-  created_at: string
-  updated_at: string
-  assignments: {
-    id: string
-    position_id: string
-    start_date: string
-    end_date: string | null
-    is_current: boolean
-    position: {
-      id: string
-      name: string
-      code: string
-      is_active: boolean
-      // Fase 11A.3: información laboral del puesto
-      work_location: string | null
-      daily_hours: number | null
-      weekly_hours: number | null
-      monthly_hours: number | null
-      break_minutes: number | null
-      schedule_notes: string | null
-      job: {
-        id: string
-        name: string
-        code: string
-        is_active: boolean
-        area_id: string
-        area: { id: string; name: string } | null
-        salary_group: {
-          id: string
-          salary_scale_id: string
-          sequence_number: number
-        } | null
-      } | null
-    } | null
-  }[] | null
-  contracts: {
-    id: string
-    assignment_id: string
-    contract_type_id: string
-    start_date: string
-    end_date: string | null
-    actual_end_date: string | null
-    is_current: boolean
-    salary_amount: number | null
-    salary_currency_code: string | null
-    salary_effective_date: string | null
-    salary_snapshot_status: string
-    representative_name_snapshot: string | null
-    representative_position_snapshot: string | null
-    representative_captured_at: string | null
-    entity_name_snapshot: string | null
-    // Fase 11A.5: condiciones formalizadas en el contrato
-    signature_date: string | null
-    signature_place: string | null
-    payment_method_id: string | null
-    payment_schedule_text: string | null
-    total_compensation_snapshot: number | null
-    conditions_captured_at: string | null
-    salary_group: { id: string; sequence_number: number } | null
-    payment_method: { name: string; code: string } | null
-    contract_type: {
-      id: string
-      name: string
-      code: string
-    } | null
-  }[] | null
-}
-
-interface Catalog {
-  id: string
-  name: string
-}
-
-interface WorkerMovement {
-  id: string
-  movement_type: string
-  effective_date: string
-  reason: string | null
-  notes: string | null
-  created_by: string | null
-  created_at: string
-  separation_reason: { name: string } | null
-  authorName: string | null
-}
-
-/** Fila cruda de `worker_employment_movements` con la relación embebida (array u objeto). */
-interface WorkerMovementRow extends Omit<WorkerMovement, "separation_reason" | "authorName"> {
-  separation_reason: { name: string } | { name: string }[] | null
-}
-
-/** Fila del RPC `resolve_tenure_payment_for_worker`. */
-interface TenurePaymentRow {
-  amount: number
-  from_months: number
-  to_months: number | null
-}
-
-// Forma cruda del trabajador devuelta por PostgREST: las relaciones embebidas
-// pueden llegar como arreglo o como objeto antes de normalizarse a `WorkerDetail`.
-interface WorkerDetailQueryJobRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  area: { id: string; name: string }[] | null
-  salary_group:
-    | { id: string; salary_scale_id: string; sequence_number: number }
-    | { id: string; salary_scale_id: string; sequence_number: number }[]
-    | null
-}
-
-interface WorkerDetailQueryPositionRow {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  job_id: string
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  job: WorkerDetailQueryJobRow | WorkerDetailQueryJobRow[] | null
-}
-
-interface WorkerDetailQueryAssignmentRow {
-  id: string
-  position_id: string
-  start_date: string
-  end_date: string | null
-  is_current: boolean
-  position: WorkerDetailQueryPositionRow | WorkerDetailQueryPositionRow[] | null
-}
-
-interface WorkerDetailQueryContractRow {
-  id: string
-  assignment_id: string
-  contract_type_id: string
-  start_date: string
-  end_date: string | null
-  actual_end_date: string | null
-  is_current: boolean
-  salary_amount: number | null
-  salary_currency_code: string | null
-  salary_effective_date: string | null
-  salary_snapshot_status: string
-  representative_name_snapshot: string | null
-  representative_position_snapshot: string | null
-  representative_captured_at: string | null
-  entity_name_snapshot: string | null
-  signature_date: string | null
-  signature_place: string | null
-  payment_method_id: string | null
-  payment_schedule_text: string | null
-  total_compensation_snapshot: number | null
-  conditions_captured_at: string | null
-  salary_group:
-    | { id: string; sequence_number: number }
-    | { id: string; sequence_number: number }[]
-    | null
-  payment_method:
-    | { name: string; code: string }
-    | { name: string; code: string }[]
-    | null
-  contract_type:
-    | { id: string; name: string; code: string }
-    | { id: string; name: string; code: string }[]
-    | null
-}
-
-interface WorkerDetailQueryRow {
-  id: string
-  code: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  birth_date: string | null
-  gender_id: string | null
-  marital_status_id: string | null
-  education_level_id: string | null
-  specialty: string | null
-  has_masters_degree: boolean
-  has_doctorate_degree: boolean
-  profession_or_trade: string | null
-  skin_color_id: string | null
-  address: string | null
-  province: string | null
-  municipality: string | null
-  phone: string | null
-  email: string | null
-  hire_date: string
-  employment_start_date: string | null
-  employment_status: string
-  created_at: string
-  updated_at: string
-  assignments: WorkerDetailQueryAssignmentRow[] | null
-  contracts: WorkerDetailQueryContractRow[] | null
-}
+/**
+ * La ficha laboral se describe con el modelo del dominio Personas (`WorkerExpediente`,
+ * importado como `WorkerDetail` para conservar el nombre que ya usaba la aplicación): la
+ * persona con su trayectoria (asignaciones y contratos) y el vocabulario de las columnas.
+ */
+type Catalog = CatalogRow
 
 const WorkerDetail = () => {
   const { entityId, workerId } = useParams<{ entityId: string; workerId: string }>()
@@ -388,7 +172,7 @@ const WorkerDetail = () => {
   const [separateOpen, setSeparateOpen] = React.useState(false)
   const [reincorporateOpen, setReincorporateOpen] = React.useState(false)
   const [changeContractOpen, setChangeContractOpen] = React.useState(false)
-  const [movements, setMovements] = React.useState<WorkerMovement[]>([])
+  const [movements, setMovements] = React.useState<WorkerEmploymentMovement[]>([])
   const [salaryHistory, setSalaryHistory] = React.useState<WorkerSalaryHistoryEntry[]>([])
   // Fase 11A.6: anexos al contrato y condiciones contractuales formalizadas vigentes
   const [addendums, setAddendums] = React.useState<ContractAddendum[]>([])
@@ -487,105 +271,20 @@ const WorkerDetail = () => {
     setError(null)
 
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.view",
-      })
-      const { data: canViewManage } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "workers.manage",
-      })
-      if (!canView && !canViewManage) {
+      // Permisos, ficha laboral con su trayectoria, catálogos, licencias de conducción,
+      // bitácora de movimientos y escala salarial: todo lo resuelve el caso de uso del
+      // dominio Personas. La pantalla ya no compone ninguna consulta.
+      const view = await loadWorkerExpedienteView({ entityId, workerId })
+
+      if (!view.permissions.canView && !view.permissions.canManage) {
         setError("No tiene permiso para ver este trabajador")
         return
       }
-      setCanManage(!!canViewManage)
+      setCanManage(view.permissions.canManage)
 
-      const { data: workerData, error: workerError } = await supabase
-              .from("workers")
-              .select(`
-                *,
-                assignments:worker_position_assignments(
-                  id, position_id, start_date, end_date, is_current,
-                  position:organization_positions(
-                      id, name, code, is_active, job_id,
-                      work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
-                      job:organization_jobs(
-                      id, name, code, is_active, area_id,
-                      area:organization_areas(id, name),
-                      salary_group:salary_groups(id, salary_scale_id, sequence_number)
-                    )
-                  )
-                ),
-                contracts:employment_contracts(
-                  id, assignment_id, contract_type_id, start_date, end_date, actual_end_date, is_current,
-                  salary_amount, salary_currency_code, salary_effective_date, salary_snapshot_status,
-                  representative_name_snapshot, representative_position_snapshot, representative_captured_at,
-                  entity_name_snapshot, entity_organism_snapshot, entity_branch_snapshot,
-                  entity_labor_code_snapshot, entity_address_snapshot, entity_province_snapshot,
-                  entity_municipality_snapshot,
-                  signature_date, signature_place, payment_method_id, payment_schedule_text, total_compensation_snapshot,
-                  conditions_captured_at,
-                  salary_group:salary_groups(id, sequence_number),
-                  payment_method:payment_methods(name, code),
-                  contract_type:employment_contract_types(id, name, code)
-                )
-              `)
-              .eq("id", workerId)
-              .eq("organization_entity_id", entityId)
-              .single()
-      
-            if (workerError) throw workerError
-            // Normaliza las relaciones embebidas (arreglo u objeto) al shape de WorkerDetail.
-            const rawWorker = workerData as WorkerDetailQueryRow
-            const mappedWorker: WorkerDetail = {
-              ...rawWorker,
-              contracts: rawWorker.contracts
-                ? rawWorker.contracts.map((c) => ({
-                    ...c,
-                    contract_type: Array.isArray(c.contract_type)
-                      ? c.contract_type[0] || null
-                      : c.contract_type,
-                    // Fase 11A.5: snapshot contractual (grupo y forma de pago formalizados)
-                    salary_group: Array.isArray(c.salary_group)
-                      ? c.salary_group[0] || null
-                      : c.salary_group,
-                    payment_method: Array.isArray(c.payment_method)
-                      ? c.payment_method[0] || null
-                      : c.payment_method,
-                  }))
-                : null,
-              assignments: rawWorker.assignments
-                ? rawWorker.assignments.map((a) => {
-                    const position = Array.isArray(a.position) ? a.position[0] ?? null : a.position
-                    const job = position
-                      ? Array.isArray(position.job)
-                        ? position.job[0] ?? null
-                        : position.job
-                      : null
-                    return {
-                      ...a,
-                      position: position
-                        ? {
-                            ...position,
-                            job: job
-                              ? {
-                                  ...job,
-                                  area: job.area
-                                    ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null }
-                                    : null,
-                                  salary_group: Array.isArray(job.salary_group)
-                                    ? job.salary_group[0] ?? null
-                                    : job.salary_group,
-                                }
-                              : null,
-                          }
-                        : null,
-                    }
-                  })
-                : null,
-            }
-            setWorker(mappedWorker)
+      const mappedWorker = view.worker
+      if (!mappedWorker) return
+      setWorker(mappedWorker)
             
                   // Antigüedad desde la fecha canónica de incorporación laboral
                   // (employment_start_date; fallback histórico a hire_date).
@@ -594,29 +293,8 @@ const WorkerDetail = () => {
                   )
                   setTenure(t)
             
-                  // Resolver pago por antigüedad aplicable.
-                  try {
-                    const { data: tenureData } = await supabase.rpc(
-                      "resolve_tenure_payment_for_worker",
-                      {
-                        p_entity_id: entityId,
-                        p_worker_id: workerId,
-                        p_reference_date: new Date().toISOString().slice(0, 10),
-                      }
-                    )
-                    if (tenureData && Array.isArray(tenureData) && tenureData.length > 0) {
-                      const row = tenureData[0] as TenurePaymentRow
-                      setTenurePayment({
-                        amount: row.amount,
-                        from_months: row.from_months,
-                        to_months: row.to_months,
-                      })
-                    } else {
-                      setTenurePayment(null)
-                    }
-                  } catch {
-                    setTenurePayment(null)
-                  }
+                  // Pago por antigüedad aplicable, resuelto en el servidor (caso de uso).
+                  setTenurePayment(view.tenurePayment)
 
                   // Pago por categoría académica (Máster / Doctor). Se resuelve con la
                   // única fuente de verdad del servidor: Doctor tiene prioridad y los
@@ -647,23 +325,14 @@ const WorkerDetail = () => {
         setPositionSegments([])
       }
 
-      // Cargar catálogos
-      const [personCatalogs, workerLicenseIds, g, m, e, ct] = await Promise.all([
-        // Catálogos globales de la persona (mismos que utiliza el candidato)
-        fetchPersonCatalogs(),
-        fetchWorkerDrivingLicenseIds(mappedWorker.id),
-        supabase.from("genders").select("id, name").order("name"),
-        supabase.from("marital_statuses").select("id, name").order("name"),
-        supabase.from("education_levels").select("id, name").order("name"),
-        supabase.from("employment_contract_types").select("id, name, code").eq("is_active", true).order("name"),
-      ])
-      setGenders((g.data as Catalog[]) || [])
-      setMaritalStatuses((m.data as Catalog[]) || [])
-      setEducationLevels((e.data as Catalog[]) || [])
-      setSkinColors(personCatalogs.skinColors)
-      setLicenseCategories(personCatalogs.licenseCategories)
-      setLicenseIds(workerLicenseIds)
-      setContractTypes((ct.data as { id: string; name: string; code: string }[]) || [])
+      // Catálogos y licencias de conducción: vienen del caso de uso del expediente.
+      setGenders(view.catalogs.genders as Catalog[])
+      setMaritalStatuses(view.catalogs.maritalStatuses as Catalog[])
+      setEducationLevels(view.catalogs.educationLevels as Catalog[])
+      setSkinColors(view.skinColors)
+      setLicenseCategories(view.licenseCategories)
+      setLicenseIds(view.drivingLicenseIds)
+      setContractTypes(view.catalogs.contractTypes)
 
       // Fase 11A.5: catálogo de formas de pago y conceptos retributivos por contrato.
       // Los conceptos son históricos: cada contrato conserva los suyos.
@@ -684,58 +353,15 @@ const WorkerDetail = () => {
         setComponentsByContract({})
       }
 
-      // Bitácora de movimientos laborales (bajas, reincorporaciones, cambios de puesto)
-      const { data: movData } = await supabase
-        .from("worker_employment_movements")
-        .select(
-          `id, movement_type, effective_date, reason, notes, created_by, created_at,
-           separation_reason:worker_separation_reasons(name)`
-        )
-        .eq("worker_id", workerId)
-        .order("created_at", { ascending: false })
-
-      const movRows = ((movData as WorkerMovementRow[]) || []).map((m: WorkerMovementRow) => ({
-        ...m,
-        separation_reason: Array.isArray(m.separation_reason)
-          ? m.separation_reason[0] || null
-          : m.separation_reason,
-      }))
-
-      const authorIds = Array.from(
-        new Set(movRows.map((m) => m.created_by).filter((id): id is string => !!id))
-      )
-      const authorMap: Record<string, string> = {}
-      if (authorIds.length > 0) {
-        const { data: profs } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", authorIds)
-        ;(profs || []).forEach((p: { id: string; full_name: string }) => {
-          authorMap[p.id] = p.full_name
-        })
-      }
-      setMovements(
-        movRows.map((m) => ({
-          ...m,
-          authorName: m.created_by ? authorMap[m.created_by] || null : null,
-        })) as WorkerMovement[]
-      )
+      // Bitácora de movimientos laborales (bajas, reincorporaciones, cambios de puesto),
+      // con el nombre de su autor resuelto por el caso de uso.
+      setMovements(view.movements)
 
       // Escala aplicable y salario de referencia (derivado del assignment actual).
       // Se calcula a partir de los datos recién cargados (locales), NO del estado
       // `worker`, que aún no se ha actualizado en este punto del mismo ciclo async.
-      const applicableScale = await resolveApplicableScaleId(entityId)
-      setApplicableScaleId(applicableScale)
-      if (applicableScale) {
-        const { data: scaleRow } = await supabase
-          .from("salary_scales")
-          .select("name")
-          .eq("id", applicableScale)
-          .maybeSingle()
-        setApplicableScaleName((scaleRow as { name?: string } | null)?.name ?? null)
-      } else {
-        setApplicableScaleName(null)
-      }
+      setApplicableScaleId(view.applicableScaleId)
+      setApplicableScaleName(view.applicableScaleName)
 
       const localAssignments = mappedWorker.assignments || []
       const localCurrentAssignment =
@@ -802,59 +428,51 @@ const WorkerDetail = () => {
   const handleEditSave = async () => {
     if (!worker) return
     // Integridad contractual: al editar un trabajador (incluidos los históricos)
-    // deben completarse los datos personales indispensables para el contrato.
-    if (!editForm.birth_date?.trim()) {
-      setError("La fecha de nacimiento es obligatoria")
+    // deben completarse los datos personales indispensables para el contrato. Las reglas
+    // y sus mensajes son los del dominio Personas, compartidos con el alta de trabajadores.
+    const profileError = validatePersonProfileFields({
+      birth_date: editForm.birth_date ?? "",
+      profession_or_trade: editForm.profession_or_trade ?? "",
+      address: editForm.address ?? "",
+      province: editForm.province ?? "",
+      municipality: editForm.municipality ?? "",
+    })
+    if (profileError) {
+      setError(profileError)
       return
     }
-    if (!editForm.profession_or_trade?.trim()) {
-      setError("La profesión u oficio es obligatoria")
-      return
-    }
-    if (!editForm.address?.trim()) {
-      setError("La dirección particular es obligatoria")
-      return
-    }
-    if (!editForm.province?.trim()) {
-      setError("La provincia es obligatoria")
-      return
-    }
-    if (!editForm.municipality?.trim()) {
-      setError("El municipio es obligatorio")
-      return
-    }
-    const { error } = await supabase
-      .from("workers")
-      .update({
-        first_name: editForm.first_name,
-        first_surname: editForm.first_surname,
-        second_surname: editForm.second_surname || null,
-        identification: editForm.identification,
-        birth_date: editForm.birth_date,
-        gender_id: editForm.gender_id || null,
-        marital_status_id: editForm.marital_status_id || null,
-        education_level_id: editForm.education_level_id || null,
-        specialty: editForm.specialty || null,
-        has_masters_degree: !!editForm.has_masters_degree,
-        has_doctorate_degree: !!editForm.has_doctorate_degree,
-        profession_or_trade: editForm.profession_or_trade || null,
-        skin_color_id: editForm.skin_color_id || null,
-        address: editForm.address || null,
-        province: editForm.province || null,
-        municipality: editForm.municipality || null,
-        phone: editForm.phone || null,
-        email: editForm.email || null,
-      })
-      .eq("id", worker.id)
 
-    if (error) {
-      setError(error.message)
+    const personalData: WorkerExpedienteInput = {
+      first_name: editForm.first_name ?? "",
+      first_surname: editForm.first_surname ?? "",
+      second_surname: editForm.second_surname || null,
+      identification: editForm.identification ?? "",
+      birth_date: editForm.birth_date || null,
+      gender_id: editForm.gender_id || null,
+      marital_status_id: editForm.marital_status_id || null,
+      education_level_id: editForm.education_level_id || null,
+      specialty: editForm.specialty || null,
+      has_masters_degree: !!editForm.has_masters_degree,
+      has_doctorate_degree: !!editForm.has_doctorate_degree,
+      profession_or_trade: editForm.profession_or_trade || null,
+      skin_color_id: editForm.skin_color_id || null,
+      address: editForm.address || null,
+      province: editForm.province || null,
+      municipality: editForm.municipality || null,
+      phone: editForm.phone || null,
+      email: editForm.email || null,
+    }
+
+    try {
+      await saveWorkerExpedientePersonalData(worker.id, personalData)
+    } catch (updateErr) {
+      setError(updateErr instanceof Error ? updateErr.message : "Error al guardar el trabajador")
       return
     }
 
     // Editar el trabajador nunca modifica al candidato: son registros independientes.
     try {
-      await saveWorkerDrivingLicenseIds(worker.id, licenseIds)
+      await saveWorkerExpedienteLicenseIds(worker.id, licenseIds)
     } catch (licenseErr) {
       setError(
         licenseErr instanceof Error
@@ -872,79 +490,45 @@ const WorkerDetail = () => {
     if (!worker) return
     setActionError(null)
 
-    if (!contractForm.contractTypeId) {
-      setActionError("Selecciona un tipo de contrato")
-      return
-    }
     const selectedType = contractTypes.find(t => t.id === contractForm.contractTypeId)
     const start = contractForm.startDate || worker.hire_date
-    if (!start) {
-      setActionError("La fecha de inicio del contrato es obligatoria")
-      return
-    }
-    if (selectedType?.code === "DETERMINADO" && !contractForm.endDate) {
-      setActionError("El contrato por tiempo determinado requiere una fecha de fin")
-      return
-    }
-    if (contractForm.endDate && contractForm.endDate <= start) {
-      setActionError("La fecha de fin debe ser posterior al inicio")
-      return
-    }
-    if (!contractForm.signatureDate) {
-      setActionError("La fecha de firma del contrato es obligatoria")
-      return
-    }
-    if (!contractForm.signaturePlace.trim()) {
-      setActionError("El lugar de firma es obligatorio")
-      return
-    }
-    if (!contractForm.paymentMethodId) {
-      setActionError("Selecciona la forma de pago")
-      return
-    }
-    if (hasInvalidComponent(contractForm.components)) {
-      setActionError(
-        "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)"
-      )
-      return
-    }
-    if ((formalizationPending || EMPTY_FORMALIZATION_PENDING).blocking.length > 0) {
-      setActionError(
-        `No se puede completar la formalización del contrato. Datos pendientes: ${(
-          formalizationPending || EMPTY_FORMALIZATION_PENDING
-        ).blocking.join(" · ")}`
-      )
-      return
-    }
-    if (!contractForm.representativeAssignmentId) {
-      setActionError("No hay representantes configurados para la fecha de firma seleccionada.")
+
+    // Condiciones del contrato: reglas y mensajes del dominio Personas.
+    const contractError = validateWorkerContractInput({
+      contractTypeId: contractForm.contractTypeId,
+      startDate: start,
+      hireDate: worker.hire_date,
+      isDetermined: selectedType?.code === "DETERMINADO",
+      endDate: contractForm.endDate,
+      signatureDate: contractForm.signatureDate,
+      signaturePlace: contractForm.signaturePlace,
+      paymentMethodId: contractForm.paymentMethodId,
+      hasInvalidComponents: hasInvalidComponent(contractForm.components),
+      blocking: (formalizationPending || EMPTY_FORMALIZATION_PENDING).blocking,
+      representativeAssignmentId: contractForm.representativeAssignmentId,
+    })
+    if (contractError) {
+      setActionError(contractError)
       return
     }
 
     setContractSubmitting(true)
     try {
-      const { data: contractData, error: rpcError } = await supabase.rpc("complete_worker_contract", {
-        p_worker_id: worker.id,
-        p_contract_type_id: contractForm.contractTypeId,
-        p_contract_start_date: start,
-        p_contract_end_date: selectedType?.code === "DETERMINADO" ? contractForm.endDate || null : null,
-        p_representative_assignment_id: contractForm.representativeAssignmentId,
-        p_signature_date: contractForm.signatureDate,
-        p_signature_place: contractForm.signaturePlace.trim(),
-        p_payment_method_id: contractForm.paymentMethodId,
-        p_compensation_components: buildComponentsPayload(contractForm.components),
-        p_payment_schedule_text: contractForm.paymentSchedule.trim() || null,
+      // Registro del contrato y generación de su documento (§13/§14): caso de uso del
+      // expediente. El documento nunca interrumpe la operación.
+      await registerWorkerExpedienteContract({
+        workerId: worker.id,
+        contractTypeId: contractForm.contractTypeId,
+        startDate: start,
+        endDate: selectedType?.code === "DETERMINADO" ? contractForm.endDate || null : null,
+        representativeAssignmentId: contractForm.representativeAssignmentId,
+        signatureDate: contractForm.signatureDate,
+        signaturePlace: contractForm.signaturePlace.trim(),
+        paymentMethodId: contractForm.paymentMethodId,
+        compensationComponents: buildComponentsPayload(contractForm.components),
+        paymentScheduleText: contractForm.paymentSchedule.trim() || null,
       })
-      if (rpcError) throw rpcError
-      // El contrato formalizado produce su documento automáticamente (§13/§14).
-      const newContractId = (contractData as { contract_id?: string } | null)?.contract_id
-      if (newContractId) {
-        try {
-          await ensureContractDocumentGenerated(newContractId)
-        } catch (genErr) {
-          console.error("Error generating contract document:", genErr)
-        }
-      }
+
       // El contrato vigente cambió: recalcular alertas de vencimiento.
       invalidateContractAlertData(queryClient)
       setContractDialogOpen(false)
