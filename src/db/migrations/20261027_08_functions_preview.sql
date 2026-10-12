@@ -105,7 +105,18 @@ INSERT INTO phase2_migration.substitution_map (group_code, enabled, old_token, n
   ('FUNCION', true, 'has_tenant_permission',                       'has_company_client_permission'),
   ('FUNCION', true, 'create_workspace',                            'create_company_client'),
   ('FUNCION', true, 'delete_workspace',                            'delete_company_client'),
-  ('FUNCION', true, 'save_tenant_role',                            'save_company_client_role');
+  ('FUNCION', true, 'save_tenant_role',                            'save_company_client_role'),
+  -- AÑADIDAS durante la ejecución de la Fase 3 (2026-10-27). El mapa inicial tenía
+  -- 18 filas; el catálogo real del proyecto tiene 19 nombres de función con
+  -- nomenclatura legacy (20 firmas, por la sobrecarga de `save_tenant_role`). Estas
+  -- 5 existen y su CUERPO no contenía tokens legacy, de modo que no entraban en la
+  -- consulta del bucle; sin embargo SÍ deben renombrarse para no dejar ningún nombre
+  -- legacy y para que las llamadas internas del resto de funciones apunten bien.
+  ('FUNCION', true, 'enforce_tenant_code_immutable',               'enforce_company_client_code_immutable'),
+  ('FUNCION', true, 'handle_tenants_updated_at',                   'handle_company_clients_updated_at'),
+  ('FUNCION', true, 'handle_tenant_roles_updated_at',              'handle_company_client_roles_updated_at'),
+  ('FUNCION', true, 'handle_tenant_invitations_updated_at',        'handle_company_client_invitations_updated_at'),
+  ('FUNCION', true, 'handle_tenant_permissions_updated_at',        'handle_company_client_permissions_updated_at');
 
 -- Tokens que el SEMÁFORO busca en zona de código. Incluye los nombres de las
 -- funciones del grupo 3: si decides NO renombrar funciones, debes poner también a
@@ -423,7 +434,14 @@ BEGIN
       AND p.prokind = 'f'
       AND (p.prosrc ~ '(tenants|tenant_id|tenant_memberships|tenant_roles|tenant_user_roles|tenant_invitations|tenant_permission|tenant_role_id|tenant_membership_id)'
            OR p.prosrc ~ '\m(create_workspace|delete_workspace|workspace_deletion_summary|workspace_deletion_target)\M'
-           OR EXISTS (SELECT 1 FROM unnest(p.proargnames) a WHERE a ILIKE '%tenant%'))
+           OR EXISTS (SELECT 1 FROM unnest(p.proargnames) a WHERE a ILIKE '%tenant%')
+           -- AÑADIDO durante la ejecución de la Fase 3 (2026-10-27): una función cuyo
+           -- CUERPO no menciona la nomenclatura legacy (p. ej. `handle_tenants_updated_at`,
+           -- `enforce_tenant_code_immutable`) no entraba por las condiciones anteriores,
+           -- pero SÍ debe renombrarse porque su NOMBRE es legacy. Se incluye toda
+           -- función listada en el mapa FUNCION.
+           OR EXISTS (SELECT 1 FROM phase2_migration.substitution_map m
+                       WHERE m.enabled AND m.group_code = 'FUNCION' AND m.old_token = p.proname))
     ORDER BY p.proname, 3
   LOOP
     v_target := coalesce(
@@ -480,10 +498,20 @@ BEGIN
       v_head_check = regexp_replace(v_old_head, '\m' || r.proname || '\M', '@@NOMBRE@@', 'g')
     );
 
-    -- Control 2: los segmentos preservados (literales, comentarios, comillas) deben
-    -- ser EXACTAMENTE los mismos, en el mismo orden y con el mismo contenido.
-    v_lit_ok := (phase2_migration.preserved_segments(r.definition)
-                 = phase2_migration.preserved_segments(v_new_def));
+    -- Control 2 (CORREGIDO durante la ejecución de la Fase 3, 2026-10-27): los
+    -- segmentos preservados (literales, comentarios, comillas) deben ser EXACTAMENTE
+    -- los mismos, en el mismo orden y con el mismo contenido... PERO la comparación
+    -- debe hacerse sobre el CUERPO, no sobre la definición completa.
+    --   Defecto detectado al ejecutar contra la base real: en `pg_get_functiondef`,
+    --   el cuerpo de una función PL/pgSQL es UN ÚNICO dollar-quote (`$function$…$function$`),
+    --   así que `preserved_segments(definition)` lo veía como UN solo segmento
+    --   preservado. Al reescribir el cuerpo cambia ese dollar-quote entero y la
+    --   comparación fallaba SIEMPRE: las 56 funciones salían BLOQUEADAS y el fichero
+    --   11 se habría negado a arrancar (guardia de 0 bloqueadas).
+    --   Comparando cuerpo contra cuerpo, los literales y comentarios que de verdad
+    --   contiene el PL/pgSQL se comparan uno a uno: 0 bloqueadas.
+    v_lit_ok := (phase2_migration.preserved_segments(v_old_body)
+                 = phase2_migration.preserved_segments(v_new_body));
 
     -- Control 3 (CORREGIDO): no debe quedar ningún token legacy en la zona de código
     -- REESCRITA, que es el CUERPO. La cabecera queda fuera porque conserva
