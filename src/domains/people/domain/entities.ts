@@ -193,6 +193,12 @@ export interface CandidateRegistrationInput {
   pre_employment_check_file: File | null
   criminal_record_check_file: File | null
   disciplinary_document: File | null
+  /**
+   * El expediente YA tiene registrado ese documento verificador (edición de la ficha): la
+   * obligatoriedad del archivo se satisface sin volver a adjuntarlo. En el alta no se usa.
+   */
+  pre_employment_check_present?: boolean
+  criminal_record_check_present?: boolean
 }
 
 /* ------------------------------------------------------------------------- */
@@ -555,4 +561,380 @@ export interface WorkerEngagementResult {
 /** Resultado del cambio de contrato (`change_worker_contract`). */
 export interface WorkerContractChangeResult {
   newContractId: string | null
+}
+
+/* ------------------------------------------------------------------------- */
+/* Expediente de la persona (ficha de candidato y ficha de trabajador)        */
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Permiso efectivo sobre la entidad para gobernar el expediente. Es el resultado de
+ * `can_access_entity`: la AUTORIDAD real sigue siendo RLS y las RPC, aquí solo se decide
+ * qué se puede ver y qué se puede editar en la pantalla.
+ */
+export interface ExpedientePermissions {
+  canView: boolean
+  canManage: boolean
+}
+
+/** Catálogo global de tipos de documento (`document_types`). */
+export interface DocumentTypeOption {
+  id: string
+  name: string
+  description: string | null
+  sort_order: number | null
+}
+
+/**
+ * Documento del expediente: fila de `candidate_documents` más su archivo en el Storage
+ * privado (`storage_path`). Los UUID y las rutas son los mismos que ya consumía la ficha.
+ */
+export interface ExpedienteDocumentRow {
+  id: string
+  candidate_id: string
+  document_type_id: string
+  original_file_name: string
+  storage_path: string
+  mime_type: string | null
+  file_size: number | null
+  description: string | null
+  is_primary: boolean
+  uploaded_by: string | null
+  created_at: string
+  updated_at: string | null
+}
+
+/** Referencia mínima al documento embebido en una formación académica. */
+export interface ExpedienteDocumentRef {
+  id: string
+  original_file_name: string
+  storage_path: string
+}
+
+/** Experiencia laboral declarada por la persona (fila de `candidate_work_experiences`). */
+export interface CandidateWorkExperienceRow {
+  id: string
+  candidate_id: string
+  organization_entity_id: string
+  job_title: string
+  company_name: string
+  start_date: string
+  end_date: string | null
+  is_current: boolean | null
+  description: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Formación académica con su título adjunto, si lo tiene. */
+export interface CandidateAcademicFormationRow {
+  id: string
+  candidate_id: string
+  organization_entity_id: string
+  program_name: string
+  start_date: string
+  end_date: string | null
+  is_studying: boolean | null
+  document_id: string | null
+  document: ExpedienteDocumentRef | null
+  created_at: string
+  updated_at: string
+}
+
+/** Nota interna del expediente (fila de `candidate_notes`). */
+export interface CandidateNoteRow {
+  id: string
+  candidate_id: string
+  organization_entity_id: string
+  note_text: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Información adicional del expediente (fila de `candidate_additional_info`). */
+export interface CandidateAdditionalInfoRow {
+  id: string
+  candidate_id: string
+  organization_entity_id: string
+  info_text: string
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+/**
+ * Ficha del candidato: la MISMA fila de `candidates` de la vista Candidatos, con los
+ * indicadores de formación académica adicional garantizados como booleanos (el formulario
+ * los edita como casillas).
+ */
+export interface CandidateExpediente extends PersonCandidate {
+  has_masters_degree: boolean
+  has_doctorate_degree: boolean
+}
+
+/** Datos accesorios del expediente del candidato (se leen aparte de la ficha). */
+export interface CandidateExpedienteRelated {
+  documents: ExpedienteDocumentRow[]
+  workExperiences: CandidateWorkExperienceRow[]
+  formations: CandidateAcademicFormationRow[]
+  notes: CandidateNoteRow[]
+  additionalInfo: CandidateAdditionalInfoRow[]
+}
+
+/** Datos personales e identificación que el expediente del candidato escribe. */
+export interface CandidateExpedienteInput {
+  first_name: string
+  first_surname: string
+  second_surname: string | null
+  identification: string
+  birth_date: string | null
+  gender_id: string | null
+  marital_status_id: string | null
+  phone: string | null
+  email: string | null
+  address: string | null
+  municipality: string | null
+  province: string | null
+  education_level_id: string | null
+  specialty: string | null
+  has_masters_degree: boolean
+  has_doctorate_degree: boolean
+  profession_or_trade: string | null
+  political_affiliation: string | null
+  /** El formulario captura "yes"/"no"; la columna guarda el booleano. */
+  is_retired_or_rehired: boolean
+  has_disciplinary_measures: boolean
+  skin_color_id: string | null
+}
+
+/** Alta de una experiencia laboral declarada por la persona. */
+export interface CandidateWorkExperienceInput {
+  candidateId: string
+  organizationEntityId: string
+  jobTitle: string
+  companyName: string
+  startDate: string
+  endDate: string | null
+  isCurrent: boolean
+  description: string | null
+}
+
+/** Alta de una formación académica, con su título adjunto opcional. */
+export interface CandidateAcademicFormationInput {
+  candidateId: string
+  organizationEntityId: string
+  programName: string
+  startDate: string
+  endDate: string | null
+  isStudying: boolean
+  /** Título (opcional): se sube al Storage y se registra como documento del expediente. */
+  titleFile: File | null
+}
+
+/** Alta de una nota o de una información adicional del expediente. */
+export interface CandidateTextEntryInput {
+  candidateId: string
+  organizationEntityId: string
+  text: string
+}
+
+/* --- Expediente laboral del trabajador ------------------------------------ */
+
+/** Cargo y área del puesto, con el grupo salarial del que depende el salario. */
+export interface WorkerPositionRef {
+  id: string
+  name: string
+  code: string
+  is_active: boolean
+  work_location: string | null
+  daily_hours: number | null
+  weekly_hours: number | null
+  monthly_hours: number | null
+  break_minutes: number | null
+  schedule_notes: string | null
+  job: WorkerJobRef | null
+}
+
+export interface WorkerJobRef {
+  id: string
+  name: string
+  code: string
+  is_active: boolean
+  area_id: string
+  area: { id: string; name: string } | null
+  salary_group: SalaryGroupRef | null
+}
+
+/** Asignación de puesto: la trayectoria laboral del trabajador (histórico incluido). */
+export interface WorkerAssignmentRow {
+  id: string
+  position_id: string
+  start_date: string
+  end_date: string | null
+  is_current: boolean
+  position: WorkerPositionRef | null
+}
+
+/** Contrato del trabajador con las condiciones formalizadas (snapshot histórico). */
+export interface WorkerContractRow {
+  id: string
+  assignment_id: string
+  contract_type_id: string
+  start_date: string
+  end_date: string | null
+  actual_end_date: string | null
+  is_current: boolean
+  salary_amount: number | null
+  salary_currency_code: string | null
+  salary_effective_date: string | null
+  salary_snapshot_status: string
+  representative_name_snapshot: string | null
+  representative_position_snapshot: string | null
+  representative_captured_at: string | null
+  entity_name_snapshot: string | null
+  signature_date: string | null
+  signature_place: string | null
+  payment_method_id: string | null
+  payment_schedule_text: string | null
+  total_compensation_snapshot: number | null
+  conditions_captured_at: string | null
+  salary_group: { id: string; sequence_number: number } | null
+  payment_method: { name: string; code: string } | null
+  contract_type: ContractTypeOption | null
+}
+
+/** Ficha del trabajador: la MISMA fila de `workers` que ya consumía la pantalla. */
+export interface WorkerExpediente {
+  id: string
+  code: string
+  first_name: string
+  first_surname: string
+  second_surname: string | null
+  identification: string
+  birth_date: string | null
+  gender_id: string | null
+  marital_status_id: string | null
+  education_level_id: string | null
+  specialty: string | null
+  has_masters_degree: boolean
+  has_doctorate_degree: boolean
+  profession_or_trade: string | null
+  skin_color_id: string | null
+  address: string | null
+  province: string | null
+  municipality: string | null
+  phone: string | null
+  email: string | null
+  hire_date: string
+  employment_start_date: string | null
+  employment_status: string
+  created_at: string
+  updated_at: string
+  assignments: WorkerAssignmentRow[] | null
+  contracts: WorkerContractRow[] | null
+}
+
+/** Movimiento de la bitácora laboral (baja, reincorporación, cambio de puesto…). */
+export interface WorkerEmploymentMovement {
+  id: string
+  movement_type: string
+  effective_date: string
+  reason: string | null
+  notes: string | null
+  created_by: string | null
+  created_at: string
+  separation_reason: { name: string } | null
+  /** Autor del movimiento, resuelto desde `profiles` (solo para mostrar). */
+  authorName: string | null
+}
+
+/** Tramo de pago por antigüedad aplicable al trabajador (`resolve_tenure_payment_for_worker`). */
+export interface TenurePaymentRule {
+  amount: number
+  from_months: number
+  to_months: number | null
+}
+
+/** Catálogos que necesita el expediente laboral (los mismos de la vista de personal). */
+export interface WorkerExpedienteCatalogs {
+  genders: CatalogRow[]
+  maritalStatuses: CatalogRow[]
+  educationLevels: CatalogRow[]
+  contractTypes: ContractTypeOption[]
+}
+
+/** Datos personales que el expediente del trabajador escribe. */
+export interface WorkerExpedienteInput {
+  first_name: string
+  first_surname: string
+  second_surname: string | null
+  identification: string
+  birth_date: string | null
+  gender_id: string | null
+  marital_status_id: string | null
+  education_level_id: string | null
+  specialty: string | null
+  has_masters_degree: boolean
+  has_doctorate_degree: boolean
+  profession_or_trade: string | null
+  skin_color_id: string | null
+  address: string | null
+  province: string | null
+  municipality: string | null
+  phone: string | null
+  email: string | null
+  /** Solo la edición del expediente desde el alta (`WorkerForm`) modifica la fecha de incorporación. */
+  hire_date?: string | null
+}
+
+/** Alta de un trabajador con su puesto y su contrato en una sola transacción. */
+export interface NewWorkerInput {
+  entityId: string
+  person: {
+    first_name: string
+    first_surname: string
+    second_surname: string
+    identification: string
+    birth_date: string
+    gender_id: string
+    marital_status_id: string
+    education_level_id: string
+    specialty: string
+    has_masters_degree: boolean
+    has_doctorate_degree: boolean
+    profession_or_trade: string
+    skin_color_id: string
+    address: string
+    province: string
+    municipality: string
+    phone: string
+    email: string
+  }
+  positionId: string
+  hireDate: string
+  contractTypeId: string | null
+  contractStartDate: string | null
+  contractEndDate: string | null
+  representativeAssignmentId: string | null
+  drivingLicenseCategoryIds: string[]
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  compensationComponents: CompensationComponentPayload[]
+  paymentScheduleText: string | null
+}
+
+/** Condiciones formalizadas del contrato que registra el expediente del trabajador. */
+export interface WorkerContractFormalizationInput {
+  workerId: string
+  contractTypeId: string
+  startDate: string
+  endDate: string | null
+  representativeAssignmentId: string | null
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  compensationComponents: CompensationComponentPayload[]
+  paymentScheduleText: string | null
 }

@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { supabase } from "@/lib/supabase"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
@@ -30,54 +29,23 @@ import {
   type PaymentMethodOption,
 } from "@/lib/contract-conditions"
 import type { PositionScheduleSegment } from "@/domains/organization-structure"
-import {
-  fetchPersonCatalogs,
-  fetchWorkerDrivingLicenseIds,
-  saveWorkerDrivingLicenseIds,
-  type CatalogOption,
-} from "@/lib/catalogs"
+import { fetchPersonCatalogs, type CatalogOption } from "@/lib/catalogs"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
-
-/**
- * Subir documento de verificación y crear el registro en worker_documents.
- */
-async function uploadWorkerDocument(
-  workerId: string,
-  documentTypeId: string,
-  file: File
-): Promise<void> {
-  const user = await supabase.auth.getUser()
-  if (!user.data.user) throw new Error("Usuario no autenticado")
-
-  const fileExt = file.name.split(".").pop() || "pdf"
-  const fileName = `worker_${workerId}_${documentTypeId}_${Date.now()}.${fileExt}`
-
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(fileName, file, {
-      cacheControl: "3600",
-      upsert: false,
-    })
-
-  if (uploadError) throw uploadError
-
-  const { error: dbError } = await supabase
-    .from("worker_documents")
-    .insert({
-      worker_id: workerId,
-      document_type_id: documentTypeId,
-      file_name: file.name,
-      storage_path: fileName,
-      mime_type: file.type,
-      file_size: file.size,
-      description: documentTypeId === "PRE_EMPLOYMENT_CHECK" ? "Chequeo Preempleo" : "Antecedentes Penales",
-      source: "MANUAL",
-      uploaded_by: user.data.user.id,
-    })
-
-  if (dbError) throw dbError
-}
+import {
+  candidateRequiresSpecialty,
+  checkWorkerIdentification,
+  createWorkerExpediente,
+  loadWorkerExpedienteLicenseIds,
+  loadWorkerFormPermissions,
+  loadWorkerReferenceCatalogs,
+  saveWorkerExpedienteLicenseIds,
+  saveWorkerExpedientePersonalData,
+  validateWorkerPersonalData,
+  validateWorkerRegistrationInput,
+  type NewWorkerInput,
+  type WorkerExpedienteInput,
+} from "@/domains/people"
 
 export interface WorkerPositionOption {
   id: string
@@ -302,20 +270,18 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
 
   React.useEffect(() => {
     const load = async () => {
-      const [personCatalogs, g, m, e, ct] = await Promise.all([
+      const [personCatalogs, catalogs] = await Promise.all([
         // Catálogos globales de la persona: mismo origen que utiliza el candidato
         fetchPersonCatalogs(),
-        supabase.from("genders").select("id, name").order("name"),
-        supabase.from("marital_statuses").select("id, name").order("name"),
-        supabase.from("education_levels").select("id, name").order("name"),
-        supabase.from("employment_contract_types").select("id, name, code").eq("is_active", true).order("name"),
+        // Catálogos de la ficha laboral: los resuelve el dominio Personas
+        loadWorkerReferenceCatalogs(),
       ])
-      setGenders((g.data as Catalog[]) || [])
-      setMaritalStatuses((m.data as Catalog[]) || [])
-      setEducationLevels((e.data as Catalog[]) || [])
+      setGenders(catalogs.genders as Catalog[])
+      setMaritalStatuses(catalogs.maritalStatuses as Catalog[])
+      setEducationLevels(catalogs.educationLevels as Catalog[])
+      setContractTypes(catalogs.contractTypes as ContractType[])
       setSkinColors(personCatalogs.skinColors)
       setLicenseCategories(personCatalogs.licenseCategories)
-      setContractTypes((ct.data as ContractType[]) || [])
       // Fase 11A.5: catálogo global de formas de pago
       try {
         setPaymentMethods(await fetchPaymentMethods())
@@ -333,7 +299,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
   React.useEffect(() => {
     if (!editingWorker?.id) return
     let active = true
-    fetchWorkerDrivingLicenseIds(editingWorker.id)
+    loadWorkerExpedienteLicenseIds(editingWorker.id)
       .then((ids) => {
         if (active) setLicenseIds(ids)
       })
@@ -345,12 +311,9 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
 
   React.useEffect(() => {
     if (!entityId) return
-    supabase
-      .rpc("can_access_entity", {
-              target_entity_id: entityId,
-              permission_code: "contract_data.manage",
-            })
-            .then(({ data }) => setCanManageOrganization(!!data))
+    loadWorkerFormPermissions(entityId).then(({ canManageContractData }) =>
+      setCanManageOrganization(canManageContractData)
+    )
   }, [entityId])
 
   const municipalities = React.useMemo(
@@ -409,7 +372,8 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
 
   const requiresSpecialty = React.useMemo(() => {
     const selected = educationLevels.find(l => l.id === form.education_level_id)
-    return ["Obrero Calificado", "Técnico Medio", "Superior"].includes(selected?.name || "")
+    // Niveles que exigen especialidad: regla compartida del dominio Personas.
+    return candidateRequiresSpecialty(selected?.name)
   }, [form.education_level_id, educationLevels])
 
   const handleIdentificationChange = (value: string) => {
@@ -430,223 +394,149 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
 
     setFormError(null)
 
-    if (!form.first_name.trim() || !form.first_surname.trim()) {
-      setFormError("El nombre y el primer apellido son obligatorios")
+    // Datos personales y laborales: las reglas son del dominio Personas y los mensajes son
+    // los de siempre. El formato del carné lo aporta el kernel compartido.
+    const selectedEducationLevel = educationLevels.find(l => l.id === form.education_level_id)
+    const personalError = validateWorkerPersonalData(
+      {
+        first_name: form.first_name,
+        first_surname: form.first_surname,
+        identification: form.identification,
+        birth_date: form.birth_date,
+        profession_or_trade: form.profession_or_trade,
+        address: form.address,
+        province: form.province,
+        municipality: form.municipality,
+        education_level_id: form.education_level_id,
+        education_level_name: selectedEducationLevel?.name || "",
+        specialty: form.specialty,
+        hire_date: form.hire_date,
+      },
+      isValidIdentification(form.identification) ? null : IDENTIFICATION_ERROR_MESSAGE
+    )
+    if (personalError) {
+      setFormError(personalError)
       return
     }
-    if (!form.identification.trim()) {
-      setFormError("El carné de identidad es obligatorio")
-      return
-    }
-    if (!isValidIdentification(form.identification)) {
-      setFormError(IDENTIFICATION_ERROR_MESSAGE)
-      return
-    }
-    // Integridad contractual: datos personales indispensables para formalizar
-    // correctamente el contrato (también al editar trabajadores históricos).
-    if (!form.birth_date.trim()) {
-      setFormError("La fecha de nacimiento es obligatoria")
-      return
-    }
-    if (!form.profession_or_trade.trim()) {
-      setFormError("La profesión u oficio es obligatoria")
-      return
-    }
-    if (!form.address.trim()) {
-      setFormError("La dirección particular es obligatoria")
-      return
-    }
-    if (!form.province.trim()) {
-      setFormError("La provincia es obligatoria")
-      return
-    }
-    if (!form.municipality.trim()) {
-      setFormError("El municipio es obligatorio")
-      return
-    }
-    if (requiresSpecialty && !form.specialty.trim()) {
-      const selected = educationLevels.find(l => l.id === form.education_level_id)
-      setFormError(`La especialidad es obligatoria para ${selected?.name}`)
-      return
-    }
-    if (!form.hire_date) {
-      setFormError("La fecha de incorporación es obligatoria")
-      return
-    }
-    if (!isEditing && !positionId) {
-      setFormError("El puesto es obligatorio")
-      return
-    }
-    if (!isEditing && !vacantPositions.some(p => p.id === positionId)) {
-          setFormError("El puesto seleccionado ya no tiene plazas disponibles. Selecciona otro puesto.")
-          return
-        }
-    if (!isEditing && !contractTypeId) {
-      setFormError("Debes seleccionar un tipo de contrato")
-      return
-    }
-    if (!isEditing && isDeterminedContract && !contractEndDate) {
-      setFormError("El contrato por tiempo determinado requiere una fecha de fin")
-      return
-    }
-    if (
-      !isEditing &&
-      contractEndDate &&
-      effectiveContractStart &&
-      contractEndDate <= effectiveContractStart
-    ) {
-      setFormError("La fecha de fin del contrato debe ser posterior a su inicio")
-        return
-      }
-      if (!isEditing && !signatureDate) {
-        setFormError("La fecha de firma del contrato es obligatoria")
-        return
-      }
-      if (!isEditing && !signaturePlace.trim()) {
-        setFormError("El lugar de firma es obligatorio")
-        return
-      }
-      if (!isEditing && !paymentMethodId) {
-        setFormError("Selecciona la forma de pago")
-        return
-      }
-      if (!isEditing && hasInvalidComponent(components)) {
-        setFormError(
-          "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)"
-        )
-        return
-      }
-      if (!isEditing && (pending || EMPTY_FORMALIZATION_PENDING).blocking.length > 0) {
-        setFormError(
-          `No se puede completar la formalización del contrato. Datos pendientes: ${(
-            pending || EMPTY_FORMALIZATION_PENDING
-          ).blocking.join(" · ")}`
-        )
-        return
-      }
-      if (!isEditing && !representativeAssignmentId) {
-        setFormError(
-          "No hay representantes configurados para la fecha de firma seleccionada."
-        )
-        return
-      }
 
-      // UNICIDAD DE PERSONAS (§27–§33): un trabajador NUEVO no puede duplicar a una
-      // persona ya existente (Candidato, Trabajador o Reingreso) por Número de
-      // Identificación. La comprobación se resuelve en el backend.
-      if (!isEditing) {
-        const { data: personStatus, error: checkError } = await supabase.rpc(
-          "person_identification_status",
-          { p_entity_id: entityId, p_identification: form.identification.trim() }
-        )
-        if (checkError) {
-          setFormError("No se pudo verificar la unicidad de la identificación.")
-          return
-        }
-        const existingPerson = (personStatus || {}) as { worker_id?: string | null; worker_status?: string | null; candidate_count?: number | null }
-        if (existingPerson.worker_id) {
-          setFormError(
-            existingPerson.worker_status === "active"
-              ? "Esta persona ya está registrada como trabajador. Solo puede actualizar su información."
-              : "Esta persona ya existe y actualmente se encuentra en Reingresos. Debe utilizar el expediente existente."
-          )
-          return
-        }
-        if ((existingPerson.candidate_count ?? 0) > 0) {
-          setFormError(
-            "Ya existe una persona con este número de identificación. Solo puede actualizar su información."
-          )
-          return
-        }
+    // Alta de un trabajador nuevo: puesto disponible y condiciones formalizadas del contrato.
+    if (!isEditing) {
+      const registrationError = validateWorkerRegistrationInput({
+        positionId,
+        positionAvailable: vacantPositions.some(p => p.id === positionId),
+        contractTypeId,
+        isDetermined: isDeterminedContract,
+        contractStartDate: effectiveContractStart,
+        contractEndDate,
+        signatureDate,
+        signaturePlace,
+        paymentMethodId,
+        hasInvalidComponents: hasInvalidComponent(components),
+        blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
+        representativeAssignmentId,
+      })
+      if (registrationError) {
+        setFormError(registrationError)
+        return
       }
+    }
 
-      setSubmitting(true)
+    // UNICIDAD DE PERSONAS (§27–§33): un trabajador NUEVO no puede duplicar a una persona ya
+    // existente (Candidato, Trabajador o Reingreso) por Número de Identificación. La
+    // comprobación la resuelve el backend y el mensaje lo aporta el dominio.
+    if (!isEditing) {
+      try {
+        const identificationConflict = await checkWorkerIdentification(entityId, form.identification)
+        if (identificationConflict) {
+          setFormError(identificationConflict)
+          return
+        }
+      } catch (checkError) {
+        console.error("Error checking person identification:", checkError)
+        setFormError("No se pudo verificar la unicidad de la identificación.")
+        return
+      }
+    }
+
+    setSubmitting(true)
 
     try {
       if (isEditing) {
         // Edición: solo datos personales/laborales. El cambio de puesto será
         // un Movimiento de personal en una fase futura (no se toca aquí).
-        const { error: updateError } = await supabase
-          .from("workers")
-          .update({
-            first_name: form.first_name.trim(),
-            first_surname: form.first_surname.trim(),
-            second_surname: form.second_surname.trim() || null,
-            identification: form.identification.trim(),
-            birth_date: form.birth_date || null,
-            gender_id: form.gender_id || null,
-            marital_status_id: form.marital_status_id || null,
-            education_level_id: form.education_level_id || null,
-            specialty: form.specialty.trim() || null,
-            has_masters_degree: form.has_masters_degree,
-            has_doctorate_degree: form.has_doctorate_degree,
-            profession_or_trade: form.profession_or_trade.trim() || null,
-            skin_color_id: form.skin_color_id || null,
-            address: form.address.trim() || null,
-            province: form.province || null,
-            municipality: form.municipality || null,
-            phone: form.phone.trim() || null,
-            email: form.email.trim() || null,
-            hire_date: form.hire_date,
-          })
-          .eq("id", editingWorker!.id)
+        const personalData: WorkerExpedienteInput = {
+          first_name: form.first_name.trim(),
+          first_surname: form.first_surname.trim(),
+          second_surname: form.second_surname.trim() || null,
+          identification: form.identification.trim(),
+          birth_date: form.birth_date || null,
+          gender_id: form.gender_id || null,
+          marital_status_id: form.marital_status_id || null,
+          education_level_id: form.education_level_id || null,
+          specialty: form.specialty.trim() || null,
+          has_masters_degree: form.has_masters_degree,
+          has_doctorate_degree: form.has_doctorate_degree,
+          profession_or_trade: form.profession_or_trade.trim() || null,
+          skin_color_id: form.skin_color_id || null,
+          address: form.address.trim() || null,
+          province: form.province || null,
+          municipality: form.municipality || null,
+          phone: form.phone.trim() || null,
+          email: form.email.trim() || null,
+          hire_date: form.hire_date,
+        }
 
-        if (updateError) throw updateError
-
+        await saveWorkerExpedientePersonalData(editingWorker!.id, personalData)
         // Reemplazo exacto de licencias (RPC transaccional)
-        await saveWorkerDrivingLicenseIds(editingWorker!.id, licenseIds)
+        await saveWorkerExpedienteLicenseIds(editingWorker!.id, licenseIds)
 
         onSuccess()
       } else {
-        const { data: rpcData, error: rpcError } = await supabase.rpc("create_worker_with_position", {
-          p_entity_id: entityId,
-          p_worker: {
-                      first_name: form.first_name.trim(),
-                      first_surname: form.first_surname.trim(),
-                      second_surname: form.second_surname.trim(),
-                      identification: form.identification.trim(),
-                      birth_date: form.birth_date,
-                      gender_id: form.gender_id,
-                      marital_status_id: form.marital_status_id,
-                      education_level_id: form.education_level_id,
-                      specialty: form.specialty.trim(),
-                      has_masters_degree: form.has_masters_degree,
-                      has_doctorate_degree: form.has_doctorate_degree,
-                      profession_or_trade: form.profession_or_trade.trim(),
-                      skin_color_id: form.skin_color_id,
-                      address: form.address.trim(),
-                      province: form.province,
-                      municipality: form.municipality,
-                      phone: form.phone.trim(),
-                      email: form.email.trim(),
-                    },
-          p_position_id: positionId,
-          p_hire_date: form.hire_date,
-          p_contract_type_id: contractTypeId || null,
-          p_contract_start_date: effectiveContractStart || null,
-          p_contract_end_date: isDeterminedContract ? contractEndDate || null : null,
-          p_representative_assignment_id: representativeAssignmentId,
-          p_driving_license_category_ids: licenseIds,
-          p_signature_date: signatureDate,
-          p_signature_place: signaturePlace.trim(),
-          p_payment_method_id: paymentMethodId,
-          p_compensation_components: buildComponentsPayload(components),
-          p_payment_schedule_text: paymentSchedule.trim() || null,
+        // Alta con puesto, contrato, licencias y documentos verificadores: una sola
+        // operación del dominio Personas (la identidad de la persona no se duplica).
+        const newWorker: NewWorkerInput = {
+          entityId,
+          person: {
+            first_name: form.first_name.trim(),
+            first_surname: form.first_surname.trim(),
+            second_surname: form.second_surname.trim(),
+            identification: form.identification.trim(),
+            birth_date: form.birth_date,
+            gender_id: form.gender_id,
+            marital_status_id: form.marital_status_id,
+            education_level_id: form.education_level_id,
+            specialty: form.specialty.trim(),
+            has_masters_degree: form.has_masters_degree,
+            has_doctorate_degree: form.has_doctorate_degree,
+            profession_or_trade: form.profession_or_trade.trim(),
+            skin_color_id: form.skin_color_id,
+            address: form.address.trim(),
+            province: form.province,
+            municipality: form.municipality,
+            phone: form.phone.trim(),
+            email: form.email.trim(),
+          },
+          positionId,
+          hireDate: form.hire_date,
+          contractTypeId: contractTypeId || null,
+          contractStartDate: effectiveContractStart || null,
+          contractEndDate: isDeterminedContract ? contractEndDate || null : null,
+          representativeAssignmentId,
+          drivingLicenseCategoryIds: licenseIds,
+          signatureDate,
+          signaturePlace: signaturePlace.trim(),
+          paymentMethodId,
+          compensationComponents: buildComponentsPayload(components),
+          paymentScheduleText: paymentSchedule.trim() || null,
+        }
+
+        await createWorkerExpediente({
+          ...newWorker,
+          hasPreEmploymentCheck: form.has_pre_employment_check,
+          preEmploymentCheckFile: form.pre_employment_check_file,
+          hasCriminalRecordCheck: form.has_criminal_record_check,
+          criminalRecordCheckFile: form.criminal_record_check_file,
         })
-
-        if (rpcError) throw rpcError
-
-        const workerId = rpcData?.worker_id
-        if (!workerId) throw new Error("No se pudo obtener el ID del trabajador creado")
-
-        // Subir documentos de verificación (Chequeo Preempleo y Antecedentes Penales)
-                // y vincularlos al trabajador recién creado.
-                if (form.has_pre_employment_check && form.pre_employment_check_file) {
-                  await uploadWorkerDocument(workerId, "PRE_EMPLOYMENT_CHECK", form.pre_employment_check_file)
-                }
-                if (form.has_criminal_record_check && form.criminal_record_check_file) {
-                  await uploadWorkerDocument(workerId, "CRIMINAL_RECORD", form.criminal_record_check_file)
-                }
 
         invalidateContractAlertData(queryClient)
         onSuccess()

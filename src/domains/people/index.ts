@@ -184,3 +184,115 @@ export {
 export type { RegisterCandidateCommand } from "./application/people.commands"
 
 export { registerCandidate } from "./application/people.commands"
+
+/* Expediente de la persona: ficha de candidato y ficha de trabajador */
+export type {
+  ExpedientePermissions,
+  DocumentTypeOption,
+  ExpedienteDocumentRow,
+  ExpedienteDocumentRef,
+  CandidateWorkExperienceRow,
+  CandidateAcademicFormationRow,
+  CandidateNoteRow,
+  CandidateAdditionalInfoRow,
+  CandidateExpediente,
+  CandidateExpedienteRelated,
+  CandidateExpedienteInput,
+  CandidateWorkExperienceInput,
+  CandidateAcademicFormationInput,
+  CandidateTextEntryInput,
+  WorkerExpediente,
+  WorkerAssignmentRow,
+  WorkerContractRow,
+  WorkerPositionRef,
+  WorkerJobRef,
+  WorkerEmploymentMovement,
+  TenurePaymentRule,
+  WorkerExpedienteCatalogs,
+  WorkerExpedienteInput,
+  NewWorkerInput,
+  WorkerContractFormalizationInput,
+} from "./domain/entities"
+
+export {
+  MISSING_BIRTH_DATE_MESSAGE,
+  MISSING_PROFESSION_MESSAGE,
+  MISSING_ADDRESS_MESSAGE,
+  MISSING_PROVINCE_MESSAGE,
+  MISSING_MUNICIPALITY_MESSAGE,
+  INVALID_COMPONENTS_EXPEDIENTE_MESSAGE,
+  validatePersonProfileFields,
+  validateSpecialtyRequirement,
+  validateVerificationDocuments,
+  validateEmail,
+  validateWorkerPersonalData,
+  validateWorkerRegistrationInput,
+  validateWorkerContractInput,
+  validateWorkExperienceInput,
+  validateAcademicFormationInput,
+  validateExpedienteText,
+  shouldUploadVerificationDocument,
+  specialtyForEducationLevel,
+} from "./domain/rules"
+
+export type {
+  WorkerPersonalDataValidationInput,
+  WorkerRegistrationValidationInput,
+  WorkerContractValidationInput,
+  WorkExperienceValidationInput,
+  AcademicFormationValidationInput,
+} from "./domain/rules"
+
+export type {
+  CandidateExpedienteView,
+  CandidateExpedientePermissions,
+  CandidateExpedienteCatalogs,
+  CandidateFormCatalogs,
+  CandidateFormView,
+} from "./application/candidate-expediente.queries"
+
+export {
+  loadCandidateExpedienteView,
+  loadCandidateExpedienteReferenceData,
+  loadCandidateExpedienteRelated,
+  loadCandidateFormCatalogs,
+  loadCandidateFormData,
+} from "./application/candidate-expediente.queries"
+
+export type { CandidateExpedienteUpdateInput } from "./application/candidate-expediente.commands"
+
+export {
+  updateCandidateExpediente,
+  addCandidateExpedienteDocument,
+  removeCandidateExpedienteDocument,
+  downloadCandidateExpedienteDocument,
+  addCandidateWorkExperience,
+  removeCandidateWorkExperience,
+  addCandidateAcademicFormation,
+  removeCandidateAcademicFormation,
+  addCandidateNote,
+  removeCandidateNote,
+  addCandidateAdditionalInfo,
+  removeCandidateAdditionalInfo,
+} from "./application/candidate-expediente.commands"
+
+export type {
+  WorkerExpedienteView,
+  WorkerExpedientePermissions,
+  WorkerFormPermissions,
+} from "./application/worker-expediente.queries"
+
+export {
+  loadWorkerExpedienteView,
+  loadWorkerReferenceCatalogs,
+  loadWorkerFormPermissions,
+  loadWorkerExpedienteLicenseIds,
+} from "./application/worker-expediente.queries"
+
+export {
+  saveWorkerExpedientePersonalData,
+  saveWorkerExpedienteLicenseIds,
+  checkWorkerIdentification,
+  createWorkerExpediente,
+  registerWorkerExpedienteContract,
+} from "./application/worker-expediente.commands"

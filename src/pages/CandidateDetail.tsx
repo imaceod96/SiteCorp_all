@@ -1,7 +1,6 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -45,129 +44,45 @@ import {
 } from "lucide-react"
 import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
 import { AcademicBadges } from "@/components/person/AcademicBadges"
+import { drivingLicenseLabels, type CatalogOption } from "@/lib/catalogs"
 import {
-  drivingLicenseLabels,
-  fetchCandidateDrivingLicenseIds,
-  fetchPersonCatalogs,
-  type CatalogOption,
-} from "@/lib/catalogs"
+  addCandidateAcademicFormation,
+  addCandidateAdditionalInfo,
+  addCandidateExpedienteDocument,
+  addCandidateNote,
+  addCandidateWorkExperience,
+  downloadCandidateExpedienteDocument,
+  isActiveWorker,
+  loadCandidateExpedienteReferenceData,
+  loadCandidateExpedienteRelated,
+  loadCandidateExpedienteView,
+  removeCandidateAcademicFormation,
+  removeCandidateAdditionalInfo,
+  removeCandidateExpedienteDocument,
+  removeCandidateNote,
+  removeCandidateWorkExperience,
+  validateAcademicFormationInput,
+  validateExpedienteText,
+  validateWorkExperienceInput,
+  type CandidateAcademicFormationRow as AcademicFormation,
+  type CandidateAdditionalInfoRow as AdditionalInfoItem,
+  type CandidateExpediente as Candidate,
+  type CandidateNoteRow as CandidateNote,
+  type CandidateWorkExperienceRow as WorkExperience,
+  type CatalogRow,
+  type DocumentTypeOption as DocumentType,
+  type ExpedienteDocumentRow as CandidateDocument,
+} from "@/domains/people"
 
-interface Candidate {
-  id: string
-  tenant_id: string
-  organization_entity_id: string
-  first_name: string
-  first_surname: string
-  second_surname: string | null
-  identification: string
-  birth_date: string | null
-  gender_id: string | null
-  marital_status_id: string | null
-  phone: string | null
-  email: string | null
-  address: string | null
-  municipality: string | null
-  province: string | null
-  education_level_id: string | null
-  specialty: string | null
-  // Formación académica adicional (indicadores independientes, no excluyentes)
-  has_masters_degree: boolean
-  has_doctorate_degree: boolean
-  profession_or_trade: string | null
-  skin_color_id: string | null
-  political_affiliation: string | null
-  is_retired_or_rehired: boolean | null
-  has_disciplinary_measures: boolean | null
-  status: "active" | "archived"
-  worker_id: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface Gender {
-  id: string
-  name: string
-}
-
-interface MaritalStatus {
-  id: string
-  name: string
-}
-
-interface EducationLevel {
-  id: string
-  name: string
-}
-
-interface DocumentType {
-  id: string
-  name: string
-  description: string | null
-  sort_order: number | null
-}
-
-interface CandidateDocument {
-  id: string
-  candidate_id: string
-  document_type_id: string
-  original_file_name: string
-  storage_path: string
-  mime_type: string | null
-  file_size: number | null
-  description: string | null
-  is_primary: boolean
-  uploaded_by: string | null
-  created_at: string
-  updated_at: string | null
-}
-
-interface WorkExperience {
-  id: string
-  candidate_id: string
-  organization_entity_id: string
-  job_title: string
-  company_name: string
-  start_date: string
-  end_date: string | null
-  is_current: boolean | null
-  description: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface AcademicFormation {
-  id: string
-  candidate_id: string
-  organization_entity_id: string
-  program_name: string
-  start_date: string
-  end_date: string | null
-  is_studying: boolean | null
-  document_id: string | null
-  document: { id: string; original_file_name: string; storage_path: string } | null
-  created_at: string
-  updated_at: string
-}
-
-interface CandidateNote {
-  id: string
-  candidate_id: string
-  organization_entity_id: string
-  note_text: string
-  created_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-interface AdditionalInfoItem {
-  id: string
-  candidate_id: string
-  organization_entity_id: string
-  info_text: string
-  created_by: string | null
-  created_at: string
-  updated_at: string
-}
+/**
+ * El expediente del candidato se describe con los modelos del dominio Personas: la ficha
+ * (`CandidateExpediente`) y sus piezas (documentos, experiencia laboral, formación
+ * académica, notas e información adicional). Los catálogos de persona comparten el mismo
+ * vocabulario (`CatalogRow`) en toda la aplicación.
+ */
+type Gender = CatalogRow
+type MaritalStatus = CatalogRow
+type EducationLevel = CatalogRow
 
 // Parse "YYYY-MM-DD" strings using local time to avoid UTC timezone shifts
 const parseDateParts = (dateString: string): Date | null => {
@@ -232,6 +147,13 @@ const CandidateDetail = () => {
     setTimeout(() => setNotice(null), 4000)
   }
 
+  /**
+   * ¿El vínculo laboral del candidato está VIGENTE? Es la regla compartida del dominio
+   * Personas (`isActiveWorker`): un vínculo vigente sitúa a la persona en Trabajadores y un
+   * vínculo finalizado, en Reingresos. Las tres vistas siguen siendo excluyentes.
+   */
+  const hasActiveEmployment = !!linkedWorker && isActiveWorker(linkedWorker)
+
   // Document upload state
   const [uploadDialogOpen, setUploadDialogOpen] = React.useState(false)
   const [uploading, setUploading] = React.useState(false)
@@ -272,55 +194,22 @@ const CandidateDetail = () => {
   const [noteText, setNoteText] = React.useState("")
   const [noteFormError, setNoteFormError] = React.useState<string | null>(null)
 
-  // Fetch reference data
+  // Datos de referencia del expediente (catálogos de persona y tipos de documento)
   React.useEffect(() => {
     const fetchReferenceData = async () => {
-      try {
-        const [personCatalogs, gendersData, maritalStatusesData, educationLevelsData] = await Promise.all([
-          // Catálogos globales de la persona: mismo origen que utiliza el trabajador
-          fetchPersonCatalogs(),
-          supabase.from("genders").select("id, name").order("name"),
-          supabase.from("marital_statuses").select("id, name").order("name"),
-          supabase.from("education_levels").select("id, name").order("name")
-        ])
-
-        if (gendersData.error) throw gendersData.error
-        if (maritalStatusesData.error) throw maritalStatusesData.error
-        if (educationLevelsData.error) throw educationLevelsData.error
-
-        setGenders(gendersData.data || [])
-        setMaritalStatuses(maritalStatusesData.data || [])
-        setEducationLevels(educationLevelsData.data || [])
-        setSkinColors(personCatalogs.skinColors)
-        setLicenseCategories(personCatalogs.licenseCategories)
-      } catch (err) {
-        console.error("Error fetching reference data:", err)
-      }
+      const reference = await loadCandidateExpedienteReferenceData()
+      setGenders(reference.genders)
+      setMaritalStatuses(reference.maritalStatuses)
+      setEducationLevels(reference.educationLevels)
+      setSkinColors(reference.skinColors)
+      setLicenseCategories(reference.licenseCategories)
+      setDocumentTypes(reference.documentTypes)
     }
 
     fetchReferenceData()
   }, [])
 
-  // Fetch document types (global catalog)
-  React.useEffect(() => {
-    const fetchDocumentTypes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("document_types")
-          .select("id, name, description, sort_order")
-          .order("sort_order", { ascending: true })
-
-        if (error) throw error
-        setDocumentTypes(data || [])
-      } catch (err) {
-        console.error("Error fetching document types:", err)
-      }
-    }
-
-    fetchDocumentTypes()
-  }, [])
-
-  // Fetch candidate data
+  // Ficha del candidato: permisos, datos de la persona, licencias y vínculo laboral
   React.useEffect(() => {
     const fetchCandidate = async () => {
       if (!entityId || !candidateId) {
@@ -332,79 +221,25 @@ const CandidateDetail = () => {
       setError(null)
 
       try {
-        // First check permissions
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) {
-          setError("Usuario no autenticado")
-          return
-        }
+        const view = await loadCandidateExpedienteView({ entityId, candidateId })
 
-        // Check if user has view permission for this candidate
-        const { data: canView } = await supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "candidates.view"
-        })
-        const hasView = !!canView
-        setHasViewPermission(hasView)
+        setHasViewPermission(view.permissions.canView)
+        setHasManagePermission(view.permissions.canManage)
+        setCanManageWorkers(view.permissions.canManageWorkers)
 
-        // Check if user has manage permission for this candidate
-        const { data: canManage } = await supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "candidates.manage"
-        })
-        setHasManagePermission(!!canManage)
-
-        // Check if user can manage workers (required to hire)
-        const { data: canManageWorkersData } = await supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "workers.manage"
-        })
-        setCanManageWorkers(!!canManageWorkersData)
-
-        if (!hasView) {
+        if (!view.permissions.canView) {
           setError("No tiene permiso para ver este candidato")
           return
         }
 
-        // Fetch candidate data
-        const { data, error: fetchError } = await supabase
-          .from("candidates")
-          .select("*")
-          .eq("id", candidateId)
-          .eq("organization_entity_id", entityId)
-          .single()
-
-        if (fetchError) throw fetchError
-
-        if (!data) {
+        if (!view.candidate) {
           setError("Candidato no encontrado")
           return
         }
 
-        setCandidate(data)
-
-        // Licencias de conducción de la persona (relación 0..N)
-        setDrivingLicenseIds(await fetchCandidateDrivingLicenseIds(candidateId))
-
-        // Si el candidato está vinculado a un trabajador, cargar su estado
-        if (data.worker_id) {
-          const { data: linked } = await supabase
-            .from("workers")
-            .select("id, code, employment_status")
-            .eq("id", data.worker_id)
-            .maybeSingle()
-          setLinkedWorker(
-            linked
-              ? {
-                  id: linked.id,
-                  code: linked.code,
-                  employment_status: linked.employment_status,
-                }
-              : null
-          )
-        } else {
-          setLinkedWorker(null)
-        }
+        setCandidate(view.candidate)
+        setDrivingLicenseIds(view.drivingLicenseIds)
+        setLinkedWorker(view.linkedWorker)
       } catch (err) {
         console.error("Error fetching candidate:", err)
         setError(err instanceof Error ? err.message : "Error al cargar el candidato")
@@ -416,48 +251,16 @@ const CandidateDetail = () => {
     fetchCandidate()
   }, [entityId, candidateId])
 
-  // Fetch documents, work experiences, notes and additional info for the candidate
+  // Documentos, experiencia laboral, formación académica, notas e información adicional
   const fetchRelatedData = React.useCallback(async () => {
     if (!candidateId || !entityId) return
 
-    try {
-      const [docsRes, expRes, formationsRes, notesRes, infoRes] = await Promise.all([
-        supabase
-          .from("candidate_documents")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("is_primary", { ascending: false })
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("candidate_work_experiences")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("start_date", { ascending: false }),
-        supabase
-          .from("candidate_academic_formations")
-          .select("*, document:candidate_documents(id, original_file_name, storage_path)")
-          .eq("candidate_id", candidateId)
-          .order("start_date", { ascending: false }),
-        supabase
-          .from("candidate_notes")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("candidate_additional_info")
-          .select("*")
-          .eq("candidate_id", candidateId)
-          .order("created_at", { ascending: false })
-      ])
-
-      if (docsRes.data) setDocuments(docsRes.data as CandidateDocument[])
-      if (expRes.data) setWorkExperiences(expRes.data as WorkExperience[])
-      if (formationsRes.data) setFormations(formationsRes.data as AcademicFormation[])
-      if (notesRes.data) setNotes(notesRes.data as CandidateNote[])
-      if (infoRes.data) setAdditionalInfo(infoRes.data as AdditionalInfoItem[])
-    } catch (err) {
-      console.error("Error fetching related data:", err)
-    }
+    const related = await loadCandidateExpedienteRelated(candidateId)
+    setDocuments(related.documents)
+    setWorkExperiences(related.workExperiences)
+    setFormations(related.formations)
+    setNotes(related.notes)
+    setAdditionalInfo(related.additionalInfo)
   }, [candidateId, entityId])
 
   // Load related data once the candidate is available
@@ -540,49 +343,18 @@ const CandidateDetail = () => {
     return formatDurationFromDays(totalDays)
   }
 
-  const getUserId = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    return user?.id || null
-  }
-
   // Upload document function
   const handleUploadDocument = async () => {
     if (!selectedFile || !selectedDocumentType || !candidateId || !entityId) return
 
     setUploading(true)
     try {
-      const user = await supabase.auth.getUser()
-      if (!user.data.user) throw new Error("Usuario no autenticado")
-
-      // Generate a unique filename
-      const fileExt = selectedFile.name.split(".").pop() || "pdf"
-      const fileName = `candidate_${candidateId}_${Date.now()}.${fileExt}`
-
-      // Upload to storage
-      const { error: uploadError } = await supabase.storage
-        .from("documents")
-        .upload(fileName, selectedFile, {
-          cacheControl: "3600",
-          upsert: false
-        })
-
-      if (uploadError) throw uploadError
-
-      // Save reference to database
-      const { error: dbError } = await supabase
-        .from("candidate_documents")
-        .insert({
-          candidate_id: candidateId,
-          document_type_id: selectedDocumentType,
-          original_file_name: selectedFile.name,
-          storage_path: fileName,
-          mime_type: selectedFile.type,
-          file_size: selectedFile.size,
-          description: documentDescription || null,
-          uploaded_by: user.data.user.id
-        })
-
-      if (dbError) throw dbError
+      await addCandidateExpedienteDocument({
+        candidateId,
+        documentTypeId: selectedDocumentType,
+        file: selectedFile,
+        description: documentDescription || null,
+      })
 
       // Close dialog and reset form
       setUploadDialogOpen(false)
@@ -607,28 +379,8 @@ const CandidateDetail = () => {
 
     setUploading(true)
     try {
-      // First delete from storage
-      const { data: document } = await supabase
-        .from("candidate_documents")
-        .select("storage_path")
-        .eq("id", documentId)
-        .single()
-
-      if (document?.storage_path) {
-        const { error: storageError } = await supabase.storage
-          .from("documents")
-          .remove([document.storage_path])
-
-        if (storageError) throw storageError
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from("candidate_documents")
-        .delete()
-        .eq("id", documentId)
-
-      if (dbError) throw dbError
+      // Elimina primero el archivo y después la fila del documento.
+      await removeCandidateExpedienteDocument(documentId)
 
       // Refresh documents list
       await fetchRelatedData()
@@ -644,21 +396,10 @@ const CandidateDetail = () => {
   // Download document function
   const handleDownloadDocument = async (doc: { storage_path: string; original_file_name: string }) => {
     try {
-      const { data, error } = await supabase.storage
-        .from("documents")
-        .download(doc.storage_path)
-
-      if (error) throw error
-
-      // Create download link
-      const url = window.URL.createObjectURL(data)
-      const a = window.document.createElement("a")
-      a.href = url
-      a.download = doc.original_file_name
-      window.document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      window.document.body.removeChild(a)
+      await downloadCandidateExpedienteDocument({
+        storagePath: doc.storage_path,
+        originalFileName: doc.original_file_name,
+      })
     } catch (err) {
       console.error("Error downloading document:", err)
       showNotice("danger", err instanceof Error ? err.message : "Error al descargar el documento")
@@ -670,41 +411,30 @@ const CandidateDetail = () => {
     if (!candidateId || !entityId) return
 
     setExpFormError(null)
-    if (!expJobTitle.trim()) {
-      setExpFormError("El puesto de trabajo es obligatorio")
-      return
-    }
-    if (!expCompany.trim()) {
-      setExpFormError("La empresa u organización es obligatoria")
-      return
-    }
-    if (!expStartDate) {
-      setExpFormError("La fecha de inicio es obligatoria")
-      return
-    }
-    if (!expIsCurrent && !expEndDate) {
-      setExpFormError("Indique la fecha de fin o marque «Puesto actual»")
-      return
-    }
-    if (!expIsCurrent && expEndDate && expEndDate < expStartDate) {
-      setExpFormError("La fecha de fin no puede ser anterior a la fecha de inicio")
+    const validationError = validateWorkExperienceInput({
+      jobTitle: expJobTitle,
+      companyName: expCompany,
+      startDate: expStartDate,
+      endDate: expEndDate,
+      isCurrent: expIsCurrent,
+    })
+    if (validationError) {
+      setExpFormError(validationError)
       return
     }
 
     setExpSubmitting(true)
     try {
-      const { error } = await supabase.from("candidate_work_experiences").insert({
-        candidate_id: candidateId,
-        organization_entity_id: entityId,
-        job_title: expJobTitle.trim(),
-        company_name: expCompany.trim(),
-        start_date: expStartDate,
-        end_date: expIsCurrent ? null : expEndDate,
-        is_current: expIsCurrent,
-        description: expDescription.trim() || null
+      await addCandidateWorkExperience({
+        candidateId,
+        organizationEntityId: entityId,
+        jobTitle: expJobTitle,
+        companyName: expCompany,
+        startDate: expStartDate,
+        endDate: expEndDate,
+        isCurrent: expIsCurrent,
+        description: expDescription.trim() || null,
       })
-
-      if (error) throw error
 
       setExpDialogOpen(false)
       setExpJobTitle("")
@@ -728,8 +458,7 @@ const CandidateDetail = () => {
   const handleDeleteExperience = async (id: string) => {
     if (!confirm("¿Está seguro de que desea eliminar esta experiencia laboral?")) return
     try {
-      const { error } = await supabase.from("candidate_work_experiences").delete().eq("id", id)
-      if (error) throw error
+      await removeCandidateWorkExperience(id)
       await fetchRelatedData()
       showNotice("success", "Experiencia laboral eliminada")
     } catch (err) {
@@ -743,68 +472,30 @@ const CandidateDetail = () => {
     if (!candidateId || !entityId) return
 
     setFormationFormError(null)
-    if (!formationProgramName.trim()) {
-      setFormationFormError("Indique qué estudió (carrera o programa)")
-      return
-    }
-    if (!formationStartDate) {
-      setFormationFormError("La fecha de inicio es obligatoria")
-      return
-    }
-    if (!formationIsStudying && !formationEndDate) {
-      setFormationFormError("Indique la fecha de fin o marque «Estudios en curso»")
-      return
-    }
-    if (!formationIsStudying && formationEndDate && formationEndDate < formationStartDate) {
-      setFormationFormError("La fecha de fin no puede ser anterior a la fecha de inicio")
+    const validationError = validateAcademicFormationInput({
+      programName: formationProgramName,
+      startDate: formationStartDate,
+      endDate: formationEndDate,
+      isStudying: formationIsStudying,
+    })
+    if (validationError) {
+      setFormationFormError(validationError)
       return
     }
 
     setFormationSubmitting(true)
     try {
-      // Upload the title document (optional) and register it in candidate_documents
-      let documentId: string | null = null
-      if (formationFile) {
-        const { data: { user } } = await supabase.auth.getUser()
-        const fileExt = formationFile.name.split(".").pop() || "pdf"
-        const fileName = `candidate_${candidateId}_academic_${Date.now()}.${fileExt}`
-
-        const { error: uploadError } = await supabase.storage
-          .from("documents")
-          .upload(fileName, formationFile, {
-            cacheControl: "3600",
-            upsert: false
-          })
-        if (uploadError) throw uploadError
-
-        const { data: docData, error: docError } = await supabase
-          .from("candidate_documents")
-          .insert({
-            candidate_id: candidateId,
-            document_type_id: "ACADEMIC_CERTIFICATE",
-            original_file_name: formationFile.name,
-            storage_path: fileName,
-            mime_type: formationFile.type,
-            file_size: formationFile.size,
-            description: `Título de ${formationProgramName.trim()}`,
-            uploaded_by: user?.id || null
-          })
-          .select("id")
-          .single()
-        if (docError) throw docError
-        documentId = docData.id
-      }
-
-      const { error } = await supabase.from("candidate_academic_formations").insert({
-        candidate_id: candidateId,
-        organization_entity_id: entityId,
-        program_name: formationProgramName.trim(),
-        start_date: formationStartDate,
-        end_date: formationIsStudying ? null : formationEndDate,
-        is_studying: formationIsStudying,
-        document_id: documentId
+      // El título adjunto (opcional) se sube al Storage y se registra como documento del
+      // expediente antes de crear la formación, para no dejar referencias colgando.
+      await addCandidateAcademicFormation({
+        candidateId,
+        organizationEntityId: entityId,
+        programName: formationProgramName,
+        startDate: formationStartDate,
+        endDate: formationEndDate,
+        isStudying: formationIsStudying,
+        titleFile: formationFile,
       })
-      if (error) throw error
 
       setFormationDialogOpen(false)
       setFormationProgramName("")
@@ -831,12 +522,8 @@ const CandidateDetail = () => {
     if (!confirm(message)) return
 
     try {
-      if (formation.document) {
-        await supabase.storage.from("documents").remove([formation.document.storage_path])
-        await supabase.from("candidate_documents").delete().eq("id", formation.document.id)
-      }
-      const { error } = await supabase.from("candidate_academic_formations").delete().eq("id", formation.id)
-      if (error) throw error
+      // Elimina la formación y, si tenía título adjunto, también su documento y su archivo.
+      await removeCandidateAcademicFormation(formation.id, formation.document)
       await fetchRelatedData()
       showNotice("success", "Formación académica eliminada")
     } catch (err) {
@@ -850,21 +537,22 @@ const CandidateDetail = () => {
     if (!candidateId || !entityId) return
 
     setInfoFormError(null)
-    if (!infoText.trim()) {
-      setInfoFormError("El texto de la información es obligatorio")
+    const validationError = validateExpedienteText(
+      infoText,
+      "El texto de la información es obligatorio"
+    )
+    if (validationError) {
+      setInfoFormError(validationError)
       return
     }
 
     setInfoSubmitting(true)
     try {
-      const { error } = await supabase.from("candidate_additional_info").insert({
-        candidate_id: candidateId,
-        organization_entity_id: entityId,
-        info_text: infoText.trim(),
-        created_by: await getUserId()
+      await addCandidateAdditionalInfo({
+        candidateId,
+        organizationEntityId: entityId,
+        text: infoText,
       })
-
-      if (error) throw error
 
       setInfoDialogOpen(false)
       setInfoText("")
@@ -883,8 +571,7 @@ const CandidateDetail = () => {
   const handleDeleteInfo = async (id: string) => {
     if (!confirm("¿Está seguro de que desea eliminar esta información?")) return
     try {
-      const { error } = await supabase.from("candidate_additional_info").delete().eq("id", id)
-      if (error) throw error
+      await removeCandidateAdditionalInfo(id)
       await fetchRelatedData()
       showNotice("success", "Información eliminada")
     } catch (err) {
@@ -898,21 +585,19 @@ const CandidateDetail = () => {
     if (!candidateId || !entityId) return
 
     setNoteFormError(null)
-    if (!noteText.trim()) {
-      setNoteFormError("El texto de la nota es obligatorio")
+    const validationError = validateExpedienteText(noteText, "El texto de la nota es obligatorio")
+    if (validationError) {
+      setNoteFormError(validationError)
       return
     }
 
     setNoteSubmitting(true)
     try {
-      const { error } = await supabase.from("candidate_notes").insert({
-        candidate_id: candidateId,
-        organization_entity_id: entityId,
-        note_text: noteText.trim(),
-        created_by: await getUserId()
+      await addCandidateNote({
+        candidateId,
+        organizationEntityId: entityId,
+        text: noteText,
       })
-
-      if (error) throw error
 
       setNoteDialogOpen(false)
       setNoteText("")
@@ -931,8 +616,7 @@ const CandidateDetail = () => {
   const handleDeleteNote = async (id: string) => {
     if (!confirm("¿Está seguro de que desea eliminar esta nota?")) return
     try {
-      const { error } = await supabase.from("candidate_notes").delete().eq("id", id)
-      if (error) throw error
+      await removeCandidateNote(id)
       await fetchRelatedData()
       showNotice("success", "Nota eliminada")
     } catch (err) {
@@ -1045,7 +729,7 @@ const CandidateDetail = () => {
           description={`Candidato en ${currentEntity?.name}`}
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              {linkedWorker && linkedWorker.employment_status === "active" && (
+              {hasActiveEmployment && linkedWorker && (
                 <SiteCorpButton
                   variant="outline"
                   onClick={() =>
@@ -1055,7 +739,7 @@ const CandidateDetail = () => {
                   <Briefcase className="mr-2 h-4 w-4" /> Ver trabajador
                 </SiteCorpButton>
               )}
-              {canManageWorkers && (!linkedWorker || linkedWorker.employment_status !== "active") && (
+              {canManageWorkers && !hasActiveEmployment && (
                 <SiteCorpButton onClick={() => setHireOpen(true)}>
                   <UserPlus className="mr-2 h-4 w-4" /> Contratar
                 </SiteCorpButton>
@@ -1088,8 +772,8 @@ const CandidateDetail = () => {
 
       {/* Indicador de relación laboral */}
       {linkedWorker && (
-        <SiteCorpAlert type={linkedWorker.employment_status === "active" ? "success" : "info"}>
-          {linkedWorker.employment_status === "active"
+        <SiteCorpAlert type={hasActiveEmployment ? "success" : "info"}>
+          {hasActiveEmployment
             ? `Trabajador activo (${linkedWorker.code}). Este candidato ya forma parte de la plantilla.`
             : `Trabajador histórico (${linkedWorker.code}). Esta persona fue trabajador anteriormente; la acción «Contratar» realizará una reincorporación.`}
         </SiteCorpAlert>

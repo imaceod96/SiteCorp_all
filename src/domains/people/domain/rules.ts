@@ -237,31 +237,19 @@ export function validateCandidateRegistration(
   if (identificationFormatError) return identificationFormatError
 
   // Integridad contractual: datos personales indispensables para formalizar
-  // correctamente un contrato laboral.
-  if (!input.birth_date.trim()) return "La fecha de nacimiento es obligatoria"
-  if (!input.profession_or_trade.trim()) return "La profesión u oficio es obligatoria"
-  if (!input.address.trim()) return "La dirección particular es obligatoria"
-  if (!input.province.trim()) return "La provincia es obligatoria"
-  if (!input.municipality.trim()) return "El municipio es obligatorio"
+  // correctamente un contrato laboral (mismas reglas que el expediente).
+  const profileError = validatePersonProfileFields(input)
+  if (profileError) return profileError
 
-  if (input.education_level_id && candidateRequiresSpecialty(input.education_level_name)) {
-    if (!input.specialty.trim()) {
-      return `La especialidad es obligatoria para ${input.education_level_name}`
-    }
-  }
+  const specialtyError = validateSpecialtyRequirement(input)
+  if (specialtyError) return specialtyError
 
   // Los documentos verificadores son obligatorios mientras su casilla esté activada.
-  if (input.has_pre_employment_check && !input.pre_employment_check_file) {
-    return "Debe seleccionar el documento de Chequeo Preempleo"
-  }
-  if (input.has_criminal_record_check && !input.criminal_record_check_file) {
-    return "Debe seleccionar el documento de Antecedentes Penales"
-  }
+  const documentsError = validateVerificationDocuments(input)
+  if (documentsError) return documentsError
 
-  if (input.email.trim()) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(input.email.trim())) return "El formato del email no es válido"
-  }
+  const emailError = validateEmail(input.email)
+  if (emailError) return emailError
 
   if (!convertDisplayDateToISO(input.birth_date)) {
     return "El formato de la fecha de nacimiento no es válido (dd/mm/aaaa)"
@@ -723,3 +711,259 @@ export function validatePositionChangeInput(
   if (input.addendum.templateBlockedMessage) return input.addendum.templateBlockedMessage
   return null
 }
+
+// ---------------------------------------------------------------------------
+// Expediente de la persona (ficha de candidato y ficha de trabajador)
+// ---------------------------------------------------------------------------
+//
+// Las cuatro pantallas del expediente (detalle y formulario de candidato, detalle y
+// formulario de trabajador) comparten estas comprobaciones. Están aquí, y no en cada
+// formulario, para que el criterio y los MENSAJES sean idénticos en todas: los textos son
+// EXACTAMENTE los que ya mostraba cada pantalla.
+
+export const MISSING_BIRTH_DATE_MESSAGE = "La fecha de nacimiento es obligatoria"
+export const MISSING_PROFESSION_MESSAGE = "La profesión u oficio es obligatoria"
+export const MISSING_ADDRESS_MESSAGE = "La dirección particular es obligatoria"
+export const MISSING_PROVINCE_MESSAGE = "La provincia es obligatoria"
+export const MISSING_MUNICIPALITY_MESSAGE = "El municipio es obligatorio"
+export const INVALID_COMPONENTS_EXPEDIENTE_MESSAGE =
+  "Revisa los conceptos retributivos: cada uno necesita descripción e importe válido (mayor o igual que 0)"
+
+/** Datos personales indispensables para formalizar un contrato (candidato y trabajador). */
+export function validatePersonProfileFields(input: {
+  birth_date: string | null
+  profession_or_trade: string | null
+  address: string | null
+  province: string | null
+  municipality: string | null
+}): string | null {
+  if (isBlank(input.birth_date)) return MISSING_BIRTH_DATE_MESSAGE
+  if (isBlank(input.profession_or_trade)) return MISSING_PROFESSION_MESSAGE
+  if (isBlank(input.address)) return MISSING_ADDRESS_MESSAGE
+  if (isBlank(input.province)) return MISSING_PROVINCE_MESSAGE
+  if (isBlank(input.municipality)) return MISSING_MUNICIPALITY_MESSAGE
+  return null
+}
+
+/** La especialidad se exige solo en los niveles educacionales que la requieren. */
+export function validateSpecialtyRequirement(input: {
+  education_level_id: string
+  education_level_name: string
+  specialty: string
+}): string | null {
+  if (!input.education_level_id) return null
+  if (!candidateRequiresSpecialty(input.education_level_name)) return null
+  if (isBlank(input.specialty)) return `La especialidad es obligatoria para ${input.education_level_name}`
+  return null
+}
+
+/**
+ * Documentos verificadores (Chequeo Preempleo y Antecedentes Penales): son obligatorios
+ * mientras su casilla esté activada. `*_present` indica que el expediente YA tiene un
+ * documento registrado de ese tipo (edición), por lo que no hace falta volver a adjuntarlo.
+ */
+export function validateVerificationDocuments(input: {
+  has_pre_employment_check: boolean
+  pre_employment_check_file: File | null
+  has_criminal_record_check: boolean
+  criminal_record_check_file: File | null
+  pre_employment_check_present?: boolean
+  criminal_record_check_present?: boolean
+}): string | null {
+  if (input.has_pre_employment_check && !input.pre_employment_check_file && !input.pre_employment_check_present) {
+    return "Debe seleccionar el documento de Chequeo Preempleo"
+  }
+  if (input.has_criminal_record_check && !input.criminal_record_check_file && !input.criminal_record_check_present) {
+    return "Debe seleccionar el documento de Antecedentes Penales"
+  }
+  return null
+}
+
+/** Correo electrónico, cuando se informa. */
+export function validateEmail(email: string): string | null {
+  if (!email.trim()) return null
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email.trim()) ? null : "El formato del email no es válido"
+}
+
+// --- Datos personales del trabajador (alta y edición del expediente) ---
+
+export interface WorkerPersonalDataValidationInput {
+  first_name: string
+  first_surname: string
+  identification: string
+  birth_date: string
+  profession_or_trade: string
+  address: string
+  province: string
+  municipality: string
+  education_level_id: string
+  education_level_name: string
+  specialty: string
+  hire_date: string
+}
+
+/**
+ * Datos personales y laborales del trabajador. `identificationFormatError` lo aporta el
+ * caso de uso desde el kernel compartido (`@/utils/ci`) y se comprueba en su posición
+ * original: justo después de exigir que el carné no esté vacío.
+ */
+export function validateWorkerPersonalData(
+  input: WorkerPersonalDataValidationInput,
+  identificationFormatError: string | null = null
+): string | null {
+  if (!input.first_name.trim() || !input.first_surname.trim()) {
+    return "El nombre y el primer apellido son obligatorios"
+  }
+  if (!input.identification.trim()) return "El carné de identidad es obligatorio"
+  if (identificationFormatError) return identificationFormatError
+  return (
+    validatePersonProfileFields(input) ||
+    validateSpecialtyRequirement(input) ||
+    (!input.hire_date ? "La fecha de incorporación es obligatoria" : null)
+  )
+}
+
+/** Alta de un trabajador nuevo: puesto disponible y condiciones formalizadas del contrato. */
+export interface WorkerRegistrationValidationInput {
+  positionId: string
+  positionAvailable: boolean
+  contractTypeId: string
+  isDetermined: boolean
+  contractStartDate: string
+  contractEndDate: string
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  hasInvalidComponents: boolean
+  blocking: string[]
+  representativeAssignmentId: string | null
+}
+
+export function validateWorkerRegistrationInput(
+  input: WorkerRegistrationValidationInput
+): string | null {
+  if (!input.positionId) return "El puesto es obligatorio"
+  if (!input.positionAvailable) {
+    return "El puesto seleccionado ya no tiene plazas disponibles. Selecciona otro puesto."
+  }
+  if (!input.contractTypeId) return "Debes seleccionar un tipo de contrato"
+  if (input.isDetermined && !input.contractEndDate) {
+    return "El contrato por tiempo determinado requiere una fecha de fin"
+  }
+  if (input.contractEndDate && input.contractStartDate && input.contractEndDate <= input.contractStartDate) {
+    return "La fecha de fin del contrato debe ser posterior a su inicio"
+  }
+  if (!input.signatureDate) return "La fecha de firma del contrato es obligatoria"
+  if (isBlank(input.signaturePlace)) return "El lugar de firma es obligatorio"
+  if (!input.paymentMethodId) return "Selecciona la forma de pago"
+  if (input.hasInvalidComponents) return INVALID_COMPONENTS_EXPEDIENTE_MESSAGE
+
+  return (
+    validateFormalizationPending(input.blocking) ||
+    validateRepresentative(input.representativeAssignmentId)
+  )
+}
+
+/**
+ * Registro del contrato desde el expediente del trabajador (`complete_worker_contract`):
+ * las condiciones se validan con los mensajes que ya mostraba esa pantalla.
+ */
+export interface WorkerContractValidationInput {
+  contractTypeId: string
+  startDate: string
+  hireDate: string
+  isDetermined: boolean
+  endDate: string
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  hasInvalidComponents: boolean
+  blocking: string[]
+  representativeAssignmentId: string | null
+}
+
+export function validateWorkerContractInput(input: WorkerContractValidationInput): string | null {
+  if (!input.contractTypeId) return "Selecciona un tipo de contrato"
+  if (!input.startDate) return "La fecha de inicio del contrato es obligatoria"
+  if (input.isDetermined && !input.endDate) {
+    return "El contrato por tiempo determinado requiere una fecha de fin"
+  }
+  if (input.endDate && input.endDate <= input.startDate) {
+    return "La fecha de fin debe ser posterior al inicio"
+  }
+  if (!input.signatureDate) return "La fecha de firma del contrato es obligatoria"
+  if (isBlank(input.signaturePlace)) return "El lugar de firma es obligatorio"
+  if (!input.paymentMethodId) return "Selecciona la forma de pago"
+  if (input.hasInvalidComponents) return INVALID_COMPONENTS_EXPEDIENTE_MESSAGE
+
+  return (
+    validateFormalizationPending(input.blocking) ||
+    validateRepresentative(input.representativeAssignmentId)
+  )
+}
+
+// --- Secciones del expediente del candidato ---
+
+export interface WorkExperienceValidationInput {
+  jobTitle: string
+  companyName: string
+  startDate: string
+  endDate: string
+  isCurrent: boolean
+}
+
+export function validateWorkExperienceInput(input: WorkExperienceValidationInput): string | null {
+  if (!input.jobTitle.trim()) return "El puesto de trabajo es obligatorio"
+  if (!input.companyName.trim()) return "La empresa u organización es obligatoria"
+  if (!input.startDate) return "La fecha de inicio es obligatoria"
+  if (!input.isCurrent && !input.endDate) return "Indique la fecha de fin o marque «Puesto actual»"
+  if (!input.isCurrent && input.endDate && input.endDate < input.startDate) {
+    return "La fecha de fin no puede ser anterior a la fecha de inicio"
+  }
+  return null
+}
+
+export interface AcademicFormationValidationInput {
+  programName: string
+  startDate: string
+  endDate: string
+  isStudying: boolean
+}
+
+export function validateAcademicFormationInput(
+  input: AcademicFormationValidationInput
+): string | null {
+  if (!input.programName.trim()) return "Indique qué estudió (carrera o programa)"
+  if (!input.startDate) return "La fecha de inicio es obligatoria"
+  if (!input.isStudying && !input.endDate) return "Indique la fecha de fin o marque «Estudios en curso»"
+  if (!input.isStudying && input.endDate && input.endDate < input.startDate) {
+    return "La fecha de fin no puede ser anterior a la fecha de inicio"
+  }
+  return null
+}
+
+/** Texto libre de una nota o de una información adicional del expediente. */
+export const validateExpedienteText = (text: string, message: string): string | null =>
+  !text.trim() ? message : null
+
+/**
+ * ¿Hay que subir (o reemplazar) el documento verificador?
+ *
+ * Regla de conservación del expediente: desmarcar la casilla NUNCA borra el documento
+ * histórico y marcar sin archivo nuevo mantiene el documento existente. Solo se escribe
+ * cuando la casilla está activada Y el usuario adjuntó un archivo.
+ */
+export const shouldUploadVerificationDocument = (
+  hasDocument: boolean,
+  file: File | null
+): file is File => hasDocument && file !== null
+
+/**
+ * Especialidad que se guarda: solo se conserva en los niveles educacionales que la exigen,
+ * de modo que cambiar de nivel no deje una especialidad heredada sin sentido.
+ */
+export const specialtyForEducationLevel = (
+  educationLevelName: string | null | undefined,
+  specialty: string
+): string | null => (candidateRequiresSpecialty(educationLevelName) ? specialty.trim() || null : null)
