@@ -16,8 +16,10 @@
 --
 -- RIESGO ESPECÍFICO (tipo C — despliegue coordinado obligatorio)
 --   · `entity_user_access.tenant_membership_id` y `.tenant_role_id` son columnas de
---     salida de la RPC `list_entity_user_access` (RETURNS TABLE). Cambiar su nombre
---     cambia la FIRMA de la función y obliga a DROP + CREATE (ver fichero 08).
+--     salida de la RPC `list_entity_user_access` (RETURNS TABLE). El nombre de esas
+--     COLUMNAS DE SALIDA **se conserva** (compatibilidad aprobada nº 2): cambiar el
+--     nombre de una columna de salida exige DROP + CREATE y haría perder la ACL, así
+--     que el fichero 11 reescribe solo el CUERPO y deja la firma intacta.
 --   · El frontend lee y escribe esos nombres en:
 --       src/components/entity-users-dialog.tsx
 --       src/components/roles-manager.tsx
@@ -119,6 +121,6 @@ COMMIT;
 
 -- ============================================================================
 -- NO EJECUTAR este fichero de forma aislada: los objetos `tenant_role_id` /
--- `tenant_membership_id` de las funciones (fichero 08) y del frontend (informe §7)
+-- `tenant_membership_id` de las funciones (fichero 11) y del frontend (informe §7)
 -- deben desplegarse en la MISMA ventana.
 -- ============================================================================

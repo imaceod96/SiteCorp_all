@@ -15,7 +15,7 @@
 --
 -- POR QUÉ NO ES SUFICIENTE POR SÍ SOLO
 --   · Los cuerpos de función son TEXTO: PostgreSQL no detecta la dependencia y no
---     avisa. La función deja de compilarse en tiempo de ejecución → fichero 08.
+--     avisa. La función deja de compilarse en tiempo de ejecución → fichero 11.
 --
 -- TABLAS AFECTADAS (26, verificado por introspección el 2026-10-27):
 --   academic_category_payments, candidates, contract_addendums,

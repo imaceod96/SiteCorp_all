@@ -16,8 +16,8 @@
 --   detección de colisiones se convirtiera en un error fatal para el usuario:
 --     · workers_tenant_code_unique  → usado en create_worker_with_position()
 --                                    y migration_create_worker()
---   → Queda EXCLUIDO aquí (lista `v_denylist`) y se trata en el fichero 08, parte B,
---     junto con el parche de ambas funciones, dentro de la misma transacción.
+--   → Queda EXCLUIDO aquí (lista `v_denylist`) y NO se renombra en esta fase
+--     (decisión aprobada nº 5). Justificación y evidencia al final del fichero.
 --   · `workers_tenant_ci_active_unique` se menciona en create_worker_with_position()
 --     pero NO EXISTE en el esquema real (el índice real es `workers_tenant_ci_unique`
 --     y su predicado excluye el origen 'MIGRATION'). Es una rama muerta: se documenta
@@ -95,7 +95,7 @@ BEGIN
   LOOP
     IF r.index_name = ANY (v_denylist) THEN
       RAISE NOTICE
-        'EXCLUIDO índice % : su nombre se compara en PL/pgSQL; se trata en el fichero 08 (parte B).',
+        'EXCLUIDO índice % : su nombre se compara en PL/pgSQL; NO se renombra (decisión nº 5).',
         r.index_name;
       CONTINUE;
     END IF;
@@ -121,7 +121,8 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- 3. VERIFICACIÓN
 -- ---------------------------------------------------------------------------
--- 3.1 ESPERADO: exactamente 1 fila → el índice excluido, a la espera del fichero 08.
+-- 3.1 ESPERADO: exactamente 1 fila → el índice excluido a propósito (decisión nº 5),
+--     que se queda con su nombre legacy de forma deliberada y documentada.
 SELECT c.relname AS indice_legacy_pendiente
 FROM pg_class c
 JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -146,10 +147,23 @@ GROUP BY object_kind;
 COMMIT;
 
 -- ============================================================================
--- PENDIENTE (fichero 08, parte B, misma transacción que el parche de funciones):
---   ALTER INDEX public.workers_tenant_code_unique
---     RENAME TO workers_company_client_code_unique;
---   + CREATE OR REPLACE de create_worker_with_position() y migration_create_worker()
---     sustituyendo la comparación '%workers_tenant_code_unique%' por
---     '%workers_company_client_code_unique%'.
+-- DECISIÓN FINAL SOBRE `workers_tenant_code_unique` (basada en evidencia del
+-- catálogo real, no en una suposición):
+--   · Se comprobó que los ÚNICOS índices cuyo nombre aparece dentro de un cuerpo de
+--     función son `wpa_current_per_worker_unique` (no contiene 'tenant': no se toca)
+--     y `workers_tenant_code_unique` (create_worker_with_position y
+--     migration_create_worker lo comparan con SQLERRM LIKE).
+--   · Ninguna restricción se menciona por nombre en ningún cuerpo y no existe ningún
+--     `ON CONFLICT ON CONSTRAINT` en el esquema.
+--   → Conforme a la decisión aprobada nº 5 (renombrar solo cuando sea seguro y no
+--     existan dependencias por nombre), este índice NO se renombra y, por tanto, NO
+--     hay que parchear ninguna función: el literal `%workers_tenant_code_unique%`
+--     conserva su validez.
+--   → La incoherencia de nombre que queda es deliberada, está documentada y NO afecta
+--     a ningún comportamiento. Si en el futuro se quisiera renombrar, habría que
+--     hacerlo en la MISMA transacción que el parche de las dos funciones.
+--
+--   Observación (no se corrige en esta fase): create_worker_with_position() también
+--   compara '%workers_tenant_ci_active_unique%', índice que NO existe en el esquema
+--   (el real es `workers_tenant_ci_unique`). Es una rama muerta.
 -- ============================================================================

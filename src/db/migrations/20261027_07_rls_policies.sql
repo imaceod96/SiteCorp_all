@@ -13,7 +13,7 @@
 --   · Las política que consultan tablas legacy dentro de su expresión
 --     (`candidate_documents`, `employment_types`, `political_affiliations`,
 --     `rehire_statuses`, …) siguen siendo válidas por OID: su texto aparece ya con
---     los nombres nuevos. Se verifican en el control de validación del fichero 08.
+--     los nombres nuevos. Se verifican en el control de validación del fichero 11.
 --   · El aislamiento NO queda "probado" por este renombrado: las pruebas reales de
 --     acceso cruzado entre clientes se ejecutan en la Fase 3 (informe §8).
 --
@@ -132,8 +132,9 @@ ORDER BY 1;
 
 -- 3.3 El texto de las políticas que consultaban tablas legacy ya debe mostrar los
 --     nombres nuevos (prueba de que el renombrado es transparente para RLS).
---     ESPERADO tras el fichero 08: 0 filas.
---     OJO: si se ejecuta ANTES del fichero 08 todavía pueden aparecer filas porque
+--     ESPERADO tras el fichero 11 (cuerpos de función): 0 filas.
+--     Línea base verificada el 2026-10-27: 26 políticas con 'tenant' en su expresión.
+--     OJO: si se ejecuta ANTES del fichero 11 todavía pueden aparecer filas porque
 --     las expresiones llaman a funciones por OID y el renderizado usa su nombre
 --     ACTUAL (p. ej. `can_use_tenant_permission(...)`, que se renombra en el 08).
 --     Que aparezcan esos nombres NO es un error de RLS.

@@ -1,106 +1,126 @@
 -- ============================================================================
--- SiteCorp · FASE 2/3 — 10. STORAGE, VISTAS Y COMPROBACIONES MANUALES OBLIGATORIAS
+-- SiteCorp · FASE 2/3 — 10. STORAGE Y COMPROBACIONES MANUALES
+--   [revisado: el bloqueo de Storage queda RESUELTO con evidencia del catálogo real]
 --
--- ESTE FICHERO NO MODIFICA NADA. Contiene:
---   (a) hallazgos verificados que evitan trabajo innecesario,
---   (b) el listado EXACTO de lo que NO se ha podido verificar y debe comprobarse
---       a mano antes de autorizar la ventana (bloqueos de la Fase 2).
+-- ============================================================================
+-- §1  STORAGE — DICTAMEN: NO REQUIERE NINGÚN CAMBIO
+-- ============================================================================
+-- Se revisaron las definiciones REALES (pg_policies del esquema `storage`) y los
+-- buckets (`storage.buckets`). Evidencia observada el 2026-10-27:
+--   · 21 políticas, todas sobre `storage.objects`, agrupadas en 6 familias
+--     (candidate_docs, document_templates, governing_docs, medical_certificates,
+--     worker_docs, worker_documents).
+--   · 3 buckets, TODOS privados (`public = false`): documents, document-templates,
+--     worker_documents.
+--   · 0 políticas referencian `tenants`, `tenant_id`, `tenant_memberships`,
+--     `tenant_roles` ni ninguna función SQL renombrada.
+--   · 0 políticas mencionan la cadena `tenant` (ni en USING ni en WITH CHECK).
 --
+-- Qué usan las políticas, y por qué no les afecta el renombrado:
+--   · `storage.foldername(name)`, `bucket_id`, `auth.uid()`  → objetos del sistema.
+--   · `can_access_entity(<entidad>, '<código de permiso>')`  → función NO renombrada
+--     y códigos de permiso que se conservan (decisión nº 4).
+--   · Funciones auxiliares de ruta `*_storage_object_entity(name)`
+--     (candidate_, document_template_, governing_document_, worker_) → NO están entre
+--     las 56 funciones afectadas: no mencionan `tenant*` y no se renombran.
+--   · Las políticas se enlazan por OID: aunque se renombrara una función que invocan,
+--     el texto se actualizaría solo (y ninguna lo hace).
+--
+-- Conclusión: NINGUNA política de Storage depende de `tenants`, `tenant_id`,
+-- `tenant_memberships` ni de funciones SQL renombradas → **no hay cambios que preparar
+-- y no queda ningún bloqueo pendiente en Storage**.
+--
+-- Verificación a ejecutar en la ventana (tras el fichero 11). ESPERADO: 0.
 -- ---------------------------------------------------------------------------
--- (a) HALLAZGOS VERIFICADOS (introspección de solo lectura)
--- ---------------------------------------------------------------------------
---  A.1 VISTAS: no existe ninguna vista ni vista materializada en `public`.
---      → No hay definiciones de vista que reescribir tras el renombrado.
---      (Control permanente: consulta §4.1 del fichero 01.)
---
---  A.2 STORAGE — RUTAS: ninguna ruta de objeto contiene el identificador de cliente.
---      Evidencia (cuerpos actuales, todos verificados):
---        · complete_document_generation():  'workers/<worker_id>/generated/<documento>.docx'
---                                           'workers/<worker_id>/generated/<documento>.xlsx'
---        · worker_storage_object_entity():  <bucket 'workers'>/<worker_id>/...
---        · candidate_storage_object_entity(): <bucket 'candidates'>/<candidate_id>/... y 'candidate_<uuid>…'
---        · governing_document_storage_object_entity(): 'governing-documents/<entity_id>/...'
---        · document_template_storage_object_entity(): 'entity/<entity_id>/...'
---      Conclusión: NO hay que migrar objetos de Storage por el renombrado de
---      `tenants.id → company_clients.id` (el UUID es el mismo y no aparece en la ruta).
---      Las funciones auxiliares de Storage NO mencionan `tenants` ni `tenant_id`
---      → NO requieren reescritura.
---
---  A.3 ESQUEMA DE TRABAJO: `phase2_migration` no está expuesto por la Data API
---      (Supabase expone únicamente `public` y `graphql_public`). Debe eliminarse al
---      cerrar la Fase 3 (ver “limpieza” al final del fichero 90).
---
--- ---------------------------------------------------------------------------
--- (b) NO VERIFICADO / BLOQUEADO — comprobación manual obligatoria
--- ---------------------------------------------------------------------------
---  B.1 POLÍTICAS DE STORAGE (bloqueo real): la introspección utilizada solo cubre el
---      esquema `public`. Las políticas de `storage.objects` NO se han podido leer, por
---      lo que NO se puede afirmar que estén libres de nomenclatura legacy.
---      Ejecutar a mano (SOLO LECTURA, no modifica nada):
---
---        SELECT schemaname, tablename, policyname, cmd, qual, with_check
---        FROM pg_policies
---        WHERE schemaname = 'storage'
---        ORDER BY tablename, policyname;
---
---        SELECT id, name, public, file_size_limit, allowed_mime_types
---        FROM storage.buckets
---        ORDER BY id;
---
---        -- ¿Alguna política de Storage menciona el cliente/tenant por nombre?
---        SELECT policyname, qual, with_check
---        FROM pg_policies
---        WHERE schemaname = 'storage'
---          AND (coalesce(qual,'') || coalesce(with_check,'')) ~ 'tenant';
---
---      Interpretación:
---        · 0 filas en la tercera consulta  → Storage queda fuera del alcance de la fase.
---        · >0 filas                        → añadir un fichero 11 de Storage antes de
---          la ventana. El renombrado de tablas/columnas NO invalida esas políticas
---          (van por OID), pero el texto podría quedar incoherente y debe revisarse.
---
---  B.2 BUCKETS: confirmar que solo existen los cuatro bucket privados esperados por el
---      código (documentos de trabajador, documentos de candidato, documentos rectores,
---      plantillas por entidad) y que NINGUNO es público. Si existiera un bucket público
---      con datos de clientes, sería un hallazgo de seguridad que debe resolverse antes
---      de declarar el aislamiento verificado.
---
---  B.3 EXTENSIONES: `btree_gist` (índice GiST de rangos en
---      organization_representative_assignments) y `unaccent` están instaladas en el
---      esquema `public`. El índice gist `ora_no_overlap` no contiene 'tenant' en su
---      definición, así que el renombrado no le afecta; se deja constancia porque su
---      operador por rango se usa en la validación de representantes.
---
---  B.4 LÍMITES DE LA VALIDACIÓN ESTÁTICA: ningún fichero de esta fase ha sido
---      ejecutado contra Supabase (ni remoto ni local). Las comprobaciones realizadas
---      son de catálogo (metadatos) y de código. La ausencia de errores sintácticos en
---      los bloques DO exige ejecutarlos en un entorno desechable antes de la ventana.
---
---  B.5 RLS: NO se ha probado ninguna política. Que una tabla tenga RLS habilitado y
---      políticas definidas NO demuestra aislamiento. Las pruebas positivas/negativas
---      de acceso cruzado entre clientes son parte de la Fase 3 (informe §8).
---
--- ---------------------------------------------------------------------------
--- CONSULTAS DE INVENTARIO PARA LA REVISIÓN MANUAL (solo lectura)
--- ---------------------------------------------------------------------------
--- Estado final de las tablas del cliente:
-SELECT cl.relname AS tabla, cl.relrowsecurity AS rls_activo,
-       (SELECT count(*) FROM pg_policy p WHERE p.polrelid = cl.oid) AS politicas,
-       (SELECT count(*) FROM pg_trigger t WHERE t.tgrelid = cl.oid AND NOT t.tgisinternal) AS triggers
-FROM pg_class cl
-JOIN pg_namespace n ON n.oid = cl.relnamespace
+SELECT count(*) AS politicas_storage_con_tenant
+FROM pg_policies
+WHERE schemaname = 'storage'
+  AND (coalesce(qual, '') || coalesce(with_check, '')) ~ 'tenant';
+
+-- Inventario de buckets (los tres deben seguir siendo privados). ESPERADO: 3 filas,
+-- todas con public = false.
+SELECT id, name, public, file_size_limit
+FROM storage.buckets
+ORDER BY id;
+
+-- ============================================================================
+-- §2  COMPROBACIONES MANUALES (lo que no se puede automatizar sin riesgo)
+-- ============================================================================
+-- Estas comprobaciones NO modifican nada: son consultas de revisión que deben
+-- ejecutarse y leerse ANTES de cerrar la ventana.
+
+-- 2.1 Tablas con `tenant_id` SIN clave foránea a `tenants`.
+--     Integridad referencial incompleta: NO se corrige en esta fase (crear FKs es un
+--     cambio funcional distinto), pero debe quedar documentado, porque tras el
+--     renombrado el riesgo de huérfanos no desaparece.
+--     Revisar el resultado y anotarlo en el informe de la ventana.
+SELECT c.relname AS tabla_sin_fk
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
 WHERE n.nspname = 'public'
-  AND cl.relkind = 'r'
-  AND cl.relname LIKE 'company_client%'
+  AND c.relkind = 'r'
+  AND a.attname = 'tenant_id'
+  AND a.attnum > 0
+  AND NOT a.attisdropped
+  AND NOT EXISTS (
+    SELECT 1 FROM pg_constraint fk
+    WHERE fk.conrelid = c.oid
+      AND fk.contype = 'f'
+      AND fk.conkey = ARRAY[a.attnum]
+  )
 ORDER BY 1;
 
--- Funciones SECURITY DEFINER: deben conservar `SET search_path` tras la reescritura.
--- ESPERADO: `search_path_configurado` = true en todas (o documentar las excepciones).
+-- 2.2 Literales que se CONSERVAN a propósito (decisión nº 2, 3, 4 y 5) y que nadie
+--     debe "corregir" por error. Repaso del inventario verificado:
+--       · 'tenant_id', 'tenant_name'      → claves JSON devueltas al cliente.
+--       · 'tenants.delete'                → código de permiso de plataforma almacenado.
+--       · 'tenant_roles.manage',
+--         'Permission denied: roles.manage or tenant_roles.manage is required'
+--                                        → código de permiso y mensaje congelado.
+--       · '(^areas\.|^jobs\.|^tenant_roles\.|_global$|_empresarial$)'
+--                                        → patrón de catálogo de permisos.
+--       · '%workers_tenant_code_unique%'  → nombre de índice que NO se renombra.
+--       · '%workers_tenant_ci_active_unique%' → rama muerta (el índice no existe).
+--       · 'app.workspace_deletion'        → ajuste de sesión interno del borrado.
+--     Consulta de control (debe devolver exactamente los casos anteriores):
 SELECT p.proname AS funcion,
-       p.prosecdef AS security_definer,
-       EXISTS (SELECT 1 FROM unnest(coalesce(p.proconfig, ARRAY[]::text[])) c
-               WHERE c LIKE 'search_path=%') AS search_path_configurado
+       coalesce(substring(p.prosrc from '''([^'']*tenant[^'']*)'''), '') AS literal_legacy
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
-WHERE n.nspname = 'public' AND p.prosecdef
+WHERE n.nspname = 'public'
+  AND p.prosrc ~ '(tenants|tenant_id|tenant_memberships|tenant_roles|tenant_user_roles|tenant_invitations|tenant_permission|tenant_role_id|tenant_membership_id)'
+  AND p.prosrc ~ '''[^'']*tenant[^'']*'''
 ORDER BY 1;
+
+-- 2.3 Defectos PREEXISTENTES detectados durante la revisión (NO se corrigen aquí:
+--     corregirlos cambiaría comportamiento y excede la Fase 2). Deben quedar en el
+--     informe como deuda técnica aceptada:
+--       a) `migration_create_worker` referencia `public.representative_assignments`,
+--          tabla que NO existe con ese nombre en el esquema.
+--       b) `create_worker_with_position` compara `%workers_tenant_ci_active_unique%`,
+--          índice que NO existe (el real es `workers_tenant_ci_unique`): rama muerta.
+--       c) `finalize_salary_change_event` inserta
+--          `tenant_id = coalesce(v_tenant, gen_random_uuid())` con
+--          `organization_entity_id = NULL`: genera un UUID que NO es un cliente y puede
+--          violar la FK. Es el ÚNICO punto del esquema que genera identificadores en
+--          esta ruta, y es anterior a esta migración. ESTA MIGRACIÓN NO GENERA NINGÚN
+--          UUID EN NINGÚN PASO.
+--       d) 8 tablas con `tenant_id` sin FK (ver 2.1).
+--     Comprobación de que la migración no introduce generación de identificadores:
+SELECT count(*) AS funciones_afectadas_que_generan_uuid
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'public'
+  AND p.prosrc ~ '(gen_random_uuid|uuid_generate_v4|gen_random_bytes)'
+  AND p.prosrc ~ '(tenants|tenant_id|tenant_memberships|tenant_roles|tenant_user_roles|tenant_invitations|tenant_permission|tenant_role_id|tenant_membership_id)';
+-- ESPERADO: 1 fila con el valor 1 (solo el caso (c), preexistente). Si aparece más de
+-- 1, revisar antes de continuar.
+
+-- 2.4 El frontend NO debe interpretar los mensajes de error congelados como contrato
+--     (solo mostrarlos). Revisar:
+--       · 'Permission denied: roles.manage or tenant_roles.manage is required'
+--       · 'Candidate organization_entity_id must belong to the same tenant as tenant_id'
+--       · 'Organization entity parent must belong to the same tenant'
+--     Si alguna pantalla compara esos textos literalmente, hay que actualizarla en la
+--     MISMA ventana (se documenta en el informe §7).

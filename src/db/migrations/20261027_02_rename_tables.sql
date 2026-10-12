@@ -4,7 +4,7 @@
 -- Cambio de tipo A (renombrado físico seguro) para la BASE DE DATOS, pero de
 -- tipo C respecto a la APLICACIÓN: la Data API (PostgREST) expone el nombre de la
 -- tabla, de modo que cualquier consulta `from("tenants")` deja de funcionar en el
--- instante del renombrado. NO EJECUTAR sin la ventana coordinada del fichero 08.
+-- instante del renombrado. NO EJECUTAR sin la ventana coordinada del fichero 11.
 --
 -- Qué se conserva intacto
 --   · El UUID de cada cliente y de cada registro (RENAME nunca regenera OID ni datos).
@@ -14,7 +14,7 @@
 -- Qué se rompe si se ejecuta solo este fichero
 --   · Toda función PL/pgSQL/SQL con el texto `tenants` / `tenant_memberships` / …
 --     (los cuerpos son texto: PostgreSQL NO avisa al renombrar; falla en runtime).
---     → van en el fichero 08, en la MISMA transacción/ventana.
+--     → van en el fichero 11, en la MISMA ventana.
 --   · El frontend y la Edge Function `delete-workspace` (contrato físico).
 --
 -- Idempotente: si la tabla ya está renombrada, no hace nada.
