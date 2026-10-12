@@ -10,6 +10,7 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
+import { filterActiveWorkers } from "@/lib/people-classification"
 import { ArrowLeft, Search, Users, UserCheck, AlertTriangle } from "lucide-react"
 
 /**
@@ -101,16 +102,19 @@ const EntityWorkers = () => {
         return
       }
 
-      const { data, error: workersError } = await supabase
-        .from("workers")
-        .select(
-          `id, code, first_name, first_surname, second_surname, identification,
+      // Criterio compartido de clasificación: relación laboral vigente
+      // (`@/lib/people-classification`). Quien causó baja pasa a Reingresos.
+      const { data, error: workersError } = await filterActiveWorkers(
+        supabase
+          .from("workers")
+          .select(
+            `id, code, first_name, first_surname, second_surname, identification,
            gender_id, marital_status_id, skin_color_id, education_level_id,
            phone, email, birth_date, province, municipality, address,
            employment_start_date, has_masters_degree, has_doctorate_degree`
-        )
-        .eq("organization_entity_id", entityId)
-        .eq("employment_status", "active")
+          )
+          .eq("organization_entity_id", entityId)
+      )
         .order("first_surname", { ascending: true })
         .order("first_name", { ascending: true })
       if (workersError) throw workersError

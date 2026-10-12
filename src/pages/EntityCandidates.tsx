@@ -2,6 +2,8 @@ import * as React from "react"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { supabase } from "@/lib/supabase"
 import { columnName } from "@/integrations/supabase/schema-target"
+import { filterUnlinkedCandidates, isPendingCandidate } from "@/lib/people-classification"
+import { fetchClientEmploymentIndex } from "@/lib/people-employment"
 import { useNavigate } from "react-router-dom"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -61,6 +63,8 @@ interface Candidate {
   political_affiliation: string | null
   is_retired_or_rehired: boolean | null
   has_disciplinary_measures: boolean | null
+  /** Vínculo con el trabajador creado al contratar (NULL = nunca contratada). */
+  worker_id: string | null
   status: "active" | "archived"
   created_at: string
   updated_at: string
@@ -299,22 +303,37 @@ const EntityCandidates = () => {
       setError(null)
 
       try {
-        // Se cargan los candidatos de la entidad y se filtran en el cliente con el
-        // constructor de filtros común (filtros acumulativos). La búsqueda textual
-        // también se resuelve aquí para que filtros + búsqueda sean consistentes.
-        const { data, error } = await supabase
-          .from("candidates")
-          .select("*")
-          .eq("organization_entity_id", entityId)
-          .order("created_at", { ascending: false })
+        // Se cargan las PERSONAS PENDIENTES de la entidad (nunca contratadas) y se
+        // filtran en el cliente con el constructor de filtros común (filtros
+        // acumulativos). La búsqueda textual también se resuelve aquí para que
+        // filtros + búsqueda sean consistentes.
+        // El criterio de clasificación es el compartido (`@/lib/people-classification`):
+        // quien ya tiene trabajador vinculado pertenece a Trabajadores o Reingresos,
+        // no a Candidatos.
+        const { data, error } = await filterUnlinkedCandidates(
+          supabase
+            .from("candidates")
+            .select("*")
+            .eq("organization_entity_id", entityId)
+        ).order("created_at", { ascending: false })
 
         if (error) throw error
         const rows = (data as Candidate[]) || []
-        setCandidates(rows)
+
+        // Clasificación compartida: una persona ya contratada NO es candidata, aunque
+        // conserve una fila en `candidates` (p. ej. una fila antigua sin vincular). La
+        // identidad de persona es (cliente, identificación), la misma que usan el
+        // backend y el trigger de unicidad.
+        const employmentIndex = await fetchClientEmploymentIndex(
+          currentEntity?.tenant_id,
+          rows.map((row) => row.identification)
+        )
+        const pendingRows = rows.filter((row) => isPendingCandidate(row, employmentIndex))
+        setCandidates(pendingRows)
 
         // Licencia de conducción (criterio booleano): qué candidatos tienen al
         // menos una categoría de licencia registrada.
-        const ids = rows.map((c) => c.id)
+        const ids = pendingRows.map((c) => c.id)
         if (ids.length > 0) {
           const { data: licenses } = await supabase
             .from("candidate_driving_license_categories")
@@ -339,7 +358,7 @@ const EntityCandidates = () => {
     if (entityId) {
       fetchCandidates()
     }
-  }, [entityId])
+  }, [entityId, currentEntity?.tenant_id])
 
   // ---------- Filtros (constructor común, criterios reales de Candidato) ----------
   const filterDefinitions = React.useMemo<EntityFilterDefinition[]>(

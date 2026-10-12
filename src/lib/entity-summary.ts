@@ -6,6 +6,7 @@ import {
   summarizeContractAlerts,
   type ContractAlertSummary,
 } from "@/lib/contract-alerts"
+import { hasLinkedWorker } from "@/lib/people-classification"
 
 /**
  * Dashboard REAL de una entidad (pantalla Resumen).
@@ -79,7 +80,8 @@ export async function fetchCandidatesSummary(entityIds: string[]): Promise<Candi
   rows.forEach((row) => {
     if (row.status === "archived") summary.archived += 1
     else summary.active += 1
-    if (row.worker_id) summary.hired += 1
+    // Criterio compartido: la fila de candidato quedó vinculada al contratar.
+    if (hasLinkedWorker(row)) summary.hired += 1
   })
   return summary
 }

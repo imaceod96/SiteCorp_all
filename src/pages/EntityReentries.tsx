@@ -10,6 +10,9 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import ReincorporateWorkerDialog from "@/components/workers/ReincorporateWorkerDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
+import { filterReentryWorkers, isReentryWorker } from "@/lib/people-classification"
+import { fetchClientEmploymentIndex } from "@/lib/people-employment"
+import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
 
 /**
@@ -50,6 +53,7 @@ const fullName = (w: ReentryRow) =>
 const EntityReentries = () => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
+  const { currentEntity } = useCurrentEntity()
 
   const [workers, setWorkers] = React.useState<ReentryRow[]>([])
   const [bajas, setBajas] = React.useState<Record<string, BajaInfo>>({})
@@ -83,21 +87,33 @@ const EntityReentries = () => {
       }
       setCanManage(!!canManageWorkers)
 
-      const { data, error: workersError } = await supabase
-        .from("workers")
-        .select(
-          `id, code, first_name, first_surname, second_surname, identification,
+      // Criterio compartido de clasificación: antiguos trabajadores sin relación
+      // laboral vigente (`@/lib/people-classification`). Al reincorporarlos vuelven
+      // a Trabajadores y salen de aquí.
+      const { data, error: workersError } = await filterReentryWorkers(
+        supabase
+          .from("workers")
+          .select(
+            `id, code, first_name, first_surname, second_surname, identification,
            gender_id, education_level_id,
            employment_status, hire_date, employment_start_date`
-        )
-        .eq("organization_entity_id", entityId)
-        .neq("employment_status", "active")
+          )
+          .eq("organization_entity_id", entityId)
+      )
         .order("first_surname", { ascending: true })
         .order("first_name", { ascending: true })
       if (workersError) throw workersError
 
       const rows = (data as ReentryRow[]) || []
-      setWorkers(rows)
+
+      // Clasificación compartida: si la persona mantiene OTRA relación laboral vigente
+      // en el cliente (aunque sea en otra entidad), no es un reingreso.
+      const employmentIndex = await fetchClientEmploymentIndex(
+        currentEntity?.tenant_id,
+        rows.map((row) => row.identification)
+      )
+      const reentryRows = rows.filter((row) => isReentryWorker(row, employmentIndex))
+      setWorkers(reentryRows)
 
       const [genders, education] = await Promise.all([
         supabase.from("genders").select("id, name").order("name"),
@@ -109,7 +125,7 @@ const EntityReentries = () => {
       })
 
       // Última baja registrada por trabajador (bitácora de movimientos).
-      if (rows.length > 0) {
+      if (reentryRows.length > 0) {
         const { data: movData } = await supabase
           .from("worker_employment_movements")
           .select(
@@ -118,7 +134,7 @@ const EntityReentries = () => {
           )
           .in(
             "worker_id",
-            rows.map((w) => w.id)
+            reentryRows.map((w) => w.id)
           )
           .eq("movement_type", "BAJA")
           .order("effective_date", { ascending: false })
@@ -149,7 +165,7 @@ const EntityReentries = () => {
     } finally {
       setLoading(false)
     }
-  }, [entityId])
+  }, [entityId, currentEntity?.tenant_id])
 
   React.useEffect(() => {
     loadData()
