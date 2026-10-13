@@ -19,14 +19,22 @@ import type { OrganizationEntity, OrganizationEntityRow } from "../domain/entiti
  * ningún permiso.
  */
 
-/** Proyección única de la tabla: `*` más el alias de la columna del cliente propietario. */
-const ENTITY_PROJECTION = selectQuery(`*, ${selectColumn("clientId")}`)
+/**
+ * Proyección única de la tabla: `*` más el alias de la columna del cliente propietario.
+ *
+ * Se construye EN CADA CONSULTA, nunca en una constante de módulo: la frontera de
+ * nomenclatura resuelve el nombre físico UNA sola vez, de forma asíncrona, antes de montar
+ * la interfaz. Una constante evaluada al importar el módulo se congelaría en el estado
+ * inicial (legacy) y pediría la columna antigua —`select=*,tenant_id`— que ya no existe
+ * tras el renombrado, provocando un 400 de PostgREST.
+ */
+const entityProjection = () => selectQuery(`*, ${selectColumn("clientId")}`)
 
 /** Todas las entidades visibles para la sesión, ordenadas por nombre. */
 export async function selectVisibleEntities(): Promise<OrganizationEntity[]> {
   const { data, error } = await supabase
     .from("organization_entities")
-    .select(ENTITY_PROJECTION)
+    .select(entityProjection())
     .order("name")
 
   if (error) throw error
@@ -37,7 +45,7 @@ export async function selectVisibleEntities(): Promise<OrganizationEntity[]> {
 export async function selectEntitiesByClient(clientId: string): Promise<OrganizationEntity[]> {
   const { data, error } = await supabase
     .from("organization_entities")
-    .select(ENTITY_PROJECTION)
+    .select(entityProjection())
     .eq(columnName("clientId"), clientId)
     .order("name")
 
@@ -53,7 +61,7 @@ export async function selectEntitiesByClient(clientId: string): Promise<Organiza
 export async function selectEntityById(entityId: string): Promise<OrganizationEntityRow> {
   const { data, error } = await supabase
     .from("organization_entities")
-    .select(ENTITY_PROJECTION)
+    .select(entityProjection())
     .eq("id", entityId)
     .single()
 
@@ -65,7 +73,7 @@ export async function selectEntityById(entityId: string): Promise<OrganizationEn
 export async function selectChildEntities(parentId: string): Promise<OrganizationEntity[]> {
   const { data, error } = await supabase
     .from("organization_entities")
-    .select(ENTITY_PROJECTION)
+    .select(entityProjection())
     .eq("parent_id", parentId)
     .order("name")
 
