@@ -1,5 +1,5 @@
-import { DOCUMENT_VARIABLES, documentVariableByKey } from "@/lib/document-variables"
-import type { DocumentData, Sc404SourceType } from "@/lib/document-data"
+import { DOCUMENT_VARIABLES, documentVariableByKey } from "@/domains/document-templates"
+import type { DocumentData, Sc404SourceType } from "./document-data"
 import type {
   DocumentGenerationPrecheck,
   GenerationBlockedReason,

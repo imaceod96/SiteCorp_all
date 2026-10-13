@@ -29,13 +29,13 @@ import {
 } from "@/lib/contract-conditions"
 import { fetchPaymentMethods } from "@/domains/contracts"
 import type { PositionScheduleSegment } from "@/domains/organization-structure"
-import { fetchPersonCatalogs, type CatalogOption } from "@/lib/catalogs"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
   candidateRequiresSpecialty,
   checkWorkerIdentification,
   createWorkerExpediente,
+  fetchPersonCatalogs,
   loadWorkerExpedienteLicenseIds,
   loadWorkerFormPermissions,
   loadWorkerReferenceCatalogs,
@@ -43,6 +43,7 @@ import {
   saveWorkerExpedientePersonalData,
   validateWorkerPersonalData,
   validateWorkerRegistrationInput,
+  type CatalogOption,
   type NewWorkerInput,
   type WorkerExpedienteInput,
 } from "@/domains/people"

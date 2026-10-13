@@ -9,6 +9,8 @@
  *   domain/rules.ts                                     → reglas puras (etiquetas, nombres de
  *                                                          archivo, variables obligatorias,
  *                                                          bloqueos y mensajes)
+ *   domain/document-data.ts                             → contratos de los SNAPSHOTS documentales
+ *   domain/document-resolution.rules.ts                 → resolución de variables del snapshot
  *   infrastructure/document-source.repository.ts        → el origen del documento
  *   infrastructure/document-data.repository.ts          → datos documentales (snapshots)
  *   infrastructure/document-template-version.repository.ts → versión de plantilla (traduce el
@@ -26,9 +28,10 @@
  * Límites DELIBERADOS del contexto:
  *  - Las plantillas, sus versiones y sus vigencias se piden SIEMPRE al dominio
  *    `document-templates`: aquí no se administran ni se duplican.
- *  - Los contratos de los SNAPSHOTS documentales viven en `@/lib/document-data` porque el
- *    registro central de variables (`@/lib/document-variables`) los describe; el dominio los
- *    consume y las reglas de contratos, representantes, resoluciones y personas NO se repiten.
+ *  - Los contratos de los SNAPSHOTS documentales viven en este dominio (`domain/document-data.ts`)
+ *    y el catálogo de variables —que los describe— en el dominio `document-templates`: la
+ *    dependencia va en un solo sentido (generación → plantillas) y las reglas de contratos,
+ *    representantes, resoluciones y personas NO se repiten.
  *  - La dependencia va en un solo sentido —presentación → aplicación → dominio → infraestructura
  *    → Supabase—, por lo que no puede formarse ningún ciclo entre dominios.
  *
@@ -57,6 +60,29 @@ export type {
   EventGenerationResult,
   EventDocumentationResult,
 } from "./domain/entities"
+
+/* Contratos de los snapshots documentales y resolución de variables */
+export type {
+  DocumentData,
+  DocumentDataValidation,
+  DocumentPartyEntity,
+  DocumentRepresentative,
+  DocumentWorker,
+  ContractDocumentData,
+  AddendumConditionSide,
+  AddendumDocumentData,
+  Sc404SourceType,
+  Sc404DocumentData,
+  ResolutionDocumentData,
+  PayrollMovementDocumentData,
+} from "./domain/document-data"
+
+export type { ResolvedDocumentVariables } from "./domain/document-resolution.rules"
+
+export {
+  resolveDocumentVariable,
+  resolveAllDocumentVariables,
+} from "./domain/document-resolution.rules"
 
 /* Reglas puras */
 export {

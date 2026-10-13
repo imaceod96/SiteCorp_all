@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { saveCandidateDrivingLicenseIds } from "@/lib/catalogs"
+import { saveCandidateDrivingLicenseIds } from "./catalogs.repository"
 import { columnName } from "@/integrations/supabase/schema-target"
 import type { PersonIdentificationStatus } from "../domain/entities"
 

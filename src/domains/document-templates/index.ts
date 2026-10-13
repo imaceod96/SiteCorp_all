@@ -7,6 +7,8 @@
  * Estructura:
  *   domain/entities.ts                            → tipos, contratos y constantes
  *   domain/rules.ts                               → reglas puras (formato, etiquetas, vigencias)
+ *   domain/document-variables.ts                  → catálogo de variables documentales,
+ *                                                  sus tipos y sus formatos de presentación
  *   infrastructure/document-templates.repository.ts → Supabase y RPC del catálogo
  *   infrastructure/document-template-files.repository.ts → Storage y analizador central
  *   application/document-templates.queries.ts     → casos de uso de lectura
@@ -76,6 +78,31 @@ export {
   templateVersionPeriodLabel,
   requiredVariableKeys,
 } from "./domain/rules"
+
+/* Catálogo de variables documentales (contrato que declaran las plantillas) */
+export type {
+  DocumentTypeCode,
+  DocumentVariableDataType,
+  DocumentVariableKind,
+  DocumentVariableDefinition,
+  DocumentVariableResolution,
+} from "./domain/document-variables"
+
+export {
+  DOCUMENT_VARIABLES,
+  documentVariableByKey,
+  documentVariablesByCategory,
+  describeDocumentDuration,
+  documentSignatureDay,
+  documentSignatureMonth,
+  documentSignatureYear,
+  formatDocumentAmount,
+  formatDocumentDate,
+  formatDocumentDateShort,
+  formatDocumentDateTextual,
+  formatDocumentHours,
+  formatSc404Dias,
+} from "./domain/document-variables"
 
 /* Casos de uso de lectura */
 export {

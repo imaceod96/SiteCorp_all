@@ -1,19 +1,21 @@
 import { supabase } from "@/lib/supabase"
+import type { CatalogOption } from "../domain/entities"
 
 /**
- * Fase 11A.4 — Información propia de la PERSONA (candidato / trabajador).
+ * Personas — Catálogos globales de la PERSONA (infraestructura).
  *
  * `skin_colors` y `driving_license_categories` son catálogos GLOBALES de SiteCorp:
  * no tienen tenant_id ni organization_entity_id. Todos los workspaces y entidades
  * consumen exactamente los mismos valores, por lo que las consultas se centralizan
- * aquí (una sola fuente) en lugar de repetirlas en cada formulario.
+ * aquí (una sola fuente) en lugar de repetirse en cada formulario.
+ *
+ * Además de los catálogos, aquí vive la relación REAL de licencias de conducción
+ * (candidato y trabajador) con sus dos RPC de reemplazo exacto: la selección que
+ * queda en base de datos coincide siempre con la que ve el usuario (0 = sin licencia).
+ *
+ * Los valores y las etiquetas de los catálogos no cambian: las mismas filas, los
+ * mismos filtros (`is_active`) y el mismo orden (`name` / `display_order`).
  */
-
-export interface CatalogOption {
-  id: string
-  name: string
-  code?: string
-}
 
 /** Color de piel: mismo catálogo para candidato y trabajador. */
 export const fetchSkinColors = async (): Promise<CatalogOption[]> => {
@@ -107,12 +109,3 @@ export const saveWorkerDrivingLicenseIds = async (
   })
   if (error) throw error
 }
-
-/** Etiquetas (A, B, C…) de las licencias seleccionadas, en el orden del catálogo. */
-export const drivingLicenseLabels = (
-  categoryIds: string[],
-  categories: CatalogOption[]
-): string[] =>
-  categories
-    .filter((category) => categoryIds.includes(category.id))
-    .map((category) => category.code || category.name)

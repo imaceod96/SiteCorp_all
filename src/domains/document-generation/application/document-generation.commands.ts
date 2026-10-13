@@ -1,5 +1,5 @@
 import { DOCX_MIME, XLSX_MIME, fetchTemplateFileContent } from "@/domains/document-templates"
-import type { Sc404SourceType } from "@/lib/document-data"
+import type { Sc404SourceType } from "../domain/document-data"
 import {
   blockedMessageFor,
   buildGeneratedDocumentName,

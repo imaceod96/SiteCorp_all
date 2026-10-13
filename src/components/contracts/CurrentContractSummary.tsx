@@ -7,7 +7,7 @@ import { FileSignature, FileText, UserMinus } from "lucide-react"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { formatContractMoney, formatConditionDate } from "@/lib/contract-conditions"
 import type { FormalizedConditions } from "@/lib/addendums"
-import { CONTRACT_ALERT_META, deadlineLabel, type ContractAlertRow } from "@/lib/contract-alerts"
+import { CONTRACT_ALERT_META, deadlineLabel, type ContractAlertRow } from "@/domains/contracts"
 
 interface CurrentContractSummaryProps {
   className?: string

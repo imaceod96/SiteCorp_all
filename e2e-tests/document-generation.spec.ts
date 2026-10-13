@@ -23,7 +23,7 @@ import type {
   GenerationDocumentKind,
   TemplateResolution,
 } from "../src/domains/document-generation/domain/entities"
-import { DOCUMENT_VARIABLES } from "../src/lib/document-variables"
+import { DOCUMENT_VARIABLES } from "../src/domains/document-templates/domain/document-variables"
 import { renderDocx } from "../src/domains/document-generation/infrastructure/renderers/docx-render"
 import { renderXlsxTemplate } from "../src/domains/document-generation/infrastructure/renderers/xlsx-render"
 
@@ -578,10 +578,12 @@ test("la limpieza controlada retiró las fachadas sin consumidores", () => {
   const offenders = sourceFiles("src").filter((file) => retired.test(code(file)))
   expect(offenders, "ningún módulo debe importar una fachada retirada").toEqual([])
 
-  // El contrato público que SÍ se sigue usando se conserva intacto.
+  // El contrato público que SÍ se sigue usando se conserva intacto, ya en su dominio:
+  // los snapshots documentales en generación y el catálogo de variables en plantillas.
   for (const kept of [
-    "src/lib/document-data.ts",
-    "src/lib/document-variables.ts",
+    "src/domains/document-generation/domain/document-data.ts",
+    "src/domains/document-generation/domain/document-resolution.rules.ts",
+    "src/domains/document-templates/domain/document-variables.ts",
     "src/lib/supabase.ts",
   ]) {
     expect(existsSync(kept), `${kept} se conserva`).toBe(true)

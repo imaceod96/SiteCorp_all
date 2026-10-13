@@ -8,7 +8,7 @@ import type {
   ResolutionDocumentData,
   Sc404DocumentData,
   Sc404SourceType,
-} from "@/lib/document-data"
+} from "../domain/document-data"
 
 /**
  * Generación documental — Obtención de DATOS documentales (infraestructura).

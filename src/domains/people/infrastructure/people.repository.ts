@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { fetchDrivingLicenseCategories, fetchSkinColors } from "@/lib/catalogs"
+import { fetchDrivingLicenseCategories, fetchSkinColors } from "./catalogs.repository"
 import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import {
   buildEmploymentIndex,

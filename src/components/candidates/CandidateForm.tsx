@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dialog"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
-import type { CatalogOption } from "@/lib/catalogs"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
@@ -35,6 +34,7 @@ import {
   validateCandidateRegistration,
   type CandidateExpediente as Candidate,
   type CandidateExpedienteInput,
+  type CatalogOption,
   type CandidateRegistrationInput,
 } from "@/domains/people"
 

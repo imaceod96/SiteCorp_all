@@ -1,7 +1,8 @@
 import * as React from "react"
-import { DOCUMENT_VARIABLES, type DocumentVariableDefinition } from "@/lib/document-variables"
 import {
+  DOCUMENT_VARIABLES,
   documentTypeCodeForTemplateType,
+  type DocumentVariableDefinition,
   type TemplateOccurrence,
 } from "@/domains/document-templates"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"

@@ -4,6 +4,7 @@ import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import {
   buildDistribution,
   fetchCandidatesSummary,
+  fetchCatalogRefs,
   fetchContractsSummary,
   fetchContractDataReadiness,
   fetchDocumentTemplatesStatus,
@@ -15,14 +16,11 @@ import {
   fetchRepresentativeStatus,
   fetchSalaryScaleStatus,
   fetchVacationsSummary,
-  type SummaryScope,
-} from "@/lib/entity-summary"
-import {
-  fetchCatalogRefs,
   fetchWorkersByAge,
   fetchWorkersByEducationLevel,
   fetchWorkersBySex,
   fetchWorkersBySkinColor,
+  type SummaryScope,
 } from "@/domains/entity-summary"
 
 /**

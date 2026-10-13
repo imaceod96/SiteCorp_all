@@ -1,4 +1,4 @@
-import { fetchPersonCatalogs, type CatalogOption } from "@/lib/catalogs"
+import { fetchPersonCatalogs } from "../infrastructure/catalogs.repository"
 import {
   fetchCandidateEmploymentLink,
   fetchCandidateExpediente,
@@ -19,6 +19,7 @@ import { loadEntityPermissionSafe } from "@/domains/access-control"
 import type {
   CandidateExpediente,
   CandidateExpedienteRelated,
+  CatalogOption,
   CatalogRow,
   DocumentTypeOption,
   EmploymentLink,

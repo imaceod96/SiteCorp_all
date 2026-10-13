@@ -1,6 +1,6 @@
 import * as React from "react"
-import { formatDocumentDate } from "@/lib/document-variables"
 import {
+  formatDocumentDate,
   templateAcceptForType,
   formatTemplateFileSize,
   getTemplateFileUrl,

@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { fetchWorkerDrivingLicenseIds, saveWorkerDrivingLicenseIds } from "@/lib/catalogs"
+import { fetchWorkerDrivingLicenseIds, saveWorkerDrivingLicenseIds } from "./catalogs.repository"
 import { sanitizeFileName } from "@/lib/documents"
 import {
   fetchEducationLevels,

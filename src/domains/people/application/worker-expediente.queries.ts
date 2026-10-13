@@ -1,4 +1,4 @@
-import { fetchPersonCatalogs, type CatalogOption } from "@/lib/catalogs"
+import { fetchPersonCatalogs } from "../infrastructure/catalogs.repository"
 import { resolveApplicableScaleId } from "@/domains/organization-structure"
 import {
   fetchSalaryScaleName,
@@ -10,6 +10,7 @@ import {
 } from "../infrastructure/worker-expediente.repository"
 import { loadEntityPermissionSafe } from "@/domains/access-control"
 import type {
+  CatalogOption,
   TenurePaymentRule,
   WorkerEmploymentMovement,
   WorkerExpediente,

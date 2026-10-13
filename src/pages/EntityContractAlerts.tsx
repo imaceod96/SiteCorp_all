@@ -22,7 +22,7 @@ import {
   formatContractDate,
   summarizeContractAlerts,
   type ContractAlertRow,
-} from "@/lib/contract-alerts"
+} from "@/domains/contracts"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import {
   invalidateContractAlertData,

@@ -1,18 +1,18 @@
 /**
- * Contratos de DATOS DOCUMENTALES (tipos puros, sin acceso a datos).
+ * Generación documental — Contratos de DATOS DOCUMENTALES (tipos puros, sin acceso a datos).
  *
  * Fase 11A.7 — Capa central de datos documentales.
  *
  * Estos contratos describen los SNAPSHOTS de los que se resuelven las variables de un
- * documento. La OBTENCIÓN de esos datos vive en el dominio de generación documental
- * (`src/domains/document-generation/infrastructure/document-data.repository.ts`): contratos,
- * anexos, resoluciones y movimientos se resuelven en funciones SQL (una única fuente de
- * resolución) y el SC-4-04 desde la relación real del trabajador.
+ * documento. La OBTENCIÓN de esos datos vive en este mismo dominio
+ * (`infrastructure/document-data.repository.ts`): contratos, anexos, resoluciones y
+ * movimientos se resuelven en funciones SQL (una única fuente de resolución) y el SC-4-04
+ * desde la relación real del trabajador.
  *
- * Viven aquí —y no dentro del dominio— porque el registro central de variables
- * (`@/lib/document-variables`) los describe: la dependencia va en un solo sentido
- * (dominio → contratos compartidos) y así el catálogo de variables y el motor de generación no
- * pueden formar un ciclo entre sí.
+ * Viven en el dominio, y no en un módulo puente, porque los describen el catálogo de
+ * variables (`@/domains/document-templates`) y el resolvedor
+ * (`./document-resolution.rules.ts`): la dependencia va en un solo sentido
+ * (generación → plantillas) y no puede formarse ningún ciclo entre dominios.
  *
  * Los componentes React NUNCA resuelven variables por su cuenta.
  */

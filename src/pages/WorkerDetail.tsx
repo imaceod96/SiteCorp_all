@@ -39,14 +39,15 @@ import { calculateTenure, calculateAge, ageRange } from "@/lib/tenure"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
 import { WorkerForm } from "@/components/workers/WorkerForm"
 import { WorkerDocumentsTab } from "@/components/workers/WorkerDocumentsTab"
-import { drivingLicenseLabels, type CatalogOption } from "@/lib/catalogs"
 import {
+  drivingLicenseLabels,
   loadWorkerExpedienteView,
   registerWorkerExpedienteContract,
   saveWorkerExpedienteLicenseIds,
   saveWorkerExpedientePersonalData,
   validatePersonProfileFields,
   validateWorkerContractInput,
+  type CatalogOption,
   type CatalogRow,
   type WorkerEmploymentMovement,
   type WorkerExpediente as WorkerDetail,
@@ -119,21 +120,19 @@ import {
   type WorkerContractualConditions,
 } from "@/lib/addendums"
 import {
+  CONTRACT_ALERT_META,
+  deadlineLabel,
   fetchComponentsByContract,
   fetchPaymentMethods,
   fetchWorkerAddendums,
+  fetchWorkerContractAlert,
   fetchWorkerContractualConditions,
   fetchWorkerSalaryHistory,
+  formatContractDate,
   isAddendumPending,
+  type ContractAlertRow,
 } from "@/domains/contracts"
 import { ContractAddendumsSection } from "@/components/addendums/ContractAddendumsSection"
-import {
-  CONTRACT_ALERT_META,
-  deadlineLabel,
-  fetchWorkerContractAlert,
-  formatContractDate,
-  type ContractAlertRow,
-} from "@/lib/contract-alerts"
 
 /**
  * La ficha laboral se describe con el modelo del dominio Personas (`WorkerExpediente`,

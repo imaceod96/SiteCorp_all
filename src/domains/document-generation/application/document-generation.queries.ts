@@ -1,8 +1,8 @@
-import { resolveAllDocumentVariables } from "@/lib/document-variables"
+import { resolveAllDocumentVariables } from "../domain/document-resolution.rules"
 import {
   fetchDocumentTemplateVersionsByIds,
 } from "@/domains/document-templates"
-import type { DocumentData, Sc404SourceType } from "@/lib/document-data"
+import type { DocumentData, Sc404SourceType } from "../domain/document-data"
 import {
   buildMissingVariables,
   documentTypeLabelFor,

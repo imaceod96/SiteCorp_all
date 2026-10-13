@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { fetchCandidateDrivingLicenseIds } from "@/lib/catalogs"
+import { fetchCandidateDrivingLicenseIds } from "./catalogs.repository"
 import { saveCandidateLicenses } from "./candidate-registration.repository"
 import {
   currentUserId,

@@ -316,6 +316,10 @@ export type {
 
 export { loadWorkerDocumentsView } from "./application/worker-documents.queries"
 
+/* Catálogos globales de la persona (color de piel y licencias de conducción) */
+export { drivingLicenseLabels } from "./domain/catalogs.rules"
+export { fetchPersonCatalogs } from "./infrastructure/catalogs.repository"
+
 export {
   EXPEDIENTE_SIGNED_URL_TTL,
   uploadWorkerDocument,

@@ -5,6 +5,7 @@ import {
   createMigratedWorker,
   loadCandidateRegistryCatalogs,
   loadPersonIdentificationStatus,
+  type CatalogOption,
   type MigrationRow,
 } from "@/domains/people"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -14,7 +15,6 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { Label } from "@/components/ui/label"
 import { SelectItem } from "@/components/ui/select"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
-import type { CatalogOption } from "@/lib/catalogs"
 
 interface Props {
   onSuccess: (workerId: string) => void

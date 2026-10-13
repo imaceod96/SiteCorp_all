@@ -1,4 +1,4 @@
-import type { DocumentTypeCode } from "@/lib/document-variables"
+import type { DocumentTypeCode } from "./document-variables"
 import {
   DOCX_MIME,
   DOC_MIME,

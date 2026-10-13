@@ -1,4 +1,4 @@
-import type { DocumentData } from "@/lib/document-data"
+import type { DocumentData } from "./document-data"
 
 /**
  * Generación documental — Entidades y contratos de dominio.
@@ -23,8 +23,8 @@ import type { DocumentData } from "@/lib/document-data"
  *
  * Los contratos de los SNAPSHOTS documentales (`ContractDocumentData`, `AddendumDocumentData`,
  * `Sc404DocumentData`, `ResolutionDocumentData`, `PayrollMovementDocumentData`) viven en
- * `@/lib/document-data` porque el registro central de variables (`@/lib/document-variables`)
- * los describe: la dependencia va en un solo sentido (dominio → contratos compartidos) y así
+ * `./document-data`, y el catálogo de variables que los describe en el dominio
+ * `document-templates`: la dependencia va en un solo sentido (generación → plantillas) y así
  * no puede formarse ningún ciclo entre el catálogo de variables y este dominio.
  */
 

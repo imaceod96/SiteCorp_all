@@ -44,7 +44,6 @@ import {
 } from "lucide-react"
 import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
 import { AcademicBadges } from "@/components/person/AcademicBadges"
-import { drivingLicenseLabels, type CatalogOption } from "@/lib/catalogs"
 import {
   addCandidateAcademicFormation,
   addCandidateAdditionalInfo,
@@ -52,6 +51,7 @@ import {
   addCandidateNote,
   addCandidateWorkExperience,
   downloadCandidateExpedienteDocument,
+  drivingLicenseLabels,
   isActiveWorker,
   loadCandidateExpedienteReferenceData,
   loadCandidateExpedienteRelated,
@@ -69,6 +69,7 @@ import {
   type CandidateExpediente as Candidate,
   type CandidateNoteRow as CandidateNote,
   type CandidateWorkExperienceRow as WorkExperience,
+  type CatalogOption,
   type CatalogRow,
   type DocumentTypeOption as DocumentType,
   type ExpedienteDocumentRow as CandidateDocument,

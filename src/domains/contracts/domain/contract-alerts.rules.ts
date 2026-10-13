@@ -1,12 +1,11 @@
-import { supabase } from "@/lib/supabase"
-
 /**
- * Vencimientos contractuales (Fase 12).
+ * Contratos — Alertas de vencimiento contractual: reglas puras (dominio).
  *
  * Las alertas NO se persisten: se derivan del contrato vigente del trabajador
  * (end_date vs. CURRENT_DATE). El cálculo de días y la categoría se resuelven en
  * la base de datos (`contract_expiry_alerts`) para que exista una única fuente de
- * verdad temporal entre la vista de alertas y WorkerDetail.
+ * verdad temporal entre la vista de alertas y WorkerDetail. Aquí sólo vive el
+ * criterio (categorías, horizontes, prioridades, filtros y textos) sin acceso a datos.
  */
 
 export type ContractAlertState =
@@ -170,34 +169,4 @@ export function formatContractDate(isoDate: string | null | undefined): string {
   const [year, month, day] = isoDate.split("-")
   if (!year || !month || !day) return isoDate
   return `${day}/${month}/${year}`
-}
-
-/**
- * Alertas de vencimiento de la entidad. `targetWorkerId` permite reutilizar el
- * mismo cálculo (y la misma autoridad de permisos) desde WorkerDetail.
- */
-export async function fetchContractAlerts(
-  entityId: string,
-  options: { horizonDays?: number; workerId?: string } = {}
-): Promise<ContractAlertRow[]> {
-  const { data, error } = await supabase.rpc("contract_expiry_alerts", {
-    target_entity_id: entityId,
-    horizon_days: options.horizonDays ?? CONTRACT_ALERT_HORIZON_DAYS,
-    target_worker_id: options.workerId ?? null,
-  })
-
-  if (error) throw error
-  return (data as ContractAlertRow[]) || []
-}
-
-/** Vencimiento del contrato vigente de un trabajador (o null si no aplica). */
-export async function fetchWorkerContractAlert(
-  entityId: string,
-  workerId: string
-): Promise<ContractAlertRow | null> {
-  const rows = await fetchContractAlerts(entityId, {
-    horizonDays: CONTRACT_ALERT_LOOKAHEAD_DAYS,
-    workerId,
-  })
-  return rows[0] ?? null
 }

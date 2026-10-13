@@ -8,9 +8,9 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useEntitySummaryDashboard } from "@/hooks/use-entity-summary"
-import type { DistributionSlice } from "@/lib/entity-summary"
 import type {
   AgeReport,
+  DistributionSlice,
   EducationLevelReport,
   ReportSlice,
   SexReport,

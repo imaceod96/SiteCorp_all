@@ -127,3 +127,63 @@ export interface EntityScopeInfo {
   /** Descendientes ACCESIBLES para el usuario (0 = no se ofrece el ámbito ampliado). */
   descendantCount: number
 }
+
+// ---------------------------------------------------------------------------
+// CANDIDATOS (módulo Candidatos: los mismos estados que gobiernan su vista)
+// ---------------------------------------------------------------------------
+
+export interface CandidatesSummary {
+  total: number
+  active: number
+  archived: number
+  /** Candidatos con vínculo fiable a un trabajador (contratados). */
+  hired: number
+}
+
+// ---------------------------------------------------------------------------
+// CONTRATOS VIGENTES
+// ---------------------------------------------------------------------------
+
+export interface ContractsSummary {
+  current: number
+  determined: number
+  undetermined: number
+}
+
+// ---------------------------------------------------------------------------
+// MOVIMIENTOS DE PERSONAL (últimos N días)
+// ---------------------------------------------------------------------------
+
+export interface MovementsSummary {
+  from: string
+  to: string
+  days: number
+  hires: number
+  separations: number
+  reincorporations: number
+  positionChanges: number
+  contractChanges: number
+}
+
+// ---------------------------------------------------------------------------
+// CONFIGURACIÓN / READINESS DE LA ENTIDAD
+// ---------------------------------------------------------------------------
+
+export interface ContractDataReadiness {
+  ready: boolean
+  missing: number
+}
+
+export interface RepresentativeStatus {
+  ready: boolean
+  assigned: number
+}
+
+export interface SalaryScaleStatus {
+  ready: boolean
+}
+
+export interface DocumentTemplatesStatus {
+  configured: number
+  total: number
+}
