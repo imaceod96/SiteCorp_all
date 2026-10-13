@@ -2,8 +2,11 @@ import * as React from "react"
 import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { supabase } from "@/lib/supabase"
-import { selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
+import { canViewEntity } from "@/domains/access-control"
+import {
+  loadEntitySiteCorpFlag,
+  loadOrganizationEntity,
+} from "@/domains/organization-structure"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
@@ -45,16 +48,9 @@ const EntityRouteWrapper = () => {
         setLoading(true)
         setError(null)
 
-        // El alias mantiene la clave JS `tenant_id` que consumen los módulos
-        // internos (p. ej. `currentEntity.tenant_id`), cuya columna física pasó a
-        // llamarse `company_client_id`.
-        const { data, error: fetchError } = await supabase
-          .from("organization_entities")
-          .select(selectQuery(`*, ${selectColumn("clientId")}`))
-          .eq("id", entityId)
-          .single()
-
-        if (fetchError) throw fetchError
+        // La entidad la devuelve el dominio de estructura organizativa (con la clave
+        // JS `tenant_id` que consumen los módulos internos ya resuelta).
+        const entity = await loadOrganizationEntity(entityId)
 
         // Authorization logic
         let isAuthorized = false
@@ -73,13 +69,9 @@ const EntityRouteWrapper = () => {
           if (viewAllPerm || manageAllPerm) {
             isAuthorized = true
           }
-          // 3. Normal entity-user access check
+          // 3. Normal entity-user access check (lo decide el backend).
           else {
-            const { data: accessData, error: accessError } = await supabase
-              .rpc("can_view_entity", { target_entity_id: entityId })
-              
-            if (accessError) throw accessError
-            isAuthorized = !!accessData
+            isAuthorized = await canViewEntity(entityId)
           }
         }
 
@@ -89,14 +81,14 @@ const EntityRouteWrapper = () => {
 
         // Protección de los módulos internos: además del acceso a la entidad, las rutas
         // /entity/:entityId/* requieren que la entidad sea Cuenta SiteCorp.
-        if (!hasSiteCorpAccount(data)) {
+        if (!hasSiteCorpAccount(entity)) {
           setCurrentEntity(null)
           setModulesDisabled(true)
           return
         }
 
         setModulesDisabled(false)
-        setCurrentEntity(data)
+        setCurrentEntity(entity)
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error al cargar la entidad")
       } finally {
@@ -145,14 +137,11 @@ const EntityRouteWrapper = () => {
     let cancelled = false
 
     const revalidate = async () => {
-      const { data } = await supabase
-        .from("organization_entities")
-        .select("is_sitecorp_account")
-        .eq("id", entityId)
-        .single()
+      // Un fallo de la lectura no cambia de estado (`null`), igual que antes.
+      const siteCorpFlag = await loadEntitySiteCorpFlag(entityId)
 
-      if (cancelled || !data) return
-      if (!hasSiteCorpAccount(data)) {
+      if (cancelled || siteCorpFlag === null) return
+      if (!hasSiteCorpAccount({ is_sitecorp_account: siteCorpFlag })) {
         clearCurrentEntity()
         setModulesDisabled(true)
       } else {

@@ -935,6 +935,11 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
   ]
   const knownRpcs = new Set([
     "can_access_entity",
+    // Estas dos comprobaciones ya existían en el backend y las usaba la aplicación
+    // (estructura organizativa y módulos internos): la consolidación las traslada al
+    // único envoltorio de control de acceso sin cambiar sus parámetros.
+    "can_view_entity",
+    "list_entity_permissions",
     "list_entity_user_access",
     "save_platform_role",
     "save_entity_role",

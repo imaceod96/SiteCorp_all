@@ -9,6 +9,7 @@ import type {
   AssignEntityAccessInput,
   ClientMembership,
   EntityAccessRow,
+  EntityPermissionCodeRow,
   EntityRoleOption,
   InviteToEntityInput,
   UserProfile,
@@ -28,7 +29,14 @@ import type {
  * permisos `users.manage` / `users.invite` del backend.
  */
 
-/** Comprueba un permiso interno del solicitante en una entidad concreta. */
+/**
+ * Comprueba un permiso interno del solicitante en una entidad concreta.
+ *
+ * Es el ÚNICO envoltorio de `can_access_entity` de toda la aplicación: ningún otro
+ * dominio ni la presentación invocan esa RPC. Los parámetros
+ * (`target_entity_id`, `permission_code`) y el código del permiso son el contrato del
+ * backend y no cambian.
+ */
 export async function rpcCanAccessEntity(
   entityId: string,
   permissionCode: string
@@ -39,6 +47,36 @@ export async function rpcCanAccessEntity(
   })
   if (error) throw error
   return Boolean(data)
+}
+
+/**
+ * Acceso de LECTURA a una entidad (`can_view_entity`, SECURITY DEFINER): responde si el
+ * solicitante puede ver la entidad, sin pedir un permiso concreto. No concede nada por sí
+ * sola; el backend sigue decidiendo en cada operación.
+ */
+export async function rpcCanViewEntity(entityId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("can_view_entity", {
+    target_entity_id: entityId,
+  })
+  if (error) throw error
+  return Boolean(data)
+}
+
+/**
+ * Códigos de permiso EFECTIVOS del solicitante en una entidad.
+ *
+ * La resolución es del backend (`list_entity_permissions`): aplica exactamente la misma
+ * regla que las políticas RLS (acceso a la entidad, pertenencia del rol, jerarquía y
+ * alcance SELF / SELF_AND_DESCENDANTS). El frontend nunca decide el acceso por sí solo.
+ */
+export async function rpcListEntityPermissionCodes(
+  entityId: string
+): Promise<EntityPermissionCodeRow[]> {
+  const { data, error } = await supabase.rpc("list_entity_permissions", {
+    target_entity_id: entityId,
+  })
+  if (error) throw error
+  return (data as EntityPermissionCodeRow[] | null) || []
 }
 
 /** Usuarios con acceso a la entidad (directo o heredado), tal como los ve el solicitante. */

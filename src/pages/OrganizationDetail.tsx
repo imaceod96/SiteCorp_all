@@ -2,8 +2,16 @@ import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { supabase } from "@/lib/supabase"
-import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
+import {
+  loadEntityPermission,
+  loadEntityUserAccess,
+  type EntityAccessRow,
+} from "@/domains/access-control"
+import {
+  deleteOrganizationEntity,
+  loadOrganizationEntityDetail,
+  type OrganizationEntity,
+} from "@/domains/organization-structure"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -55,41 +63,6 @@ import { EntityUsersDialog } from "@/components/entity-users-dialog"
 import { OrganizationEntityDialog } from "@/components/organization-entity-dialog"
 import RolesManager from "@/components/roles-manager"
 
-interface OrganizationEntity {
-  id: string
-  tenant_id: string
-  parent_id: string | null
-  entity_type: "business_group" | "company" | "ueb"
-  name: string
-  code: string
-  regime_id: string
-  status: string
-  description: string | null
-  address: string | null
-  municipality: string | null
-  province: string | null
-  postal_code: string | null
-  is_active: boolean
-  is_sitecorp_account: boolean
-  account_is_active: boolean
-  account_code: string | null
-}
-
-interface EntityAccessRow {
-  access_id: string
-  tenant_membership_id: string
-  user_id: string
-  full_name: string | null
-  username: string | null
-  profile_is_active: boolean
-  tenant_role_id: string
-  role_name: string
-  source_entity_id: string
-  source_entity_name: string
-  access_scope: "SELF" | "SELF_AND_DESCENDANTS"
-  is_direct: boolean
-}
-
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",
   company: "Empresa",
@@ -139,87 +112,26 @@ const OrganizationDetail = () => {
       setError(null)
       setLoading(true)
       
-      // Fetch entity details
-      // El alias mantiene la clave JS `tenant_id` (columna física `company_client_id`).
-      const entityResult = await supabase
-        .from("organization_entities")
-        .select(selectQuery(`*, ${selectColumn("clientId")}`))
-        .eq("id", entityId)
-        .single()
-      
-      if (entityResult.error) throw entityResult.error
-      const entityData = entityResult.data as OrganizationEntity
-      
-      // La entidad debe pertenecer al cliente activo. `tenant_id` es la columna
-      // FÍSICA de Supabase.
-      if (currentCompanyClientId && entityData.tenant_id !== currentCompanyClientId) {
-              throw new Error("No tienes permiso para acceder a esta entidad")
-            }
-      
-            if (!currentCompanyClientId && !isPlatformSuperAdmin) {
-              throw new Error("No tienes permiso para acceder a esta entidad")
-            }
-      
-      setEntity(entityData)
-      
-      // Fetch all entities of the owning company client (ancestor path + switcher)
-      const tenantEntitiesResult = await supabase
-        .from("organization_entities")
-        .select(selectQuery(`*, ${selectColumn("clientId")}`))
-        .eq(columnName("clientId"), entityData.tenant_id)
-        .order("name")
-      
-      if (tenantEntitiesResult.error) throw tenantEntitiesResult.error
-      const tenantEntityRows = tenantEntitiesResult.data as OrganizationEntity[]
-      setTenantEntities(tenantEntityRows)
-      
-      // Build ancestor path client-side using parent references
-      const entityById = tenantEntityRows.reduce<Record<string, OrganizationEntity>>((map, entity) => {
-        map[entity.id] = entity
-        return map
-      }, {})
-      const ancestorIds: string[] = []
-      let parentId = entityData.parent_id
-      while (parentId) {
-        const parent = entityById[parentId]
-        if (!parent) break
-        ancestorIds.unshift(parent.id)
-        parentId = parent.parent_id
-      }
-      setAncestors(ancestorIds.map((id) => entityById[id]).filter(Boolean))
-      
-      // Fetch children
-      const childrenResult = await supabase
-        .from("organization_entities")
-        .select(selectQuery(`*, ${selectColumn("clientId")}`))
-        .eq("parent_id", entityId)
-        .order("name")
-      
-      if (childrenResult.error) throw childrenResult.error
-      setChildren(childrenResult.data || [])
-      
-      // Fetch direct and inherited users
-      const accessResult = await supabase
-        .rpc("list_entity_user_access", { target_entity_id: entityId })
-      
-      if (accessResult.error) throw accessResult.error
-      const accessRows = accessResult.data as EntityAccessRow[] || []
-      
+      // La entidad, su camino de entidades superiores, sus hijas directas y las
+      // entidades de su cliente (conmutador) las compone el dominio de estructura
+      // organizativa; la comprobación de cliente activo y su mensaje no cambian.
+      const detail = await loadOrganizationEntityDetail({
+        entityId,
+        currentCompanyClientId,
+        isPlatformSuperAdmin,
+      })
+
+      setEntity(detail.entity)
+      setTenantEntities(detail.tenantEntities)
+      setAncestors(detail.ancestors)
+      setChildren(detail.children)
+
+      // Accesos de usuarios (directos y heredados): los decide el backend.
+      const accessRows = await loadEntityUserAccess(entityId)
+
       setDirectUsers(accessRows.filter(row => row.is_direct))
       setInheritedUsers(accessRows.filter(row => !row.is_direct))
       
-      // Fetch all entities of the active company client for switcher (if needed)
-            if (currentCompanyClientId && currentCompanyClientId !== entityData.tenant_id) {
-              const otherTenantEntitiesResult = await supabase
-                .from("organization_entities")
-                .select(selectQuery(`*, ${selectColumn("clientId")}`))
-                .eq(columnName("clientId"), currentCompanyClientId)
-                .order("name")
-              
-              if (otherTenantEntitiesResult.error) throw otherTenantEntitiesResult.error
-              setTenantEntities(otherTenantEntitiesResult.data || [])
-            }
-            
           } catch (err) {
             setError(err instanceof Error ? err.message : "No se pudo cargar la entidad")
           } finally {
@@ -237,12 +149,9 @@ const OrganizationDetail = () => {
     if (!targetEntityId) return
     
     try {
-      const { data } = await supabase.rpc("can_access_entity", {
-        target_entity_id: targetEntityId,
-        permission_code: "organization.manage"
-      })
+      const allowed = await loadEntityPermission(targetEntityId, "organization.manage")
       
-      setCanDeleteEntities(!!data)
+      setCanDeleteEntities(allowed)
     } catch (err) {
       console.error("Error checking delete permissions:", err)
       setCanDeleteEntities(false)
@@ -267,17 +176,12 @@ const OrganizationDetail = () => {
     setEntityDialogOpen(true)
   }
   
-  const deleteOrganizationEntity = async () => {
+  const removeOrganizationEntity = async () => {
     if (!entity) return
     
     try {
       setDeleting(true)
-      const response = await supabase
-        .from("organization_entities")
-        .delete()
-        .eq("id", entity.id)
-      
-      if (response.error) throw response.error
+      await deleteOrganizationEntity(entity.id)
       
       setDeleteEntity(null)
       // Navigate back to organization overview
@@ -743,7 +647,7 @@ const OrganizationDetail = () => {
             <SiteCorpButton
               type="button"
               variant="destructive"
-              onClick={deleteOrganizationEntity}
+              onClick={removeOrganizationEntity}
               disabled={deleting}
             >
               {deleting ? "Eliminando..." : "Eliminar"}

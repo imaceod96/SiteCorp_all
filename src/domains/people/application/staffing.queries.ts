@@ -11,11 +11,11 @@ import type {
   SalaryValue,
   StaffingExportRow,
 } from "@/domains/organization-structure"
+import { loadEntityPermissionSafe } from "@/domains/access-control"
 import {
   fetchActiveContractTypes,
   fetchEntityHireablePeople,
   fetchEntityOccupancy,
-  fetchEntityPermission,
   fetchEntityStaffingPositions,
   fetchEntityStaffingWorkers,
   fetchSeparationReasons,
@@ -67,8 +67,8 @@ const emptyOccupancy = (): EntityOccupancy => ({ counts: {}, occupants: {} })
  */
 export async function loadEntityStaffingBoard(entityId: string): Promise<EntityStaffingBoard> {
   const [canView, canManage] = await Promise.all([
-    fetchEntityPermission(entityId, "workers.view"),
-    fetchEntityPermission(entityId, "workers.manage"),
+    loadEntityPermissionSafe(entityId, "workers.view"),
+    loadEntityPermissionSafe(entityId, "workers.manage"),
   ])
 
   if (!canView && !canManage) {
@@ -106,7 +106,7 @@ export async function loadTransitionWorkspace(
     fetchEntityStaffingPositions(entityId),
     fetchEntityOccupancy(entityId),
     fetchActiveContractTypes(),
-    fetchEntityPermission(entityId, CONTRACT_DATA_PERMISSION),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
     options.workerId ? fetchWorkerIdentity(options.workerId) : Promise.resolve(null),
   ])
 
@@ -128,7 +128,7 @@ export async function loadContractChangeWorkspace(
 ): Promise<ContractChangeWorkspace> {
   const [contractTypes, canManageContractData] = await Promise.all([
     fetchActiveContractTypes(),
-    fetchEntityPermission(entityId, CONTRACT_DATA_PERMISSION),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
   ])
   return { contractTypes, canManageContractData }
 }
@@ -209,8 +209,8 @@ export async function loadEntityStaffingWorkspace(
   entityId: string
 ): Promise<EntityStaffingWorkspace> {
   const [canView, canManage] = await Promise.all([
-    fetchEntityPermission(entityId, "workers.view"),
-    fetchEntityPermission(entityId, "workers.manage"),
+    loadEntityPermissionSafe(entityId, "workers.view"),
+    loadEntityPermissionSafe(entityId, "workers.manage"),
   ])
   if (!canView && !canManage) return emptyStaffingWorkspace(canManage)
 

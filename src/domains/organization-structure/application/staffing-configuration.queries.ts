@@ -14,7 +14,7 @@ import {
   type ConfigurationJobRow,
 } from "../infrastructure/jobs.repository"
 import { selectConfigurationPositionRows } from "../infrastructure/positions.repository"
-import { fetchEntityPermission } from "../infrastructure/entity-configuration.repository"
+import { loadEntityPermission } from "@/domains/access-control"
 import type {
   OccupationalCategory,
   OrganizationArea,
@@ -107,8 +107,8 @@ export async function loadStaffingConfiguration(
   entityId: string
 ): Promise<StaffingConfigurationWorkspace> {
   const [canView, canManage] = await Promise.all([
-    fetchEntityPermission(entityId, "staffing.view"),
-    fetchEntityPermission(entityId, "staffing.manage"),
+    loadEntityPermission(entityId, "staffing.view"),
+    loadEntityPermission(entityId, "staffing.manage"),
   ])
 
   if (!canView && !canManage) return emptyStaffingConfiguration(canManage)

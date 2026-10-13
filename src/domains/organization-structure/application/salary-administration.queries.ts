@@ -1,4 +1,4 @@
-import { fetchEntityPermission } from "../infrastructure/entity-configuration.repository"
+import { loadEntityPermission } from "@/domains/access-control"
 import { resolveApplicableScaleId } from "../infrastructure/salary.repository"
 import {
   rpcHasPlatformPermission,
@@ -79,13 +79,13 @@ export async function resolveSalaryValueForGroup(
  */
 export async function canViewSalary(entityId?: string): Promise<boolean> {
   if (await rpcHasPlatformPermission("salary.view")) return true
-  if (entityId) return fetchEntityPermission(entityId, "salary.view")
+  if (entityId) return loadEntityPermission(entityId, "salary.view")
   return false
 }
 
 export async function canManageSalary(entityId?: string): Promise<boolean> {
   if (await rpcHasPlatformPermission("salary.manage")) return true
-  if (entityId) return fetchEntityPermission(entityId, "salary.manage")
+  if (entityId) return loadEntityPermission(entityId, "salary.manage")
   return false
 }
 

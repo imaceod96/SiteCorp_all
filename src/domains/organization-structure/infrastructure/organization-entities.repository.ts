@@ -1,18 +1,94 @@
 import { supabase } from "@/lib/supabase"
-import { columnName } from "@/integrations/supabase/schema-target"
+import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
+import type { OrganizationEntity, OrganizationEntityRow } from "../domain/entities"
 
 /**
  * Entidades organizativas — Repositorio (infraestructura).
  *
- * Único punto que escribe en `organization_entities`. La tabla es la misma en los dos
- * estados de la frontera de nomenclatura; lo único que cambia de nombre es la COLUMNA
- * del cliente propietario, que se resuelve con `columnName("clientId")`.
+ * Único punto que lee y escribe `organization_entities` (Grupo Empresarial → Empresa →
+ * UEB y Cuenta SiteCorp). La tabla es la misma en los dos estados de la frontera de
+ * nomenclatura; lo único que cambia de nombre es la COLUMNA del cliente propietario, que
+ * se resuelve con `columnName("clientId")`.
  *
  * `company_client_id` (clave JS `tenant_id`) identifica al CLIENTE y nunca debe
  * confundirse con `organization_entity_id`, que identifica a la ENTIDAD.
  *
- * No se cambia ningún permiso: RLS sigue decidiendo quién puede crear o editar.
+ * Ámbito: el cliente NO se envía desde el frontend para acotar la visibilidad —lo impone
+ * RLS—; cuando una lectura se filtra por cliente es porque la pantalla muestra
+ * explícitamente el árbol de ESE cliente (y RLS sigue decidiendo si se ve). No se cambia
+ * ningún permiso.
  */
+
+/** Proyección única de la tabla: `*` más el alias de la columna del cliente propietario. */
+const ENTITY_PROJECTION = selectQuery(`*, ${selectColumn("clientId")}`)
+
+/** Todas las entidades visibles para la sesión, ordenadas por nombre. */
+export async function selectVisibleEntities(): Promise<OrganizationEntity[]> {
+  const { data, error } = await supabase
+    .from("organization_entities")
+    .select(ENTITY_PROJECTION)
+    .order("name")
+
+  if (error) throw error
+  return (data as OrganizationEntity[] | null) || []
+}
+
+/** Entidades de un cliente concreto, ordenadas por nombre. */
+export async function selectEntitiesByClient(clientId: string): Promise<OrganizationEntity[]> {
+  const { data, error } = await supabase
+    .from("organization_entities")
+    .select(ENTITY_PROJECTION)
+    .eq(columnName("clientId"), clientId)
+    .order("name")
+
+  if (error) throw error
+  return (data as OrganizationEntity[] | null) || []
+}
+
+/**
+ * Una entidad por su identificador. Se conserva la lectura UNITARIA original
+ * (`.single()`): la ausencia de fila es un error del servidor y NO se convierte en un
+ * resultado vacío, porque de eso depende el mensaje de las pantallas.
+ */
+export async function selectEntityById(entityId: string): Promise<OrganizationEntityRow> {
+  const { data, error } = await supabase
+    .from("organization_entities")
+    .select(ENTITY_PROJECTION)
+    .eq("id", entityId)
+    .single()
+
+  if (error) throw error
+  return data as OrganizationEntityRow
+}
+
+/** Entidades hijas directas de una entidad, ordenadas por nombre. */
+export async function selectChildEntities(parentId: string): Promise<OrganizationEntity[]> {
+  const { data, error } = await supabase
+    .from("organization_entities")
+    .select(ENTITY_PROJECTION)
+    .eq("parent_id", parentId)
+    .order("name")
+
+  if (error) throw error
+  return (data as OrganizationEntity[] | null) || []
+}
+
+/**
+ * Bandera de Cuenta SiteCorp de una entidad (`is_sitecorp_account`).
+ *
+ * La revalidación de los módulos internos es tolerante: si la lectura falla, el caso de
+ * uso devuelve `null` y la pantalla no cambia de estado (igual que antes).
+ */
+export async function selectEntitySiteCorpFlag(entityId: string): Promise<boolean | null> {
+  const { data, error } = await supabase
+    .from("organization_entities")
+    .select("is_sitecorp_account")
+    .eq("id", entityId)
+    .single()
+
+  if (error) throw error
+  return (data as { is_sitecorp_account: boolean | null } | null)?.is_sitecorp_account ?? null
+}
 
 /**
  * Alta de la entidad. El cliente propietario se fija AQUÍ y sólo aquí: proviene del
@@ -43,6 +119,13 @@ export async function updateOrganizationEntity(
     .from("organization_entities")
     .update(payload)
     .eq("id", entityId)
+
+  if (error) throw error
+}
+
+/** Baja definitiva de la entidad. Quién puede borrarla lo decide RLS. */
+export async function deleteOrganizationEntityById(entityId: string): Promise<void> {
+  const { error } = await supabase.from("organization_entities").delete().eq("id", entityId)
 
   if (error) throw error
 }

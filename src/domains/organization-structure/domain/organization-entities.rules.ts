@@ -24,6 +24,75 @@ export const ENTITY_TYPE_OPTIONS: ReadonlyArray<{ value: OrganizationEntityType;
   { value: "ueb", label: "UEB" },
 ]
 
+/**
+ * Composición de la JERARQUÍA organizativa a partir de las entidades visibles.
+ *
+ * Es la única regla que agrupa el árbol: cada cliente (clave `tenant_id`, la columna
+ * física del cliente propietario) con sus raíces —las entidades SIN entidad superior— y,
+ * para cualquier entidad, sus hijas directas.
+ *
+ * Es EXACTAMENTE la agrupación que hacían las pantallas: una entidad cuyo padre no está
+ * entre las visibles no se convierte en raíz (no se inventa jerarquía) y tampoco se
+ * oculta de su padre visible, si lo tuviera.
+ *
+ * Regla pura: no consulta Supabase y no depende de la interfaz.
+ */
+export interface OrganizationTree {
+  /** Hijas directas por identificador de entidad superior. */
+  childrenByParent: Record<string, OrganizationEntity[]>
+  /** Entidades raíz por cliente propietario. */
+  rootsByCompanyClient: Record<string, OrganizationEntity[]>
+}
+
+export function buildOrganizationTree(entities: OrganizationEntity[]): OrganizationTree {
+  return entities.reduce<OrganizationTree>(
+    (tree, entity) => {
+      if (entity.parent_id) {
+        tree.childrenByParent[entity.parent_id] = [
+          ...(tree.childrenByParent[entity.parent_id] || []),
+          entity,
+        ]
+        return tree
+      }
+
+      tree.rootsByCompanyClient[entity.tenant_id] = [
+        ...(tree.rootsByCompanyClient[entity.tenant_id] || []),
+        entity,
+      ]
+      return tree
+    },
+    { childrenByParent: {}, rootsByCompanyClient: {} }
+  )
+}
+
+/**
+ * Camino de entidades superiores (de la raíz a la inmediata) construido con las
+ * referencias `parent_id` de las entidades del MISMO cliente. Si un ancestro no está
+ * entre las entidades visibles, el camino se corta ahí (nunca se inventa un nodo).
+ */
+export function resolveEntityAncestors(
+  entities: OrganizationEntity[],
+  entity: OrganizationEntity | null
+): OrganizationEntity[] {
+  if (!entity) return []
+
+  const entityById = entities.reduce<Record<string, OrganizationEntity>>((map, row) => {
+    map[row.id] = row
+    return map
+  }, {})
+
+  const ancestorIds: string[] = []
+  let parentId = entity.parent_id
+  while (parentId) {
+    const parent = entityById[parentId]
+    if (!parent) break
+    ancestorIds.unshift(parent.id)
+    parentId = parent.parent_id
+  }
+
+  return ancestorIds.map((id) => entityById[id]).filter(Boolean)
+}
+
 /** Códigos canónicos del catálogo `entity_regimes`. */
 export const REGIME_OPTIONS: ReadonlyArray<{ value: OrganizationEntityRegime; label: string }> = [
   { value: "PRESUPUESTADA", label: "Presupuestada" },

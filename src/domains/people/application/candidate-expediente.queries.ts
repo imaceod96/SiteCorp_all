@@ -15,7 +15,7 @@ import {
   fetchSkinColorsCatalog,
   fetchLicenseCategories,
 } from "../infrastructure/people.repository"
-import { fetchEntityPermission } from "../infrastructure/staffing.repository"
+import { loadEntityPermissionSafe } from "@/domains/access-control"
 import type {
   CandidateExpediente,
   CandidateExpedienteRelated,
@@ -122,9 +122,9 @@ export async function loadCandidateExpedienteView(input: {
   candidateId: string
 }): Promise<CandidateExpedienteView> {
   const [canView, canManage, canManageWorkers] = await Promise.all([
-    fetchEntityPermission(input.entityId, "candidates.view"),
-    fetchEntityPermission(input.entityId, "candidates.manage"),
-    fetchEntityPermission(input.entityId, "workers.manage"),
+    loadEntityPermissionSafe(input.entityId, "candidates.view"),
+    loadEntityPermissionSafe(input.entityId, "candidates.manage"),
+    loadEntityPermissionSafe(input.entityId, "workers.manage"),
   ])
 
   const permissions: CandidateExpedientePermissions = { canView, canManage, canManageWorkers }
@@ -212,7 +212,7 @@ export async function loadCandidateFormData(input: {
   entityId: string
   candidateId: string
 }): Promise<CandidateFormView> {
-  const canManage = await fetchEntityPermission(input.entityId, "candidates.manage")
+  const canManage = await loadEntityPermissionSafe(input.entityId, "candidates.manage")
 
   if (!canManage) {
     return {

@@ -469,17 +469,35 @@ test("las consultas y escrituras del bloque viven en sus repositorios, aisladas 
   expect(read(repositories[2])).toMatch(/\.eq\("organization_entity_id", entityId\)/)
   expect(read(repositories[4])).toMatch(/\.eq\("organization_entity_id", entityId\)/)
 
-  // Los permisos se preguntan al backend por permiso interno de la entidad.
+  // Los permisos se preguntan al backend por permiso interno de la entidad, y SÓLO desde
+  // el dominio de control de acceso: la configuración ya no mantiene su propio envoltorio.
   const configuration = read(repositories[3])
-  expect(configuration).toMatch(/\.rpc\("can_access_entity", \{/)
-  expect(configuration).toMatch(/permission_code: permissionCode/)
+  expect(configuration).not.toMatch(/export async function fetchEntityPermission/)
+  expect(configuration).not.toMatch(/\.rpc\(/)
 
-  // Quien puede ver o gestionar la configuración lo decide `staffing.view` / `staffing.manage`.
+  const accessRepository = read(
+    "src/domains/access-control/infrastructure/entity-access.repository.ts"
+  )
+  expect(accessRepository).toMatch(/\.rpc\("can_access_entity", \{/)
+  expect(accessRepository).toMatch(/permission_code: permissionCode/)
+
+  // Un único envoltorio en toda la aplicación: ningún otro dominio invoca esa RPC.
+  for (const source of [
+    ...repositories.map(read),
+    read("src/domains/people/infrastructure/people.repository.ts"),
+    read("src/domains/people/infrastructure/staffing.repository.ts"),
+  ]) {
+    expect(source).not.toMatch(/\.rpc\("can_access_entity"/)
+  }
+
+  // Quien puede ver o gestionar la configuración lo decide `staffing.view` / `staffing.manage`,
+  // con los mismos códigos y el mismo comportamiento ante errores (el error se propaga).
   const useCase = read(
     "src/domains/organization-structure/application/staffing-configuration.queries.ts"
   )
-  expect(useCase).toMatch(/fetchEntityPermission\(entityId, "staffing\.view"\)/)
-  expect(useCase).toMatch(/fetchEntityPermission\(entityId, "staffing\.manage"\)/)
+  expect(useCase).toMatch(/loadEntityPermission\(entityId, "staffing\.view"\)/)
+  expect(useCase).toMatch(/loadEntityPermission\(entityId, "staffing\.manage"\)/)
+  expect(useCase).toMatch(/@\/domains\/access-control/)
   expect(useCase).not.toMatch(/@\/lib\/supabase/)
   expect(useCase).not.toMatch(/companyClientId/)
 

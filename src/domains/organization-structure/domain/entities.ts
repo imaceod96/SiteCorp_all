@@ -462,6 +462,21 @@ export interface OrganizationEntity {
   account_code: string | null
 }
 
+/**
+ * Fila COMPLETA de `organization_entities`, con las columnas administrativas que no
+ * participan en las reglas de la jerarquía pero que sí consumen los módulos internos de
+ * la entidad (contexto de entidad). Es un superconjunto de `OrganizationEntity`: leerla
+ * no cambia ninguna consulta, sólo deja de recortar la proyección.
+ */
+export interface OrganizationEntityRow extends OrganizationEntity {
+  created_at: string | null
+  updated_at: string | null
+  organism: string | null
+  branch: string | null
+  labor_identification_code: string | null
+  revolution_year: string | null
+}
+
 /** Datos editables del alta/edición de una entidad organizativa. */
 export interface OrganizationEntityFormData {
   name: string

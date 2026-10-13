@@ -38,19 +38,6 @@ import type {
  * `company_client_id`) son EXACTAMENTE los que ya usaban las tres vistas.
  */
 
-/** Permiso efectivo sobre una entidad (`can_access_entity`). RLS sigue siendo la autoridad. */
-export async function canAccessEntityPermission(
-  entityId: string,
-  permissionCode: string
-): Promise<boolean> {
-  const { data, error } = await supabase.rpc("can_access_entity", {
-    target_entity_id: entityId,
-    permission_code: permissionCode,
-  })
-  if (error) throw error
-  return !!data
-}
-
 // ---------------------------------------------------------------------------
 // Candidatos
 // ---------------------------------------------------------------------------

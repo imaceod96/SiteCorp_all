@@ -1,8 +1,8 @@
+import { loadEntityPermission } from "@/domains/access-control"
 import { isPendingCandidate, isReentryWorker } from "../domain/rules"
 import { fetchPersonIdentificationStatus } from "../infrastructure/candidate-registration.repository"
 import { rpcMigrationTemplateData } from "../infrastructure/worker-migration.repository"
 import {
-  canAccessEntityPermission,
   fetchCandidatesWithLicense,
   fetchClientEmploymentIndex,
   fetchEducationLevels,
@@ -100,8 +100,8 @@ export interface EntityWorkersDirectoryView {
 export async function loadEntityWorkersDirectory(
   entityId: string
 ): Promise<EntityWorkersDirectoryView> {
-  const canView = await canAccessEntityPermission(entityId, "workers.view")
-  const canManage = await canAccessEntityPermission(entityId, "workers.manage")
+  const canView = await loadEntityPermission(entityId, "workers.view")
+  const canManage = await loadEntityPermission(entityId, "workers.manage")
 
   const empty: EntityWorkersDirectoryView = {
     canView,
@@ -147,8 +147,8 @@ export async function loadEntityReentriesView(input: {
   entityId: string
   companyClientId: string | null | undefined
 }): Promise<EntityReentriesView> {
-  const canView = await canAccessEntityPermission(input.entityId, "workers.view")
-  const canManage = await canAccessEntityPermission(input.entityId, "workers.manage")
+  const canView = await loadEntityPermission(input.entityId, "workers.view")
+  const canManage = await loadEntityPermission(input.entityId, "workers.manage")
 
   const empty: EntityReentriesView = {
     canView,

@@ -238,25 +238,43 @@ export {
 
 // --- Entidades organizativas: tipos ---
 export type { OrganizationEntity } from "./domain/entities"
+export type { OrganizationEntityRow } from "./domain/entities"
 export type { OrganizationEntityType } from "./domain/entities"
 export type { OrganizationEntityRegime } from "./domain/entities"
 export type { OrganizationEntityFormData } from "./domain/entities"
 export type { SaveOrganizationEntityInput } from "./domain/entities"
 
 // --- Entidades organizativas: reglas puras ---
+export type { OrganizationTree } from "./domain/organization-entities.rules"
 export {
   ENTITY_TYPE_OPTIONS,
   REGIME_OPTIONS,
   STATUS_OPTIONS,
   buildOrganizationEntityPayload,
+  buildOrganizationTree,
   describeEntityError,
   generateEntityCode,
   isParentTypeAllowed,
+  resolveEntityAncestors,
   resolveParentCandidates,
 } from "./domain/organization-entities.rules"
 
-// --- Entidades organizativas: caso de uso ---
-export { saveOrganizationEntity } from "./application/organization-entities.commands"
+// --- Entidades organizativas: casos de uso ---
+export type {
+  LoadOrganizationEntityDetailInput,
+  OrganizationEntityDetail,
+} from "./application/organization-entities.queries"
+export {
+  loadClientEntities,
+  loadEntitySiteCorpFlag,
+  loadOrganizationEntity,
+  loadOrganizationEntityDetail,
+  loadVisibleEntities,
+} from "./application/organization-entities.queries"
+export {
+  deleteOrganizationEntity,
+  saveOrganizationEntity,
+} from "./application/organization-entities.commands"
 
 // --- Escala de antigüedad: tipos ---
 export type { TenureScaleRange } from "./domain/entities"

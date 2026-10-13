@@ -1,7 +1,6 @@
 import * as React from "react"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { supabase } from "@/lib/supabase"
-import { columnName } from "@/integrations/supabase/schema-target"
+import { loadClientEntities, type OrganizationEntity } from "@/domains/organization-structure"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -12,14 +11,6 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SelectItem } from "@/components/ui/select"
 import RolesManager from "@/components/roles-manager"
 import { Building2, Layers, Factory } from "lucide-react"
-
-interface OrganizationEntity {
-  id: string
-  name: string
-  code: string
-  entity_type: "business_group" | "company" | "ueb"
-  is_active: boolean
-}
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",
@@ -52,16 +43,9 @@ const CompanyClientRoles = () => {
         setError(null)
         setLoading(true)
 
-        // El nombre de la columna lo resuelve la frontera de nomenclatura.
-        const { data, error: entitiesError } = await supabase
-          .from("organization_entities")
-          .select("id, name, code, entity_type, is_active")
-          .eq(columnName("clientId"), currentCompanyClientId)
-          .order("name")
-
-        if (entitiesError) throw entitiesError
-
-        const rows = data || []
+        // Las entidades del cliente las devuelve el dominio de estructura
+        // organizativa: la pantalla no compone consultas.
+        const rows = await loadClientEntities(currentCompanyClientId)
         setEntities(rows)
         setSelectedEntityId((current) => current || rows[0]?.id || "")
       } catch (err) {

@@ -8,7 +8,7 @@ import {
   fetchWorkerLicenseIds,
   fetchWorkerTenurePayment,
 } from "../infrastructure/worker-expediente.repository"
-import { fetchEntityPermission } from "../infrastructure/staffing.repository"
+import { loadEntityPermissionSafe } from "@/domains/access-control"
 import type {
   TenurePaymentRule,
   WorkerEmploymentMovement,
@@ -48,7 +48,7 @@ export async function loadWorkerFormPermissions(
   entityId: string
 ): Promise<WorkerFormPermissions> {
   return {
-    canManageContractData: await fetchEntityPermission(entityId, "contract_data.manage"),
+    canManageContractData: await loadEntityPermissionSafe(entityId, "contract_data.manage"),
   }
 }
 
@@ -102,8 +102,8 @@ export async function loadWorkerExpedienteView(input: {
   workerId: string
 }): Promise<WorkerExpedienteView> {
   const [canView, canManage] = await Promise.all([
-    fetchEntityPermission(input.entityId, "workers.view"),
-    fetchEntityPermission(input.entityId, "workers.manage"),
+    loadEntityPermissionSafe(input.entityId, "workers.view"),
+    loadEntityPermissionSafe(input.entityId, "workers.manage"),
   ])
 
   const permissions: WorkerExpedientePermissions = { canView, canManage }

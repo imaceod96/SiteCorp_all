@@ -111,6 +111,14 @@ export interface EntityAccessRow {
   is_direct: boolean
 }
 
+/**
+ * Fila de `list_entity_permissions`: el CÓDIGO de permiso efectivo del solicitante en
+ * una entidad, tal como lo resuelve el backend (jerarquía, alcance y ámbito del rol).
+ */
+export interface EntityPermissionCodeRow {
+  permission_code: string
+}
+
 /** Membresía del cliente (la columna física la resuelve la frontera de nomenclatura). */
 export interface ClientMembership {
   id: string

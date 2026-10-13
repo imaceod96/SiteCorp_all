@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
+import { loadEntityPermissionSafe } from "@/domains/access-control"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { formatDocumentDate } from "@/lib/document-variables"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
@@ -58,25 +59,20 @@ const EntitySettingsDocumentTemplates = () => {
     setLoadError(null)
 
     try {
-      const [{ data: canView }, { data: canManageTemplates }, { data: entity }] =
-        await Promise.all([
-          supabase.rpc("can_access_entity", {
-            target_entity_id: entityId,
-            permission_code: "document_templates.view",
-          }),
-          supabase.rpc("can_access_entity", {
-            target_entity_id: entityId,
-            permission_code: "document_templates.manage",
-          }),
-          supabase.from("organization_entities").select("name").eq("id", entityId).maybeSingle(),
-        ])
+      // Los permisos se preguntan al dominio de control de acceso: un fallo de la
+      // comprobación no habilita nada y no tumba la pantalla.
+      const [canView, canManageTemplates, { data: entity }] = await Promise.all([
+        loadEntityPermissionSafe(entityId, "document_templates.view"),
+        loadEntityPermissionSafe(entityId, "document_templates.manage"),
+        supabase.from("organization_entities").select("name").eq("id", entityId).maybeSingle(),
+      ])
 
       if (!canView && !canManageTemplates) {
         setNotAllowed("No tiene permiso para consultar las plantillas documentales de esta entidad.")
         return
       }
 
-      setCanManage(!!canManageTemplates)
+      setCanManage(canManageTemplates)
       setEntityName((entity as { name: string } | null)?.name || "")
 
       const [catalog, loadedTemplates] = await Promise.all([

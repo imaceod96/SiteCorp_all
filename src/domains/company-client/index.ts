@@ -8,7 +8,8 @@
  *   domain/entities.ts                             → tipos y contratos
  *   domain/rules.ts                                → reglas puras
  *   infrastructure/company-client.mapper.ts        → compatibilidad con `tenant_id`
- *   infrastructure/company-client.repository.ts    → lectura unitaria de `tenants`
+ *   infrastructure/company-client.repository.ts    → lecturas de `tenants` (unitaria y lista)
+ *   application/company-clients.queries.ts         → casos de uso de lectura
  *
  * Alcance: el módulo ya lo consumen la presentación (layouts de cliente y de
  * plataforma) para expresar el cliente activo con el vocabulario de dominio.
@@ -27,8 +28,8 @@
  * un solo sentido (presentación → dominio; infrastructure → domain), por lo que
  * no puede formarse ningún ciclo.
  *
- * `getCompanyClientById` es una lectura UNITARIA y de solo lectura de `tenants`.
- * No sustituye a las lecturas de lista y NO es una autorización: RLS y las RPC
+ * `getCompanyClientById` es una lectura UNITARIA y `loadCompanyClients` la lectura de
+ * LISTA (ambas de solo lectura de `tenants`). Ninguna es una autorización: RLS y las RPC
  * de Supabase siguen siendo la autoridad final.
  */
 
@@ -49,3 +50,6 @@ export {
 
 /* Repositorio (lectura de la tabla legacy `tenants`) */
 export { getCompanyClientById } from "./infrastructure/company-client.repository"
+
+/* Casos de uso de lectura */
+export { loadCompanyClients } from "./application/company-clients.queries"

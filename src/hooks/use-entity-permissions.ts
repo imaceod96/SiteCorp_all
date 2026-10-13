@@ -1,13 +1,16 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
+import { loadEntityPermissionCodes } from "@/domains/access-control"
 
 /**
  * Permisos internos efectivos del usuario en UNA entidad.
  *
- * Resolución central en base de datos (`list_entity_permissions`), que aplica
- * exactamente la misma regla que las políticas RLS: acceso a la entidad,
- * pertenencia del rol a esa entidad, jerarquía y scope (SELF / SELF_AND_DESCENDANTS).
- * El frontend nunca decide el acceso por sí solo.
+ * La resolución es del dominio de control de acceso (`list_entity_permissions` en el
+ * backend), que aplica exactamente la misma regla que las políticas RLS: acceso a la
+ * entidad, pertenencia del rol a esa entidad, jerarquía y scope (SELF /
+ * SELF_AND_DESCENDANTS). La interfaz nunca decide el acceso por sí sola.
+ *
+ * Tolerancia (la misma de siempre): sin permisos o ante un fallo de red no se concede
+ * ninguna capacidad — el hook devuelve una lista vacía.
  */
 export function useEntityPermissions(entityId: string | undefined | null) {
   const [codes, setCodes] = React.useState<string[]>([])
@@ -25,17 +28,8 @@ export function useEntityPermissions(entityId: string | undefined | null) {
 
       setLoading(true)
       try {
-        const { data, error } = await supabase.rpc("list_entity_permissions", {
-          target_entity_id: entityId,
-        })
-        if (error) throw error
-        if (!cancelled) {
-          setCodes(
-            ((data as { permission_code: string }[]) || [])
-              .map((row) => row.permission_code)
-              .filter(Boolean)
-          )
-        }
+        const resolved = await loadEntityPermissionCodes(entityId)
+        if (!cancelled) setCodes(resolved)
       } catch {
         // Sin permisos o error de red: no se concede ninguna capacidad.
         if (!cancelled) setCodes([])

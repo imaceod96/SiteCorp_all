@@ -5,8 +5,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { supabase } from "@/lib/supabase"
-import { selectColumn, selectQuery, tableName } from "@/integrations/supabase/schema-target"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -24,9 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { SelectItem } from "@/components/ui/select"
-import EntityUsersDialog, {
-  type OrganizationEntity,
-} from "@/components/entity-users-dialog"
+import EntityUsersDialog from "@/components/entity-users-dialog"
 import {
   createCompanyClient,
   deleteCompanyClient,
@@ -35,6 +31,13 @@ import {
   type CompanyClientDeletionSummary,
   type CompanyClientRecord,
 } from "@/lib/company-clients"
+import { loadCompanyClients, type CompanyClient } from "@/domains/company-client"
+import {
+  buildOrganizationTree,
+  deleteOrganizationEntity,
+  loadVisibleEntities,
+  type OrganizationEntity,
+} from "@/domains/organization-structure"
 import {
   OrganizationEntityDialog,
 } from "@/components/organization-entity-dialog"
@@ -78,6 +81,20 @@ const typeIcon = (type: OrganizationEntity["entity_type"]) => {
   if (type === "company") return <Building2 className="h-4 w-4 text-sitecorp-primary" />
   return <Factory className="h-4 w-4 text-sitecorp-primary" />
 }
+
+/**
+ * Proyección del cliente de dominio al registro legacy que ya consumen la interfaz, el
+ * contexto del cliente activo y el adaptador de escritura. La correspondencia es la
+ * IDENTIDAD: `companyClientId === id`.
+ */
+const toCompanyClientRecord = (companyClient: CompanyClient): CompanyClientRecord => ({
+  id: companyClient.companyClientId,
+  name: companyClient.name,
+  code: companyClient.code ?? "",
+  description: companyClient.description,
+  is_active: companyClient.isActive === true,
+  created_at: companyClient.createdAt ?? undefined,
+})
 
 const friendlyCompanyClientError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error ?? "")
@@ -140,25 +157,15 @@ const Organizations = () => {
       setError(null)
       setLoading(true)
 
-      // Es una lectura de LISTA: no se sustituye por lecturas unitarias. El nombre
-      // físico de la tabla lo resuelve la frontera de nomenclatura.
-      const [companyClientResult, entityResult] = await Promise.all([
-        supabase.from(tableName("clients")).select("*").order("name"),
-        // `*` devuelve los nombres FÍSICOS de columna. Tras la migración, la columna
-        // propietaria se llama `company_client_id`, pero el modelo de la app la lee
-        // como `tenant_id`. Sin el alias, `entity.tenant_id` queda `undefined` y la
-        // agrupación de la jerarquía (grupos → empresas → UEB) no encuentra raíces.
-        supabase
-          .from("organization_entities")
-          .select(selectQuery(`*, ${selectColumn("clientId")}`))
-          .order("name"),
+      // Es una lectura de LISTA: no se sustituye por lecturas unitarias. Los clientes
+      // los devuelve su dominio y las entidades el de estructura organizativa (con el
+      // alias de la columna del cliente propietario ya resuelto).
+      const [companyClientList, entityRows] = await Promise.all([
+        loadCompanyClients(),
+        loadVisibleEntities(),
       ])
 
-      if (companyClientResult.error) throw companyClientResult.error
-      if (entityResult.error) throw entityResult.error
-
-      const companyClientRows = (companyClientResult.data || []) as CompanyClientRecord[]
-      const entityRows = (entityResult.data || []) as OrganizationEntity[]
+      const companyClientRows = companyClientList.map(toCompanyClientRecord)
 
       setCompanyClients(companyClientRows)
       setEntities(entityRows)
@@ -195,21 +202,12 @@ const Organizations = () => {
     checkDeletePermissions()
   }, [hasPlatformPermission])
 
-  const childrenByParent = React.useMemo(() => {
-    return entities.reduce<Record<string, OrganizationEntity[]>>((map, entity) => {
-      if (!entity.parent_id) return map
-      map[entity.parent_id] = [...(map[entity.parent_id] || []), entity]
-      return map
-    }, {})
-  }, [entities])
-
-  const rootsByCompanyClient = React.useMemo(() => {
-    return entities.reduce<Record<string, OrganizationEntity[]>>((map, entity) => {
-      if (entity.parent_id) return map
-      map[entity.tenant_id] = [...(map[entity.tenant_id] || []), entity]
-      return map
-    }, {})
-  }, [entities])
+  // Composición de la jerarquía (Grupo Empresarial → Empresa → UEB): regla única del
+  // dominio de estructura organizativa.
+  const { childrenByParent, rootsByCompanyClient } = React.useMemo(
+    () => buildOrganizationTree(entities),
+    [entities]
+  )
 
   const normalizedSearch = search.trim().toLowerCase()
 
@@ -320,11 +318,10 @@ const Organizations = () => {
     setEntityDialogOpen(true)
   }
 
-  const deleteOrganizationEntity = async (entity: OrganizationEntity) => {
+  const removeOrganizationEntity = async (entity: OrganizationEntity) => {
     try {
       setDeleting(true)
-      const response = await supabase.from("organization_entities").delete().eq("id", entity.id)
-      if (response.error) throw response.error
+      await deleteOrganizationEntity(entity.id)
       setDeleteEntity(null)
       await loadData()
     } catch (err) {
@@ -797,7 +794,7 @@ const Organizations = () => {
                   <SiteCorpButton
                     type="button"
                     variant="destructive"
-                    onClick={() => deleteEntity && deleteOrganizationEntity(deleteEntity)}
+                    onClick={() => deleteEntity && removeOrganizationEntity(deleteEntity)}
                     disabled={deleting}
                   >
                     {deleting ? "Eliminando..." : "Eliminar"}

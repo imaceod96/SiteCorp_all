@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { tableName } from "@/integrations/supabase/schema-target"
 import type { CompanyClientId } from "../domain/entities"
-import { toCompanyClient } from "./company-client.mapper"
+import { toCompanyClient, type LegacyTenantSummary } from "./company-client.mapper"
 
 /**
  * Obtiene un cliente por su UUID y lo proyecta al dominio.
@@ -25,4 +25,21 @@ export async function getCompanyClientById(
 
   if (error) throw error
   return data ? toCompanyClient(data) : null
+}
+
+/**
+ * Lista de clientes visibles para la sesión actual, ordenada por nombre.
+ *
+ * Es una lectura de LISTA y de solo lectura: sólo devuelve los clientes que RLS deja ver
+ * (el superadministrador de plataforma los ve todos). No autoriza nada y no cambia el
+ * cliente activo —eso sigue siendo responsabilidad del contexto de interfaz—.
+ */
+export async function selectCompanyClients(): Promise<LegacyTenantSummary[]> {
+  const { data, error } = await supabase
+    .from(tableName("clients"))
+    .select("id, name, code, description, is_active, created_at, updated_at")
+    .order("name")
+
+  if (error) throw error
+  return (data as LegacyTenantSummary[] | null) || []
 }

@@ -2,8 +2,13 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { supabase } from "@/lib/supabase"
-import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
+import { loadEntityPermission } from "@/domains/access-control"
+import {
+  buildOrganizationTree,
+  deleteOrganizationEntity,
+  loadClientEntities,
+  type OrganizationEntity,
+} from "@/domains/organization-structure"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -16,26 +21,6 @@ import { Building2, ChevronDown, ChevronRight, Factory, Layers, Pencil, Plus, Se
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { OrganizationEntityDialog } from "@/components/organization-entity-dialog"
-
-interface OrganizationEntity {
-  id: string
-  tenant_id: string
-  parent_id: string | null
-  entity_type: "business_group" | "company" | "ueb"
-  name: string
-  code: string
-  regime_id: string
-  status: string
-  description: string | null
-  address: string | null
-  municipality: string | null
-  province: string | null
-  postal_code: string | null
-  is_active: boolean
-  is_sitecorp_account: boolean
-  account_is_active: boolean
-  account_code: string | null
-}
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",
@@ -74,16 +59,9 @@ const Organization = () => {
       setError(null)
       setLoading(true)
       
-      // El nombre de la columna lo resuelve la frontera de nomenclatura. El alias
-      // `tenant_id:company_client_id` mantiene la clave JS que usa la app.
-      const entitiesResult = await supabase
-        .from("organization_entities")
-        .select(selectQuery(`*, ${selectColumn("clientId")}`))
-        .eq(columnName("clientId"), currentCompanyClientId)
-        .order("name")
-      
-      if (entitiesResult.error) throw entitiesResult.error
-      setEntities(entitiesResult.data || [])
+      // Las entidades del cliente activo las devuelve el dominio de estructura
+      // organizativa: la pantalla no compone consultas.
+      setEntities(await loadClientEntities(currentCompanyClientId))
       
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la organización")
@@ -103,13 +81,14 @@ const Organization = () => {
       // HALLAZGO PENDIENTE (documentado, NO corregido aquí): `can_access_entity`
       // espera el id de una entidad organizativa (`organization_entities.id`), no
       // el id del cliente propietario. La migración conserva el comportamiento
-      // actual sin cambios; su corrección corresponde a un bloque propio.
-      const { data } = await supabase.rpc("can_access_entity", {
-        target_entity_id: currentCompanyClientId,
-        permission_code: "organization.manage"
-      })
+      // actual sin cambios —misma RPC, mismos parámetros—; su corrección
+      // corresponde a un bloque propio.
+      const allowed = await loadEntityPermission(
+        currentCompanyClientId,
+        "organization.manage"
+      )
       
-      setCanDeleteEntities(!!data)
+      setCanDeleteEntities(allowed)
     } catch (err) {
       console.error("Error checking delete permissions:", err)
       setCanDeleteEntities(false)
@@ -130,17 +109,12 @@ const Organization = () => {
     setEntityDialogOpen(true)
   }
   
-  const deleteOrganizationEntity = async () => {
+  const removeOrganizationEntity = async () => {
     if (!deleteEntity) return
     
     try {
       setDeleting(true)
-      const response = await supabase
-        .from("organization_entities")
-        .delete()
-        .eq("id", deleteEntity.id)
-      
-      if (response.error) throw response.error
+      await deleteOrganizationEntity(deleteEntity.id)
       
       setDeleteEntity(null)
       loadEntities()
@@ -155,10 +129,16 @@ const Organization = () => {
     entity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entity.code.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  // Composición de la jerarquía: regla única del dominio de estructura organizativa.
+  const { childrenByParent } = React.useMemo(
+    () => buildOrganizationTree(entities),
+    [entities]
+  )
   
   const renderEntityTree = (entityList: OrganizationEntity[], level = 0) => {
     return entityList.map((entity) => {
-      const hasChildren = entities.some(e => e.parent_id === entity.id)
+      const hasChildren = (childrenByParent[entity.id] || []).length > 0
       
       return (
         <div key={entity.id} className="space-y-2">
@@ -225,10 +205,7 @@ const Organization = () => {
               )}
             </div>
           </div>
-          {hasChildren && renderEntityTree(
-            entities.filter(e => e.parent_id === entity.id),
-            level + 1
-          )}
+          {hasChildren && renderEntityTree(childrenByParent[entity.id] || [], level + 1)}
         </div>
       )
     })
@@ -321,7 +298,7 @@ const Organization = () => {
             <SiteCorpButton
               type="button"
               variant="destructive"
-              onClick={deleteOrganizationEntity}
+              onClick={removeOrganizationEntity}
               disabled={deleting}
             >
               {deleting ? "Eliminando..." : "Eliminar"}

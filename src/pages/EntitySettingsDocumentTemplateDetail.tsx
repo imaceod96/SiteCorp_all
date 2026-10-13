@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
+import { loadEntityPermissionSafe } from "@/domains/access-control"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -109,15 +109,11 @@ const EntitySettingsDocumentTemplateDetail = () => {
     setNotAllowed(null)
 
     try {
-      const [{ data: canView }, { data: canManageTemplates }] = await Promise.all([
-        supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "document_templates.view",
-        }),
-        supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "document_templates.manage",
-        }),
+      // Los permisos se preguntan al dominio de control de acceso: un fallo de la
+      // comprobación no habilita nada.
+      const [canView, canManageTemplates] = await Promise.all([
+        loadEntityPermissionSafe(entityId, "document_templates.view"),
+        loadEntityPermissionSafe(entityId, "document_templates.manage"),
       ])
 
       if (!canView && !canManageTemplates) {
@@ -125,7 +121,7 @@ const EntitySettingsDocumentTemplateDetail = () => {
         return
       }
 
-      setCanManage(!!canManageTemplates)
+      setCanManage(canManageTemplates)
 
       const fresh = await fetchDocumentTemplate(templateId)
       if (!fresh || fresh.organization_entity_id !== entityId) {

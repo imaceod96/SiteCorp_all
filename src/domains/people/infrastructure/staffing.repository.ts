@@ -265,28 +265,6 @@ export async function fetchEntityOccupancy(entityId: string): Promise<EntityOccu
   return { counts, occupants }
 }
 
-/**
- * Permiso efectivo sobre la entidad SIN propagar fallos (`can_access_entity`). Es la
- * comprobación que ya hacían estas pantallas, que sólo la usan para habilitar botones y
- * enlaces de configuración: un fallo de la comprobación no habilita nada y no debe tumbar
- * la vista. La autoridad real sigue siendo RLS y las RPC.
- */
-export async function fetchEntityPermission(
-  entityId: string,
-  permissionCode: string
-): Promise<boolean> {
-  try {
-    const { data, error } = await supabase.rpc("can_access_entity", {
-      target_entity_id: entityId,
-      permission_code: permissionCode,
-    })
-    if (error) return false
-    return !!data
-  } catch {
-    return false
-  }
-}
-
 interface RawHireablePersonRow {
   id: string
   first_name: string

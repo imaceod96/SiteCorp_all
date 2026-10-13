@@ -1,4 +1,5 @@
 import {
+  deleteOrganizationEntityById,
   insertOrganizationEntity,
   updateOrganizationEntity,
 } from "../infrastructure/organization-entities.repository"
@@ -54,4 +55,15 @@ export async function saveOrganizationEntity(input: SaveOrganizationEntityInput)
 
     throw error
   }
+}
+
+/**
+ * Baja de una entidad organizativa.
+ *
+ * No se comprueba ningún permiso aquí: quién puede eliminar una entidad lo decide RLS y,
+ * en la interfaz, el permiso de plataforma `organizations.delete` (que ya gobierna la
+ * visibilidad del botón). El borrado arrastra la jerarquía en la base de datos.
+ */
+export async function deleteOrganizationEntity(entityId: string): Promise<void> {
+  await deleteOrganizationEntityById(entityId)
 }

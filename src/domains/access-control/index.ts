@@ -76,10 +76,14 @@ export {
 
 /* Consultas */
 export {
+  canViewEntity,
   loadEntityAccessOverview,
   loadEntityAccessWorkspace,
   loadEntityPermission,
+  loadEntityPermissionCodes,
+  loadEntityPermissionSafe,
   loadEntityPermissions,
+  loadEntityUserAccess,
 } from "./application/entity-access.queries"
 export { loadRoleScopeWorkspace } from "./application/roles.queries"
 
