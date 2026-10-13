@@ -11,14 +11,15 @@ import { Label } from "@/components/ui/label"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Plus, Trash2 } from "lucide-react"
+import { academicCategoryLabel } from "@/domains/organization-structure"
 import {
-  academicCategoryLabel,
   type PrenominaWorkerEntry,
   type PrenominaNightEntry,
   type PrenominaClaConfig,
   computeClaPreview,
   computeEntryPreview,
   computeNightPreview,
+  deletedNightIds,
   formatDateDMY,
   formatDecimalInput,
   formatHours,
@@ -28,7 +29,10 @@ import {
   formatTenureLabel,
   parseDecimalInput,
   parseIntegerInput,
-} from "@/lib/prenomina"
+  validateClaMinutes,
+  validateNightInput,
+  validateWorkedDays,
+} from "@/domains/payroll-preparation"
 
 interface NightRow {
   id: string | null
@@ -153,50 +157,57 @@ const WorkerPrenominaDialog = ({
 
   const handleSave = async () => {
     setError(null)
-    if (workedDaysValue < 0) {
-      setError("Los días trabajados no pueden ser negativos")
+    // Validaciones de dominio (mismos mensajes y mismo orden que antes).
+    const daysError = validateWorkedDays(workedDaysValue)
+    if (daysError) {
+      setError(daysError)
       return
     }
     for (const row of rows) {
-      if (!row.start || !row.end) {
-        setError("Cada registro nocturno debe tener hora de inicio y fin")
-        return
-      }
-      if (parseIntegerInput(row.nights) <= 0) {
-        setError("Las noches trabajadas deben ser mayores que cero")
+      const nightError = validateNightInput({
+        id: row.id,
+        start: row.start,
+        end: row.end,
+        nights: parseIntegerInput(row.nights),
+      })
+      if (nightError) {
+        setError(nightError)
         return
       }
     }
 
     // CLA: minutos enteros >= 0 (no se aceptan negativos ni texto).
-    const readMinutes = (raw: string, label: string): number | null => {
-      const trimmed = raw.trim()
-      if (trimmed === "") return 0
-      if (!/^\d+$/.test(trimmed)) {
-        setError(`${label}: los minutos deben ser un número entero mayor o igual que 0`)
-        return null
-      }
-      return Number(trimmed)
-    }
     let claDayMin = 0
     let claNight1Min = 0
     let claNight2Min = 0
     if (claApplied && claDayUsed && claDayEnabled) {
-      const value = readMinutes(claDayMinutes, "CLA diurno")
-      if (value === null) return
-      claDayMin = value
+      const read = validateClaMinutes(claDayMinutes, "CLA diurno")
+      if (read.error) {
+        setError(read.error)
+        return
+      }
+      claDayMin = read.minutes
     }
     if (claApplied && claNightUsed && claNightEnabled) {
-      const value1 = readMinutes(claNight1Minutes, "CLA nocturno (tramo 1)")
-      if (value1 === null) return
-      claNight1Min = value1
-      const value2 = readMinutes(claNight2Minutes, "CLA nocturno (tramo 2)")
-      if (value2 === null) return
-      claNight2Min = value2
+      const read1 = validateClaMinutes(claNight1Minutes, "CLA nocturno (tramo 1)")
+      if (read1.error) {
+        setError(read1.error)
+        return
+      }
+      claNight1Min = read1.minutes
+      const read2 = validateClaMinutes(claNight2Minutes, "CLA nocturno (tramo 2)")
+      if (read2.error) {
+        setError(read2.error)
+        return
+      }
+      claNight2Min = read2.minutes
     }
 
-    const keptIds = rows.map((r) => r.id).filter((id): id is string => !!id)
-    const deletedNightIds = originalIds.filter((id) => !keptIds.includes(id))
+    // Registros nocturnos que el usuario eliminó (existían y ya no están).
+    const removedNightIds = deletedNightIds(
+      originalIds,
+      rows.map((row) => ({ id: row.id }))
+    )
 
     setSaving(true)
     try {
@@ -208,7 +219,7 @@ const WorkerPrenominaDialog = ({
           end: r.end,
           nights: parseIntegerInput(r.nights),
         })),
-        deletedNightIds,
+        removedNightIds,
         {
           applied: claApplied,
           dayUsed: claApplied && claDayUsed && claDayEnabled,

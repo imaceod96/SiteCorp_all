@@ -16,11 +16,14 @@ import { FileSpreadsheet, RefreshCw, Lock, Unlock, Eye, ChevronDown, ChevronRigh
 import WorkerPrenominaDialog from "@/components/prenomina/WorkerPrenominaDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
+import { academicCategoryLabel } from "@/domains/organization-structure"
 import {
   MONTH_LABELS,
   PRENOMINA_STATUS_LABELS,
-  academicCategoryLabel,
-  claConfigFromEntry,
+  canManagePrenomina,
+  canViewPrenomina,
+  isPeriodClosed,
+  resolveEntryClaConfig,
   type PrenominaPeriod,
   type PrenominaWorkerEntry,
   type PrenominaNightEntry,
@@ -30,7 +33,6 @@ import {
   closePrenominaPeriod,
   createPrenominaPeriod,
   deletePrenominaNight,
-  fetchPrenominaClaConfig,
   fetchPrenominaEntries,
   fetchPrenominaNights,
   fetchPrenominaPeriod,
@@ -45,7 +47,7 @@ import {
   savePrenominaExcelBlob,
   savePrenominaInputs,
   savePrenominaNight,
-} from "@/lib/prenomina"
+} from "@/domains/payroll-preparation"
 
 interface SaveNightInput {
   id: string | null
@@ -119,8 +121,8 @@ const EntityPrenomina = () => {
   const { currentEntity } = useCurrentEntity()
   const { permissions, loading: permissionsLoading } = useEntityPermissions(entityId)
 
-  const canView = permissions.includes("prenomina.view") || permissions.includes("prenomina.manage")
-  const canManage = permissions.includes("prenomina.manage")
+  const canView = canViewPrenomina(permissions)
+  const canManage = canManagePrenomina(permissions)
 
   const now = new Date()
   const [year, setYear] = React.useState(now.getFullYear())
@@ -316,15 +318,8 @@ const EntityPrenomina = () => {
   // Cargo: BORRADOR → Cargo ACTUAL; CERRADA → snapshot congelado del registro.
   const openWorkerDialog = async (entry: PrenominaWorkerEntry) => {
     setActiveEntry(entry)
-    if (period?.status === "CERRADA") {
-      setActiveClaConfig(claConfigFromEntry(entry))
-    } else {
-      try {
-        setActiveClaConfig(await fetchPrenominaClaConfig(entry.id))
-      } catch {
-        setActiveClaConfig(claConfigFromEntry(entry))
-      }
-    }
+    // BORRADOR → Cargo ACTUAL; CERRADA → snapshot congelado. Lo decide el dominio.
+    setActiveClaConfig(await resolveEntryClaConfig(entry, period?.status))
     setDialogOpen(true)
   }
 
@@ -444,7 +439,7 @@ const EntityPrenomina = () => {
     )
   }
 
-  const readOnly = period?.status === "CERRADA"
+  const readOnly = isPeriodClosed(period?.status)
 
   return (
     <div className="space-y-6 p-6">
