@@ -1,0 +1,94 @@
+/**
+ * Plantillas documentales — Interfaz pública del contexto.
+ *
+ * Punto único de entrada para los consumidores (páginas y componentes):
+ *   import { fetchDocumentTemplates } from "@/domains/document-templates"
+ *
+ * Estructura:
+ *   domain/entities.ts                            → tipos, contratos y constantes
+ *   domain/rules.ts                               → reglas puras (formato, etiquetas, vigencias)
+ *   infrastructure/document-templates.repository.ts → Supabase y RPC del catálogo
+ *   infrastructure/document-template-files.repository.ts → Storage y analizador central
+ *   application/document-templates.queries.ts     → casos de uso de lectura
+ *   application/document-templates.commands.ts    → casos de uso de escritura
+ *
+ * Alcance DELIBERADAMENTE ACOTADO: la ADMINISTRACIÓN de plantillas de una entidad (listado,
+ * versiones y vigencias, archivos, análisis, validación, activación y descarga). El motor de
+ * generación documental NO forma parte de este contexto y sigue viviendo fuera, aunque se
+ * apoye en estas plantillas ya resueltas.
+ *
+ * La dependencia va en un solo sentido —presentación → aplicación → dominio → infraestructura
+ * → Supabase—, por lo que no puede formarse ningún ciclo entre dominios.
+ *
+ * Los nombres públicos se conservan respecto de la etapa anterior para no alterar a los
+ * consumidores que todavía no se han migrado; lo que cambia es el lugar donde vive el código,
+ * no su contrato.
+ */
+
+/* Constantes y tipos de dominio */
+export {
+  DOCUMENT_TEMPLATES_BUCKET,
+  DOCX_MIME,
+  DOC_MIME,
+  XLSX_MIME,
+  WORD_ACCEPT,
+  MAX_TEMPLATE_FILE_BYTES,
+  UNSUPPORTED_WORD_FILE_MESSAGE,
+} from "./domain/entities"
+
+export type {
+  WordDocumentFormat,
+  DocumentTemplateTypeCode,
+  DocumentTemplateVersionStatus,
+  DocumentTemplateFileKind,
+  DocumentTemplateType,
+  TemplateOccurrence,
+  TemplateMalformed,
+  TemplateIncompatibleVariable,
+  DocumentTemplateAnalysis,
+  DocumentTemplateVersion,
+  DocumentTemplate,
+  TemplateValidationChecks,
+  TemplateValidation,
+  CreateDocumentTemplateInput,
+  TemplateFileInspection,
+  UploadableTemplateVersion,
+  UploadTemplateFileInput,
+  TemplateFileProbe,
+  RegisteredTemplateFile,
+  ReanalyzeTemplateFileInput,
+} from "./domain/entities"
+
+/* Reglas puras (formato de archivo, etiquetas y vigencias) */
+export {
+  TEMPLATE_TYPE_USES_XLSX,
+  templateAcceptForType,
+  documentTypeCodeForTemplateType,
+  detectWordDocumentFormat,
+  inspectTemplateFile,
+  describeTemplateFileProblem,
+  templateFileFormatLabel,
+  formatTemplateFileSize,
+  templateVersionPeriodLabel,
+} from "./domain/rules"
+
+/* Casos de uso de lectura */
+export {
+  fetchCompatibleVariableKeys,
+  fetchDocumentTemplate,
+  fetchDocumentTemplates,
+  fetchDocumentTemplateTypes,
+  getTemplateFileUrl,
+  validateTemplateVersion,
+} from "./application/document-templates.queries"
+
+/* Casos de uso de escritura */
+export {
+  activateTemplateVersion,
+  createDocumentTemplate,
+  createDocumentTemplateVersion,
+  deactivateTemplateVersion,
+  reanalyzeTemplateFile,
+  registerTemplateFile,
+  saveTemplateAnalysis,
+} from "./application/document-templates.commands"

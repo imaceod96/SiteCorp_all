@@ -2,6 +2,7 @@ import * as React from "react"
 import { supabase } from "@/lib/supabase"
 import { rpcName, selectQuery, tableName } from "@/integrations/supabase/schema-target"
 import type { User } from "@supabase/supabase-js"
+import { loadPlatformPermissionSafe } from "@/domains/access-control"
 import {
   AuthContext,
   type AuthProfile,
@@ -137,17 +138,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut()
   }
 
+  /**
+   * Permiso de plataforma del usuario. La consulta se delega en el dominio de control de
+   * acceso —único lugar desde el que se invoca `has_platform_permission`— y se conserva el
+   * atajo del superadministrador para no consultar lo que ya se sabe.
+   *
+   * El contrato público de `AuthContext` no cambia: la misma firma y la misma política de
+   * errores (un fallo de la comprobación devuelve `false`, nunca habilita nada).
+   */
   const hasPlatformPermission = async (code: string): Promise<boolean> => {
-    try {
-      if (isPlatformSuperAdmin) return true
-      const { data, error } = await supabase.rpc("has_platform_permission", {
-        permission_code: code,
-      })
-      if (error) return false
-      return !!data
-    } catch {
-      return false
-    }
+    if (isPlatformSuperAdmin) return true
+    return loadPlatformPermissionSafe(code)
   }
 
   const hasTenantPermission = async (code: string): Promise<boolean> => {

@@ -22,7 +22,7 @@ import {
   type DocumentTemplate,
   type DocumentTemplateVersion,
   type TemplateValidation,
-} from "@/lib/document-templates"
+} from "@/domains/document-templates"
 import DocumentTemplateFilesPanel from "@/components/document-templates/DocumentTemplateFilesPanel"
 import DocumentTemplateValidationPanel from "@/components/document-templates/DocumentTemplateValidationPanel"
 import DocumentTemplateVersionsPanel from "@/components/document-templates/DocumentTemplateVersionsPanel"

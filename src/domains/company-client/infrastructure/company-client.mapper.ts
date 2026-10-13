@@ -36,6 +36,19 @@ export interface LegacyTenantSummary {
 }
 
 /**
+ * Forma de la fila que devuelve la RPC de alta y que la pantalla de administración usa
+ * como registro de trabajo (código y estado YA resueltos por el servidor).
+ *
+ * Se declara como especialización del contrato legacy —y no como una copia— para que el
+ * compilador garantice que sigue siendo la MISMA fila física: los dos campos que la
+ * interfaz necesita obligatorios son los que el backend siempre devuelve.
+ */
+export interface CompanyClientRecord extends LegacyTenantSummary {
+  code: string
+  is_active: boolean
+}
+
+/**
  * `tenant_id` legacy → `companyClientId` de dominio.
  * Correspondencia de identidad: conserva el valor tal cual.
  */

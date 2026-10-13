@@ -2,6 +2,7 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth, type AuthProfile } from "@/contexts/AuthContext"
 import { supabase } from "@/lib/supabase"
+import { loadPlatformPermission } from "@/domains/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -227,10 +228,8 @@ const PlatformUsers = () => {
 
   const loadEffectivePermissions = async (user: PlatformUser) => {
     try {
-      const { error } = await supabase.rpc("has_platform_permission", {
-        permission_code: "users.view_all",
-      })
-      if (error) throw error
+      // La consulta de un permiso de plataforma vive en el dominio de control de acceso.
+      await loadPlatformPermission("users.view_all")
     } catch (err) {
       console.error("Error loading permissions:", err)
     }

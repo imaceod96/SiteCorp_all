@@ -24,14 +24,16 @@ import {
 import { SelectItem } from "@/components/ui/select"
 import EntityUsersDialog from "@/components/entity-users-dialog"
 import {
+  companyClientNameError,
   createCompanyClient,
   deleteCompanyClient,
-  getCompanyClientDeletionSummary,
+  loadCompanyClientDeletionSummary,
+  loadCompanyClients,
   updateCompanyClient,
+  type CompanyClient,
   type CompanyClientDeletionSummary,
   type CompanyClientRecord,
-} from "@/lib/company-clients"
-import { loadCompanyClients, type CompanyClient } from "@/domains/company-client"
+} from "@/domains/company-client"
 import {
   buildOrganizationTree,
   deleteOrganizationEntity,
@@ -96,15 +98,6 @@ const toCompanyClientRecord = (companyClient: CompanyClient): CompanyClientRecor
   created_at: companyClient.createdAt ?? undefined,
 })
 
-const friendlyCompanyClientError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error ?? "")
-  const normalized = message.toLowerCase()
-
-  if (normalized.includes("row-level security")) {
-    return "No tienes permiso para crear o editar clientes."
-  }
-  return message || "No se pudo guardar el cliente."
-}
 
 const Organizations = () => {
   const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
@@ -288,7 +281,8 @@ const Organizations = () => {
       setCompanyClientForm(emptyCompanyClientForm)
       await loadData()
     } catch (err) {
-      setCompanyClientError(friendlyCompanyClientError(err))
+      // El mensaje lo decide la regla pura del dominio: la pantalla no traduce errores.
+      setCompanyClientError(companyClientNameError(err))
     } finally {
       setCompanyClientSaving(false)
     }
@@ -339,7 +333,7 @@ const Organizations = () => {
     setDeleteSummaryLoading(true)
 
     try {
-      const summary = await getCompanyClientDeletionSummary(companyClient.id)
+      const summary = await loadCompanyClientDeletionSummary(companyClient.id)
       setDeleteSummary(summary)
     } catch (err) {
       console.error("No se pudo preparar la eliminación del cliente.", {

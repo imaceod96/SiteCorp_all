@@ -323,3 +323,77 @@ test("las consultas de organization_entities y de clientes viven en sus reposito
   expect(clientsQueries).toMatch(/loadCompanyClients/)
   expect(clientsQueries).not.toMatch(/@\/lib\/supabase/)
 })
+
+// ---------------------------------------------------------------------------
+// 5. Consolidación de los permisos de PLATAFORMA
+// ---------------------------------------------------------------------------
+
+test("la consulta de permisos de plataforma también vive sólo en control de acceso", () => {
+  const platformRepository = read(
+    "src/domains/access-control/infrastructure/platform-permissions.repository.ts"
+  )
+  expect(platformRepository).toMatch(/@\/lib\/supabase/)
+  expect(platformRepository).toMatch(/\.rpc\("has_platform_permission", \{/)
+  // El nombre del argumento es el contrato del backend y no cambia.
+  expect(platformRepository).toMatch(/permission_code: permissionCode/)
+
+  // Las dos políticas de error de los consumidores se conservan, y sólo aquí.
+  const platformQueries = read(
+    "src/domains/access-control/application/platform-permissions.queries.ts"
+  )
+  expect(platformQueries).toMatch(/export async function loadPlatformPermission\(/)
+  expect(platformQueries).toMatch(/export async function loadPlatformPermissionSafe\(/)
+  expect(platformQueries).toMatch(/catch \{\s*return false/)
+
+  // Ningún dominio ni la presentación mantienen ya su propia invocación de la RPC.
+  const sinEnvoltorioPropio = [
+    "src/contexts/AuthProvider.tsx",
+    "src/pages/PlatformUsers.tsx",
+    "src/domains/organization-structure/application/salary-administration.queries.ts",
+    "src/domains/organization-structure/infrastructure/salary-administration.repository.ts",
+  ]
+
+  for (const file of sinEnvoltorioPropio) {
+    expect(read(file), `${file} no debe invocar has_platform_permission`).not.toMatch(
+      /rpc\("has_platform_permission"/
+    )
+  }
+
+  // El contrato público de AuthContext no cambia y el atajo del superadministrador se
+  // conserva: la consulta la responde el backend, que ya contempla ese privilegio.
+  expect(read("src/contexts/AuthContext.ts")).toMatch(
+    /hasPlatformPermission: \(code: string\) => Promise<boolean>/
+  )
+  const provider = read("src/contexts/AuthProvider.tsx")
+  expect(provider).toMatch(/if \(isPlatformSuperAdmin\) return true/)
+  expect(provider).toMatch(/loadPlatformPermissionSafe\(code\)/)
+
+  // El consumidor que trata el fallo como error real sigue propagándolo.
+  expect(
+    read("src/domains/organization-structure/application/salary-administration.queries.ts")
+  ).toMatch(/loadPlatformPermission\("salary\.(view|manage)"\)/)
+  expect(read("src/pages/PlatformUsers.tsx")).toMatch(/loadPlatformPermission\("users\.view_all"\)/)
+
+  // Sin ciclos: el proveedor de autenticación depende del dominio, nunca al revés.
+  expect(platformRepository).not.toMatch(/@\/contexts\//)
+  expect(platformQueries).not.toMatch(/@\/contexts\//)
+  expect(read("src/domains/access-control/index.ts")).toMatch(/loadPlatformPermissionSafe/)
+})
+
+// ---------------------------------------------------------------------------
+// 6. Hallazgo de `organization.manage` (documentado, sin corregir)
+// ---------------------------------------------------------------------------
+
+test("el hallazgo de organization.manage sigue documentado y sin corregir", () => {
+  const page = read("src/pages/Organization.tsx")
+
+  // La comprobación sigue pasando el id del CLIENTE como id de entidad, tal como estaba.
+  expect(page).toMatch(
+    /loadEntityPermission\(\s*currentCompanyClientId,\s*"organization\.manage"\s*\)/
+  )
+  expect(page).toMatch(/HALLAZGO PENDIENTE/)
+
+  // Y NO se ha sustituido por una autorización calculada en la interfaz.
+  expect(page).not.toMatch(/has_platform_permission/)
+  expect(page).not.toMatch(/@\/lib\/supabase/)
+})

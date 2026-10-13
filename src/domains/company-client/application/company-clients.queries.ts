@@ -1,6 +1,10 @@
-import { selectCompanyClients } from "../infrastructure/company-client.repository"
+import {
+  rpcCompanyClientDeletionSummary,
+  selectCompanyClients,
+} from "../infrastructure/company-client.repository"
+import { companyClientDeletionError } from "../domain/rules"
 import { toCompanyClient } from "../infrastructure/company-client.mapper"
-import type { CompanyClient } from "../domain/entities"
+import type { CompanyClient, CompanyClientDeletionSummary, CompanyClientId } from "../domain/entities"
 
 /**
  * Company Client — Casos de uso de lectura (aplicación).
@@ -16,4 +20,26 @@ import type { CompanyClient } from "../domain/entities"
 export async function loadCompanyClients(): Promise<CompanyClient[]> {
   const rows = await selectCompanyClients()
   return rows.map(toCompanyClient)
+}
+
+/**
+ * RESUMEN de consecuencias antes de borrar el cliente (solo lectura).
+ *
+ * Las cifras las calcula el backend con el permiso de plataforma `tenants.delete`: la
+ * interfaz nunca las inventa ni las estima. Si la consulta falla se registra el
+ * diagnóstico técnico y se propaga un mensaje de usuario: sin resumen fiable no debe
+ * ofrecerse la eliminación.
+ */
+export async function loadCompanyClientDeletionSummary(
+  companyClientId: CompanyClientId
+): Promise<CompanyClientDeletionSummary> {
+  try {
+    return await rpcCompanyClientDeletionSummary(companyClientId)
+  } catch (error) {
+    console.error("No se pudo obtener el resumen de eliminación del cliente.", {
+      companyClientId,
+      error,
+    })
+    throw new Error(companyClientDeletionError(error))
+  }
 }

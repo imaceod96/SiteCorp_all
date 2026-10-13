@@ -80,9 +80,18 @@ const Organization = () => {
     try {
       // HALLAZGO PENDIENTE (documentado, NO corregido aquí): `can_access_entity`
       // espera el id de una entidad organizativa (`organization_entities.id`), no
-      // el id del cliente propietario. La migración conserva el comportamiento
-      // actual sin cambios —misma RPC, mismos parámetros—; su corrección
-      // corresponde a un bloque propio.
+      // el id del cliente propietario. Contrato verificado de la función SQL:
+      // devuelve false sin sesión o con el perfil inactivo, true para el
+      // superadministrador de plataforma y, para el resto, busca el id en
+      // `organization_entities` y devuelve false si no existe. Como aquí se pasa un
+      // `company_clients.id`, la comprobación sólo es verdadera para el
+      // superadministrador. Contratos alternativos ya definidos en la base:
+      // `can_manage_entity(target_entity_id)` (por entidad) y
+      // `can_use_company_client_permission(target_tenant_id, permission_code)` (por
+      // cliente). Elegir entre ellos cambia la semántica del permiso, así que la
+      // migración conserva el comportamiento actual sin cambios —misma RPC, mismos
+      // parámetros— y su corrección corresponde a un bloque propio con autorización
+      // expresa.
       const allowed = await loadEntityPermission(
         currentCompanyClientId,
         "organization.manage"

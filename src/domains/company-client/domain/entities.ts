@@ -50,3 +50,56 @@ export interface CompanyClient {
 export interface CompanyClientScope {
   companyClientId: CompanyClientId
 }
+
+/**
+ * Datos editables del cliente (alta y edición).
+ *
+ * El CÓDIGO no forma parte de la entrada: lo genera el servidor al crear el cliente
+ * (nombre normalizado + sufijo alfanumérico único) y es INMUTABLE después — la base de
+ * datos rechaza cualquier cambio con el disparador `enforce_company_client_code_immutable`.
+ * Por eso nunca se envía desde el formulario ni se regenera al renombrar.
+ */
+export interface CompanyClientInput {
+  name: string
+  description?: string | null
+  isActive?: boolean
+}
+
+/**
+ * Resumen REAL de las consecuencias de eliminar un cliente (solo lectura).
+ *
+ * Lo calcula el backend con el permiso de plataforma `tenants.delete`: la interfaz NUNCA
+ * inventa ni estima cifras. Las claves `tenant_id` / `tenant_name` son el CONTRATO de la
+ * RPC (preservado por la migración SQL) y se conservan literales por compatibilidad.
+ */
+export interface CompanyClientDeletionSummary {
+  tenant_id: string
+  tenant_name: string
+  entities: number
+  workers: number
+  positions: number
+  candidates: number
+  contracts: number
+  addendums: number
+  worker_documents: number
+  candidate_documents: number
+  document_templates: number
+  roles: number
+  memberships: number
+  invitations: number
+}
+
+/**
+ * Resultado del borrado definitivo del cliente.
+ *
+ * El backend autoriza, exige la confirmación por nombre y borra en una única transacción;
+ * además limpia del Storage privado exclusivamente los objetos del cliente eliminado y
+ * reporta los fallos parciales, que la interfaz muestra como aviso y NUNCA oculta.
+ */
+export interface CompanyClientDeletionResult {
+  status: "DELETED"
+  tenant_id: string
+  tenant_name: string | null
+  summary: CompanyClientDeletionSummary | null
+  storage: { removed: number; failed: number; failures?: string[] }
+}

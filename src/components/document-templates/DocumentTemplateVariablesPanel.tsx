@@ -3,7 +3,7 @@ import { DOCUMENT_VARIABLES, type DocumentVariableDefinition } from "@/lib/docum
 import {
   documentTypeCodeForTemplateType,
   type TemplateOccurrence,
-} from "@/lib/document-templates"
+} from "@/domains/document-templates"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"

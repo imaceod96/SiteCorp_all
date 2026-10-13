@@ -6,13 +6,16 @@
  *
  * Estructura:
  *   domain/entities.ts                             → tipos y contratos
- *   domain/rules.ts                                → reglas puras
+ *   domain/rules.ts                                → reglas puras (incluidos los mensajes de error)
  *   infrastructure/company-client.mapper.ts        → compatibilidad con `tenant_id`
- *   infrastructure/company-client.repository.ts    → lecturas de `tenants` (unitaria y lista)
+ *   infrastructure/company-client.repository.ts    → ÚNICO acceso a `tenants` y a sus RPC
  *   application/company-clients.queries.ts         → casos de uso de lectura
+ *   application/company-clients.commands.ts        → casos de uso de escritura y ciclo de vida
  *
- * Alcance: el módulo ya lo consumen la presentación (layouts de cliente y de
- * plataforma) para expresar el cliente activo con el vocabulario de dominio.
+ * Alcance: el dominio cubre el CICLO DE VIDA completo del cliente propietario — lectura
+ * (unitaria y de lista), alta, edición, resumen previo al borrado y borrado definitivo con
+ * confirmación. La presentación (layouts, pantalla de organización y administración de
+ * clientes) consume estos casos de uso con el vocabulario de dominio.
  *
  * ADAPTADOR DE LECTURA: `LegacyTenantSummary` (la forma de la fila legacy de
  * `tenants`) es EXACTAMENTE el tipo que la presentación expone como
@@ -34,13 +37,25 @@
  */
 
 /* Identificadores y contratos de dominio */
-export type { CompanyClientId, CompanyClient, CompanyClientScope } from "./domain/entities"
+export type {
+  CompanyClientId,
+  CompanyClient,
+  CompanyClientScope,
+  CompanyClientInput,
+  CompanyClientDeletionSummary,
+  CompanyClientDeletionResult,
+} from "./domain/entities"
 
-/* Reglas puras */
-export { isCompanyClientId, sameCompanyClient } from "./domain/rules"
+/* Reglas puras (incluidos los mensajes de usuario de cada operación) */
+export {
+  isCompanyClientId,
+  sameCompanyClient,
+  companyClientNameError,
+  companyClientDeletionError,
+} from "./domain/rules"
 
 /* Mapper de compatibilidad (legacy `tenant_id` ↔ `companyClientId`) */
-export type { LegacyTenantSummary } from "./infrastructure/company-client.mapper"
+export type { LegacyTenantSummary, CompanyClientRecord } from "./infrastructure/company-client.mapper"
 
 export {
   tenantIdToCompanyClientId,
@@ -48,8 +63,18 @@ export {
   toCompanyClient,
 } from "./infrastructure/company-client.mapper"
 
-/* Repositorio (lectura de la tabla legacy `tenants`) */
+/* Repositorio: lecturas de la tabla legacy `tenants` (el resto son de su capa de escritura) */
 export { getCompanyClientById } from "./infrastructure/company-client.repository"
 
 /* Casos de uso de lectura */
-export { loadCompanyClients } from "./application/company-clients.queries"
+export {
+  loadCompanyClients,
+  loadCompanyClientDeletionSummary,
+} from "./application/company-clients.queries"
+
+/* Casos de uso de escritura y ciclo de vida */
+export {
+  createCompanyClient,
+  updateCompanyClient,
+  deleteCompanyClient,
+} from "./application/company-clients.commands"

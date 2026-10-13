@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { loadEntityPermissionSafe } from "@/domains/access-control"
+import { fetchEntityName } from "@/domains/organization-structure"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { formatDocumentDate } from "@/lib/document-variables"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
@@ -21,7 +21,7 @@ import {
   type DocumentTemplate,
   type DocumentTemplateVersion,
   type DocumentTemplateType,
-} from "@/lib/document-templates"
+} from "@/domains/document-templates"
 import CreateDocumentTemplateDialog from "@/components/document-templates/CreateDocumentTemplateDialog"
 import { FileText, Plus, ArrowRight, Download, FilePlus2, PowerOff } from "lucide-react"
 
@@ -59,12 +59,13 @@ const EntitySettingsDocumentTemplates = () => {
     setLoadError(null)
 
     try {
-      // Los permisos se preguntan al dominio de control de acceso: un fallo de la
-      // comprobación no habilita nada y no tumba la pantalla.
-      const [canView, canManageTemplates, { data: entity }] = await Promise.all([
+      // Los permisos se preguntan al dominio de control de acceso (un fallo de la
+      // comprobación no habilita nada y no tumba la pantalla) y el nombre de la entidad al
+      // de estructura organizativa: la pantalla no compone consultas.
+      const [canView, canManageTemplates, name] = await Promise.all([
         loadEntityPermissionSafe(entityId, "document_templates.view"),
         loadEntityPermissionSafe(entityId, "document_templates.manage"),
-        supabase.from("organization_entities").select("name").eq("id", entityId).maybeSingle(),
+        fetchEntityName(entityId),
       ])
 
       if (!canView && !canManageTemplates) {
@@ -73,7 +74,7 @@ const EntitySettingsDocumentTemplates = () => {
       }
 
       setCanManage(canManageTemplates)
-      setEntityName((entity as { name: string } | null)?.name || "")
+      setEntityName(name)
 
       const [catalog, loadedTemplates] = await Promise.all([
         fetchDocumentTemplateTypes(),

@@ -44,3 +44,31 @@ export function sameCompanyClient(
   if (!isCompanyClientId(a) || !isCompanyClientId(b)) return false
   return normalize(a) === normalize(b)
 }
+
+/**
+ * Mensaje de usuario para un fallo al GUARDAR un cliente.
+ *
+ * Regla pura de traducción de errores: no consulta nada, no concede nada y sólo
+ * reescribe los fallos que el backend identifica con un significado estable
+ * (permiso denegado por RLS y colisión del código generado). Cualquier otro mensaje
+ * del servidor se conserva literal: el diagnóstico original nunca se descarta.
+ */
+export function companyClientNameError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err ?? "")
+  if (message.toLowerCase().includes("row-level security")) {
+    return "No tienes permiso para crear o editar clientes."
+  }
+  if (message.toLowerCase().includes("duplicate key")) {
+    return "No se pudo generar un código único para el cliente. Inténtalo de nuevo."
+  }
+  return message || "No se pudo guardar el cliente."
+}
+
+/** Mensaje de usuario para un fallo al ELIMINAR un cliente (misma política de errores). */
+export function companyClientDeletionError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err ?? "")
+  if (message.toLowerCase().includes("row-level security")) {
+    return "No tienes permiso para eliminar clientes."
+  }
+  return message || "No se pudo eliminar el cliente."
+}

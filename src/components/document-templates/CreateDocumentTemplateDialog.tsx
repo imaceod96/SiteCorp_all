@@ -8,7 +8,7 @@ import {
   registerTemplateFile,
   type DocumentTemplateType,
   type DocumentTemplateTypeCode,
-} from "@/lib/document-templates"
+} from "@/domains/document-templates"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"

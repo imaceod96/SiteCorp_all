@@ -298,13 +298,3 @@ export async function rpcResolveSalaryValue(
   if (!data || data.length === 0) return null
   return data[0] as SalaryGroupValue
 }
-
-/** Permiso de plataforma del usuario (nunca de una entidad). */
-export async function rpcHasPlatformPermission(permissionCode: string): Promise<boolean> {
-  const { data, error } = await supabase.rpc("has_platform_permission", {
-    permission_code: permissionCode,
-  })
-
-  if (error) throw error
-  return !!data
-}

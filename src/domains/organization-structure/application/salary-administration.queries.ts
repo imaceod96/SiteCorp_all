@@ -1,7 +1,6 @@
-import { loadEntityPermission } from "@/domains/access-control"
+import { loadEntityPermission, loadPlatformPermission } from "@/domains/access-control"
 import { resolveApplicableScaleId } from "../infrastructure/salary.repository"
 import {
-  rpcHasPlatformPermission,
   rpcResolveSalaryValue,
   selectCurrentSalaryGroupValue,
   selectEntityEmpresarialScale,
@@ -75,21 +74,22 @@ export async function resolveSalaryValueForGroup(
 
 /**
  * Permisos salariales: basta un permiso de plataforma (que ya incluye al superadministrador)
- * o el permiso interno de la entidad.
+ * o el permiso interno de la entidad. Ambos se preguntan al dominio de control de acceso,
+ * que es el único que conoce las dos familias de permisos.
  */
 export async function canViewSalary(entityId?: string): Promise<boolean> {
-  if (await rpcHasPlatformPermission("salary.view")) return true
+  if (await loadPlatformPermission("salary.view")) return true
   if (entityId) return loadEntityPermission(entityId, "salary.view")
   return false
 }
 
 export async function canManageSalary(entityId?: string): Promise<boolean> {
-  if (await rpcHasPlatformPermission("salary.manage")) return true
+  if (await loadPlatformPermission("salary.manage")) return true
   if (entityId) return loadEntityPermission(entityId, "salary.manage")
   return false
 }
 
 /** Gestionar la escala presupuestada global es un permiso de plataforma. */
 export async function canManageGlobalSalary(): Promise<boolean> {
-  return rpcHasPlatformPermission("salary.manage")
+  return loadPlatformPermission("salary.manage")
 }

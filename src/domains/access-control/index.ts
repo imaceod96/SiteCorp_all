@@ -15,7 +15,12 @@
  * Contexto propio y DELIMITADO: roles, permisos y acceso de usuarios. No depende de
  * ningún otro dominio (la dependencia va siempre presentación → dominio → Supabase),
  * por lo que no puede formarse un ciclo. La autorización efectiva sigue siendo del
- * backend: RLS, `can_access_entity` y los RPC de roles y accesos.
+ * backend: RLS, `can_access_entity`, `has_platform_permission` y los RPC de roles y accesos.
+ *
+ * Es el ÚNICO lugar desde el que se preguntan las dos familias de permisos: los internos
+ * de una entidad (`can_access_entity` / `can_view_entity` / `list_entity_permissions`) y los
+ * de plataforma (`has_platform_permission`). Los consumidores —incluido el proveedor de
+ * autenticación— delegan aquí y no mantienen envoltorios propios.
  */
 
 /* Tipos y contratos */
@@ -85,6 +90,12 @@ export {
   loadEntityPermissions,
   loadEntityUserAccess,
 } from "./application/entity-access.queries"
+
+/* Permisos de PLATAFORMA (Nivel 1 — Administración global de SiteCorp) */
+export {
+  loadPlatformPermission,
+  loadPlatformPermissionSafe,
+} from "./application/platform-permissions.queries"
 export { loadRoleScopeWorkspace } from "./application/roles.queries"
 
 /* Comandos */
