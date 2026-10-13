@@ -246,8 +246,10 @@ test("las comprobaciones de permiso viven sólo en el dominio de control de acce
     "src/domains/access-control/application/entity-access.commands.ts",
     "src/domains/access-control/application/roles.queries.ts",
     "src/domains/access-control/application/roles.commands.ts",
+    "src/domains/access-control/application/platform-permissions.queries.ts",
     "src/domains/access-control/infrastructure/entity-access.repository.ts",
     "src/domains/access-control/infrastructure/permissions.repository.ts",
+    "src/domains/access-control/infrastructure/platform-permissions.repository.ts",
     "src/domains/access-control/infrastructure/roles.repository.ts",
   ]
 

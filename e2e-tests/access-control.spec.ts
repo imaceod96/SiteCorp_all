@@ -1042,6 +1042,7 @@ test("el dominio de control de acceso no depende de la presentación ni de otros
     "src/domains/access-control/application/entity-access.commands.ts",
     "src/domains/access-control/application/roles.queries.ts",
     "src/domains/access-control/application/roles.commands.ts",
+    "src/domains/access-control/application/platform-permissions.queries.ts",
   ]
 
   for (const file of domainFiles) {
@@ -1064,6 +1065,7 @@ test("el dominio de control de acceso no depende de la presentación ni de otros
     "src/domains/access-control/infrastructure/entity-access.repository.ts",
     "src/domains/access-control/infrastructure/roles.repository.ts",
     "src/domains/access-control/infrastructure/permissions.repository.ts",
+    "src/domains/access-control/infrastructure/platform-permissions.repository.ts",
   ]
   for (const file of infrastructure) {
     expect(read(file), `${file} es la frontera de Supabase`).toMatch(/@\/lib\/supabase/)
