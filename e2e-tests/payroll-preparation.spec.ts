@@ -753,8 +753,15 @@ test("la fachada src/lib/prenomina.ts se retiró y ningún módulo la importa", 
   const offenders = sourceFiles("src").filter((file) => retired.test(code(file)))
   expect(offenders, "ningún módulo debe importar la fachada retirada").toEqual([])
 
-  // Lo que sigue teniendo consumidores se conserva (no se toca código de otros módulos).
-  expect(existsSync("src/lib/academic-payment.ts")).toBe(true)
+  // La fachada del pago académico también se retiró (bloque de administración global): su
+  // único consumidor pasó al dominio de estructura organizativa.
+  expect(existsSync("src/lib/academic-payment.ts")).toBe(false)
+
+  const retiredAcademicPayment = /from "@\/lib\/academic-payment"/
+  const academicOffenders = sourceFiles("src").filter((file) =>
+    retiredAcademicPayment.test(code(file))
+  )
+  expect(academicOffenders, "ningún módulo debe importar la fachada retirada").toEqual([])
 })
 
 test("el dominio de prenómina no depende de la presentación ni forma ciclos", () => {

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import {
   friendlyRoleSaveError,
   isProtectedRole,
@@ -830,13 +830,16 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
   expect(section).not.toMatch(/@\/lib\/supabase/)
   expect(section).not.toMatch(/\.rpc\(/)
 
-  // La fachada de compatibilidad sigue exponiendo el mismo contrato público.
-  const facade = read("src/lib/academic-payment.ts")
-  expect(facade).toMatch(/loadAcademicCategoryPayment as resolveAcademicCategoryPayment/)
-  expect(facade).toMatch(/loadAcademicCategoryPaymentConfig as fetchAcademicCategoryPaymentConfig/)
-  expect(facade).toMatch(/saveAcademicCategoryPayment,/)
-  expect(facade).toMatch(/academicCategoryLabel,/)
-  expect(facade).not.toMatch(/@\/lib\/supabase/)
+  // La fachada de compatibilidad se retiró: ya no queda ningún consumidor y el único lugar
+  // donde vive el pago académico es el dominio de estructura organizativa.
+  expect(existsSync("src/lib/academic-payment.ts")).toBe(false)
+
+  const workerDetail = read("src/pages/WorkerDetail.tsx")
+  expect(workerDetail).toMatch(/from "@\/domains\/organization-structure"/)
+  expect(workerDetail).toMatch(/loadAcademicCategoryPayment\(entityId, workerId\)/)
+  expect(workerDetail).not.toMatch(/@\/lib\/academic-payment/)
+  expect(workerDetail).not.toMatch(/@\/lib\/supabase/)
+  expect(workerDetail).not.toMatch(/supabase\.from\(/)
 })
 
 test("los datos contractuales y los cargos de representación no consultan Supabase desde la pantalla", () => {
