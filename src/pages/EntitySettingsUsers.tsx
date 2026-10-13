@@ -1,5 +1,4 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { EntityUsersDialog, type OrganizationEntity } from "@/components/entity-users-dialog"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
@@ -9,28 +8,20 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { UserPlus, Users } from "lucide-react"
-
-interface EntityAccessRow {
-  access_id: string
-  user_id: string
-  full_name: string | null
-  username: string | null
-  role_name: string
-  source_entity_name: string
-  access_scope: "SELF" | "SELF_AND_DESCENDANTS"
-  is_direct: boolean
-}
-
-const scopeLabels: Record<EntityAccessRow["access_scope"], string> = {
-  SELF: "Solo esta entidad",
-  SELF_AND_DESCENDANTS: "Esta entidad y sus descendientes",
-}
+import {
+  ACCESS_SCOPE_LABELS,
+  loadEntityAccessOverview,
+  type EntityAccessRow,
+} from "@/domains/access-control"
 
 /**
  * Ajustes → Usuarios de UNA entidad.
  *
  * Muestra únicamente las personas con acceso a ESTA entidad (directo o heredado
- * desde un ancestro), nunca todos los usuarios del workspace.
+ * desde un ancestro), nunca todos los usuarios del workspace: la visibilidad la
+ * decide el backend (`list_entity_user_access`), no un filtro de la interfaz.
+ *
+ * La consulta y los permisos se resuelven en el dominio de control de acceso.
  */
 const EntitySettingsUsers = () => {
   const { currentEntity } = useCurrentEntity()
@@ -52,18 +43,10 @@ const EntitySettingsUsers = () => {
     setError(null)
 
     try {
-      const [listResult, manageResult] = await Promise.all([
-        supabase.rpc("list_entity_user_access", { target_entity_id: entityId }),
-        supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "users.manage",
-        }),
-      ])
+      const overview = await loadEntityAccessOverview(entityId)
 
-      if (listResult.error) throw listResult.error
-
-      setRows((listResult.data as EntityAccessRow[]) || [])
-      setCanManage(Boolean(manageResult.data))
+      setRows(overview.accessRows)
+      setCanManage(overview.canManage)
     } catch (err) {
       setError(
         err instanceof Error
@@ -122,7 +105,7 @@ const EntitySettingsUsers = () => {
             <div className="flex flex-wrap items-center gap-2">
               <SiteCorpStatusBadge status="info">{row.role_name}</SiteCorpStatusBadge>
               <SiteCorpStatusBadge status="neutral">
-                {scopeLabels[row.access_scope]}
+                {ACCESS_SCOPE_LABELS[row.access_scope]}
               </SiteCorpStatusBadge>
               {inherited && (
                 <SiteCorpStatusBadge status="warning">

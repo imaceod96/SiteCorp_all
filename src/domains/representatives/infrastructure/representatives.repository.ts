@@ -3,6 +3,7 @@ import type {
   EntityContractData,
   EntityContractDataInput,
   RepresentativeHistoryRow,
+  RepresentativePositionConfigRow,
   RepresentativePositionRow,
 } from "../domain/entities"
 
@@ -100,6 +101,29 @@ export async function fetchValidRepresentatives(
 ): Promise<RepresentativePositionRow[]> {
   const rows = await fetchRepresentativePositions(entityId, onDate)
   return rows.filter((row) => !!row.assignment_id && !!row.person_name)
+}
+
+/**
+ * Listado ADMINISTRATIVO de los cargos de representación de la entidad: incluye los
+ * cargos inactivos (a diferencia de `resolve_entity_representatives`, que sólo
+ * devuelve los vigentes para una fecha).
+ *
+ * Consulta directa sujeta a RLS, con la misma proyección y la misma ordenación que
+ * usaba la pantalla de datos contractuales. La lectura no exige ningún permiso
+ * adicional: la propia política de la tabla decide qué entidades son visibles.
+ */
+export async function fetchRepresentativePositionList(
+  entityId: string
+): Promise<RepresentativePositionConfigRow[]> {
+  const { data, error } = await supabase
+    .from("organization_representative_positions")
+    .select("id, title, display_order, is_active")
+    .eq("organization_entity_id", entityId)
+    .order("display_order")
+    .order("title")
+
+  if (error) throw error
+  return (data as RepresentativePositionConfigRow[]) || []
 }
 
 export async function fetchRepresentativeHistory(

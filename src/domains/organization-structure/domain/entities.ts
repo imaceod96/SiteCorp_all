@@ -424,3 +424,133 @@ export interface StaffingExportMeta {
   entityName: string
   generatedAt: Date
 }
+
+/* ------------------------------------------------------------------ */
+/* Entidades organizativas: Grupo Empresarial → Empresa → UEB          */
+/* ------------------------------------------------------------------ */
+
+/** Tipo de entidad organizativa. Determina qué entidad superior admite. */
+export type OrganizationEntityType = "business_group" | "company" | "ueb"
+
+/** Régimen de la entidad: determina la escala salarial aplicable. */
+export type OrganizationEntityRegime = "PRESUPUESTADA" | "EMPRESARIAL"
+
+/**
+ * Entidad organizativa tal como la consumen las páginas de organización.
+ *
+ * `tenant_id` es la CLAVE de JavaScript del cliente propietario (la columna física la
+ * resuelve la frontera de nomenclatura): nunca debe confundirse con
+ * `organization_entity_id`, que identifica a la propia entidad.
+ */
+export interface OrganizationEntity {
+  id: string
+  tenant_id: string
+  parent_id: string | null
+  entity_type: OrganizationEntityType
+  name: string
+  code: string
+  regime_id: string
+  status: string
+  description: string | null
+  address: string | null
+  municipality: string | null
+  province: string | null
+  postal_code: string | null
+  is_active: boolean
+  is_sitecorp_account: boolean
+  account_is_active: boolean
+  account_code: string | null
+}
+
+/** Datos editables del alta/edición de una entidad organizativa. */
+export interface OrganizationEntityFormData {
+  name: string
+  entity_type: OrganizationEntityType
+  regime_id: OrganizationEntityRegime | null
+  is_active: boolean
+  description: string | null
+  is_sitecorp_account: boolean
+  account_code: string | null
+  parent_id: string | null
+}
+
+/** Comando de alta o edición de una entidad organizativa. */
+export interface SaveOrganizationEntityInput {
+  /** Entidad que se edita, o `null` en el alta. */
+  editingEntity: OrganizationEntity | null
+  /** Cliente propietario: se fija al crear y NUNCA se modifica al editar. */
+  companyClientId: string
+  data: OrganizationEntityFormData
+}
+
+/* ------------------------------------------------------------------ */
+/* Escala de pago por antigüedad                                       */
+/* ------------------------------------------------------------------ */
+
+/** Unidad con la que se introduce un tramo en el formulario. */
+export type TenureScaleUnit = "Meses" | "Años"
+
+/** Tramo de antigüedad configurado (los tramos se desactivan, no se borran). */
+export interface TenureScaleRange {
+  id: string
+  from_months: number
+  to_months: number | null
+  amount: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Valores persistibles de un tramo (siempre en meses). */
+export interface TenureScaleValues {
+  from_months: number
+  to_months: number | null
+  amount: number
+}
+
+/** Valores del formulario de un tramo (cantidad + unidad, tal como se escriben). */
+export interface TenureScaleFormValues {
+  from_amount: string
+  from_unit: TenureScaleUnit
+  to_amount: string
+  to_unit: TenureScaleUnit
+  to_limit: boolean
+  amount: string
+}
+
+/* ------------------------------------------------------------------ */
+/* Pago por categoría académica (Máster / Doctor)                      */
+/* ------------------------------------------------------------------ */
+
+/** Categoría académica con pago propio. Doctor tiene prioridad sobre Máster. */
+export type AcademicCategory = "MASTER" | "DOCTOR"
+
+/** Alcance de la configuración aplicada. */
+export type AcademicPaymentScope = "PRESUPUESTADA_GLOBAL" | "EMPRESARIAL_ENTITY"
+
+export interface AcademicCategoryPaymentResolution {
+  /** Categoría académica efectiva (DOCTOR tiene prioridad sobre MASTER). */
+  category: AcademicCategory | null
+  /** Importe aplicable. `null` = no configurado. `0` = configurado sin pago. */
+  amount: number | null
+  /** true si existe configuración explícita para la categoría efectiva. */
+  configured: boolean
+  /** Régimen de la entidad (PRESUPUESTADA | EMPRESARIAL). */
+  regime: string | null
+  /** Alcance de la configuración aplicada. */
+  scope: AcademicPaymentScope | null
+}
+
+export interface AcademicCategoryPaymentConfig {
+  entityId: string
+  scope: AcademicPaymentScope
+  regime: string | null
+  currencyCode: string
+  masterAmount: number | null
+  doctorAmount: number | null
+  masterConfigured: boolean
+  doctorConfigured: boolean
+  configured: boolean
+  canView: boolean
+  canManage: boolean
+}

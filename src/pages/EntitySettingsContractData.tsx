@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -18,31 +17,19 @@ import {
   MAX_REPRESENTATIVE_POSITIONS,
   changeRepresentative,
   createRepresentativePosition,
-  fetchEntityContractData,
   fetchRepresentativeHistory,
-  fetchRepresentativePositions,
   formatRepresentativeDate,
+  loadEntityContractDataWorkspace,
   representativePeriodLabel,
   saveEntityContractData,
   updateRepresentativePosition,
   type EntityContractDataInput,
   type RepresentativeHistoryRow,
-  type RepresentativePositionRow,
+  type RepresentativePositionConfig,
 } from "@/domains/representatives"
 import { Building2, Clock, Edit3, Plus, Replace, UserPlus, Users } from "lucide-react"
 
-interface PositionRow {
-  id: string
-  title: string
-  display_order: number
-  is_active: boolean
-}
-
-interface PositionWithOccupant extends PositionRow {
-  assignment_id: string | null
-  person_name: string | null
-  effective_from: string | null
-}
+type PositionWithOccupant = RepresentativePositionConfig
 
 const emptyContractData: EntityContractDataInput = {
   organism: null,
@@ -95,23 +82,16 @@ const EntitySettingsContractData = () => {
     setNotAllowed(null)
 
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "contract_data.view",
-      })
-      const { data: canManageContractData } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "contract_data.manage",
-      })
+      const workspace = await loadEntityContractDataWorkspace(entityId)
 
-      if (!canView && !canManageContractData) {
+      if (!workspace) {
         setNotAllowed("No tiene permiso para ver los datos contractuales de esta entidad.")
         return
       }
 
-      setCanManage(!!canManageContractData)
+      setCanManage(workspace.canManage)
 
-      const data = await fetchEntityContractData(entityId)
+      const data = workspace.contractData
       if (data) {
         setEntityName(data.name)
         setInternalCode(data.code)
@@ -127,32 +107,7 @@ const EntitySettingsContractData = () => {
         setRevolutionYearText(data.revolution_year || "")
       }
 
-      const [{ data: rawPositions, error: positionsError }, todayOccupants] = await Promise.all([
-        supabase
-          .from("organization_representative_positions")
-          .select("id, title, display_order, is_active")
-          .eq("organization_entity_id", entityId)
-          .order("display_order")
-          .order("title"),
-        fetchRepresentativePositions(entityId),
-      ])
-      if (positionsError) throw positionsError
-
-      const occupants = new Map<string, RepresentativePositionRow>(
-        (todayOccupants || []).map((row) => [row.position_id, row])
-      )
-
-      setPositions(
-        ((rawPositions as PositionRow[]) || []).map((position) => {
-          const occupant = occupants.get(position.id)
-          return {
-            ...position,
-            assignment_id: occupant?.assignment_id ?? null,
-            person_name: occupant?.person_name ?? null,
-            effective_from: occupant?.effective_from ?? null,
-          }
-        })
-      )
+      setPositions(workspace.positions)
     } catch (err) {
       console.error("Error loading contractual data:", err)
       setNotAllowed(

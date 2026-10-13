@@ -50,3 +50,34 @@ export interface EntityContractDataInput {
   municipality: string | null
   revolution_year: string | null
 }
+
+/**
+ * CARGO de representación tal como se CONFIGURA en la entidad (incluye los cargos
+ * inactivos). Es una vista administrativa distinta de la resolución por fecha: la
+ * pantalla de Ajustes debe mostrar también los cargos desactivados para poder
+ * reactivarlos, mientras que `resolve_entity_representatives` sólo devuelve los
+ * vigentes para una fecha.
+ */
+export interface RepresentativePositionConfigRow {
+  id: string
+  title: string
+  display_order: number
+  is_active: boolean
+}
+
+/** Cargo configurado junto con la persona que lo ocupa HOY (si existe). */
+export interface RepresentativePositionConfig extends RepresentativePositionConfigRow {
+  assignment_id: string | null
+  person_name: string | null
+  effective_from: string | null
+}
+
+/**
+ * Carga completa de la pantalla «Datos contractuales»: los datos de la entidad, los
+ * cargos configurados con su ocupante vigente y si el solicitante puede modificarlos.
+ */
+export interface EntityContractDataWorkspace {
+  contractData: EntityContractData | null
+  canManage: boolean
+  positions: RepresentativePositionConfig[]
+}

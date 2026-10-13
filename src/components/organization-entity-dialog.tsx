@@ -3,38 +3,34 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { supabase } from "@/lib/supabase"
-import { columnName } from "@/integrations/supabase/schema-target"
 import { Button as SiteCorpButton } from "@/components/ui/button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Building2, Factory, Layers, Plus, ShieldOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { buildAccountCode } from "@/lib/sitecorp-account"
+import {
+  ENTITY_TYPE_OPTIONS,
+  REGIME_OPTIONS,
+  describeEntityError,
+  resolveParentCandidates,
+  saveOrganizationEntity,
+  type OrganizationEntity,
+} from "@/domains/organization-structure"
 
-interface OrganizationEntity {
-  id: string
-  tenant_id: string
-  parent_id: string | null
-  entity_type: "business_group" | "company" | "ueb"
-  name: string
-  code: string
-  regime_id: string
-  status: string
-  description: string | null
-  address: string | null
-  municipality: string | null
-  province: string | null
-  postal_code: string | null
-  is_active: boolean
-  is_sitecorp_account: boolean
-  account_is_active: boolean
-  account_code: string | null
-}
+/**
+ * Alta y edición de una entidad organizativa (Grupo Empresarial → Empresa → UEB).
+ *
+ * Toda la lógica de negocio y la persistencia viven en el dominio
+ * (`@/domains/organization-structure`): el código autogenerado, la jerarquía válida
+ * según el tipo, la Cuenta SiteCorp y su código derivado, el cliente propietario y la
+ * traducción de los errores del backend. Este componente sólo compone el formulario.
+ *
+ * El CLIENTE propietario se fija al crear y nunca se modifica al editar: es lo que
+ * mantiene el aislamiento entre clientes.
+ */
 
 interface OrganizationEntityFormData {
   name: string
@@ -45,34 +41,6 @@ interface OrganizationEntityFormData {
   is_sitecorp_account: boolean
   account_code: string | null
   parent_id: string | null
-}
-
-const entityTypeOptions = [
-  { value: "business_group", label: "Grupo empresarial" },
-  { value: "company", label: "Empresa" },
-  { value: "ueb", label: "UEB" },
-]
-
-// Códigos canónicos del catálogo `entity_regimes` (determinan la escala salarial aplicable)
-const regimeOptions = [
-  { value: "PRESUPUESTADA", label: "Presupuestada" },
-  { value: "EMPRESARIAL", label: "Empresarial" },
-]
-
-const statusOptions = [
-  { value: "active", label: "Activo" },
-  { value: "inactive", label: "Inactivo" },
-]
-
-// Generate automatic code based on entity type
-const generateCode = (entityType: "business_group" | "company" | "ueb"): string => {
-  const timestamp = Date.now().toString(36).toUpperCase().padStart(6, "0").substring(0, 6)
-  const prefixes: Record<string, string> = {
-    business_group: "GE",
-    company: "EMP",
-    ueb: "UEB",
-  }
-  return `${prefixes[entityType]}-${timestamp}`
 }
 
 // El domicilio (dirección, provincia, municipio) ya no forma parte del alta de la
@@ -115,42 +83,6 @@ interface OrganizationEntityDialogProps {
   /** Entidad superior preseleccionada según el nodo desde el que se crea */
   defaultParentId?: string
   defaultRegime?: OrganizationEntity["regime_id"]
-}
-
-/** Traduce errores de Supabase a un mensaje entendible sin exponer detalles internos. */
-const describeEntityError = (error: {
-  code?: string
-  message?: string
-  details?: string | null
-  hint?: string | null
-}): string => {
-  const code = error?.code || ""
-  const message = error?.message || ""
-
-  if (code === "23503") {
-    return "El cliente o la entidad superior seleccionada no es válida."
-  }
-  if (code === "23505") {
-    return "Ya existe una entidad con ese nombre en este cliente."
-  }
-  if (code === "23514") {
-    return /parent/i.test(message)
-      ? "La entidad superior no es válida para este tipo de entidad."
-      : "Los datos no cumplen las reglas de la organización."
-  }
-  if (code === "23502") {
-    return "Falta un dato obligatorio para crear la entidad."
-  }
-  if (code === "22P02") {
-    return "Alguno de los identificadores enviados no es válido."
-  }
-  if (code === "42501" || /row-level security/i.test(message)) {
-    return "No tienes permiso para crear o editar entidades en este cliente."
-  }
-  if (code === "PGRST204") {
-    return "La estructura del formulario no coincide con la base de datos. Contacta al administrador."
-  }
-  return message || "No se pudo guardar la entidad."
 }
 
 export const OrganizationEntityDialog = ({
@@ -251,65 +183,30 @@ export const OrganizationEntityDialog = ({
       return
     }
 
-    let entityPayload: Record<string, unknown> | null = null
-
     try {
       setSaving(true)
 
-      // Código interno de la entidad: se sigue generando automáticamente (nunca se pide)
-      const entityCode =
-        data.entity_type === "business_group" || !editingEntity
-          ? generateCode(data.entity_type)
-          : editingEntity?.code || generateCode(data.entity_type)
-
-      // Cuenta SiteCorp: la bandera es la única fuente de verdad de los módulos internos.
-      // El código de cuenta que exige el modelo se deriva del código interno y solo se
-      // genera al activar (nunca se regenera al reeditar: la operación es idempotente).
-      const wasSiteCorp = editingEntity?.is_sitecorp_account === true
-      const sitecorp = data.is_sitecorp_account === true
-      const accountCode = sitecorp
-        ? editingEntity?.account_code || buildAccountCode(entityCode)
-        : null
-      const accountIsActive = sitecorp ? (wasSiteCorp ? editingEntity?.account_is_active === true : true) : false
-
-      const entityData = {
-        ...data,
-        code: entityCode,
-        // parent_id siempre UUID real o NULL (nunca cadena vacía)
-        parent_id: data.entity_type === "business_group" ? null : data.parent_id || null,
-        is_sitecorp_account: sitecorp,
-        account_code: accountCode,
-        account_is_active: accountIsActive,
-      }
+      await saveOrganizationEntity({
+        editingEntity,
+        companyClientId: effectiveCompanyClientId,
+        data: {
+          name: data.name,
+          entity_type: data.entity_type,
+          regime_id: data.regime_id,
+          is_active: data.is_active,
+          description: data.description,
+          is_sitecorp_account: data.is_sitecorp_account,
+          account_code: data.account_code,
+          parent_id: data.parent_id,
+        },
+      })
 
       if (editingEntity) {
-        // El cliente de la entidad no se modifica al editar (aislamiento por cliente)
-        entityPayload = entityData
-        const { error } = await supabase
-          .from("organization_entities")
-          .update(entityData)
-          .eq("id", editingEntity.id)
-
-        if (error) throw error
-
         toast({
           title: "Entidad actualizada",
           description: `La entidad "${data.name}" ha sido actualizada correctamente.`,
         })
       } else {
-        // El cliente solo se fija al crear: proviene del cliente desde el que se
-        // abre el formulario. La clave es el nombre FÍSICO de columna activo.
-        const insertData = { ...entityData, [columnName("clientId")]: effectiveCompanyClientId }
-        entityPayload = insertData
-
-        const { error } = await supabase
-          .from("organization_entities")
-          .insert([insertData])
-          .select()
-          .single()
-
-        if (error) throw error
-
         toast({
           title: "Entidad creada",
           description: `La entidad "${data.name}" ha sido creada correctamente.`,
@@ -319,20 +216,14 @@ export const OrganizationEntityDialog = ({
       onSaved()
       onOpenChange(false)
     } catch (err) {
+      // El dominio ya registra el diagnóstico completo de la escritura (incluido el
+      // payload). Aquí sólo se traduce el error a un mensaje entendible.
       const requestError = err as {
         code?: string
         message?: string
         details?: string | null
         hint?: string | null
       }
-
-      console.error("[organization-entity] No se pudo guardar la entidad", {
-        code: requestError?.code,
-        message: requestError?.message,
-        details: requestError?.details,
-        hint: requestError?.hint,
-        payload: entityPayload,
-      })
 
       const description = describeEntityError(requestError)
       setSaveError(description)
@@ -342,50 +233,21 @@ export const OrganizationEntityDialog = ({
     }
   }
 
-  // Entidades candidatas a ser padre: siempre del MISMO cliente (aislamiento por
-  // cliente). `tenant_id` es la columna FÍSICA de Supabase.
-  const parentEntities = React.useMemo(() => {
-    const sameCompanyClient = entities.filter(
-      (e) => e.id !== editingEntity?.id && e.tenant_id === effectiveCompanyClientId
-    )
-    const active = sameCompanyClient.filter((e) => e.is_active !== false)
-
-    // Al editar, la entidad superior actual debe seguir visible aunque esté inactiva
-    const currentParent = editingEntity?.parent_id
-      ? sameCompanyClient.find((e) => e.id === editingEntity.parent_id)
-      : undefined
-    if (currentParent && !active.some((e) => e.id === currentParent.id)) {
-      return [currentParent, ...active]
-    }
-    return active
-  }, [entities, editingEntity, effectiveCompanyClientId])
-
   const watchedEntityType = watch("entity_type")
   const watchedParentId = watch("parent_id")
 
-  // When entity type is business_group, no parents allowed
-  // When entity type is company, only business_groups as parents
-  // When entity type is ueb, only companies as parents
-  const filteredParentEntities = React.useMemo(() => {
-    const entityType = watchedEntityType
-    if (!entityType) return parentEntities
-
-    return parentEntities.filter((e) => {
-      if (entityType === "business_group") return false // No parents for business groups
-
-      if (entityType === "company") {
-        // Only business groups can be parents
-        return e.entity_type === "business_group"
-      }
-
-      if (entityType === "ueb") {
-        // Only companies can be parents
-        return e.entity_type === "company"
-      }
-
-      return true
-    })
-  }, [watchedEntityType, parentEntities])
+  // Entidades candidatas a ser la entidad superior: siempre del MISMO cliente
+  // (aislamiento por cliente) y coherentes con el tipo (Grupo → Empresa → UEB).
+  const filteredParentEntities = React.useMemo(
+    () =>
+      resolveParentCandidates({
+        entities,
+        editingEntity,
+        companyClientId: effectiveCompanyClientId,
+        entityType: watchedEntityType,
+      }),
+    [entities, editingEntity, effectiveCompanyClientId, watchedEntityType]
+  )
 
   // La entidad superior debe ser coherente con el tipo: los grupos no tienen padre y
   // al cambiar de tipo se descarta una selección que ya no es válida.
@@ -441,7 +303,7 @@ export const OrganizationEntityDialog = ({
                   setValue("entity_type", value as OrganizationEntityFormDataZod["entity_type"])
                 }
               >
-                {entityTypeOptions.map((opt) => (
+                {ENTITY_TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -461,7 +323,7 @@ export const OrganizationEntityDialog = ({
                   )
                 }
               >
-                {regimeOptions.map((opt) => (
+                {REGIME_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

@@ -1,17 +1,20 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { RolesManager } from "@/components/roles-manager"
+import { loadEntityPermission } from "@/domains/access-control"
 
 /**
  * Ajustes → Roles y permisos de UNA entidad.
  *
  * Muestra exclusivamente los roles internos de la entidad actual: aunque otra
  * entidad del mismo workspace tenga un rol con el mismo nombre, es un rol distinto.
+ *
+ * La comprobación de acceso la responde el backend (`can_access_entity`); si falla,
+ * se muestra el error en lugar de asumir un permiso.
  */
 const EntitySettingsRoles = () => {
   const { currentEntity } = useCurrentEntity()
@@ -33,12 +36,8 @@ const EntitySettingsRoles = () => {
       setLoading(true)
       setError(null)
       try {
-        const { data, error: rpcError } = await supabase.rpc("can_access_entity", {
-          target_entity_id: entityId,
-          permission_code: "roles.view",
-        })
-        if (rpcError) throw rpcError
-        if (!cancelled) setCanView(Boolean(data))
+        const allowed = await loadEntityPermission(entityId, "roles.view")
+        if (!cancelled) setCanView(allowed)
       } catch (err) {
         if (!cancelled) {
           setError(

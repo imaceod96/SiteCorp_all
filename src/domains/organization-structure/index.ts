@@ -230,3 +230,79 @@ export {
   buildStaffingWorkbookBlob,
   saveStaffingExcelBlob,
 } from "./infrastructure/staffing-export.workbook"
+
+/* ================================================================== */
+/* Configuración de entidad: entidades organizativas, escala de        */
+/* antigüedad y pago por categoría académica                          */
+/* ================================================================== */
+
+// --- Entidades organizativas: tipos ---
+export type { OrganizationEntity } from "./domain/entities"
+export type { OrganizationEntityType } from "./domain/entities"
+export type { OrganizationEntityRegime } from "./domain/entities"
+export type { OrganizationEntityFormData } from "./domain/entities"
+export type { SaveOrganizationEntityInput } from "./domain/entities"
+
+// --- Entidades organizativas: reglas puras ---
+export {
+  ENTITY_TYPE_OPTIONS,
+  REGIME_OPTIONS,
+  STATUS_OPTIONS,
+  buildOrganizationEntityPayload,
+  describeEntityError,
+  generateEntityCode,
+  isParentTypeAllowed,
+  resolveParentCandidates,
+} from "./domain/organization-entities.rules"
+
+// --- Entidades organizativas: caso de uso ---
+export { saveOrganizationEntity } from "./application/organization-entities.commands"
+
+// --- Escala de antigüedad: tipos ---
+export type { TenureScaleRange } from "./domain/entities"
+export type { TenureScaleValues } from "./domain/entities"
+export type { TenureScaleFormValues } from "./domain/entities"
+export type { TenureScaleUnit } from "./domain/entities"
+
+// --- Escala de antigüedad: reglas puras ---
+export {
+  EMPTY_TENURE_FORM,
+  MONTHS_PER_YEAR,
+  formatTenureRange,
+  tenureFormToValues,
+  tenureRangeToForm,
+} from "./domain/tenure-scale.rules"
+
+// --- Escala de antigüedad: casos de uso ---
+export { loadTenureScaleRanges } from "./application/tenure-scale.queries"
+export {
+  createTenureScaleRange,
+  deleteTenureScaleRange,
+  updateTenureScaleRangeById,
+} from "./application/tenure-scale.commands"
+
+// --- Pago por categoría académica: tipos ---
+export type { AcademicCategory } from "./domain/entities"
+export type { AcademicPaymentScope } from "./domain/entities"
+export type { AcademicCategoryPaymentConfig } from "./domain/entities"
+export type { AcademicCategoryPaymentResolution } from "./domain/entities"
+export type { ParsedAcademicAmount } from "./domain/academic-payment.rules"
+
+// --- Pago por categoría académica: reglas puras ---
+export {
+  academicCategoryLabel,
+  formatAcademicAmount,
+  parseAcademicAmount,
+  resolveAcademicCategory,
+} from "./domain/academic-payment.rules"
+
+// --- Pago por categoría académica: casos de uso ---
+export {
+  loadAcademicCategoryPayment,
+  loadAcademicCategoryPaymentConfig,
+  loadAcademicCategoryPaymentForFlags,
+} from "./application/academic-payment.queries"
+export {
+  saveAcademicCategoryPayment,
+  saveAcademicCategoryPaymentAmounts,
+} from "./application/academic-payment.commands"

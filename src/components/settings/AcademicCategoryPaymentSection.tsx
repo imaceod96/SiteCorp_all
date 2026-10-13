@@ -6,30 +6,15 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
 import { Loader2, Save, GraduationCap } from "lucide-react"
 import {
-  fetchAcademicCategoryPaymentConfig,
-  saveAcademicCategoryPayment,
   formatAcademicAmount,
+  loadAcademicCategoryPaymentConfig,
+  parseAcademicAmount,
+  saveAcademicCategoryPaymentAmounts,
   type AcademicCategoryPaymentConfig,
-} from "@/lib/academic-payment"
+} from "@/domains/organization-structure"
 
 interface AcademicCategoryPaymentSectionProps {
   entityId: string
-}
-
-type ParsedAmount = { valid: true; value: number | null } | { valid: false }
-
-/**
- * Interpreta el importe introducido:
- *   ""            → válido, valor NULL (No configurado)
- *   "0"           → válido, valor 0 (configurado sin pago)
- *   "< 0" o texto → inválido
- */
-function parseAmount(raw: string): ParsedAmount {
-  const trimmed = raw.trim()
-  if (trimmed === "") return { valid: true, value: null }
-  const parsed = Number(trimmed.replace(",", "."))
-  if (!Number.isFinite(parsed) || parsed < 0) return { valid: false }
-  return { valid: true, value: parsed }
 }
 
 /**
@@ -62,7 +47,7 @@ const AcademicCategoryPaymentSection: React.FC<AcademicCategoryPaymentSectionPro
     setLoading(true)
     setError(null)
     try {
-      const next = await fetchAcademicCategoryPaymentConfig(entityId)
+      const next = await loadAcademicCategoryPaymentConfig(entityId)
       setConfig(next)
       setMasterInput(next.masterAmount === null ? "" : String(next.masterAmount))
       setDoctorInput(next.doctorAmount === null ? "" : String(next.doctorAmount))
@@ -88,12 +73,12 @@ const AcademicCategoryPaymentSection: React.FC<AcademicCategoryPaymentSectionPro
     setError(null)
     setSuccess(null)
 
-    const masterParsed = parseAmount(masterInput)
+    const masterParsed = parseAcademicAmount(masterInput)
     if (!masterParsed.valid) {
       setError("El importe de Máster debe ser un número mayor o igual que 0")
       return
     }
-    const doctorParsed = parseAmount(doctorInput)
+    const doctorParsed = parseAcademicAmount(doctorInput)
     if (!doctorParsed.valid) {
       setError("El importe de Doctor debe ser un número mayor o igual que 0")
       return
@@ -101,8 +86,11 @@ const AcademicCategoryPaymentSection: React.FC<AcademicCategoryPaymentSectionPro
 
     setSaving(true)
     try {
-      await saveAcademicCategoryPayment(entityId, "MASTER", masterParsed.value)
-      await saveAcademicCategoryPayment(entityId, "DOCTOR", doctorParsed.value)
+      await saveAcademicCategoryPaymentAmounts({
+        entityId,
+        masterAmount: masterParsed.value,
+        doctorAmount: doctorParsed.value,
+      })
       await load()
       setSuccess("Configuración de pago por categoría académica guardada correctamente.")
     } catch (err) {

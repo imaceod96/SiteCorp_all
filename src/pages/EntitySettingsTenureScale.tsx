@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -32,26 +31,28 @@ import {
 } from "lucide-react"
 import { SelectItem } from "@/components/ui/select"
 import AcademicCategoryPaymentSection from "@/components/settings/AcademicCategoryPaymentSection"
+import {
+  EMPTY_TENURE_FORM,
+  createTenureScaleRange,
+  deleteTenureScaleRange,
+  formatTenureRange,
+  loadTenureScaleRanges,
+  tenureRangeToForm,
+  updateTenureScaleRangeById,
+  type TenureScaleFormValues,
+  type TenureScaleRange,
+} from "@/domains/organization-structure"
 
-interface TenureScaleRange {
-  id: string
-  from_months: number
-  to_months: number | null
-  amount: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-interface TenureScaleForm {
-  from_amount: string
-  from_unit: "Meses" | "Años"
-  to_amount: string
-  to_unit: "Meses" | "Años" | null
-  to_limit: boolean
-  amount: string
-}
-
+/**
+ * Escala de pago de antigüedad de UNA entidad.
+ *
+ * La lectura, la conversión meses/años, las validaciones y las escrituras viven en el
+ * dominio de estructura organizativa. La escala es propia de cada entidad y los tramos
+ * se desactivan (no se borran), conservando el histórico salarial.
+ *
+ * Esta pantalla no comprueba permisos (no los comprobaba antes): la autorización
+ * efectiva es de RLS y no se añade ninguna regla nueva de acceso.
+ */
 const EntitySettingsTenureScale = () => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
@@ -61,14 +62,7 @@ const EntitySettingsTenureScale = () => {
   const [error, setError] = React.useState<string | null>(null)
   const [formDialogOpen, setFormDialogOpen] = React.useState(false)
   const [formMode, setFormMode] = React.useState<"create" | "edit">("create")
-  const [formData, setFormData] = React.useState<TenureScaleForm>({
-    from_amount: "",
-    from_unit: "Meses",
-    to_amount: "",
-    to_unit: "Meses",
-    to_limit: false,
-    amount: "",
-  })
+  const [formData, setFormData] = React.useState<TenureScaleFormValues>(EMPTY_TENURE_FORM)
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -79,15 +73,8 @@ const EntitySettingsTenureScale = () => {
     setError(null)
 
     try {
-      const { data, error: fetchError } = await supabase
-        .from("tenure_payment_scales")
-        .select("*")
-        .eq("organization_entity_id", entityId)
-        .eq("is_active", true)
-        .order("from_months")
-
-      if (fetchError) throw fetchError
-      setRanges(data as TenureScaleRange[])
+      const data = await loadTenureScaleRanges(entityId)
+      setRanges(data)
     } catch (err) {
       console.error("Error loading tenure scales:", err)
       setError(
@@ -104,42 +91,14 @@ const EntitySettingsTenureScale = () => {
 
   const handleOpenCreateForm = () => {
     setFormMode("create")
-    setFormData({
-      from_amount: "",
-      from_unit: "Meses",
-      to_amount: "",
-      to_unit: "Meses",
-      to_limit: false,
-      amount: "",
-    })
+    setFormData(EMPTY_TENURE_FORM)
     setEditingId(null)
     setFormDialogOpen(true)
   }
 
   const handleOpenEditForm = (range: TenureScaleRange) => {
     setFormMode("edit")
-    const fromYears = Math.floor(range.from_months / 12)
-    const fromMonths = range.from_months % 12
-    setFormData({
-      from_amount: String(fromYears > 0 ? fromYears : fromMonths),
-      from_unit: fromYears > 0 ? "Años" : "Meses",
-      to_amount:
-        range.to_months !== null
-          ? String(
-              Math.floor(range.to_months / 12) > 0
-                ? Math.floor(range.to_months / 12)
-                : range.to_months % 12
-            )
-          : "",
-      to_unit:
-        range.to_months !== null
-          ? Math.floor(range.to_months / 12) > 0
-            ? "Años"
-            : "Meses"
-          : "Meses",
-      to_limit: range.to_months === null,
-      amount: String(range.amount),
-    })
+    setFormData(tenureRangeToForm(range))
     setEditingId(range.id)
     setFormDialogOpen(true)
   }
@@ -155,70 +114,11 @@ const EntitySettingsTenureScale = () => {
 
     setSubmitting(true)
     try {
-      const fromMonths =
-        (formData.from_unit === "Años"
-          ? parseFloat(formData.from_amount) * 12
-          : parseFloat(formData.from_amount)) || 0
-
-      const toMonths =
-        formData.to_limit
-          ? null
-          : (formData.to_unit === "Años"
-              ? parseFloat(formData.to_amount) * 12
-              : parseFloat(formData.to_amount)) || null
-
-      const amount = parseFloat(formData.amount)
-
-      if (isNaN(fromMonths) || fromMonths < 0) {
-        setError("El valor 'Desde' debe ser un número válido positivo")
-        setSubmitting(false)
-        return
-      }
-
-      if (!formData.to_limit && (isNaN(toMonths) || toMonths < 0)) {
-        setError("El valor 'Hasta' debe ser un número válido positivo")
-        setSubmitting(false)
-        return
-      }
-
-      if (!formData.to_limit && toMonths !== null && toMonths <= fromMonths) {
-        setError("El valor 'Hasta' debe ser mayor que 'Desde'")
-        setSubmitting(false)
-        return
-      }
-
-      if (isNaN(amount) || amount < 0) {
-        setError("El importe debe ser un número válido positivo o cero")
-        setSubmitting(false)
-        return
-      }
-
       if (formMode === "create") {
-        const { error: insertError } = await supabase
-          .from("tenure_payment_scales")
-          .insert({
-            organization_entity_id: entityId,
-            from_months: fromMonths,
-            to_months: toMonths,
-            amount: amount,
-            is_active: true,
-          })
-
-        if (insertError) throw insertError
+        await createTenureScaleRange(entityId, formData)
       } else {
         if (!editingId) throw new Error("ID de edición no disponible")
-
-        const { error: updateError } = await supabase
-          .from("tenure_payment_scales")
-          .update({
-            from_months: fromMonths,
-            to_months: toMonths,
-            amount: amount,
-            is_active: true,
-          })
-          .eq("id", editingId)
-
-        if (updateError) throw updateError
+        await updateTenureScaleRangeById(editingId, formData)
       }
 
       setFormDialogOpen(false)
@@ -239,12 +139,7 @@ const EntitySettingsTenureScale = () => {
     if (!window.confirm("¿Está seguro de eliminar este tramo?")) return
 
     try {
-      const { error: deleteError } = await supabase
-        .from("tenure_payment_scales")
-        .update({ is_active: false })
-        .eq("id", id)
-
-      if (deleteError) throw deleteError
+      await deleteTenureScaleRange(id)
       await loadRanges()
     } catch (err) {
       console.error("Error deleting tenure scale:", err)
@@ -254,28 +149,6 @@ const EntitySettingsTenureScale = () => {
           : "Error al eliminar el tramo de escala salarial"
       )
     }
-  }
-
-  const formatRange = (range: TenureScaleRange): string => {
-    const fromYears = Math.floor(range.from_months / 12)
-    const fromMonths = range.from_months % 12
-    const fromStr =
-      fromYears > 0
-        ? `${fromYears} ${fromYears === 1 ? "año" : "años"}`
-        : `${fromMonths} ${fromMonths === 1 ? "mes" : "meses"}`
-
-    if (range.to_months === null) {
-      return `${fromStr} en adelante`
-    }
-
-    const toYears = Math.floor(range.to_months / 12)
-    const toMonths = range.to_months % 12
-    const toStr =
-      toYears > 0
-        ? `${toYears} ${toYears === 1 ? "año" : "años"}`
-        : `${toMonths} ${toMonths === 1 ? "mes" : "meses"}`
-
-    return `${fromStr} a ${toStr}`
   }
 
   if (loading) {
@@ -343,14 +216,14 @@ const EntitySettingsTenureScale = () => {
               <tbody className="divide-y">
                 {ranges.map((range) => (
                   <tr key={range.id} className="hover:bg-muted">
-                    <td className="px-4 py-3">{formatRange(range)}</td>
+                    <td className="px-4 py-3">{formatTenureRange(range)}</td>
                     <td className="px-4 py-3">
                       {range.to_months === null ? (
                         <span className="font-medium text-sitecorp-primary">
                           Sin límite
                         </span>
                       ) : (
-                        formatRange(range)
+                        formatTenureRange(range)
                       )}
                     </td>
                     <td className="px-4 py-3">

@@ -1,11 +1,4 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
-import {
-  columnName,
-  selectColumn,
-  selectQuery,
-  tableName,
-} from "@/integrations/supabase/schema-target"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
@@ -23,19 +16,20 @@ import {
 } from "@/components/ui/dialog"
 import { SelectItem } from "@/components/ui/select"
 import {
-  fetchPlatformPermissions,
-  groupPlatformPermissions,
-  platformPermissionLabel,
-  type PlatformPermission,
-} from "@/lib/platform-permissions"
-import {
+  deleteRole as deleteRoleCommand,
   entityPermissionLabel,
-  fetchEntityPermissions,
-  groupEntityPermissions,
-  isInternalPermissionCode,
-  type EntityPermission,
-  type EntityPermissionGroup,
-} from "@/lib/entity-permissions"
+  friendlyRoleSaveError,
+  isProtectedRole as isProtectedRoleRule,
+  loadRoleScopeWorkspace,
+  permissionGroupsFor,
+  platformPermissionLabel,
+  saveRole as saveRoleCommand,
+  selectablePermissionsFor,
+  type PermissionOption,
+  type RoleForm,
+  type RoleRecord,
+  type RoleScope,
+} from "@/domains/access-control"
 import {
   BadgeCheck,
   Eye,
@@ -48,88 +42,23 @@ import {
   Users,
 } from "lucide-react"
 
-export type RoleScope = "platform" | "organization"
-
-interface PermissionOption {
-  id: string
-  code: string
-  description: string | null
-  /** Sólo en el ámbito de plataforma: grupo del catálogo. */
-  category?: string | null
-  /** Sólo en el ámbito de plataforma: pertenece al catálogo global de SiteCorp. */
-  is_platform_scope?: boolean
-}
-
-interface RoleRecord {
-  id: string
-  name: string
-  description: string | null
-  is_system_role: boolean
-  is_active: boolean
-  created_at: string
-  permissionIds: string[]
-  permissionCodes: string[]
-  assignedUserCount: number
-  organizationEntityId: string | null
-}
-
-interface RoleForm {
-  name: string
-  description: string
-  is_active: boolean
-}
-
-interface PermissionGroup {
-  title: string
-  codes: string[]
-}
+export type { RoleScope } from "@/domains/access-control"
 
 /**
- * Filas de Supabase utilizadas al cargar roles. Cada interfaz refleja sólo las
- * columnas realmente seleccionadas y consumidas en este componente.
- */
-interface RoleRow {
-  id: string
-  name: string
-  description: string | null
-  is_system_role: boolean
-  is_active: boolean
-  created_at: string
-  /** Sólo existe en `tenant_roles`; `platform_roles` no tiene esta columna. */
-  organization_entity_id?: string | null
-}
-
-interface PlatformUserRoleRow {
-  platform_role_id: string
-  user_id: string
-}
-
-interface TenantUserRoleRow {
-  tenant_role_id: string
-  tenant_membership_id: string
-}
-
-interface RolePermissionMappingRow {
-  platform_role_id?: string
-  tenant_role_id?: string
-  platform_permission_id?: string
-  tenant_permission_id?: string
-}
-
-const emptyForm: RoleForm = {
-  name: "",
-  description: "",
-  is_active: true,
-}
-
-/**
+ * Gestión de roles de UN ámbito: plataforma (SiteCorp) o una entidad organizativa.
+ *
+ * Toda la lógica y la persistencia viven en el dominio de control de acceso
+ * (`@/domains/access-control`): el catálogo de permisos, el ámbito, la protección de los
+ * roles del sistema, la traducción de los errores y los RPC de guardado y borrado.
+ * Este componente sólo compone la interfaz.
+ *
  * ÁMBITO DE ENTIDAD (Nivel 2): los roles internos pertenecen a UNA entidad
- * (`tenant_roles.organization_entity_id`). El catálogo de permisos que se ofrece
- * es el GLOBAL de permisos internos (`@/lib/entity-permissions`).
+ * (`tenant_roles.organization_entity_id`). El catálogo de permisos que se ofrece es el
+ * GLOBAL de permisos internos.
  *
  * ÁMBITO DE PLATAFORMA (Nivel 1): roles globales de SiteCorp con el catálogo de
- * plataforma. `tenant_roles.*` NO vuelve a aparecer aquí: la administración de los
- * roles internos se realiza dentro de cada entidad (`save_entity_role`).
+ * plataforma. `tenant_roles.*` NO vuelve a aparecer aquí: la administración de los roles
+ * internos se realiza dentro de cada entidad (`save_entity_role`).
  */
 
 const permissionLabel = (scope: RoleScope, permission: PermissionOption) =>
@@ -137,66 +66,10 @@ const permissionLabel = (scope: RoleScope, permission: PermissionOption) =>
     ? platformPermissionLabel(permission)
     : entityPermissionLabel(permission)
 
-const friendlySaveError = (scope: RoleScope, error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error ?? "")
-  const normalized = message.toLowerCase()
-  const roleLabel = scope === "platform" ? "rol de plataforma" : "rol de la entidad"
-
-  if (
-    normalized.includes("already exists") ||
-    normalized.includes("duplicate key") ||
-    normalized.includes("23505")
-  ) {
-    return `Ya existe un ${roleLabel} con ese nombre en este ámbito.`
-  }
-  if (normalized.includes("role name is required")) {
-    return "El nombre del rol es obligatorio."
-  }
-  if (normalized.includes("reserved system role")) {
-    return "SuperAdmin es un nombre reservado y no puede usarse en un rol personalizado."
-  }
-  if (normalized.includes("system role names cannot be changed")) {
-    return "El nombre de un rol del sistema no puede cambiarse."
-  }
-  if (normalized.includes("activation status cannot be changed")) {
-    return "El estado de un rol del sistema no puede cambiarse."
-  }
-  if (normalized.includes("system role administrador is protected")) {
-    return "El rol Administrador es un rol del sistema protegido: no puede modificarse, desactivarse ni eliminarse."
-  }
-  if (normalized.includes("system organization role permissions cannot be reduced")) {
-    return "Los permisos del rol Administrador no pueden reducirse ni cambiarse."
-  }
-  if (normalized.includes("superadmin permissions cannot")) {
-    return "Los permisos reservados de SuperAdmin no pueden reducirse ni cambiarse."
-  }
-  if (normalized.includes("permission denied") || normalized.includes("row-level security")) {
-    return scope === "platform"
-      ? "No tienes permiso para gestionar roles de plataforma."
-      : "Necesitas el permiso «Gestionar roles y permisos» dentro de esta entidad."
-  }
-  if (normalized.includes("permissions are invalid")) {
-    return "Uno o más permisos seleccionados no son válidos."
-  }
-  if (normalized.includes("not internal entity permissions")) {
-    return "Sólo puedes asignar permisos internos de entidad. Los permisos de plataforma no están disponibles aquí."
-  }
-  if (normalized.includes("only assign internal permissions")) {
-    return "Sólo puedes asignar permisos internos que tú mismo tengas actualmente en esta entidad."
-  }
-  if (normalized.includes("only assign platform permissions")) {
-    return "Solo puedes asignar permisos de plataforma que actualmente posees."
-  }
-  if (normalized.includes("role was not found in this entity") || normalized.includes("role was not found")) {
-    return "El rol indicado no pertenece a esta entidad."
-  }
-  if (normalized.includes("cannot be deleted")) {
-    return "El rol no puede eliminarse: tiene usuarios o invitaciones asignadas, o es un rol del sistema."
-  }
-  if (normalized.includes("workspace was not found")) {
-    return "El cliente no existe."
-  }
-  return message || `No se pudo guardar el ${roleLabel}.`
+const emptyForm: RoleForm = {
+  name: "",
+  description: "",
+  is_active: true,
 }
 
 export const RolesManager = ({
@@ -246,111 +119,10 @@ export const RolesManager = ({
       setError(null)
       setLoading(true)
 
-      const rolesRequest = isPlatform
-        ? supabase.from("platform_roles").select("*").order("name")
-        : supabase
-            .from(tableName("roles"))
-            .select("*")
-            .eq("organization_entity_id", organizationEntityId as string)
-            .order("name")
+      const workspace = await loadRoleScopeWorkspace({ scope, organizationEntityId })
 
-      const [rolesResult, permissionsResult] = await Promise.all([
-        rolesRequest,
-        isPlatform
-          ? fetchPlatformPermissions().then((data) => ({ data, error: null }))
-          : fetchEntityPermissions().then((data) => ({ data, error: null })),
-      ])
-
-      if (rolesResult.error) throw rolesResult.error
-      if (permissionsResult.error) throw permissionsResult.error
-
-      const roleRows: RoleRow[] = rolesResult.data || []
-      const roleIds = roleRows.map((role: { id: string }) => role.id)
-
-      const mappingsRequest =
-        roleIds.length === 0
-          ? Promise.resolve({ data: [], error: null })
-          : isPlatform
-            ? supabase
-                .from("platform_role_permissions")
-                .select("platform_role_id,platform_permission_id")
-                .in("platform_role_id", roleIds)
-            : supabase
-                .from(tableName("rolePermissions"))
-                .select(selectQuery(`${selectColumn("roleId")},${selectColumn("permissionId")}`))
-                .in(columnName("roleId"), roleIds)
-
-      const mappingsResult = await mappingsRequest
-      if (mappingsResult.error) throw mappingsResult.error
-
-      let assignmentRows: { roleId: string; userId: string }[] = []
-
-      if (roleIds.length > 0) {
-        if (isPlatform) {
-          const platformAssignments = await supabase
-            .from("platform_user_roles")
-            .select("platform_role_id,user_id")
-            .in("platform_role_id", roleIds)
-          if (platformAssignments.error) throw platformAssignments.error
-          assignmentRows = (platformAssignments.data || []).map((row: PlatformUserRoleRow) => ({
-            roleId: row.platform_role_id,
-            userId: row.user_id,
-          }))
-        } else {
-          const [entityAssignments, legacyAssignments] = await Promise.all([
-            supabase
-              .from("entity_user_access")
-              .select(selectQuery(`${selectColumn("roleId")},${selectColumn("membershipId")}`))
-              .in(columnName("roleId"), roleIds),
-            supabase
-              .from(tableName("userRoles"))
-              .select(selectQuery(`${selectColumn("roleId")},${selectColumn("membershipId")}`))
-              .in(columnName("roleId"), roleIds),
-          ])
-          if (entityAssignments.error) throw entityAssignments.error
-          if (legacyAssignments.error) throw legacyAssignments.error
-
-          assignmentRows = [
-            ...(entityAssignments.data || []),
-            ...(legacyAssignments.data || []),
-          ].map((row: TenantUserRoleRow) => ({
-            roleId: row.tenant_role_id,
-            userId: row.tenant_membership_id,
-          }))
-        }
-      }
-
-      const mappings = (mappingsResult.data || []) as RolePermissionMappingRow[]
-      const roleRecords = roleRows.map((role: RoleRow) => {
-        const roleMappings = mappings.filter((mapping) =>
-          isPlatform ? mapping.platform_role_id === role.id : mapping.tenant_role_id === role.id
-        )
-        const permissionIds = isPlatform
-          ? roleMappings.map((mapping) => mapping.platform_permission_id)
-          : roleMappings.map((mapping) => mapping.tenant_permission_id)
-
-        return {
-          ...role,
-          permissionIds,
-          permissionCodes: permissionIds
-            .map(
-              (permissionId) =>
-                (permissionsResult.data || []).find(
-                  (permission: PermissionOption) => permission.id === permissionId
-                )?.code
-            )
-            .filter(Boolean),
-          assignedUserCount: new Set(
-            assignmentRows
-              .filter((assignment) => assignment.roleId === role.id)
-              .map((assignment) => assignment.userId)
-          ).size,
-          organizationEntityId: role.organization_entity_id || null,
-        } as RoleRecord
-      })
-
-      setRoles(roleRecords)
-      setPermissions(permissionsResult.data || [])
+      setRoles(workspace.roles)
+      setPermissions(workspace.permissions)
       setLoadedKey(dataKey)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la información de roles.")
@@ -393,8 +165,7 @@ export const RolesManager = ({
 
   // El rol Administrador (y SuperAdmin en plataforma) es un rol del sistema:
   // sus permisos y metadatos están completamente protegidos.
-  const isProtectedRole = (role: RoleRecord | null) =>
-    Boolean(role?.is_system_role) && (isPlatform ? role?.name === "SuperAdmin" : true)
+  const isProtectedRole = (role: RoleRecord | null) => isProtectedRoleRule(role, isPlatform)
 
   const permissionsLocked = isProtectedRole(editingRole)
 
@@ -403,25 +174,15 @@ export const RolesManager = ({
     nextPermissionIds: string[],
     role: RoleRecord | null
   ) => {
-    const request = isPlatform
-      ? supabase.rpc("save_platform_role", {
-          p_role_id: role?.id || null,
-          p_name: nextForm.name,
-          p_description: nextForm.description,
-          p_is_active: nextForm.is_active,
-          p_permission_ids: nextPermissionIds,
-        })
-      : supabase.rpc("save_entity_role", {
-          p_entity_id: organizationEntityId,
-          p_role_id: role?.id || null,
-          p_name: nextForm.name,
-          p_description: nextForm.description,
-          p_is_active: nextForm.is_active,
-          p_permission_ids: nextPermissionIds,
-        })
-
-    const { error: saveError } = await request
-    if (saveError) throw saveError
+    await saveRoleCommand({
+      scope,
+      organizationEntityId,
+      roleId: role?.id || null,
+      name: nextForm.name,
+      description: nextForm.description,
+      isActive: nextForm.is_active,
+      permissionIds: nextPermissionIds,
+    })
   }
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -445,7 +206,7 @@ export const RolesManager = ({
       closeDialog()
       await loadData()
     } catch (err) {
-      setFormError(friendlySaveError(scope, err))
+      setFormError(friendlyRoleSaveError(scope, err))
     } finally {
       setSaving(false)
     }
@@ -470,7 +231,7 @@ export const RolesManager = ({
       setSuccess(`Rol ${role.is_active ? "desactivado" : "activado"} correctamente.`)
       await loadData()
     } catch (err) {
-      setError(friendlySaveError(scope, err))
+      setError(friendlyRoleSaveError(scope, err))
     } finally {
       setSaving(false)
     }
@@ -490,16 +251,12 @@ export const RolesManager = ({
         throw new Error("A role assigned to users or invitations cannot be deleted")
       }
 
-      const { error: deleteError } = isPlatform
-        ? await supabase.from("platform_roles").delete().eq("id", role.id)
-        : await supabase.rpc("delete_entity_role", { p_role_id: role.id })
-
-      if (deleteError) throw deleteError
+      await deleteRoleCommand({ scope, roleId: role.id })
 
       setSuccess("Rol eliminado correctamente.")
       await loadData()
     } catch (err) {
-      setError(friendlySaveError(scope, err))
+      setError(friendlyRoleSaveError(scope, err))
     } finally {
       setSaving(false)
     }
@@ -515,21 +272,15 @@ export const RolesManager = ({
 
   // Nivel 1 (plataforma): sólo el catálogo de plataforma.
   // Nivel 2 (entidad): sólo el catálogo global de permisos INTERNOS.
-  const selectablePermissions = React.useMemo(() => {
-    if (isPlatform) {
-      return permissions.filter((permission) => permission.is_platform_scope !== false)
-    }
-    return permissions.filter((permission) => isInternalPermissionCode(permission.code))
-  }, [isPlatform, permissions])
+  const selectablePermissions = React.useMemo(
+    () => selectablePermissionsFor(scope, permissions),
+    [scope, permissions]
+  )
 
-  const allGroups: PermissionGroup[] = React.useMemo(() => {
-    if (isPlatform) {
-      return groupPlatformPermissions(permissions as PlatformPermission[])
-    }
-    return groupEntityPermissions(permissions as EntityPermission[]).map(
-      (group: EntityPermissionGroup) => ({ title: group.title, codes: group.codes })
-    )
-  }, [isPlatform, permissions])
+  const allGroups = React.useMemo(
+    () => permissionGroupsFor(scope, permissions),
+    [scope, permissions]
+  )
 
   const renderPermissionCheckbox = (permission: PermissionOption) => {
     const checked =
