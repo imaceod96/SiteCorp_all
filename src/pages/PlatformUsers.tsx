@@ -1,8 +1,17 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth, type AuthProfile } from "@/contexts/AuthContext"
-import { supabase } from "@/lib/supabase"
-import { loadPlatformPermission } from "@/domains/access-control"
+import { useAuth } from "@/contexts/AuthContext"
+import {
+  assignPlatformRole,
+  createPlatformUser,
+  loadActivePlatformRoles,
+  loadPlatformPermission,
+  loadPlatformUsers,
+  setPlatformUserActive,
+  updatePlatformUser,
+  type PlatformRole,
+  type PlatformUser,
+} from "@/domains/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -17,29 +26,6 @@ import { SiteCorpError } from "@/components/ui/sitecorp-error"
 import { SelectItem } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Pencil, Plus, Power, UserMinus, UserCheck, Key, ShieldCheck } from "lucide-react"
-
-interface PlatformUser {
-  id: string
-  full_name: string
-  username: string
-  /**
-   * `public.profiles` no almacena el correo (vive en `auth.users`), por lo que el
-   * usuario se construye a partir de la fila de `profiles` y este campo puede
-   * venir ausente.
-   */
-  email?: string
-  is_active: boolean
-  created_at: string
-  roles: { name: string; is_system_role: boolean }[]
-}
-
-interface PlatformRole {
-  id: string
-  name: string
-  description: string | null
-  is_system_role: boolean
-  is_active: boolean
-}
 
 const PlatformUsers = () => {
   const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
@@ -65,29 +51,8 @@ const PlatformUsers = () => {
     try {
       setError(null)
       setLoading(true)
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (profilesError) throw profilesError
-
-      const usersWithRoles = await Promise.all(
-        (profilesData || []).map(async (profile: AuthProfile) => {
-          const { data: roleData } = await supabase
-            .from("platform_user_roles")
-            .select("platform_role_id, platform_roles(name, is_system_role)")
-            .eq("user_id", profile.id)
-
-          const roles = (roleData || []).map((r: { platform_roles: { name: string; is_system_role: boolean }[] }) => r.platform_roles).flat()
-          return {
-            ...profile,
-            roles,
-          }
-        })
-      )
-
-      setUsers(usersWithRoles)
+      // El listado de usuarios de plataforma lo compone el dominio de control de acceso.
+      setUsers(await loadPlatformUsers())
     } catch (err) {
       console.error("Error loading users:", err)
       setError("No se pudo cargar la lista de usuarios.")
@@ -98,14 +63,7 @@ const PlatformUsers = () => {
 
   const loadRoles = React.useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("platform_roles")
-        .select("*")
-        .eq("is_active", true)
-        .order("name")
-
-      if (error) throw error
-      setRoles(data || [])
+      setRoles(await loadActivePlatformRoles())
     } catch (err) {
       console.error("Error loading roles:", err)
     }
@@ -132,9 +90,9 @@ const PlatformUsers = () => {
   const startEdit = (user: PlatformUser) => {
     setEditingUser(user)
     setFormData({
-      full_name: user.full_name,
-      username: user.username,
-      email: user.email,
+      full_name: user.full_name ?? "",
+      username: user.username ?? "",
+      email: user.email ?? "",
       password: "",
       is_active: user.is_active,
     })
@@ -144,26 +102,22 @@ const PlatformUsers = () => {
     e.preventDefault()
     try {
       if (editingUser) {
-        const { error } = await supabase
-          .from("profiles")
-          .update({ full_name: formData.full_name, username: formData.username })
-          .eq("id", editingUser.id)
-        if (error) throw error
-      } else {
-        // Admin-provisioned users must go through the secure edge function
-        const { data, error } = await supabase.functions.invoke("create-sitecorp-user", {
-          body: {
-            full_name: formData.full_name,
-            username: formData.username,
-            email: formData.email,
-            password: formData.password,
-            is_active: formData.is_active,
-            platform_role_id: selectedRoleId || null,
-          },
+        await updatePlatformUser({
+          userId: editingUser.id,
+          fullName: formData.full_name,
+          username: formData.username,
         })
-
-        if (error) throw error
-        if (!data) throw new Error("Respuesta vacía del servidor")
+      } else {
+        // El alta de usuarios de plataforma sigue pasando por la Edge Function del backend:
+        // el cliente nunca crea usuarios ni maneja claves privilegiadas.
+        await createPlatformUser({
+          fullName: formData.full_name,
+          username: formData.username,
+          email: formData.email,
+          password: formData.password,
+          isActive: formData.is_active,
+          platformRoleId: selectedRoleId || null,
+        })
       }
       setEditingUser(null)
       setShowCreateForm(false)
@@ -183,11 +137,7 @@ const PlatformUsers = () => {
 
   const toggleActive = async (user: PlatformUser) => {
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_active: !user.is_active })
-        .eq("id", user.id)
-      if (error) throw error
+      await setPlatformUserActive(user.id, !user.is_active)
       await loadUsers()
     } catch (err) {
       console.error("Error toggling user:", err)
@@ -198,31 +148,13 @@ const PlatformUsers = () => {
   const assignRole = async (user: PlatformUser) => {
     if (!selectedRoleId) return
     try {
-      const { error } = await supabase
-        .from("platform_user_roles")
-        .insert({ user_id: user.id, platform_role_id: selectedRoleId })
-      if (error) throw error
+      await assignPlatformRole(user.id, selectedRoleId)
       setAssigningRole(null)
       setSelectedRoleId("")
       await loadUsers()
     } catch (err) {
       console.error("Error assigning role:", err)
       setError("No se pudo asignar el rol.")
-    }
-  }
-
-  const removeRole = async (user: PlatformUser, roleName: string) => {
-    try {
-      const { error } = await supabase
-        .from("platform_user_roles")
-        .delete()
-        .eq("user_id", user.id)
-        .eq("platform_role_id", roles.find((r) => r.name === roleName)?.id)
-      if (error) throw error
-      await loadUsers()
-    } catch (err) {
-      console.error("Error removing role:", err)
-      setError("No se pudo eliminar el rol.")
     }
   }
 
@@ -255,7 +187,7 @@ const PlatformUsers = () => {
         {user.is_active ? "Activo" : "Inactivo"}
       </SiteCorpStatusBadge>
     ),
-    created_at: new Date(user.created_at).toLocaleDateString("es-ES"),
+    created_at: new Date(user.created_at ?? "").toLocaleDateString("es-ES"),
     actions: (
       <div className="flex items-center gap-2">
         <SiteCorpButton size="sm" variant="outline" onClick={() => startEdit(user)}>

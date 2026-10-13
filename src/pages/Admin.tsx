@@ -1,7 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
-import { tableName } from "@/integrations/supabase/schema-target"
+import { companyClientMetrics, loadCompanyClients } from "@/domains/company-client"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -21,16 +20,11 @@ const Admin = () => {
   React.useEffect(() => {
     const loadMetrics = async () => {
       try {
-        // Es una lectura de LISTA para métricas: no se sustituye por lecturas
-        // unitarias. El nombre físico de la tabla lo resuelve la frontera.
-        const { data: companyClients } = await supabase.from(tableName("clients")).select("*")
-        if (companyClients) {
-          setMetrics({
-            total: companyClients.length,
-            active: companyClients.filter((c: { is_active: boolean | null }) => c.is_active).length,
-            inactive: companyClients.filter((c: { is_active: boolean | null }) => !c.is_active).length,
-          })
-        }
+        // Lectura de LISTA del dominio del cliente propietario: no se sustituye por lecturas
+        // unitarias y ninguna consulta se compone aquí. Las cifras las calcula la regla pura
+        // del dominio, con el mismo criterio que ya aplicaba la pantalla.
+        const companyClients = await loadCompanyClients()
+        setMetrics(companyClientMetrics(companyClients))
       } catch (error) {
         console.error("Error loading metrics:", error)
       } finally {

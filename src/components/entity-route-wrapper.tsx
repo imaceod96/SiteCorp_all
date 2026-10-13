@@ -4,8 +4,12 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { canViewEntity } from "@/domains/access-control"
 import {
+  SITECORP_MODULES_DISABLED_MESSAGE,
+  SITECORP_MODULES_DISABLED_TITLE,
+  hasSiteCorpAccount,
   loadEntitySiteCorpFlag,
   loadOrganizationEntity,
+  organizationFallbackPath,
 } from "@/domains/organization-structure"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -14,12 +18,6 @@ import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { EntityLayout } from "@/components/entity-layout"
 import { Outlet } from "react-router-dom"
-import {
-  SITECORP_MODULES_DISABLED_MESSAGE,
-  SITECORP_MODULES_DISABLED_TITLE,
-  hasSiteCorpAccount,
-  organizationFallbackPath,
-} from "@/lib/sitecorp-account"
 import { ShieldOff } from "lucide-react"
 
 const EntityRouteWrapper = () => {

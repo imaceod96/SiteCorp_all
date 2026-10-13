@@ -1,6 +1,11 @@
 import * as React from "react"
 import { useAuth } from "@/contexts/AuthContext"
-import { supabase } from "@/lib/supabase"
+import {
+  changePassword,
+  passwordChangeError,
+  updateOwnAvatar,
+  updateOwnProfile,
+} from "@/domains/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -35,39 +40,15 @@ const Account = () => {
     setSuccess(null)
 
     try {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          full_name: formData.full_name,
-          username: formData.username,
-          avatar_url: formData.avatar_url,
-        })
-        .eq("id", user?.id)
-
-      if (profileError) throw profileError
+      // Los datos de la cuenta y el avatar los guarda el dominio de control de acceso.
+      await updateOwnProfile(user?.id ?? "", {
+        fullName: formData.full_name,
+        username: formData.username,
+        avatarUrl: formData.avatar_url,
+      })
 
       if (avatarFile) {
-        const fileExt = avatarFile.name.split(".").pop()
-        const filePath = `${user?.id}/${avatarFile.name}`
-
-        const { error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(filePath, avatarFile, {
-            contentType: avatarFile.type,
-          })
-
-        if (uploadError) throw uploadError
-
-        const { data: publicUrlData } = await supabase.storage
-                  .from("avatars")
-                  .getPublicUrl(filePath)
-        
-                const { error: avatarError } = await supabase
-                  .from("profiles")
-                  .update({ avatar_url: publicUrlData.publicUrl })
-          .eq("id", user?.id)
-
-        if (avatarError) throw avatarError
+        await updateOwnAvatar(user?.id ?? "", avatarFile)
       }
 
       setSuccess("Cambios guardados correctamente.")
@@ -85,18 +66,19 @@ const Account = () => {
     setPasswordLoading(true)
     setError(null)
 
-    if (passwordData.new_password !== passwordData.confirm_password) {
-      setError("Las contraseñas nuevas no coinciden.")
+    // La coincidencia de las contraseñas nuevas es una regla pura del dominio.
+    const passwordError = passwordChangeError(
+      passwordData.new_password,
+      passwordData.confirm_password
+    )
+    if (passwordError) {
+      setError(passwordError)
       setPasswordLoading(false)
       return
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: passwordData.new_password,
-      })
-
-      if (error) throw error
+      await changePassword(passwordData.new_password)
 
       setSuccess("Contraseña actualizada correctamente.")
       setPasswordData({ current_password: "", new_password: "", confirm_password: "" })

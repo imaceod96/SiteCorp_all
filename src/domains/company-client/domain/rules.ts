@@ -9,7 +9,7 @@
  * forma previas al uso de un identificador, NUNCA autorización.
  */
 
-import type { CompanyClientId } from "./entities"
+import type { CompanyClient, CompanyClientId } from "./entities"
 
 /**
  * Normaliza un identificador para compararlo.
@@ -71,4 +71,30 @@ export function companyClientDeletionError(err: unknown): string {
     return "No tienes permiso para eliminar clientes."
   }
   return message || "No se pudo eliminar el cliente."
+}
+
+/** Recuento de clientes por estado (métricas de la administración global). */
+export interface CompanyClientMetrics {
+  total: number
+  active: number
+  inactive: number
+}
+
+/**
+ * MÉTRICAS de la lista de clientes que ve la sesión.
+ *
+ * Sólo se cuentan las filas recibidas: un cliente sin estado (`is_active` nulo o ausente) se
+ * cuenta como inactivo, que es exactamente el criterio que ya aplicaba la pantalla de
+ * administración global. No consulta Supabase: el alcance lo determina la lectura que la
+ * sesión puede hacer según RLS.
+ */
+export function companyClientMetrics(
+  companyClients: ReadonlyArray<Pick<CompanyClient, "isActive">>
+): CompanyClientMetrics {
+  const active = companyClients.filter((client) => client.isActive).length
+  return {
+    total: companyClients.length,
+    active,
+    inactive: companyClients.length - active,
+  }
 }

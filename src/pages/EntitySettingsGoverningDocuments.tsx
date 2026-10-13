@@ -1,11 +1,14 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/contexts/AuthContext"
 import {
-  columnName,
-  selectColumn,
-  selectQuery,
-} from "@/integrations/supabase/schema-target"
+  downloadGoverningDocument,
+  loadGoverningDocuments,
+  openGoverningDocument,
+  removeGoverningDocument,
+  saveGoverningDocument,
+  type GoverningDocument,
+} from "@/domains/organization-structure"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -28,7 +31,6 @@ import {
   formatDocumentDate,
   formatFileSize,
   isViewableDocument,
-  sanitizeFileName,
   validateDocumentFile,
 } from "@/lib/documents"
 
@@ -38,23 +40,14 @@ import {
  * El archivo vive en el bucket privado `documents` bajo
  * `governing-documents/<organization_entity_id>/<documento_id>/<archivo>`, de modo
  * que las políticas de Storage resuelven la entidad desde la ruta.
+ *
+ * El bucket, la ruta, los metadatos y el ciclo de vida los mantiene el dominio de
+ * estructura organizativa: esta pantalla no compone consultas ni habla con Storage.
  */
-
-const BUCKET = "documents"
-
-interface GoverningDocument {
-  id: string
-  organization_entity_id: string
-  name: string
-  file_name: string
-  storage_path: string
-  mime_type: string | null
-  file_size: number | null
-  created_at: string
-}
 
 const EntitySettingsGoverningDocuments = () => {
   const { entityId } = useParams<{ entityId: string }>()
+  const { user } = useAuth()
   const { permissions, loading: permissionsLoading } = useEntityPermissions(entityId)
 
   const canView = permissions.includes("organization.view") || permissions.includes("organization.manage")
@@ -79,26 +72,11 @@ const EntitySettingsGoverningDocuments = () => {
     setLoading(true)
     setError(null)
     try {
-      const [entityRes, documentsRes] = await Promise.all([
-        supabase
-          .from("organization_entities")
-          .select(selectQuery(`name, ${selectColumn("clientId")}`))
-          .eq("id", entityId)
-          .maybeSingle(),
-        supabase
-          .from("governing_documents")
-          .select(
-            "id, organization_entity_id, name, file_name, storage_path, mime_type, file_size, created_at"
-          )
-          .eq("organization_entity_id", entityId)
-          .order("created_at", { ascending: false }),
-      ])
-      if (documentsRes.error) throw documentsRes.error
+      const workspace = await loadGoverningDocuments(entityId)
 
-      const entity = entityRes.data as { name: string; tenant_id: string | null } | null
-      setEntityName(entity?.name || "")
-      setCompanyClientId(entity?.tenant_id ?? null)
-      setDocuments((documentsRes.data as GoverningDocument[]) || [])
+      setEntityName(workspace.entity.name)
+      setCompanyClientId(workspace.entity.companyClientId)
+      setDocuments(workspace.documents)
     } catch (err) {
       console.error("Error loading governing documents:", err)
       setError(err instanceof Error ? err.message : "Error al cargar los documentos rectores")
@@ -148,35 +126,18 @@ const EntitySettingsGoverningDocuments = () => {
     setSaving(true)
     setFormError(null)
 
-    const documentId = crypto.randomUUID()
-    const storagePath = `governing-documents/${entityId}/${documentId}/${sanitizeFileName(selectedFile.name)}`
-
     try {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData.user) throw new Error("Usuario no autenticado")
+      if (!user?.id) throw new Error("Usuario no autenticado")
 
-      const { error: storageError } = await supabase.storage
-        .from(BUCKET)
-        .upload(storagePath, selectedFile, { cacheControl: "3600", upsert: false })
-      if (storageError) throw storageError
-
-      // La clave del insert es el nombre FÍSICO de columna del estado activo.
-      const { error: dbError } = await supabase.from("governing_documents").insert({
-        id: documentId,
-        [columnName("clientId")]: companyClientId,
-        organization_entity_id: entityId,
-        name: documentName.trim(),
-        file_name: selectedFile.name,
-        storage_path: storagePath,
-        mime_type: selectedFile.type || null,
-        file_size: selectedFile.size,
-        created_by: userData.user.id,
+      // El alta (archivo + metadatos, con limpieza si el registro falla) la resuelve el
+      // dominio: el identificador del documento y la ruta de Storage son los de siempre.
+      await saveGoverningDocument({
+        entityId,
+        companyClientId,
+        name: documentName,
+        file: selectedFile,
+        createdBy: user.id,
       })
-      if (dbError) {
-        // No dejar archivos huérfanos si el registro no se pudo crear.
-        await supabase.storage.from(BUCKET).remove([storagePath])
-        throw dbError
-      }
 
       setDialogOpen(false)
       setDocumentName("")
@@ -194,11 +155,8 @@ const EntitySettingsGoverningDocuments = () => {
   const handleOpen = async (doc: GoverningDocument) => {
     setBusyId(doc.id)
     try {
-      const { data, error: signedError } = await supabase.storage
-        .from(BUCKET)
-        .createSignedUrl(doc.storage_path, 60)
-      if (signedError) throw signedError
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer")
+      const signedUrl = await openGoverningDocument(doc)
+      window.open(signedUrl, "_blank", "noopener,noreferrer")
     } catch (err) {
       console.error("Error opening governing document:", err)
       showError("No se pudo abrir el documento")
@@ -210,10 +168,7 @@ const EntitySettingsGoverningDocuments = () => {
   const handleDownload = async (doc: GoverningDocument) => {
     setBusyId(doc.id)
     try {
-      const { data, error: downloadError } = await supabase.storage
-        .from(BUCKET)
-        .download(doc.storage_path)
-      if (downloadError) throw downloadError
+      const data = await downloadGoverningDocument(doc)
 
       const url = window.URL.createObjectURL(data)
       const link = window.document.createElement("a")
@@ -237,11 +192,8 @@ const EntitySettingsGoverningDocuments = () => {
     }
     setBusyId(doc.id)
     try {
-      const { error: storageError } = await supabase.storage.from(BUCKET).remove([doc.storage_path])
-      if (storageError) throw storageError
-
-      const { error: dbError } = await supabase.from("governing_documents").delete().eq("id", doc.id)
-      if (dbError) throw dbError
+      // El dominio retira primero el archivo y después el registro, en ese mismo orden.
+      await removeGoverningDocument(doc)
 
       await loadDocuments()
       showSuccess("Documento eliminado correctamente")

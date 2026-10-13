@@ -324,3 +324,43 @@ export {
   saveAcademicCategoryPayment,
   saveAcademicCategoryPaymentAmounts,
 } from "./application/academic-payment.commands"
+
+// --- Cuenta SiteCorp de la entidad: reglas puras ---
+export {
+  SITECORP_MODULES_DISABLED_MESSAGE,
+  SITECORP_MODULES_DISABLED_TITLE,
+  buildAccountCode,
+  canUseInternalModules,
+  hasSiteCorpAccount,
+  organizationFallbackPath,
+} from "./domain/account.rules"
+
+// --- Módulos internos de la entidad: catálogo de rutas y permisos ---
+export type {
+  EntityInternalModule,
+  EntityNavEntry,
+  EntityNavGroup,
+  EntityNavLink,
+} from "./domain/entity-modules.catalog"
+export {
+  ENTITY_INTERNAL_MODULES,
+  ENTITY_NAV,
+  contractAlertsPath,
+} from "./domain/entity-modules.catalog"
+
+// --- Documentos rectores de la entidad: tipos ---
+export type {
+  GoverningDocument,
+  GoverningDocumentEntity,
+  GoverningDocumentsWorkspace,
+  SaveGoverningDocumentInput,
+} from "./domain/entities"
+
+// --- Documentos rectores de la entidad: casos de uso ---
+export { loadGoverningDocuments } from "./application/governing-documents.queries"
+export {
+  downloadGoverningDocument,
+  openGoverningDocument,
+  removeGoverningDocument,
+  saveGoverningDocument,
+} from "./application/governing-documents.commands"

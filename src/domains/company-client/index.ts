@@ -52,7 +52,11 @@ export {
   sameCompanyClient,
   companyClientNameError,
   companyClientDeletionError,
+  companyClientMetrics,
 } from "./domain/rules"
+
+/* Recuento de clientes por estado (métricas de la administración global) */
+export type { CompanyClientMetrics } from "./domain/rules"
 
 /* Mapper de compatibilidad (legacy `tenant_id` ↔ `companyClientId`) */
 export type { LegacyTenantSummary, CompanyClientRecord } from "./infrastructure/company-client.mapper"

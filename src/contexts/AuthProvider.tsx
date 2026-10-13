@@ -1,14 +1,35 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
-import { rpcName, selectQuery, tableName } from "@/integrations/supabase/schema-target"
 import type { User } from "@supabase/supabase-js"
-import { loadPlatformPermissionSafe } from "@/domains/access-control"
+import {
+  loadAuthenticatedIdentity,
+  loadClientPermissionSafe,
+  loadPlatformPermissionSafe,
+  loadSessionUser,
+  signOut as signOutSession,
+  subscribeAuthChanges,
+  type AuthenticatedIdentity,
+} from "@/domains/access-control"
 import {
   AuthContext,
   type AuthProfile,
   type AuthMembership,
 } from "@/contexts/AuthContext"
 
+/**
+ * Proveedor de autenticación (presentación).
+ *
+ * NO habla con Supabase: toda la sesión, la identidad y los permisos los resuelve el dominio
+ * de control de acceso. Aquí sólo se mantiene el ESTADO que publica el contexto y se decide
+ * qué evento actualiza qué, con el MISMO contrato público de `AuthContext` y el mismo
+ * comportamiento que antes:
+ *
+ *   · la carga inicial y los eventos `INITIAL_SESSION` / `SIGNED_IN` aplican la MISMA
+ *     secuencia de identidad (antes estaba duplicada);
+ *   · un perfil inactivo cierra la sesión;
+ *   · `SIGNED_OUT` deja el estado en blanco;
+ *   · el superadministrador conserva su atajo en los dos permisos;
+ *   · un fallo de la comprobación de permisos devuelve `false` y nunca habilita nada.
+ */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = React.useState<User | null>(null)
   const [profile, setProfile] = React.useState<AuthProfile | null>(null)
@@ -22,53 +43,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   React.useEffect(() => {
     let mounted = true
 
+    /** Estado en blanco al cerrar sesión (se conserva literalmente). */
+    const resetAuthState = () => {
+      setUser(null)
+      setProfile(null)
+      setIsPlatformSuperAdmin(false)
+      setIsPlatformUser(false)
+      setIsProfileActive(true)
+      setMemberships([])
+      setAuthLoading(false)
+      setAuthReady(true)
+    }
+
+    /**
+     * Aplica la identidad cargada por el dominio.
+     *
+     * Si el perfil está inactivo se cierra la sesión, y NO se tocan los indicadores de
+     * plataforma ni las membresías: es el mismo orden de efectos que ya tenía el proveedor.
+     */
+    const applyIdentity = async (identity: AuthenticatedIdentity) => {
+      if (!mounted) return
+
+      setProfile(identity.profile)
+      setIsProfileActive(identity.isProfileActive)
+
+      if (identity.signedOut) {
+        await signOutSession()
+        return
+      }
+
+      setIsPlatformSuperAdmin(identity.isPlatformSuperAdmin)
+      setIsPlatformUser(identity.isPlatformUser)
+      setMemberships(identity.memberships)
+    }
+
     const loadAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        const sessionUser = await loadSessionUser()
         if (!mounted) return
 
-        if (session?.user) {
-          setUser(session.user)
-
-          // Load profile
-          const { data: profileData } = await supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single()
-
-          if (mounted) {
-            setProfile(profileData || null)
-            const active = profileData?.is_active !== false
-            setIsProfileActive(active)
-            if (!active) {
-              await supabase.auth.signOut()
-              return
-            }
-          }
-
-          // Load SuperAdmin status
-          const { data: superAdminData } = await supabase.rpc("is_platform_superadmin")
-          if (mounted) {
-            setIsPlatformSuperAdmin(!!superAdminData)
-          }
-
-          // Load Platform User status (at least one active Platform Role)
-          const { data: platformUserData } = await supabase.rpc("is_platform_user")
-          if (mounted) {
-            setIsPlatformUser(!!platformUserData || !!superAdminData)
-          }
-
-          // Load memberships
-          const { data: membershipsData } = await supabase
-            .from(tableName("memberships"))
-            .select(selectQuery(`*, tenant:${tableName("clients")}(*)`))
-            .eq("user_id", session.user.id)
-            .eq("is_active", true)
-
-          if (mounted) {
-            setMemberships(membershipsData || [])
-          }
+        if (sessionUser) {
+          setUser(sessionUser)
+          await applyIdentity(await loadAuthenticatedIdentity(sessionUser.id))
         }
       } catch (error) {
         console.error("Auth loading error:", error)
@@ -82,60 +98,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     loadAuth()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted) return
+    const unsubscribe = subscribeAuthChanges(async (event, sessionUser) => {
+      if (!mounted) return
 
-        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-          if (session?.user) {
-            setUser(session.user)
-            const { data: profileData } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", session.user.id)
-              .single()
-            setProfile(profileData || null)
-            const active = profileData?.is_active !== false
-            setIsProfileActive(active)
-            if (!active) {
-              await supabase.auth.signOut()
-              return
-            }
-
-            const { data: superAdminData } = await supabase.rpc("is_platform_superadmin")
-            setIsPlatformSuperAdmin(!!superAdminData)
-
-            const { data: platformUserData } = await supabase.rpc("is_platform_user")
-            setIsPlatformUser(!!platformUserData || !!superAdminData)
-
-            const { data: membershipsData } = await supabase
-              .from(tableName("memberships"))
-              .select(selectQuery(`*, tenant:${tableName("clients")}(*)`))
-              .eq("user_id", session.user.id)
-              .eq("is_active", true)
-            setMemberships(membershipsData || [])
-          }
-        } else if (event === "SIGNED_OUT") {
-          setUser(null)
-          setProfile(null)
-          setIsPlatformSuperAdmin(false)
-          setIsPlatformUser(false)
-          setIsProfileActive(true)
-          setMemberships([])
-          setAuthLoading(false)
-          setAuthReady(true)
+      if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+        if (sessionUser) {
+          setUser(sessionUser)
+          await applyIdentity(await loadAuthenticatedIdentity(sessionUser.id))
         }
+      } else if (event === "SIGNED_OUT") {
+        resetAuthState()
       }
-    )
+    })
 
     return () => {
       mounted = false
-      subscription.unsubscribe()
+      unsubscribe()
     }
   }, [])
 
   const logout = async () => {
-    await supabase.auth.signOut()
+    await signOutSession()
   }
 
   /**
@@ -151,18 +134,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return loadPlatformPermissionSafe(code)
   }
 
+  /**
+   * Permiso de cliente del usuario (Nivel 2). También se delega en el dominio, con la misma
+   * política de errores: un fallo se traduce a «sin permiso».
+   */
   const hasTenantPermission = async (code: string): Promise<boolean> => {
-    try {
-      if (isPlatformSuperAdmin) return true
-      const { data, error } = await supabase.rpc(rpcName("hasClientPermission"), {
-        // Parámetro PRESERVADO por la migración SQL (decisión nº 2).
-        permission_code: code,
-      })
-      if (error) return false
-      return !!data
-    } catch {
-      return false
-    }
+    if (isPlatformSuperAdmin) return true
+    return loadClientPermissionSafe(code)
   }
 
   return (

@@ -1,12 +1,13 @@
 import * as React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { supabase } from "@/lib/supabase"
 import {
-  columnName,
-  selectQuery,
-  tableName,
-} from "@/integrations/supabase/schema-target"
+  cancelClientInvitation,
+  loadClientInvitations,
+  resendClientInvitation,
+  sendClientInvitation,
+  type ClientInvitation,
+} from "@/domains/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -16,15 +17,6 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpError } from "@/components/ui/sitecorp-error"
 import { Mail, RefreshCw, X } from "lucide-react"
-
-interface CompanyClientInvitation {
-  id: string
-  email: string
-  role_name: string
-  status: string
-  expires_at: string
-  created_at: string
-}
 
 const statusLabels: Record<string, string> = {
   pending: "Pendiente",
@@ -41,9 +33,9 @@ const statusType: Record<string, "success" | "warning" | "danger" | "neutral"> =
 }
 
 const CompanyClientInvitations = () => {
-  const { isPlatformSuperAdmin } = useAuth()
+  const { isPlatformSuperAdmin, user } = useAuth()
   const { currentCompanyClient } = useCurrentCompanyClient()
-  const [invitations, setInvitations] = React.useState<CompanyClientInvitation[]>([])
+  const [invitations, setInvitations] = React.useState<ClientInvitation[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [email, setEmail] = React.useState("")
@@ -56,31 +48,8 @@ const CompanyClientInvitations = () => {
       setLoading(true)
       if (!currentCompanyClient) return
 
-      const { data, error: fetchError } = await supabase
-        .from(tableName("invitations"))
-        .select(selectQuery(`*, tenant_role:${tableName("roles")}(name)`))
-        .eq(columnName("clientId"), currentCompanyClient.id)
-        .order("created_at", { ascending: false })
-
-      if (fetchError) throw fetchError
-
-      setInvitations(
-        (data || []).map((inv: {
-          id: string
-          email: string
-          status: string
-          expires_at: string | null
-          created_at: string
-          tenant_role: { name: string | null } | null
-        }) => ({
-          id: inv.id,
-          email: inv.email,
-          role_name: inv.tenant_role?.name || "Sin rol",
-          status: inv.status,
-          expires_at: inv.expires_at,
-          created_at: inv.created_at,
-        }))
-      )
+      // El listado de invitaciones lo compone el dominio de control de acceso.
+      setInvitations(await loadClientInvitations(currentCompanyClient.id))
     } catch (err) {
       console.error("Error loading invitations:", err)
       setError("No se pudo cargar la lista de invitaciones.")
@@ -99,17 +68,14 @@ const CompanyClientInvitations = () => {
 
     setSending(true)
     try {
-      // Las claves del insert son los nombres FÍSICOS de columna del estado activo.
-      const { error } = await supabase.from(tableName("invitations")).insert({
-        [columnName("clientId")]: currentCompanyClient.id,
+      // La vigencia y las claves del registro las resuelve el dominio: la invitación dura una
+      // semana y queda pendiente, igual que antes.
+      await sendClientInvitation({
+        clientId: currentCompanyClient.id,
         email,
-        [columnName("roleId")]: selectedRole || null,
-        invited_by: (await supabase.auth.getUser()).data.user?.id,
-        status: "pending",
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        roleId: selectedRole || null,
+        invitedBy: user?.id,
       })
-
-      if (error) throw error
 
       setEmail("")
       setSelectedRole("")
@@ -124,11 +90,7 @@ const CompanyClientInvitations = () => {
 
   const cancelInvitation = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from(tableName("invitations"))
-        .update({ status: "cancelled" })
-        .eq("id", id)
-      if (error) throw error
+      await cancelClientInvitation(id)
       await loadInvitations()
     } catch (err) {
       console.error("Error cancelling invitation:", err)
@@ -138,11 +100,7 @@ const CompanyClientInvitations = () => {
 
   const resendInvitation = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from(tableName("invitations"))
-        .update({ status: "pending" })
-        .eq("id", id)
-      if (error) throw error
+      await resendClientInvitation(id)
       await loadInvitations()
     } catch (err) {
       console.error("Error resending invitation:", err)
@@ -169,7 +127,8 @@ const CompanyClientInvitations = () => {
             {statusLabels[inv.status] || inv.status}
           </SiteCorpStatusBadge>
         ),
-    expires_at: new Date(inv.expires_at).toLocaleDateString("es-ES"),
+    // Una invitación sin fecha de expiración se mostraba como la fecha cero.
+    expires_at: new Date(inv.expires_at ?? 0).toLocaleDateString("es-ES"),
     created_at: new Date(inv.created_at).toLocaleDateString("es-ES"),
     actions: (
       <div className="flex items-center gap-2">

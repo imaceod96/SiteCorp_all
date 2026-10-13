@@ -178,3 +178,187 @@ export interface InviteToEntityInput {
   /** Usuario que invita (se registra en `invited_by`). */
   invitedBy: string
 }
+
+/* ------------------------------------------------------------------ */
+/* CUENTA Y SESIÓN (autenticación)                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Perfil del usuario autenticado, tal como lo devuelve `public.profiles`.
+ *
+ * El correo NO vive aquí (está en `auth.users` y no se expone): la sesión lo aporta el
+ * objeto de usuario de Supabase Auth. Este módulo NO configura la autenticación ni cambia
+ * ninguna política: sólo la consulta.
+ */
+export interface AuthProfileRecord {
+  id: string
+  username: string | null
+  full_name: string | null
+  avatar_url: string | null
+  is_active: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+/** Cliente propietario resumido, embebido en una membresía. */
+export interface AuthTenantSummary {
+  id: string
+  name: string
+}
+
+/** Membresía ACTIVA de la sesión con su cliente propietario. */
+export interface AuthMembershipRecord {
+  id: string
+  tenant_id: string
+  user_id: string
+  is_active: boolean
+  tenant: AuthTenantSummary | null
+}
+
+/**
+ * Identidad completa de la sesión: el perfil, su estado y el nivel de plataforma.
+ *
+ * Es el resultado de UNA sola secuencia de carga: perfil → estado → (cierre de sesión si el
+ * perfil está inactivo) → superadministrador → usuario de plataforma → membresías activas.
+ */
+export interface AuthenticatedIdentity {
+  profile: AuthProfileRecord | null
+  isProfileActive: boolean
+  isPlatformSuperAdmin: boolean
+  isPlatformUser: boolean
+  memberships: AuthMembershipRecord[]
+  /** La sesión se cerró porque el perfil estaba inactivo (`is_active === false`). */
+  signedOut: boolean
+}
+
+/** Datos editables por el propio usuario en su cuenta. */
+export interface ProfileAccountInput {
+  fullName: string
+  username: string
+  avatarUrl: string
+}
+
+/* ------------------------------------------------------------------ */
+/* ADMINISTRACIÓN DE PLATAFORMA (Nivel 1 — SiteCorp)                   */
+/* ------------------------------------------------------------------ */
+
+/** Rol de plataforma, como registro administrable. */
+export interface PlatformRole {
+  id: string
+  name: string
+  description: string | null
+  is_system_role: boolean
+  is_active: boolean
+}
+
+/** Rol de plataforma ASIGNADO a un usuario (lo que la tabla muestra como etiqueta). */
+export interface PlatformRoleRef {
+  name: string
+  is_system_role: boolean
+}
+
+/**
+ * Fila de `platform_user_roles` con su rol embebido. La relación es de a-uno, pero la
+ * consulta original la trataba como lista (`.map(...).flat()`): la proyección conserva
+ * EXACTAMENTE esa forma para no cambiar el resultado.
+ */
+export interface PlatformUserRoleRow {
+  platform_role_id: string
+  platform_roles: PlatformRoleRef[]
+}
+
+/**
+ * Usuario de plataforma: fila de `profiles` más los roles de plataforma asignados.
+ *
+ * `email` puede venir ausente porque `public.profiles` no almacena el correo (vive en
+ * `auth.users`); es el mismo contrato que ya consumía la pantalla.
+ */
+export interface PlatformUser {
+  id: string
+  full_name: string
+  username: string
+  email?: string
+  is_active: boolean
+  created_at: string
+  roles: PlatformRoleRef[]
+}
+
+/** Alta de un usuario de plataforma (la ejecuta la Edge Function del backend). */
+export interface CreatePlatformUserInput {
+  fullName: string
+  username: string
+  email: string
+  password: string
+  isActive: boolean
+  platformRoleId: string | null
+}
+
+/** Edición de los datos editables de un usuario (nunca el correo ni la contraseña). */
+export interface UpdatePlatformUserInput {
+  userId: string
+  fullName: string
+  username: string
+}
+
+/* ------------------------------------------------------------------ */
+/* USUARIOS E INVITACIONES DE UN CLIENTE (Nivel 2 — cliente)           */
+/* ------------------------------------------------------------------ */
+
+/** Membresía de un cliente (incluye las INACTIVAS: el listado administrativo no filtra). */
+export interface ClientMembershipRow {
+  id: string
+  user_id: string
+  tenant_id: string
+  is_active: boolean
+  created_at: string
+}
+
+/** Asignación de rol de cliente a una membresía, con el rol embebido. */
+export interface ClientUserRoleRow {
+  tenant_membership_id: string
+  tenant_role_id: string
+  tenant_roles: { name: string | null } | null
+}
+
+/** Usuario de un cliente, ya compuesto para el listado administrativo. */
+export interface ClientUser {
+  id: string
+  full_name: string
+  username: string
+  email: string
+  is_active: boolean
+  membership_status: string
+  invitation_status: string
+  role_name: string
+  created_at: string
+}
+
+/** Fila de `tenant_invitations` con su rol embebido. */
+export interface ClientInvitationRow {
+  id: string
+  email: string
+  status: string
+  expires_at: string | null
+  created_at: string
+  tenant_role: { name: string | null } | null
+}
+
+/** Invitación de un cliente, ya compuesta para el listado. */
+export interface ClientInvitation {
+  id: string
+  email: string
+  role_name: string
+  status: string
+  expires_at: string
+  created_at: string
+}
+
+/** Alta de una invitación a nivel de CLIENTE (sin entidad ni alcance). */
+export interface SendClientInvitationInput {
+  clientId: string
+  email: string
+  /** Rol de cliente; `null` cuando la invitación no lleva rol asignado. */
+  roleId: string | null
+  /** Usuario que invita. Si falta, la columna no se envía (mismo comportamiento previo). */
+  invitedBy?: string
+}

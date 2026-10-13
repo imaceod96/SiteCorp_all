@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
+import { signIn } from "@/domains/access-control"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -21,13 +21,12 @@ const Login = () => {
     setError(null)
 
     try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      // El inicio de sesión lo resuelve el dominio de control de acceso; el mensaje de
+      // error es el del servidor, tal como se mostraba antes.
+      const signInError = await signIn(email, password)
 
       if (signInError) {
-        setError(signInError.message)
+        setError(signInError)
         return
       }
 

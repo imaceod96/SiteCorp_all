@@ -1,15 +1,17 @@
 /**
- * Cuenta SiteCorp de una entidad organizativa.
+ * Estructura organizativa — Catálogo de MÓDULOS INTERNOS de una Cuenta SiteCorp.
  *
- * Regla única del sistema:
- *   organization_entities.is_sitecorp_account === true
- *   → la entidad usa los MÓDULOS INTERNOS de gestión de SiteCorp
+ * Es la lista ÚNICA de rutas y de permisos por módulo: la navegación de los módulos internos
+ * se compone a partir de aquí, y por eso las entradas y el orden no se tocan. Cada módulo
+ * declara los permisos internos que lo habilitan (basta con uno); la ausencia de permisos
+ * significa que el módulo está disponible para cualquier usuario con acceso a la entidad.
  *
- * No significa: otro tenant/workspace, otro régimen, otra jerarquía ni una cuenta de
- * usuario. Es una propiedad estructural de la entidad y NO sustituye a los permisos:
- * el acceso real sigue siendo entidad SiteCorp + acceso a la entidad + permiso RBAC.
+ * Origen: `src/lib/sitecorp-account.ts`. El catálogo se traslada al dominio —como el catálogo
+ * de permisos de control de acceso— para que no existan dos fuentes de verdad de los módulos
+ * internos. Es un catálogo PURO: no consulta Supabase ni decide autorización.
  */
 
+/** Módulo interno enrutable de una Cuenta SiteCorp. */
 export interface EntityInternalModule {
   key: string
   label: string
@@ -163,43 +165,3 @@ export const ENTITY_NAV: EntityNavEntry[] = [
   link(moduleByKey("pending-documents")),
   link(moduleByKey("settings")),
 ]
-
-export const SITECORP_MODULES_DISABLED_TITLE = "Módulos internos no habilitados"
-
-export const SITECORP_MODULES_DISABLED_MESSAGE =
-  "Esta entidad no tiene habilitados los módulos internos de SiteCorp."
-
-/** ¿La entidad utiliza los módulos internos de SiteCorp? */
-export function hasSiteCorpAccount(
-  entity: { is_sitecorp_account?: boolean | null } | null | undefined
-): boolean {
-  return entity?.is_sitecorp_account === true
-}
-
-/**
- * Regla central de acceso a módulos internos:
- *   entidad es Cuenta SiteCorp  (condición estructural)
- *   + el usuario tiene acceso a la entidad y permiso para el módulo (RBAC)
- */
-export function canUseInternalModules(
-  entity: { is_sitecorp_account?: boolean | null } | null | undefined,
-  options: { isAuthorized: boolean }
-): boolean {
-  return hasSiteCorpAccount(entity) && options.isAuthorized
-}
-
-/**
- * Código de cuenta SiteCorp. No se introduce a mano y no se regenera al reeditar:
- * se deriva del código interno de la entidad (único por workspace).
- */
-export const buildAccountCode = (entityCode: string): string =>
-  `CUENTA-${entityCode.toUpperCase()}`
-
-/** Ruta externa equivalente para volver cuando los módulos internos no están disponibles. */
-export const organizationFallbackPath = (options: {
-  isPlatformSuperAdmin: boolean
-  hasPlatformOrganizationAccess: boolean
-}): string =>
-  options.isPlatformSuperAdmin || options.hasPlatformOrganizationAccess
-    ? "/admin/companies"
-    : "/organization"

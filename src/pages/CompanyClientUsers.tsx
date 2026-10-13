@@ -2,14 +2,12 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { supabase } from "@/lib/supabase"
 import {
-  columnName,
-  selectColumn,
-  selectEmbed,
-  selectQuery,
-  tableName,
-} from "@/integrations/supabase/schema-target"
+  loadClientUsers,
+  setClientMembershipActive,
+  updateClientUser,
+  type ClientUser,
+} from "@/domains/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -23,26 +21,14 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpError } from "@/components/ui/sitecorp-error"
 import { Pencil, Plus, Power, UserMinus, UserCheck, Mail } from "lucide-react"
 
-interface CompanyClientUser {
-  id: string
-  full_name: string
-  username: string
-  email: string
-  is_active: boolean
-  membership_status: string
-  invitation_status: string
-  role_name: string
-  created_at: string
-}
-
 const CompanyClientUsers = () => {
   const { isPlatformSuperAdmin } = useAuth()
   const { currentCompanyClient } = useCurrentCompanyClient()
   const navigate = useNavigate()
-  const [users, setUsers] = React.useState<CompanyClientUser[]>([])
+  const [users, setUsers] = React.useState<ClientUser[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [editingUser, setEditingUser] = React.useState<CompanyClientUser | null>(null)
+  const [editingUser, setEditingUser] = React.useState<ClientUser | null>(null)
   const [formData, setFormData] = React.useState({
     full_name: "",
     username: "",
@@ -55,65 +41,9 @@ const CompanyClientUsers = () => {
       setLoading(true)
       if (!currentCompanyClient) return
 
-      const { data: membersData, error: membersError } = await supabase
-        .from(tableName("memberships"))
-        .select(selectQuery(`id,user_id,${selectColumn("clientId")},is_active,created_at`))
-        .eq(columnName("clientId"), currentCompanyClient.id)
-
-      if (membersError) throw membersError
-
-      const memberRows = membersData || []
-      const userIds = memberRows.map((member: { id: string; user_id: string; is_active: boolean; created_at: string }) => member.user_id)
-      const membershipIds = memberRows.map((member: { id: string; user_id: string; is_active: boolean; created_at: string }) => member.id)
-
-      const [profilesResult, rolesResult] = await Promise.all([
-        userIds.length
-          ? supabase.from("profiles").select("id,full_name,username,is_active").in("id", userIds)
-          : Promise.resolve({ data: [], error: null }),
-        membershipIds.length
-          ? supabase
-              .from(tableName("userRoles"))
-              .select(
-                selectQuery(
-                  `${selectColumn("membershipId")},${selectColumn("roleId")},${selectEmbed("roles", "tenant_roles")}(name)`,
-                ),
-              )
-              .in(columnName("membershipId"), membershipIds)
-          : Promise.resolve({ data: [], error: null }),
-      ])
-
-      if (profilesResult.error) throw profilesResult.error
-      if (rolesResult.error) throw rolesResult.error
-
-      const profilesById = (profilesResult.data || []).reduce((map: Record<string, { id: string; full_name: string | null; username: string | null; is_active: boolean }>, profile: { id: string; full_name: string | null; username: string | null; is_active: boolean }) => {
-        map[profile.id] = profile
-        return map
-      }, {})
-      const rolesByMembership = (rolesResult.data || []).reduce(
-        (map: Record<string, { name: string | null } | null>, roleAssignment: { tenant_membership_id: string; tenant_roles: { name: string | null } | null }) => {
-          map[roleAssignment.tenant_membership_id] = roleAssignment.tenant_roles
-          return map
-        },
-        {}
-      )
-
-      const usersWithDetails = memberRows.map((member: { id: string; user_id: string; is_active: boolean; created_at: string }) => {
-        const profile = profilesById[member.user_id]
-
-        return {
-          id: member.user_id,
-          full_name: profile?.full_name || "Usuario",
-          username: profile?.username || "sin usuario",
-          email: profile?.username || "",
-          is_active: member.is_active,
-          membership_status: member.is_active ? "active" : "inactive",
-          invitation_status: "none",
-          role_name: rolesByMembership[member.id]?.name || "Sin rol",
-          created_at: member.created_at,
-        }
-      })
-
-      setUsers(usersWithDetails)
+      // El listado administrativo lo compone el dominio de control de acceso: membresías del
+      // cliente (incluidas las inactivas) + perfiles + roles asignados.
+      setUsers(await loadClientUsers(currentCompanyClient.id))
     } catch (err) {
       console.error("Error loading users:", err)
       setError("No se pudo cargar la lista de usuarios.")
@@ -131,7 +61,7 @@ const CompanyClientUsers = () => {
     setFormData({ full_name: "", username: "", email: "" })
   }
 
-  const startEdit = (user: CompanyClientUser) => {
+  const startEdit = (user: ClientUser) => {
     setEditingUser(user)
     setFormData({ full_name: user.full_name, username: user.username, email: user.email })
   }
@@ -140,11 +70,11 @@ const CompanyClientUsers = () => {
     e.preventDefault()
     try {
       if (editingUser && currentCompanyClient) {
-        const { error } = await supabase
-          .from("profiles")
-          .update({ full_name: formData.full_name, username: formData.username })
-          .eq("id", editingUser.id)
-        if (error) throw error
+        await updateClientUser({
+          userId: editingUser.id,
+          fullName: formData.full_name,
+          username: formData.username,
+        })
       }
       setEditingUser(null)
       setFormData({ full_name: "", username: "", email: "" })
@@ -154,15 +84,10 @@ const CompanyClientUsers = () => {
     }
   }
 
-  const toggleActive = async (user: CompanyClientUser) => {
+  const toggleActive = async (user: ClientUser) => {
     try {
       if (!currentCompanyClient) return
-      const { error } = await supabase
-        .from(tableName("memberships"))
-        .update({ is_active: !user.is_active })
-        .eq(columnName("clientId"), currentCompanyClient.id)
-        .eq("user_id", user.id)
-      if (error) throw error
+      await setClientMembershipActive(currentCompanyClient.id, user.id, !user.is_active)
       await loadUsers()
     } catch (err) {
       console.error("Error toggling membership:", err)

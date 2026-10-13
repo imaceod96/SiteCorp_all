@@ -569,3 +569,54 @@ export interface AcademicCategoryPaymentConfig {
   canView: boolean
   canManage: boolean
 }
+
+/* ------------------------------------------------------------------ */
+/* Documentos rectores de una entidad                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Documento RECTOR de una entidad organizativa: operativo de la ENTIDAD, no catálogo
+ * global. Sólo nombre + archivo: sin versiones, aprobaciones ni clasificación.
+ *
+ * El archivo vive en el bucket privado `documents`, bajo
+ * `governing-documents/<organization_entity_id>/<documento_id>/<archivo>`, de modo que las
+ * políticas de Storage resuelven la entidad desde la ruta. La ruta se conserva literal: no
+ * se cambia dónde ni cómo se almacenan los archivos.
+ */
+export interface GoverningDocument {
+  id: string
+  organization_entity_id: string
+  name: string
+  file_name: string
+  storage_path: string
+  mime_type: string | null
+  file_size: number | null
+  created_at: string
+}
+
+/**
+ * Identidad mínima de la entidad para la pantalla de documentos rectores: su nombre y el
+ * cliente propietario (columna física del cliente, resuelta por la frontera de nomenclatura).
+ */
+export interface GoverningDocumentEntity {
+  name: string
+  /** Cliente propietario de la entidad (`null` si la entidad no lo tuviera). */
+  companyClientId: string | null
+}
+
+/** Todo lo que necesita la pantalla de documentos rectores de una entidad. */
+export interface GoverningDocumentsWorkspace {
+  entity: GoverningDocumentEntity
+  documents: GoverningDocument[]
+}
+
+/** Alta de un documento rector (nombre visible + archivo ya subido a Storage). */
+export interface SaveGoverningDocumentInput {
+  entityId: string
+  /** Cliente propietario; se registra junto al documento. */
+  companyClientId: string | null
+  name: string
+  file: File
+  /** Usuario que registra el documento (se guarda en `created_by`). */
+  createdBy: string
+}

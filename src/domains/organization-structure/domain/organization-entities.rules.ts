@@ -1,4 +1,4 @@
-import { buildAccountCode } from "@/lib/sitecorp-account"
+import { buildAccountCode } from "./account.rules"
 import type {
   OrganizationEntity,
   OrganizationEntityFormData,

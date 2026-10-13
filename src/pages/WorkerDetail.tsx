@@ -55,11 +55,11 @@ import {
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
-  resolveAcademicCategoryPayment,
   academicCategoryLabel,
   formatAcademicAmount,
+  loadAcademicCategoryPayment,
   type AcademicCategoryPaymentResolution,
-} from "@/lib/academic-payment"
+} from "@/domains/organization-structure"
 import ChangePositionDialog, {
   type WorkerCurrentSituation,
 } from "@/components/workers/ChangePositionDialog"
@@ -302,7 +302,7 @@ const WorkerDetail = () => {
                   // única fuente de verdad del servidor: Doctor tiene prioridad y los
                   // importes nunca se suman. Sin fallback entre regímenes.
                   try {
-                    setAcademicPayment(await resolveAcademicCategoryPayment(entityId, workerId))
+                    setAcademicPayment(await loadAcademicCategoryPayment(entityId, workerId))
                   } catch (academicErr) {
                     console.error("Error resolving academic category payment:", academicErr)
                     setAcademicPayment(null)
