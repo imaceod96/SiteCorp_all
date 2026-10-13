@@ -3,7 +3,7 @@ import {
   ensureContractDocumentGenerated,
   type DocumentAutomationResult,
 } from "@/domains/contracts"
-import { ensurePayrollMovementDocumentGenerated } from "@/lib/payroll-movements"
+import { ensurePayrollMovementDocumentGenerated } from "@/domains/payroll-movements"
 import { ensureResolutionDocumentGenerated } from "@/domains/resolutions"
 import type { PayrollMovementType } from "../domain/entities"
 
@@ -12,7 +12,8 @@ import type { PayrollMovementType } from "../domain/entities"
  *
  * Qué documento acompaña a cada operación es una regla del dominio
  * (`TRANSITION_MOVEMENT_DOCUMENT`); CÓMO se genera es de la capa documental, que se
- * invoca desde aquí para que ni el dominio ni los casos de uso dependan de `@/lib`.
+ * invoca desde aquí a través de los dominios de contratos, resoluciones y movimientos de
+ * nómina — ningún dominio ni caso de uso depende ya de `@/lib`.
  *
  * Política de avisos (idéntica a la que ya tenían las pantallas):
  *   · El documento del movimiento de nómina es SILENCIOSO: el movimiento ya quedó

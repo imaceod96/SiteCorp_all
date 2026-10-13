@@ -42,13 +42,22 @@ test("el contexto de contratos concentra las consultas del contrato, del anexo y
     "src/domains/contracts/infrastructure/addendums.repository.ts",
     "src/domains/contracts/infrastructure/contract-conditions.repository.ts",
     "src/domains/contracts/infrastructure/salary.repository.ts",
-    "src/domains/contracts/infrastructure/contract-documents.repository.ts",
   ]
 
   for (const repository of repositories) {
     const source = read(repository)
     expect(source, `${repository} es la frontera de Supabase`).toMatch(/@\/lib\/supabase/)
   }
+
+  // La automatización documental del contrato ya no es una frontera de Supabase: la vigencia de
+  // la plantilla la resuelve el dominio de plantillas y la generación, el motor documental.
+  const contractDocuments = read(
+    "src/domains/contracts/infrastructure/contract-documents.repository.ts"
+  )
+  expect(contractDocuments).not.toMatch(/@\/lib\/supabase/)
+  expect(contractDocuments).toMatch(/from "@\/domains\/document-generation"/)
+  expect(contractDocuments).toMatch(/from "@\/domains\/document-templates"/)
+  expect(contractDocuments).toMatch(/resolveDocumentTemplateVersion\(/)
 
   // Los casos de uso de la aplicación no hablan con Supabase ni con el motor documental.
   const useCases = [

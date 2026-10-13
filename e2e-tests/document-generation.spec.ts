@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import JSZip from "jszip"
 import ExcelJS from "exceljs"
 import {
@@ -55,6 +55,16 @@ const code = (path: string) =>
   read(path)
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^[ \t]*\/\/.*$/gm, "")
+
+/** Todos los módulos de `src`: permite comprobar la frontera sin enumerar archivos a mano. */
+const sourceFiles = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory()
+      ? sourceFiles(`${dir}/${entry.name}`)
+      : /\.tsx?$/.test(entry.name)
+        ? [`${dir}/${entry.name}`]
+        : []
+  )
 
 /* ------------------------------------------------------------------ */
 /* Utilidades                                                        */
@@ -552,30 +562,28 @@ test("las RPC, sus parámetros y el Storage del expediente no cambian", () => {
   expect(templatesFiles).toMatch(/new Error\("La plantilla no tiene un documento configurado válido"\)/)
 })
 
-test("la fachada de compatibilidad del motor sólo reexporta", () => {
-  const facade = read("src/lib/document-generation.ts")
-
-  expect(facade).not.toMatch(/@\/lib\/supabase/)
-  expect(facade).not.toMatch(/supabase\.storage/)
-  expect(facade).not.toMatch(/\.rpc\(/)
-  expect(facade).not.toMatch(/\.from\("/)
-  expect(facade).toMatch(/@\/domains\/document-generation/)
-
-  // Lo que aún consumen los módulos sin migrar sigue disponible con el mismo nombre.
-  for (const name of [
-    "generateContractDocument",
-    "generateAddendumDocument",
-    "generateSc404Document",
-    "generateResolutionDocument",
-    "generatePayrollMovementDocument",
-    "precheckDocumentGeneration",
-    "fetchGeneratedDocuments",
-    "downloadGeneratedDocument",
-    "DOCUMENT_TYPE_LABELS",
-    "BLOCKED_MESSAGES",
-    "WORKER_DOCUMENTS_BUCKET",
-    "parseSc404ExistingId",
+test("la limpieza controlada retiró las fachadas sin consumidores", () => {
+  // Se eliminaron cuando el último consumidor migró a su dominio: no quedaba ninguno pendiente.
+  for (const facade of [
+    "src/lib/document-generation.ts",
+    "src/lib/document-templates.ts",
+    "src/lib/document-batches.ts",
+    "src/lib/payroll-movements.ts",
   ]) {
-    expect(facade, `la fachada debe reexportar ${name}`).toMatch(new RegExp(`\\b${name}\\b`))
+    expect(existsSync(facade), `${facade} no debe seguir existiendo`).toBe(false)
+  }
+
+  // Ningún módulo puede quedarse importando un módulo puente que ya no existe.
+  const retired = /from "@\/lib\/(document-generation|document-templates|document-batches|payroll-movements)"/
+  const offenders = sourceFiles("src").filter((file) => retired.test(code(file)))
+  expect(offenders, "ningún módulo debe importar una fachada retirada").toEqual([])
+
+  // El contrato público que SÍ se sigue usando se conserva intacto.
+  for (const kept of [
+    "src/lib/document-data.ts",
+    "src/lib/document-variables.ts",
+    "src/lib/supabase.ts",
+  ]) {
+    expect(existsSync(kept), `${kept} se conserva`).toBe(true)
   }
 })

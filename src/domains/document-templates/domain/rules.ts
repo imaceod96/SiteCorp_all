@@ -6,6 +6,7 @@ import {
   UNSUPPORTED_WORD_FILE_MESSAGE,
   WORD_ACCEPT,
   XLSX_MIME,
+  type DocumentTemplateAnalysis,
   type DocumentTemplateVersion,
   type TemplateFileInspection,
   type WordDocumentFormat,
@@ -127,6 +128,20 @@ export const formatTemplateFileSize = (bytes: number | null | undefined): string
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/**
+ * Variables OBLIGATORIAS de una versión, tal como las determinó el analizador central.
+ *
+ * Ningún consumidor interpreta el contenido del documento por su cuenta: se lee el análisis
+ * ya registrado. Una versión sin análisis no exige nada (la decisión de bloqueo es del motor
+ * de generación documental, no de esta regla).
+ */
+export const requiredVariableKeys = (
+  analysis: Pick<DocumentTemplateAnalysis, "required_variables"> | null | undefined
+): string[] => {
+  const required = analysis?.required_variables
+  return Array.isArray(required) ? required.map((value) => String(value)) : []
 }
 
 /** Vigencia de una versión tal como se muestra: borrador, vigente o periodo cerrado. */

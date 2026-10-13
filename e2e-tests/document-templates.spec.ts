@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import {
   inspectTemplateFile,
   documentTypeCodeForTemplateType,
@@ -25,8 +25,8 @@ import type { DocumentTemplateVersion } from "../src/domains/document-templates/
  *   2. Etiquetas y periodos de vigencia de las versiones (borrador, vigente, cerrada).
  *   3. Que la administración de plantillas vive en UN dominio y que las pantallas y los
  *      componentes migrados ya no consultan Supabase ni la fachada legacy.
- *   4. Que la fachada de compatibilidad conserva el contrato que aún consumen el motor de
- *      generación documental y la sección contractual.
+ *   4. Que la fachada legacy se retiró (limpieza controlada) y que el dominio es el ÚNICO
+ *      punto de entrada para resolver versiones de plantilla.
  *
  * Las importaciones profundas traen reglas PURAS: no arrastran el cliente de Supabase.
  * Las pruebas funcionales reales del módulo son las de la pantalla (Playwright sobre la
@@ -217,20 +217,23 @@ test("las pantallas y los componentes migrados ya no consultan Supabase", () => 
   expect(detail).toMatch(/registerTemplateFile/)
 })
 
-test("la fachada de compatibilidad del catálogo sólo reexporta", () => {
-  const facade = read("src/lib/document-templates.ts")
+test("la fachada legacy se retiró: el dominio es el único punto de entrada", () => {
+  // Limpieza controlada: se eliminó cuando el último consumidor migró al dominio.
+  expect(existsSync("src/lib/document-templates.ts")).toBe(false)
+  expect(existsSync("src/lib/document-generation.ts")).toBe(false)
 
-  // Sólo reexporta: no conserva ninguna consulta propia.
-  expect(facade).not.toMatch(/@\/lib\/supabase/)
-  expect(facade).not.toMatch(/supabase\.from\(/)
-  expect(facade).not.toMatch(/\.rpc\(/)
-
-  // Los mismos nombres y los mismos valores de siempre, ya resueltos por el dominio.
-  expect(facade).toMatch(/DOCUMENT_TEMPLATES_BUCKET/)
-  expect(facade).toMatch(/DOCX_MIME/)
-  expect(facade).toMatch(/XLSX_MIME/)
-  expect(facade).toMatch(/formatTemplateFileSize/)
-  expect(facade).toMatch(/@\/domains\/document-templates/)
+  // Y los consumidores reales piden aquí las plantillas, sus versiones y su vigencia.
+  for (const file of [
+    "src/domains/document-generation/infrastructure/document-template-version.repository.ts",
+    "src/domains/document-generation/application/document-generation.commands.ts",
+    "src/domains/contracts/infrastructure/contract-documents.repository.ts",
+    "src/domains/resolutions/infrastructure/resolutions.repository.ts",
+    "src/components/documents/ContractualDocumentSection.tsx",
+  ]) {
+    expect(read(file), `${file} debe consumir el dominio de plantillas`).toMatch(
+      /from "@\/domains\/document-templates"/
+    )
+  }
 })
 
 test("el motor documental consume el dominio de plantillas, no la fachada", () => {

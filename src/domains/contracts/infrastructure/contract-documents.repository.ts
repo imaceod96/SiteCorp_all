@@ -1,10 +1,10 @@
-import { supabase } from "@/lib/supabase"
 import {
   documentTypeCodeForContractType,
   fetchGeneratedDocuments,
   generateAddendumDocument,
   generateContractDocument,
 } from "@/domains/document-generation"
+import { resolveDocumentTemplateVersion } from "@/domains/document-templates"
 import type {
   DocumentAutomationResult,
   TemplateAvailability,
@@ -20,7 +20,7 @@ import type {
  *
  * Reutiliza el motor documental existente y su idempotencia (`begin_document_generation`):
  * aquí sólo se decide CUÁNDO y si ya existe un documento, para no generar duplicados ante
- * reintentos. Es la única parte del contexto que habla con el motor documental (`@/lib`).
+ * reintentos. Este archivo ya no habla con Supabase: consume los dominios documentales.
  */
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -40,26 +40,26 @@ const resolveTemplateAvailability = async (
     }
   }
 
-  const { data, error } = await supabase.rpc("resolve_document_template_version", {
-    p_entity_id: entityId,
-    p_document_type_code: documentTypeCode,
-    p_reference_date: referenceDate || todayIso(),
-  })
-  if (error) throw error
+  // La vigencia la resuelve el dominio de plantillas: aquí no se compone ninguna consulta.
+  const resolved = await resolveDocumentTemplateVersion(
+    entityId,
+    documentTypeCode,
+    referenceDate || todayIso()
+  )
 
-  const row = (data as Record<string, unknown> | null) || {}
-  const rawStatus = row.status != null ? String(row.status) : "NONE"
   const status: TemplateAvailabilityStatus =
-    rawStatus === "RESOLVED" || rawStatus === "NONE" || rawStatus === "AMBIGUOUS"
-      ? rawStatus
+    resolved.status === "RESOLVED" ||
+    resolved.status === "NONE" ||
+    resolved.status === "AMBIGUOUS"
+      ? resolved.status
       : "UNKNOWN"
 
   return {
     status,
     documentTypeCode,
-    versionId: row.version_id != null ? String(row.version_id) : null,
-    versionNumber: row.version_number != null ? Number(row.version_number) : null,
-    templateName: row.template_name != null ? String(row.template_name) : null,
+    versionId: resolved.version_id,
+    versionNumber: resolved.version_number,
+    templateName: resolved.template_name,
   }
 }
 

@@ -74,6 +74,7 @@ export {
   templateFileFormatLabel,
   formatTemplateFileSize,
   templateVersionPeriodLabel,
+  requiredVariableKeys,
 } from "./domain/rules"
 
 /* Casos de uso de lectura */

@@ -5,6 +5,11 @@ import {
   type DocumentGenerationResult,
 } from "@/domains/document-generation"
 import {
+  fetchDocumentTemplateVersion,
+  requiredVariableKeys,
+  resolveDocumentTemplateVersion,
+} from "@/domains/document-templates"
+import {
   RESOLUTION_DOCUMENT_TYPE,
   type ResolutionContext,
   type CreateResolutionInput,
@@ -65,39 +70,36 @@ export const resolveResolutionTemplateAvailability = async (
   if (!entityId) {
     return { status: "UNKNOWN", versionId: null, versionNumber: null, templateName: null }
   }
-  const { data, error } = await supabase.rpc("resolve_document_template_version", {
-    p_entity_id: entityId,
-    p_document_type_code: RESOLUTION_DOCUMENT_TYPE,
-    p_reference_date: referenceDate || new Date().toISOString().slice(0, 10),
-  })
-  if (error) throw error
+  // La vigencia la resuelve el dominio de plantillas: aquí no se compone ninguna consulta.
+  const resolved = await resolveDocumentTemplateVersion(
+    entityId,
+    RESOLUTION_DOCUMENT_TYPE,
+    referenceDate || new Date().toISOString().slice(0, 10)
+  )
 
-  const row = (data as Record<string, unknown> | null) || {}
-  const raw = row.status != null ? String(row.status) : "NONE"
   const status: ResolutionTemplateStatus =
-    raw === "RESOLVED" || raw === "NONE" || raw === "AMBIGUOUS" ? raw : "UNKNOWN"
+    resolved.status === "RESOLVED" || resolved.status === "NONE" || resolved.status === "AMBIGUOUS"
+      ? resolved.status
+      : "UNKNOWN"
 
   return {
     status,
-    versionId: row.version_id != null ? String(row.version_id) : null,
-    versionNumber: row.version_number != null ? Number(row.version_number) : null,
-    templateName: row.template_name != null ? String(row.template_name) : null,
+    versionId: resolved.version_id,
+    versionNumber: resolved.version_number,
+    templateName: resolved.template_name,
   }
 }
 
-/** Variables realmente exigidas por la plantilla RESOLUTION aplicable (§42). */
+/**
+ * Variables realmente exigidas por la plantilla RESOLUTION aplicable (§42).
+ * Se leen del análisis YA registrado de la versión, a través del dominio de plantillas: el
+ * documento nunca se vuelve a analizar aquí.
+ */
 export const fetchResolutionRequiredVariables = async (
   versionId: string
 ): Promise<string[]> => {
-  const { data, error } = await supabase
-    .from("document_template_versions")
-    .select("analysis")
-    .eq("id", versionId)
-    .maybeSingle()
-  if (error) throw error
-  const analysis = (data as { analysis: { required_variables?: unknown } | null } | null)?.analysis
-  const required = analysis?.required_variables
-  return Array.isArray(required) ? required.map((value) => String(value)) : []
+  const version = await fetchDocumentTemplateVersion(versionId)
+  return requiredVariableKeys(version?.analysis ?? null)
 }
 
 export interface ResolutionAutomationResult {
