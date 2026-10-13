@@ -14,11 +14,13 @@
  *
  * Alcance DELIBERADAMENTE ACOTADO: la ADMINISTRACIÓN de plantillas de una entidad (listado,
  * versiones y vigencias, archivos, análisis, validación, activación y descarga). El motor de
- * generación documental NO forma parte de este contexto y sigue viviendo fuera, aunque se
- * apoye en estas plantillas ya resueltas.
+ * generación documental NO forma parte de este contexto: vive en el dominio
+ * `@/domains/document-generation`, que CONSUME estas plantillas y versiones ya resueltas (y de
+ * ahí las lecturas de versión y de su documento configurado que se ofrecen aquí).
  *
  * La dependencia va en un solo sentido —presentación → aplicación → dominio → infraestructura
- * → Supabase—, por lo que no puede formarse ningún ciclo entre dominios.
+ * → Supabase; generación documental → plantillas—, por lo que no puede formarse ningún ciclo
+ * entre dominios.
  *
  * Los nombres públicos se conservan respecto de la etapa anterior para no alterar a los
  * consumidores que todavía no se han migrado; lo que cambia es el lugar donde vive el código,
@@ -39,6 +41,8 @@ export {
 export type {
   WordDocumentFormat,
   DocumentTemplateTypeCode,
+  DocumentTemplateVersionDetail,
+  ResolvedDocumentTemplateVersion,
   DocumentTemplateVersionStatus,
   DocumentTemplateFileKind,
   DocumentTemplateType,
@@ -78,7 +82,11 @@ export {
   fetchDocumentTemplate,
   fetchDocumentTemplates,
   fetchDocumentTemplateTypes,
+  fetchDocumentTemplateVersion,
+  fetchDocumentTemplateVersionsByIds,
+  fetchTemplateFileContent,
   getTemplateFileUrl,
+  resolveDocumentTemplateVersion,
   validateTemplateVersion,
 } from "./application/document-templates.queries"
 

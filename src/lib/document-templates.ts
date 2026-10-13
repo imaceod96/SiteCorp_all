@@ -3,11 +3,13 @@
  *
  * El acceso a datos de la administración de plantillas vive ahora en el dominio
  * `@/domains/document-templates` (domain / application / infrastructure). Este módulo se
- * conserva ÚNICAMENTE como fachada para los consumidores que todavía no se han migrado:
+ * conserva ÚNICAMENTE como fachada de compatibilidad: cualquier consumidor que aún no se haya
+ * migrado encuentra aquí los mismos nombres y los mismos valores de siempre.
  *
- *   · `@/lib/document-generation` (motor de generación documental, fuera del alcance de
- *     esta migración) usa el bucket y los MIME de los documentos.
- *   · `@/components/documents/ContractualDocumentSection` usa el formateo de tamaños.
+ * Ya NO hay consumidores internos de esta fachada: el motor de generación documental y la
+ * sección contractual del expediente se migraron al dominio
+ * (`@/domains/document-generation`), que consume las plantillas y sus versiones directamente
+ * del dominio de plantillas. Se conserva mientras existan consumidores sin migrar.
  *
  * No se ha cambiado ningún nombre, ningún valor ni ninguna consulta: la fachada sólo
  * reexporta. Las pantallas y los componentes de plantillas ya migrados importan

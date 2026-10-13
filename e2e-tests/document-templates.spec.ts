@@ -217,7 +217,7 @@ test("las pantallas y los componentes migrados ya no consultan Supabase", () => 
   expect(detail).toMatch(/registerTemplateFile/)
 })
 
-test("la fachada de compatibilidad conserva el contrato del motor documental", () => {
+test("la fachada de compatibilidad del catálogo sólo reexporta", () => {
   const facade = read("src/lib/document-templates.ts")
 
   // Sólo reexporta: no conserva ninguna consulta propia.
@@ -225,17 +225,30 @@ test("la fachada de compatibilidad conserva el contrato del motor documental", (
   expect(facade).not.toMatch(/supabase\.from\(/)
   expect(facade).not.toMatch(/\.rpc\(/)
 
-  // Lo que todavía consumen el motor de generación y la sección contractual.
+  // Los mismos nombres y los mismos valores de siempre, ya resueltos por el dominio.
   expect(facade).toMatch(/DOCUMENT_TEMPLATES_BUCKET/)
   expect(facade).toMatch(/DOCX_MIME/)
   expect(facade).toMatch(/XLSX_MIME/)
   expect(facade).toMatch(/formatTemplateFileSize/)
   expect(facade).toMatch(/@\/domains\/document-templates/)
+})
 
-  const engine = read("src/lib/document-generation.ts")
-  expect(engine).toMatch(/from "@\/lib\/document-templates"/)
+test("el motor documental consume el dominio de plantillas, no la fachada", () => {
+  // El motor vive en su propio dominio y pide ahí las plantillas y sus versiones.
+  const adapter = read(
+    "src/domains/document-generation/infrastructure/document-template-version.repository.ts"
+  )
+  expect(adapter).toMatch(/from "@\/domains\/document-templates"/)
+  expect(adapter).not.toMatch(/@\/lib\/document-templates/)
+
+  const commands = read(
+    "src/domains/document-generation/application/document-generation.commands.ts"
+  )
+  expect(commands).toMatch(/from "@\/domains\/document-templates"/)
+
+  // La sección contractual del expediente también consume el dominio directamente.
   expect(read("src/components/documents/ContractualDocumentSection.tsx")).toMatch(
-    /from "@\/lib\/document-templates"/
+    /from "@\/domains\/document-templates"/
   )
 })
 

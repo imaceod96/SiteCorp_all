@@ -5,6 +5,9 @@ import type {
   DocumentTemplateAnalysis,
   DocumentTemplateType,
   DocumentTemplateVersion,
+  DocumentTemplateVersionDetail,
+  DocumentTemplateVersionStatus,
+  ResolvedDocumentTemplateVersion,
   TemplateValidation,
 } from "../domain/entities"
 
@@ -103,6 +106,104 @@ export const selectDocumentTemplateById = async (
     versions: [...(row.document_template_versions || [])].sort(
       (a, b) => b.version_number - a.version_number
     ),
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Lectura de versiones para el MOTOR de generación documental          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Columnas de una versión que necesita el motor de generación: su vigencia, su DOCUMENTO
+ * CONFIGURADO (con el formato REAL) y el análisis de variables que ESA plantilla exige.
+ */
+const VERSION_DETAIL_SELECT =
+  "id, version_number, status, effective_from, effective_to, configured_file_path, configured_file_format, analysis, document_type_code, document_templates(name)"
+
+const record = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" ? (value as Record<string, unknown>) : {}
+
+const text = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null
+  const result = typeof value === "string" ? value.trim() : String(value)
+  return result === "" ? null : result
+}
+
+const numValue = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const toVersionDetail = (value: unknown): DocumentTemplateVersionDetail => {
+  const row = record(value)
+  return {
+    id: String(row.id),
+    version_number: numValue(row.version_number),
+    status: (text(row.status) as DocumentTemplateVersionStatus) ?? "DRAFT",
+    effective_from: text(row.effective_from),
+    effective_to: text(row.effective_to),
+    configured_file_path: text(row.configured_file_path),
+    configured_file_format: text(row.configured_file_format),
+    document_type_code: text(row.document_type_code),
+    analysis: (row.analysis as DocumentTemplateAnalysis | null) ?? null,
+    template_name: text(record(row.document_templates).name),
+  }
+}
+
+/** Una versión concreta con su análisis y el nombre de su plantilla (o `null`). */
+export const selectDocumentTemplateVersionById = async (
+  versionId: string
+): Promise<DocumentTemplateVersionDetail | null> => {
+  const { data, error } = await supabase
+    .from("document_template_versions")
+    .select(VERSION_DETAIL_SELECT)
+    .eq("id", versionId)
+    .maybeSingle()
+
+  throwIfError(error)
+  if (!data) return null
+  return toVersionDetail(data)
+}
+
+/** Varias versiones a la vez (historial de documentos generados), sin anidar consultas. */
+export const selectDocumentTemplateVersionsByIds = async (
+  versionIds: string[]
+): Promise<DocumentTemplateVersionDetail[]> => {
+  if (versionIds.length === 0) return []
+
+  const { data, error } = await supabase
+    .from("document_template_versions")
+    .select(VERSION_DETAIL_SELECT)
+    .in("id", versionIds)
+
+  throwIfError(error)
+  return ((data as unknown[]) || []).map(toVersionDetail)
+}
+
+/**
+ * Versión VIGENTE para un tipo documental, una entidad y una fecha de referencia.
+ * La decisión es del backend (RPC SECURITY DEFINER, con el permiso de la entidad): aquí sólo
+ * se invoca y se tipa. Sus parámetros y sus claves de salida NO cambian.
+ */
+export const rpcResolveDocumentTemplateVersion = async (input: {
+  entityId: string
+  documentTypeCode: string
+  referenceDate: string
+}): Promise<ResolvedDocumentTemplateVersion> => {
+  const { data, error } = await supabase.rpc("resolve_document_template_version", {
+    p_entity_id: input.entityId,
+    p_document_type_code: input.documentTypeCode,
+    p_reference_date: input.referenceDate,
+  })
+
+  throwIfError(error)
+  const row = record(data)
+  return {
+    status: text(row.status) ?? "NONE",
+    version_id: text(row.version_id),
+    version_number: numValue(row.version_number),
+    template_name: text(row.template_name),
   }
 }
 

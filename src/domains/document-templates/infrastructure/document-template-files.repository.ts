@@ -60,6 +60,24 @@ export const removeTemplateObjects = async (paths: string[]): Promise<void> => {
   await supabase.storage.from(DOCUMENT_TEMPLATES_BUCKET).remove(paths)
 }
 
+/**
+ * Descarga el contenido REAL de un archivo del bucket privado.
+ *
+ * Lo usa el motor de generación documental para leer el DOCUMENTO CONFIGURADO de la versión
+ * (nunca el original sin configurar). Los errores se propagan tal cual, porque el mensaje que
+ * ve el usuario es el del backend.
+ */
+export const downloadTemplateObject = async (path: string): Promise<Uint8Array> => {
+  const { data, error } = await supabase.storage
+    .from(DOCUMENT_TEMPLATES_BUCKET)
+    .download(path)
+
+  if (error || !data) {
+    throw error ?? new Error("La plantilla no tiene un documento configurado válido")
+  }
+  return new Uint8Array(await data.arrayBuffer())
+}
+
 /** Enlace temporal (firmado) de descarga de un archivo del bucket privado. */
 export const createTemplateSignedUrl = async (path: string): Promise<string | null> => {
   const { data, error } = await supabase.storage

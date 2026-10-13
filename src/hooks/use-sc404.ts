@@ -5,7 +5,7 @@ import {
   fetchGeneratedDocuments,
   generateSc404Document,
   parseSc404ExistingId,
-} from "@/lib/document-generation"
+} from "@/domains/document-generation"
 import type { Sc404SourceType } from "@/lib/document-data"
 
 /**

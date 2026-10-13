@@ -4,7 +4,7 @@ import {
   fetchGeneratedDocuments,
   generateAddendumDocument,
   generateContractDocument,
-} from "@/lib/document-generation"
+} from "@/domains/document-generation"
 import type {
   DocumentAutomationResult,
   TemplateAvailability,

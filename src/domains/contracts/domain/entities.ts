@@ -342,7 +342,8 @@ export interface DocumentAutomationResult {
 }
 
 /**
- * Resultado del motor documental, con la MISMA forma que devuelve `@/lib/document-generation`.
+ * Resultado del motor documental, con la MISMA forma que devuelve el dominio
+ * `@/domains/document-generation` (y su fachada `@/lib/document-generation`).
  * Se declara aquí porque el dominio no puede depender del módulo del motor y porque el
  * contexto de estructura organizativa y el de resoluciones comparten este contrato: así los
  * documentos de una transición laboral se pueden tratar igual vengan de donde vengan.

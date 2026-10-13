@@ -3,7 +3,7 @@ import {
   fetchGeneratedDocuments,
   generateResolutionDocument,
   type DocumentGenerationResult,
-} from "@/lib/document-generation"
+} from "@/domains/document-generation"
 import {
   RESOLUTION_DOCUMENT_TYPE,
   type ResolutionContext,

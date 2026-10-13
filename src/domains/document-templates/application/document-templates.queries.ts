@@ -1,14 +1,22 @@
 import {
+  rpcResolveDocumentTemplateVersion,
   rpcValidateDocumentTemplateVersion,
   selectCompatibleVariableKeys,
   selectDocumentTemplateById,
   selectDocumentTemplateTypes,
+  selectDocumentTemplateVersionById,
+  selectDocumentTemplateVersionsByIds,
   selectEntityDocumentTemplates,
 } from "../infrastructure/document-templates.repository"
-import { createTemplateSignedUrl } from "../infrastructure/document-template-files.repository"
+import {
+  createTemplateSignedUrl,
+  downloadTemplateObject,
+} from "../infrastructure/document-template-files.repository"
 import type {
   DocumentTemplate,
   DocumentTemplateType,
+  DocumentTemplateVersionDetail,
+  ResolvedDocumentTemplateVersion,
   TemplateValidation,
 } from "../domain/entities"
 
@@ -60,4 +68,39 @@ export async function validateTemplateVersion(versionId: string): Promise<Templa
 /** Enlace temporal de descarga de un archivo del bucket privado de plantillas. */
 export async function getTemplateFileUrl(path: string): Promise<string | null> {
   return createTemplateSignedUrl(path)
+}
+
+/**
+ * Versión concreta con su análisis y el nombre de su plantilla.
+ * La usa el motor de generación documental cuando la fuente ya tiene una versión FIJA: las
+ * regeneraciones usan SIEMPRE esa misma versión, aunque exista una más nueva.
+ */
+export async function fetchDocumentTemplateVersion(
+  versionId: string
+): Promise<DocumentTemplateVersionDetail | null> {
+  return selectDocumentTemplateVersionById(versionId)
+}
+
+/** Varias versiones a la vez (historial de documentos generados de un origen). */
+export async function fetchDocumentTemplateVersionsByIds(
+  versionIds: string[]
+): Promise<DocumentTemplateVersionDetail[]> {
+  return selectDocumentTemplateVersionsByIds(versionIds)
+}
+
+/**
+ * Versión VIGENTE para un tipo documental, una entidad y una fecha.
+ * El backend decide si hay una versión aplicable, ninguna o varias (ambiguo).
+ */
+export async function resolveDocumentTemplateVersion(
+  entityId: string,
+  documentTypeCode: string,
+  referenceDate: string
+): Promise<ResolvedDocumentTemplateVersion> {
+  return rpcResolveDocumentTemplateVersion({ entityId, documentTypeCode, referenceDate })
+}
+
+/** Contenido REAL del documento configurado de una versión (lectura del motor). */
+export async function fetchTemplateFileContent(path: string): Promise<Uint8Array> {
+  return downloadTemplateObject(path)
 }

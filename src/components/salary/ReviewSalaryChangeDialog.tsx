@@ -13,7 +13,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { showSuccess } from "@/utils/toast"
-import { ensureEventDocumentation } from "@/lib/document-batches"
+import { ensureEventDocumentation } from "@/domains/document-generation"
 import {
   applySalaryChange,
   fetchSalaryChangeImpact,

@@ -3,8 +3,9 @@
  *
  * Este contexto cubre la ADMINISTRACIÓN de las plantillas de una entidad: su catálogo,
  * sus versiones y vigencias, sus archivos (original y configurado), el análisis de
- * variables y su validación. NO incluye el motor de generación documental, que sigue en
- * `@/lib/document-generation` y consume la plantilla ya resuelta.
+ * variables y su validación. NO incluye el motor de generación documental, que vive en el
+ * dominio `@/domains/document-generation` y consume aquí la plantilla ya resuelta (la
+ * dependencia va en un solo sentido).
  *
  * Reglas del contexto (las mismas de la etapa anterior):
  *  - Toda decisión crítica (qué variable es válida, qué es obligatorio, qué puede
@@ -146,6 +147,38 @@ export interface DocumentTemplate {
   created_at: string
   updated_at: string
   versions: DocumentTemplateVersion[]
+}
+
+/**
+ * Versión concreta con su análisis y el nombre de su plantilla.
+ *
+ * Es la lectura que necesita el MOTOR de generación documental —de ahí que viva en este
+ * contexto, que es el dueño del catálogo de plantillas y versiones—: el formato REAL del
+ * documento configurado y las variables que ESA plantilla exige.
+ */
+export interface DocumentTemplateVersionDetail {
+  id: string
+  version_number: number | null
+  status: DocumentTemplateVersionStatus
+  effective_from: string | null
+  effective_to: string | null
+  configured_file_path: string | null
+  configured_file_format: string | null
+  document_type_code: string | null
+  analysis: DocumentTemplateAnalysis | null
+  template_name: string | null
+}
+
+/**
+ * Resultado de resolver la versión VIGENTE para un tipo documental y una fecha.
+ * `status` lo decide el backend: `RESOLVED` (una sola aplicable), `NONE` (ninguna) o
+ * `AMBIGUOUS` (más de una). Nunca se interpreta aquí.
+ */
+export interface ResolvedDocumentTemplateVersion {
+  status: string
+  version_id: string | null
+  version_number: number | null
+  template_name: string | null
 }
 
 export interface TemplateValidationChecks {

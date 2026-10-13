@@ -35,8 +35,8 @@ import {
   requestBatchZip,
   type PendingBatch,
   type PendingBatchItem,
-} from "@/lib/document-batches"
-import { DOCUMENT_TYPE_LABELS } from "@/lib/document-generation"
+  DOCUMENT_TYPE_LABELS,
+} from "@/domains/document-generation"
 import { showError, showSuccess } from "@/utils/toast"
 import {
   AlertTriangle,
