@@ -1,65 +1,27 @@
 import * as React from 'react'
+import type {
+  SalaryScale,
+  SalaryScaleWithGroups,
+  SalaryGroup,
+  SalaryGroupValue,
+} from '@/domains/organization-structure'
 
-export interface SalaryScale {
-  id: string
-  scope_type: 'PRESUPUESTADA_GLOBAL' | 'EMPRESARIAL_ENTITY'
-  tenant_id: string | null
-  organization_entity_id: string | null
-  regime_id: string
-  name: string
-  description: string | null
-  currency_code: string
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface SalaryGroup {
-  id: string
-  salary_scale_id: string
-  sequence_number: number
-  description: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface SalaryGroupValue {
-  id: string
-  salary_group_id: string
-  amount: number
-  currency_code: string
-  effective_from: string
-  effective_to: string | null
-  is_active: boolean
-  created_by: string | null
-  created_at: string
-  updated_at: string
-}
-
-export interface SalaryGroupCurrentValue {
-  amount: number
-  currency_code: string
-  effective_from: string
-  effective_to: string | null
-}
-
-/** Fila devuelta por la RPC resolve_salary_group_values (vigencia temporal por grupo). */
-export interface ResolvedSalaryGroupValue extends SalaryGroupCurrentValue {
-  salary_group_id: string
-}
-
-export interface SalaryGroupWithCurrent {
-  group: SalaryGroup
-  /** Importe vigente HOY (resolución temporal por effective_from / effective_to) */
-  current_value: SalaryGroupCurrentValue | null
-  roman_numeral: string
-}
-
-export interface SalaryScaleWithGroups {
-  scale: SalaryScale
-  groups: SalaryGroupWithCurrent[]
-}
+/**
+ * Contexto de escalas salariales (presentación).
+ *
+ * Las entidades las define el dominio `organization-structure` (dueño de la estructura
+ * organizativa) y aquí sólo se reexportan: la interfaz pública de este contexto no cambia y
+ * ningún componente necesita conocer de dónde salen.
+ */
+export type {
+  SalaryScale,
+  SalaryGroup,
+  SalaryGroupValue,
+  SalaryGroupCurrentValue,
+  ResolvedSalaryGroupValue,
+  SalaryGroupWithCurrent,
+  SalaryScaleWithGroups,
+} from '@/domains/organization-structure'
 
 interface SalaryContextType {
   // Scale operations

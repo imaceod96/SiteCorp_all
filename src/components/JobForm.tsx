@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -9,50 +8,39 @@ import { SiteCorpCheckbox } from "@/components/ui/sitecorp-checkbox"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { toRomanNumeral } from "@/utils/roman-numerals"
 import {
   NO_OCCUPATIONAL_CATEGORY_LABEL,
-  fetchOccupationalCategories,
+  jobSaveErrorMessage,
+  loadCurrentSalaryValueForGroup,
+  loadJobFormWorkspace,
+  parseJobCla,
+  saveJob,
+  validateJobInput,
+  type JobClaDraft,
+  type JobFormScaleInfo,
   type OccupationalCategory,
+  type OrganizationArea,
+  type OrganizationJob,
+  type PreparationLevel,
+  type SalaryGroupWithCurrent,
+  type SalaryValue,
 } from "@/domains/organization-structure"
-import type { SalaryGroup, SalaryGroupWithCurrent } from "@/contexts/SalaryContext"
 
-interface OrganizationArea {
-  id: string
-  organization_entity_id: string
-  parent_area_id: string | null
-  code: string
-  name: string
-  description: string | null
-  hierarchy_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-interface JobFormEditingJob {
-  id: string
-  name: string
-  code: string
-  description: string | null
-  area_id: string
-  hierarchy_order: number
-  salary_group_id: string
-  occupational_category_id: string | null
-  required_profession_or_trade: string | null
-  work_content: string | null
-  is_cuadro: boolean | null
-  is_principal_specialist: boolean | null
-  // Condiciones Laborales Anormales (presentes en la fila real de organization_jobs)
-  has_abnormal_conditions?: boolean | null
-  cla_day_enabled?: boolean | null
-  cla_day_hourly_rate?: number | null
-  cla_night_enabled?: boolean | null
-}
-
+/**
+ * Cargo de la entidad: alta y edición.
+ *
+ * El formulario no compone consultas ni habla con Supabase. Los casos de uso del dominio le
+ * entregan el catálogo global de categorías ocupacionales y de niveles de preparación, las
+ * áreas activas de la entidad y los grupos de la ESCALA APLICABLE a la entidad con su
+ * importe vigente; las reglas puras del dominio validan y él sólo conserva los campos.
+ *
+ * El salario NUNCA se escribe desde el cargo: se deriva del grupo salarial y de la escala.
+ * La CLA (Condiciones Laborales Anormales) es un concepto del CARGO, independiente de la
+ * Nocturnidad, con dos tramos nocturnos propios.
+ */
 interface JobFormProps {
   entityId: string
-  editingJob?: JobFormEditingJob | null
+  editingJob?: OrganizationJob | null
   onSuccess: () => void
   onCancel: () => void
 }
@@ -66,7 +54,7 @@ export const JobForm: React.FC<JobFormProps> = ({
   const [areas, setAreas] = React.useState<OrganizationArea[]>([])
   const [groups, setGroups] = React.useState<SalaryGroupWithCurrent[]>([])
   const [categories, setCategories] = React.useState<OccupationalCategory[]>([])
-  const [preparationLevels, setPreparationLevels] = React.useState<{ id: string; name: string; code: string }[]>([])
+  const [preparationLevels, setPreparationLevels] = React.useState<PreparationLevel[]>([])
   const [selectedPreparationLevels, setSelectedPreparationLevels] = React.useState<string[]>([])
   const [isCuadro, setIsCuadro] = React.useState(false)
   const [isPrincipalSpecialist, setIsPrincipalSpecialist] = React.useState(false)
@@ -76,16 +64,8 @@ export const JobForm: React.FC<JobFormProps> = ({
   const [formError, setFormError] = React.useState<string | null>(null)
   const [selectedGroup, setSelectedGroup] = React.useState<string>("")
   const [selectedCategory, setSelectedCategory] = React.useState<string>("")
-  const [salaryVigente, setSalaryVigente] = React.useState<{
-      amount: number
-      currency_code: string
-    } | null>(null)
-    const [scaleInfo, setScaleInfo] = React.useState<{
-      scaleId: string | null
-      scaleName: string
-      scopeType: string | null
-      regime: string | null
-    } | null>(null)
+  const [salaryVigente, setSalaryVigente] = React.useState<SalaryValue | null>(null)
+    const [scaleInfo, setScaleInfo] = React.useState<JobFormScaleInfo | null>(null)
     // CLA — Condiciones Laborales Anormales (configuración del CARGO).
     // Reutiliza la opción existente "Condiciones anormales"; NO es Nocturnidad.
     const [hasAbnormalConditions, setHasAbnormalConditions] = React.useState(false)
@@ -101,128 +81,53 @@ export const JobForm: React.FC<JobFormProps> = ({
 
   const navigate = useNavigate()
 
+  const editingJobId = editingJob?.id || null
+  const editingSalaryGroupId = editingJob?.salary_group_id || null
+
   const loadData = React.useCallback(async () => {
     if (!entityId) return
 
     setLoading(true)
     setError(null)
-    let stage: "areas" | "categorias" | "escala" | "grupos" = "areas"
 
     try {
-      // Load active areas of this entity
-      const { data: areasData, error: areasError } = await supabase
-        .from("organization_areas")
-        .select("*")
-        .eq("organization_entity_id", entityId)
-        .eq("is_active", true)
-        .order("hierarchy_order")
+      // Caso de uso: áreas activas, catálogos globales, escala aplicable con sus grupos y,
+      // al editar, los tramos de CLA, los niveles de preparación y el salario vigente.
+      const workspace = await loadJobFormWorkspace(entityId, {
+        jobId: editingJobId,
+        salaryGroupId: editingSalaryGroupId,
+      })
 
-      if (areasError) throw areasError
-      setAreas((areasData as OrganizationArea[]) || [])
+      setAreas(workspace.areas)
+      setCategories(workspace.categories)
+      setPreparationLevels(workspace.preparationLevels)
+      setScaleInfo(workspace.scaleInfo)
+      setGroups(workspace.groups)
+      setSalaryVigente(workspace.currentSalaryValue)
+      setSelectedPreparationLevels(workspace.preparationLevelIds)
 
-      // Catálogo GLOBAL de categorías ocupacionales (nunca hardcodeado en React)
-      stage = "categorias"
-      setCategories(await fetchOccupationalCategories())
-
-      // Catálogo GLOBAL de niveles de preparación
-      const { data: prepData, error: prepError } = await supabase
-        .from("preparation_levels")
-        .select("id, name, code")
-        .eq("is_active", true)
-        .order("sort_order")
-      if (prepError) throw prepError
-      setPreparationLevels((prepData as { id: string; name: string; code: string }[]) || [])
-
-      stage = "escala"
-
-      // Régimen de la entidad (para mensajes específicos por régimen)
-      const { data: entityData, error: entityError } = await supabase
-        .from("organization_entities")
-        .select("id, regime_id")
-        .eq("id", entityId)
-        .maybeSingle()
-
-      if (entityError) throw entityError
-      const regime = ((entityData?.regime_id as string | null) || "").toUpperCase() || null
-
-      // Escala aplicable a la entidad (RPC SECURITY DEFINER):
-      // PRESUPUESTADA → escala global; EMPRESARIAL → escala de esta entidad (sin fallback)
-      const { data: scaleData, error: scaleError } = await supabase.rpc(
-        "resolve_salary_scale_for_entity",
-        { entity_id: entityId }
-      )
-
-      if (scaleError) throw scaleError
-
-      const resolvedScaleId = (scaleData as string | null) || null
-
-      stage = "grupos"
-
-      if (!resolvedScaleId) {
-        setScaleInfo({ scaleId: null, scaleName: "", scopeType: null, regime })
-        setGroups([])
-      } else {
-        // Detalles de la escala (tolerante a RLS: el nombre es solo informativo)
-        const { data: scaleRows, error: scaleDetailsError } = await supabase
-          .from("salary_scales")
-          .select("id, name, scope_type")
-          .eq("id", resolvedScaleId)
-
-        if (scaleDetailsError) throw scaleDetailsError
-
-        const scaleDetails = (scaleRows as { id: string; name: string | null; scope_type: string | null }[] | null)?.[0] || null
-
-        setScaleInfo({
-          scaleId: resolvedScaleId,
-          scaleName: scaleDetails?.name || "Escala aplicable",
-          scopeType: scaleDetails?.scope_type || null,
-          regime,
-        })
-
-        // Grupos pertenecientes a ESA escala (relación real: salary_groups.salary_scale_id)
-        const { data: groupsData, error: groupsError } = await supabase
-          .from("salary_groups")
-          .select("*")
-          .eq("salary_scale_id", resolvedScaleId)
-          .eq("is_active", true)
-          .order("sequence_number")
-
-        if (groupsError) throw groupsError
-
-        // Fetch current values for each group
-        const groupsWithValues: SalaryGroupWithCurrent[] = []
-        for (const group of groupsData as SalaryGroup[]) {
-          const { data: valueData, error: valueError } = await supabase
-            .from("salary_group_values")
-            .select("*")
-            .eq("salary_group_id", group.id)
-            .eq("is_active", true)
-            .order("effective_from", { ascending: false })
-            .limit(1)
-            .single()
-
-          groupsWithValues.push({
-            group,
-            current_value: valueError && valueError.code !== "PGRST116" ? null : valueData,
-            roman_numeral: toRomanNumeral(group.sequence_number),
-          })
-        }
-
-        setGroups(groupsWithValues)
+      // Tramos nocturnos CLA ya configurados para este Cargo (tabla hija).
+      const segment1 = workspace.claNightSegments.find((s) => s.segment_order === 1)
+      const segment2 = workspace.claNightSegments.find((s) => s.segment_order === 2)
+      if (segment1) {
+        setClaNight1Start(segment1.start_time)
+        setClaNight1End(segment1.end_time)
+        setClaNight1Rate(String(segment1.hourly_rate))
+      }
+      if (segment2) {
+        setClaNight2Start(segment2.start_time)
+        setClaNight2End(segment2.end_time)
+        setClaNight2Rate(String(segment2.hourly_rate))
       }
     } catch (err) {
       console.error("Error loading data:", err)
       setError(
-        stage === "areas"
-          ? "No se pudieron cargar las áreas."
-          : stage === "categorias"
-            ? "No se pudieron cargar las categorías ocupacionales."
-            : "No se pudieron cargar los grupos salariales."
+        err instanceof Error ? err.message : "No se pudieron cargar los grupos salariales."
       )
     } finally {
       setLoading(false)
     }
-  }, [entityId])
+  }, [entityId, editingJobId, editingSalaryGroupId])
 
   React.useEffect(() => {
     loadData()
@@ -233,10 +138,8 @@ export const JobForm: React.FC<JobFormProps> = ({
       // Cargo nuevo: clasificación y retribución parten vacías
       setSelectedGroup("")
       setSelectedCategory("")
-      setSelectedPreparationLevels([])
       setIsCuadro(false)
       setIsPrincipalSpecialist(false)
-      setSalaryVigente(null)
       setHasAbnormalConditions(false)
       setClaDayEnabled(false)
       setClaDayRate("")
@@ -252,7 +155,6 @@ export const JobForm: React.FC<JobFormProps> = ({
 
     setSelectedGroup(editingJob.salary_group_id)
         setSelectedCategory(editingJob.occupational_category_id || "")
-        setSelectedPreparationLevels([])
         setIsCuadro(!!editingJob.is_cuadro)
         setIsPrincipalSpecialist(!!editingJob.is_principal_specialist)
         setHasAbnormalConditions(editingJob.has_abnormal_conditions || false)
@@ -261,73 +163,16 @@ export const JobForm: React.FC<JobFormProps> = ({
           editingJob.cla_day_hourly_rate != null ? String(editingJob.cla_day_hourly_rate) : ""
         )
         setClaNightEnabled(!!editingJob.cla_night_enabled)
-        setClaNight1Start("")
-        setClaNight1End("")
-        setClaNight1Rate("")
-        setClaNight2Start("")
-        setClaNight2End("")
-        setClaNight2Rate("")
-
-        // Tramos nocturnos CLA configurados para este Cargo (tabla hija)
-        if (editingJob.id) {
-          supabase
-            .from("organization_job_cla_night_segments")
-            .select("segment_order, start_time, end_time, hourly_rate")
-            .eq("organization_job_id", editingJob.id)
-            .order("segment_order")
-            .then(({ data: segData, error: segError }) => {
-              if (segError || !segData) return
-              const segs = segData as { segment_order: number; start_time: string; end_time: string; hourly_rate: number }[]
-              const s1 = segs.find((s) => s.segment_order === 1)
-              const s2 = segs.find((s) => s.segment_order === 2)
-              if (s1) {
-                setClaNight1Start(String(s1.start_time).slice(0, 5))
-                setClaNight1End(String(s1.end_time).slice(0, 5))
-                setClaNight1Rate(String(s1.hourly_rate))
-              }
-              if (s2) {
-                setClaNight2Start(String(s2.start_time).slice(0, 5))
-                setClaNight2End(String(s2.end_time).slice(0, 5))
-                setClaNight2Rate(String(s2.hourly_rate))
-              }
-            })
-        }
-
-        // Load existing preparation levels for this job
-        if (editingJob.id) {
-          supabase
-            .from("organization_job_preparation_levels")
-            .select("preparation_level_id")
-            .eq("organization_job_id", editingJob.id)
-            .then(({ data: jobPrepData, error: jobPrepError }) => {
-              if (!jobPrepError && jobPrepData) {
-                setSelectedPreparationLevels(
-                  (jobPrepData as { preparation_level_id: string }[]).map(r => r.preparation_level_id)
-                )
-              }
-            })
-        }
-    
-        // Load the current salary value for the editing job's group
-        if (editingJob.salary_group_id) {
-      supabase
-        .from("salary_group_values")
-        .select("*")
-        .eq("salary_group_id", editingJob.salary_group_id)
-        .eq("is_active", true)
-        .order("effective_from", { ascending: false })
-        .limit(1)
-        .single()
-        .then(({ data, error }) => {
-          if (!error && data) {
-            setSalaryVigente({
-              amount: data.amount,
-              currency_code: data.currency_code,
-            })
-          }
-        })
-    }
   }, [editingJob])
+
+  const buildClaDraft = (): JobClaDraft => ({
+    hasAbnormalConditions,
+    dayEnabled: claDayEnabled,
+    dayRate: claDayRate,
+    nightEnabled: claNightEnabled,
+    night1: { start: claNight1Start, end: claNight1End, rate: claNight1Rate },
+    night2: { start: claNight2Start, end: claNight2End, rate: claNight2Rate },
+  })
 
   const handleGroupChange = async (groupId: string) => {
     setSelectedGroup(groupId)
@@ -335,53 +180,8 @@ export const JobForm: React.FC<JobFormProps> = ({
 
     if (!groupId) return
 
-    const { data, error } = await supabase
-      .from("salary_group_values")
-      .select("*")
-      .eq("salary_group_id", groupId)
-      .eq("is_active", true)
-      .order("effective_from", { ascending: false })
-      .limit(1)
-      .single()
-
-    if (!error && data) {
-      setSalaryVigente({
-        amount: data.amount,
-        currency_code: data.currency_code,
-      })
-    }
-  }
-
-  // Reemplazo atómico de los dos tramos nocturnos CLA del Cargo. Cuando el pago
-  // nocturno está desactivado se eliminan (no se guardan horarios huérfanos).
-  const saveClaNightSegments = async (jobId: string) => {
-    await supabase
-      .from("organization_job_cla_night_segments")
-      .delete()
-      .eq("organization_job_id", jobId)
-    if (hasAbnormalConditions && claNightEnabled) {
-      const { error: segError } = await supabase
-        .from("organization_job_cla_night_segments")
-        .insert([
-          {
-            organization_job_id: jobId,
-            organization_entity_id: entityId,
-            segment_order: 1,
-            start_time: claNight1Start,
-            end_time: claNight1End,
-            hourly_rate: parseFloat(claNight1Rate),
-          },
-          {
-            organization_job_id: jobId,
-            organization_entity_id: entityId,
-            segment_order: 2,
-            start_time: claNight2Start,
-            end_time: claNight2End,
-            hourly_rate: parseFloat(claNight2Rate),
-          },
-        ])
-      if (segError) throw segError
-    }
+    const value = await loadCurrentSalaryValueForGroup(groupId)
+    if (value) setSalaryVigente(value)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -403,143 +203,47 @@ export const JobForm: React.FC<JobFormProps> = ({
         10
       )
 
-    if (!name) {
-      setFormError("El nombre es obligatorio")
-      return
-    }
-    if (!area_id) {
-      setFormError("El área es obligatoria")
-      return
-    }
-    // Integridad contractual: la categoría ocupacional alimenta el contrato, por
-    // lo que debe completarse también al editar cargos históricos incompletos.
-    if (!selectedCategory) {
-      setFormError("La categoría ocupacional es obligatoria")
-      return
-    }
-    if (!selectedGroup) {
-          setFormError("El grupo salarial es obligatorio")
-          return
-        }
-    
-        // Validación de CLA (no guardar configuraciones incompletas)
-        if (hasAbnormalConditions) {
-          if (claDayEnabled) {
-            const rate = parseFloat(claDayRate)
-            if (claDayRate.trim() === "" || isNaN(rate) || rate < 0) {
-              setFormError("Indica una tarifa horaria válida (≥ 0) para el pago diurno de CLA")
-              return
-            }
-          }
-          if (claNightEnabled) {
-            if (!claNight1Start || !claNight1End) {
-              setFormError("Tramo nocturno 1: indica hora de inicio y hora de fin")
-              return
-            }
-            const r1 = parseFloat(claNight1Rate)
-            if (claNight1Rate.trim() === "" || isNaN(r1) || r1 < 0) {
-              setFormError("Tramo nocturno 1: indica una tarifa horaria válida (≥ 0)")
-              return
-            }
-            if (!claNight2Start || !claNight2End) {
-              setFormError("Tramo nocturno 2: indica hora de inicio y hora de fin")
-              return
-            }
-            const r2 = parseFloat(claNight2Rate)
-            if (claNight2Rate.trim() === "" || isNaN(r2) || r2 < 0) {
-              setFormError("Tramo nocturno 2: indica una tarifa horaria válida (≥ 0)")
-              return
-            }
-          }
-        }
-    
-        // Verify the area belongs to this entity
-    const area = areas.find((a) => a.id === area_id)
-    if (!area || area.organization_entity_id !== entityId) {
-      setFormError("El área seleccionada no pertenece a esta entidad")
+    const claDraft = buildClaDraft()
+
+    // Reglas puras del dominio: nombre, área, categoría ocupacional, grupo salarial, CLA y
+    // pertenencia del área a esta entidad.
+    const validationError = validateJobInput({
+      name,
+      areaId: area_id,
+      categoryId: selectedCategory,
+      salaryGroupId: selectedGroup,
+      areas,
+      entityId,
+      cla: claDraft,
+    })
+    if (validationError) {
+      setFormError(validationError)
       return
     }
 
     setSubmitting(true)
 
     try {
-          const claDayRateValue =
-            hasAbnormalConditions && claDayEnabled ? parseFloat(claDayRate) : null
-    
-          if (editingJob) {
-            const { error: updateError } = await supabase
-              .from("organization_jobs")
-              .update({
-                name,
-                area_id,
-                description,
-                salary_group_id: selectedGroup,
-                hierarchy_order: isNaN(hierarchy_order) ? 0 : hierarchy_order,
-                occupational_category_id: selectedCategory || null,
-                required_profession_or_trade,
-                work_content,
-                has_abnormal_conditions: hasAbnormalConditions,
-                cla_day_enabled: hasAbnormalConditions && claDayEnabled,
-                cla_day_hourly_rate: claDayRateValue,
-                cla_night_enabled: hasAbnormalConditions && claNightEnabled,
-                is_cuadro: isCuadro,
-                is_principal_specialist: isPrincipalSpecialist,
-              })
-              .eq("id", editingJob.id)
-    
-            if (updateError) throw updateError
-            await saveClaNightSegments(editingJob.id)
-            await supabase.from("organization_job_preparation_levels").delete().eq("organization_job_id", editingJob.id)
-            if (selectedPreparationLevels.length > 0) {
-              const { error: prepError } = await supabase
-                .from("organization_job_preparation_levels")
-                .insert(selectedPreparationLevels.map(preparation_level_id => ({ organization_job_id: editingJob.id, preparation_level_id })))
-              if (prepError) throw prepError
-            }
-            onSuccess()
-          } else {
-            const { data: insertedJob, error: insertError } = await supabase
-              .from("organization_jobs")
-              .insert({
-                organization_entity_id: entityId,
-                name,
-                area_id,
-                description,
-                salary_group_id: selectedGroup,
-                hierarchy_order: isNaN(hierarchy_order) ? 0 : hierarchy_order,
-                is_active: true,
-                occupational_category_id: selectedCategory,
-                required_profession_or_trade,
-                work_content,
-                has_abnormal_conditions: hasAbnormalConditions,
-                cla_day_enabled: hasAbnormalConditions && claDayEnabled,
-                cla_day_hourly_rate: claDayRateValue,
-                cla_night_enabled: hasAbnormalConditions && claNightEnabled,
-                is_cuadro: isCuadro,
-                is_principal_specialist: isPrincipalSpecialist,
-              })
-              .select("id")
-              .single()
-    
-            if (insertError) throw insertError
-            if (insertedJob) await saveClaNightSegments(insertedJob.id)
-            if (insertedJob && selectedPreparationLevels.length > 0) {
-              const { error: prepError } = await supabase
-                .from("organization_job_preparation_levels")
-                .insert(selectedPreparationLevels.map(preparation_level_id => ({ organization_job_id: insertedJob.id, preparation_level_id })))
-              if (prepError) throw prepError
-            }
-            onSuccess()
-          }
-        } catch (err) {
+      await saveJob({
+        entityId,
+        jobId: editingJobId,
+        name,
+        areaId: area_id,
+        description,
+        salaryGroupId: selectedGroup,
+        hierarchyOrder: isNaN(hierarchy_order) ? 0 : hierarchy_order,
+        occupationalCategoryId: selectedCategory || null,
+        requiredProfessionOrTrade: required_profession_or_trade,
+        workContent: work_content,
+        isCuadro,
+        isPrincipalSpecialist,
+        preparationLevelIds: selectedPreparationLevels,
+        cla: parseJobCla(claDraft),
+      })
+      onSuccess()
+    } catch (err) {
       console.error("Error saving job:", err)
-      const message =
-        err instanceof Error ? err.message : "Error al guardar el cargo"
-      if (message.includes("categoría ocupacional")) {
-        setFormError("La categoría ocupacional es obligatoria para los cargos nuevos.")
-      } else {
-        setFormError(message)
-      }
+      setFormError(jobSaveErrorMessage(err))
     } finally {
       setSubmitting(false)
     }

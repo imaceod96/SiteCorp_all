@@ -1,25 +1,28 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  areaParentOptions,
+  areaSaveErrorMessage,
+  saveArea,
+  validateAreaInput,
+  type OrganizationArea,
+} from "@/domains/organization-structure"
 
-interface OrganizationArea {
-  id: string
-  organization_entity_id: string
-  parent_area_id: string | null
-  code: string
-  name: string
-  description: string | null
-  hierarchy_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
+/**
+ * Área de la entidad: alta y edición.
+ *
+ * El formulario no compone consultas ni habla con Supabase: valida con las reglas puras del
+ * dominio (nombre obligatorio y área superior de la misma entidad) y delega el guardado en
+ * su caso de uso. El código del área lo genera la base de datos y es de sólo lectura.
+ *
+ * La jerarquía se edita eligiendo «Área superior»: un área nunca puede colgar de sí misma ni
+ * de su propia rama (ni crear ciclos), y el backend lo impone de nuevo al guardar.
+ */
 interface AreaFormProps {
   entityId: string
   areas: OrganizationArea[]
@@ -38,103 +41,55 @@ export const AreaForm: React.FC<AreaFormProps> = ({
   const [submitting, setSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
 
-  // Build parent options: active areas of this entity, excluding the area itself and its descendants
-  const getDescendantIds = (areaId: string, all: OrganizationArea[]): Set<string> => {
-    const result = new Set<string>()
-    const stack = [areaId]
-    while (stack.length > 0) {
-      const current = stack.pop()!
-      result.add(current)
-      all.filter(a => a.parent_area_id === current).forEach(c => stack.push(c.id))
-    }
-    return result
-  }
-
-  const parentOptions = React.useMemo(() => {
-    const excluded = editingArea ? getDescendantIds(editingArea.id, areas) : new Set<string>()
-    let options = areas.filter(a => a.is_active && !excluded.has(a.id))
-
-    // If editing, always include the current parent so the value is visible
-    if (editingArea?.parent_area_id) {
-      const currentParent = areas.find(a => a.id === editingArea.parent_area_id)
-      if (currentParent && !options.some(o => o.id === currentParent.id)) {
-        options = [...options, currentParent]
-      }
-    }
-    return options.sort(
-      (a, b) => a.hierarchy_order - b.hierarchy_order || a.name.localeCompare(b.name)
-    )
-  }, [areas, editingArea])
+  // Opciones de «Área superior»: activas de esta entidad, sin el área ni sus descendientes.
+  const parentOptions = React.useMemo(
+    () => areaParentOptions(areas, editingArea),
+    [areas, editingArea]
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault()
-      if (!entityId) return
-  
-      setFormError(null)
-  
-      const form = e.target as HTMLFormElement
-      const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim()
-      const description = (form.elements.namedItem("description") as HTMLTextAreaElement).value.trim() || null
-      const parent_area_id = (form.elements.namedItem("parent_area_id") as HTMLSelectElement).value || null
-      const hierarchy_order = parseInt(
-        (form.elements.namedItem("hierarchy_order") as HTMLInputElement).value,
-        10
-      )
+    e.preventDefault()
+    if (!entityId) return
 
-    if (!name) {
-      setFormError("El nombre es obligatorio")
+    setFormError(null)
+
+    const form = e.target as HTMLFormElement
+    const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim()
+    const description =
+      (form.elements.namedItem("description") as HTMLTextAreaElement).value.trim() || null
+    const parent_area_id =
+      (form.elements.namedItem("parent_area_id") as HTMLSelectElement).value || null
+    const hierarchy_order = parseInt(
+      (form.elements.namedItem("hierarchy_order") as HTMLInputElement).value,
+      10
+    )
+
+    const validationError = validateAreaInput({
+      name,
+      parentAreaId: parent_area_id,
+      entityId,
+      areas,
+    })
+    if (validationError) {
+      setFormError(validationError)
       return
-    }
-
-    // Validate parent area belongs to this entity
-    if (parent_area_id) {
-      const parent = areas.find(a => a.id === parent_area_id)
-      if (!parent || parent.organization_entity_id !== entityId) {
-        setFormError("El área superior seleccionada no pertenece a esta entidad")
-        return
-      }
     }
 
     setSubmitting(true)
 
     try {
-      if (editingArea) {
-        const { error: updateError } = await supabase
-          .from("organization_areas")
-          .update({
-            name,
-            description,
-            parent_area_id: parent_area_id || null,
-            hierarchy_order: isNaN(hierarchy_order) ? 0 : hierarchy_order,
-          })
-          .eq("id", editingArea.id)
-
-        if (updateError) throw updateError
-        onSuccess()
-      } else {
-        const { error: insertError } = await supabase
-          .from("organization_areas")
-          .insert({
-            organization_entity_id: entityId,
-            name,
-            description,
-            parent_area_id: parent_area_id || null,
-            hierarchy_order: isNaN(hierarchy_order) ? 0 : hierarchy_order,
-            is_active: true,
-          })
-
-        if (insertError) throw insertError
-        onSuccess()
-      }
+      await saveArea({
+        entityId,
+        areaId: editingArea ? editingArea.id : null,
+        name,
+        description,
+        parentAreaId: parent_area_id || null,
+        hierarchyOrder: isNaN(hierarchy_order) ? 0 : hierarchy_order,
+      })
+      onSuccess()
     } catch (err) {
       console.error("Error saving area:", err)
-      const message =
-        err instanceof Error ? err.message : "Error al guardar el área"
-      if (message.includes("organization_areas_organization_entity_id_code_unique")) {
-        setFormError("Ya existe un área con ese código en esta entidad")
-      } else {
-        setFormError(message)
-      }
+      setFormError(areaSaveErrorMessage(err))
     } finally {
       setSubmitting(false)
     }

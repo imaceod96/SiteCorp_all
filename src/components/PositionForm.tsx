@@ -1,5 +1,4 @@
 import * as React from "react"
-import { supabase } from "@/lib/supabase"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -9,54 +8,42 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { toRomanNumeral } from "@/utils/roman-numerals"
-import { NO_OCCUPATIONAL_CATEGORY_LABEL } from "@/domains/organization-structure"
-import { NO_PREPARATION_LEVEL_LABEL } from "@/domains/organization-structure"
 import {
+  MAX_AUTHORIZED_QUANTITY,
+  NO_OCCUPATIONAL_CATEGORY_LABEL,
+  NO_PREPARATION_LEVEL_LABEL,
   WEEK_DAYS,
+  addDraftScheduleSegments,
   formatTime,
+  generatePositionCode,
+  normalizeScheduleTime,
+  positionSaveErrorMessage,
+  positionSchedulePayload,
+  removeScheduleSegment,
+  savePosition,
+  sortScheduleSegments,
+  validatePositionInput,
   weekDayLabel,
+  type PositionEditingData,
+  type PositionJobOption,
   type PositionScheduleSegment,
 } from "@/domains/organization-structure"
 import { CalendarClock, Plus, X } from "lucide-react"
 
-export interface PositionJobOption {
-  id: string
-  name: string
-  code: string
-  is_active: boolean
-  area_id: string
-  area: {
-    id: string
-    name: string
-    code: string
-  }
-  salary_group: {
-    id: string
-    salary_scale_id: string
-    sequence_number: number
-  } | null
-  /** Clasificación del cargo: se muestra derivada, nunca se edita en el Puesto. */
-  occupational_category: { id: string; name: string } | null
-  preparation_levels: { id: string; code: string; name: string }[]
-}
+export type { PositionJobOption, PositionEditingData } from "@/domains/organization-structure"
 
-export interface PositionEditingData {
-  id: string
-  job_id: string
-  code: string
-  name: string
-  description: string | null
-  authorized_quantity: number
-  // Fase 11A.3: información laboral del puesto
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  schedule_segments?: PositionScheduleSegment[]
-}
-
+/**
+ * Puesto de la plantilla: alta y edición.
+ *
+ * El formulario no compone consultas ni habla con Supabase: valida con las reglas puras del
+ * dominio y guarda con su caso de uso, que delega en la RPC atómica
+ * `save_position_with_schedule`. El puesto es un ÚNICO registro con N plazas autorizadas
+ * («No. de puestos»); las ocupadas y las vacantes se derivan de las asignaciones activas y
+ * nunca se escriben aquí.
+ *
+ * La categoría ocupacional, el nivel de preparación, el grupo escala y el área son del
+ * CARGO: se muestran derivados y de sólo lectura.
+ */
 interface PositionFormProps {
   entityId: string
   jobs: PositionJobOption[]
@@ -67,36 +54,8 @@ interface PositionFormProps {
   onCancel: () => void
 }
 
-const MAX_QUANTITY = 9999
-
-// Alfabeto sin caracteres ambiguos (0/O, 1/I) para códigos legibles
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
-const generatePositionCode = (): string => {
-  const bytes = new Uint8Array(6)
-  crypto.getRandomValues(bytes)
-  let suffix = ""
-  for (let i = 0; i < bytes.length; i++) {
-    suffix += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
-  }
-  return `PST-${suffix}`
-}
-
 const formatSalary = (value: { amount: number; currency_code: string }) =>
   `${value.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} ${value.currency_code}`
-
-/** "08:00:00" | "08:00" → "08:00" (la BD guarda `time`). */
-const normalizeTime = (time: string): string => {
-  const [hours, minutes] = time.split(":")
-  return `${(hours || "00").padStart(2, "0")}:${(minutes || "00").padStart(2, "0")}`
-}
-
-const parseNullableNumber = (raw: string): number | null => {
-  const trimmed = raw.trim().replace(",", ".")
-  if (!trimmed) return null
-  const parsed = Number(trimmed)
-  return Number.isFinite(parsed) ? parsed : NaN
-}
 
 export const PositionForm: React.FC<PositionFormProps> = ({
   entityId,
@@ -149,8 +108,8 @@ export const PositionForm: React.FC<PositionFormProps> = ({
   const [segments, setSegments] = React.useState<PositionScheduleSegment[]>(
     (editingPosition?.schedule_segments || []).map((segment) => ({
       day_of_week: segment.day_of_week,
-      start_time: normalizeTime(segment.start_time),
-      end_time: normalizeTime(segment.end_time),
+      start_time: normalizeScheduleTime(segment.start_time),
+      end_time: normalizeScheduleTime(segment.end_time),
     }))
   )
   const [draftDays, setDraftDays] = React.useState<number[]>([1])
@@ -216,14 +175,7 @@ export const PositionForm: React.FC<PositionFormProps> = ({
     }
   }, [selectedJob, applicableScaleId, salaryValuesByGroup])
 
-  const sortedSegments = React.useMemo(
-    () =>
-      [...segments].sort(
-        (a, b) =>
-          a.day_of_week - b.day_of_week || a.start_time.localeCompare(b.start_time)
-      ),
-    [segments]
-  )
+  const sortedSegments = React.useMemo(() => sortScheduleSegments(segments), [segments])
 
   const toggleDraftDay = (day: number) => {
     setDraftDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]))
@@ -232,50 +184,20 @@ export const PositionForm: React.FC<PositionFormProps> = ({
   const handleAddSegments = () => {
     setFormError(null)
 
-    if (draftDays.length === 0) {
-      setFormError("Selecciona al menos un día para el horario")
-      return
-    }
-    if (!draftStart || !draftEnd) {
-      setFormError("Indica la hora desde y hasta del horario")
-      return
-    }
-    if (normalizeTime(draftStart) === normalizeTime(draftEnd)) {
-      setFormError("La hora desde y hasta no pueden ser iguales")
-      return
-    }
-
-    const start = normalizeTime(draftStart)
-    const end = normalizeTime(draftEnd)
-
-    setSegments(prev => {
-      const next = [...prev]
-      draftDays.forEach(day => {
-        const duplicated = next.some(
-          segment =>
-            segment.day_of_week === day &&
-            normalized(segment.start_time) === start &&
-            normalized(segment.end_time) === end
-        )
-        if (!duplicated) {
-          next.push({ day_of_week: day, start_time: start, end_time: end })
-        }
-      })
-      return next
+    const result = addDraftScheduleSegments(segments, {
+      days: draftDays,
+      start: draftStart,
+      end: draftEnd,
     })
+    if (result.error) {
+      setFormError(result.error)
+      return
+    }
+    setSegments(result.segments)
   }
 
   const removeSegment = (segment: PositionScheduleSegment) => {
-    setSegments(prev =>
-      prev.filter(
-        item =>
-          !(
-            item.day_of_week === segment.day_of_week &&
-            item.start_time === segment.start_time &&
-            item.end_time === segment.end_time
-          )
-      )
-    )
+    setSegments(prev => removeScheduleSegment(prev, segment))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -285,120 +207,51 @@ export const PositionForm: React.FC<PositionFormProps> = ({
     setFormError(null)
 
     const name = baseName.trim()
-    if (!selectedJobId) {
-      setFormError("El cargo es obligatorio")
-      return
-    }
-    if (!name) {
-      setFormError("El nombre del puesto es obligatorio")
-      return
-    }
-
     const job = jobs.find(j => j.id === selectedJobId)
-    if (!job) {
-      setFormError("El cargo seleccionado no es válido")
-      return
-    }
 
-    const qty = parseInt(authorizedQuantity, 10)
-    if (isNaN(qty) || qty < 1) {
-      setFormError("La cantidad de puestos debe ser un número entero mayor o igual a 1")
+    // Reglas puras del dominio: cargo, nombre, cantidad autorizada, lugar de trabajo,
+    // jornada, descanso y horario (más los valores ya convertidos).
+    const validation = validatePositionInput({
+      jobId: selectedJobId,
+      jobExists: !!job,
+      name,
+      authorizedQuantity,
+      workLocation,
+      dailyHours,
+      weeklyHours,
+      monthlyHours,
+      breakMinutes,
+      segmentsCount: sortedSegments.length,
+      scheduleNotes,
+    })
+    if (validation.error) {
+      setFormError(validation.error)
       return
-    }
-    if (qty > MAX_QUANTITY) {
-      setFormError(`La cantidad de puestos no puede superar ${MAX_QUANTITY}`)
-      return
-    }
-
-    const daily = parseNullableNumber(dailyHours)
-    const weekly = parseNullableNumber(weeklyHours)
-    const monthly = parseNullableNumber(monthlyHours)
-    const breakValue = parseNullableNumber(breakMinutes)
-
-    // Integridad contractual: el lugar de trabajo, la jornada y el horario viven
-    // en el PUESTO y son indispensables para formalizar el contrato.
-    if (!workLocation.trim()) {
-      setFormError("El lugar de trabajo es obligatorio")
-      return
-    }
-    if (
-      daily === null || daily <= 0 ||
-      weekly === null || weekly <= 0 ||
-      monthly === null || monthly <= 0
-    ) {
-      setFormError(
-        "La jornada es obligatoria: indica horas diarias, semanales y mensuales mayores que 0"
-      )
-      return
-    }
-    if (breakValue === null) {
-      setFormError("El descanso (minutos) es obligatorio")
-      return
-    }
-    if (sortedSegments.length === 0 && !scheduleNotes.trim()) {
-      setFormError("El horario es obligatorio: añade segmentos de horario o una descripción")
-      return
-    }
-
-    // Los valores deben ser >= 0; no se imponen límites legales no definidos
-    const hourFields: [string, number | null][] = [
-      ["Horas diarias", daily],
-      ["Horas semanales", weekly],
-      ["Horas mensuales", monthly],
-    ]
-    for (const [label, value] of hourFields) {
-      if (value !== null && (Number.isNaN(value) || value < 0)) {
-        setFormError(`${label} debe ser un número mayor o igual a 0`)
-        return
-      }
-    }
-    if (breakValue !== null) {
-      if (Number.isNaN(breakValue) || breakValue < 0) {
-        setFormError("El descanso debe ser un número de minutos mayor o igual a 0")
-        return
-      }
-      if (!Number.isInteger(breakValue)) {
-        setFormError("El descanso debe expresarse en minutos enteros")
-        return
-      }
     }
 
     setSubmitting(true)
 
     try {
-      const { error: rpcError } = await supabase.rpc("save_position_with_schedule", {
-        p_entity_id: entityId,
-        p_position_id: isEditing ? editingPosition!.id : null,
-        p_job_id: selectedJobId,
-        p_code: isEditing ? editingPosition!.code : generatePositionCode(),
-        p_name: name,
-        p_description: description.trim() || null,
-        p_authorized_quantity: qty,
-        p_work_location: workLocation.trim() || null,
-        p_daily_hours: daily,
-        p_weekly_hours: weekly,
-        p_monthly_hours: monthly,
-        p_break_minutes: breakValue,
-        p_schedule_notes: scheduleNotes.trim() || null,
-        p_segments: sortedSegments.map((segment, index) => ({
-          day_of_week: segment.day_of_week,
-          start_time: segment.start_time,
-          end_time: segment.end_time,
-          display_order: index + 1,
-        })),
+      await savePosition({
+        entityId,
+        positionId: isEditing ? editingPosition!.id : null,
+        jobId: selectedJobId,
+        code: isEditing ? editingPosition!.code : generatePositionCode(),
+        name,
+        description: description.trim() || null,
+        authorizedQuantity: validation.quantity,
+        workLocation: workLocation.trim() || null,
+        dailyHours: validation.dailyHours,
+        weeklyHours: validation.weeklyHours,
+        monthlyHours: validation.monthlyHours,
+        breakMinutes: validation.breakMinutes,
+        scheduleNotes: scheduleNotes.trim() || null,
+        segments: positionSchedulePayload(sortedSegments),
       })
-
-      if (rpcError) throw rpcError
       onSuccess()
     } catch (err) {
       console.error("Error saving position:", err)
-      const message = err instanceof Error ? err.message : "Error al guardar el puesto"
-      if (message.includes("organization_positions_entity_code_unique") ||
-          message.includes("organization_positions_job_id_code_unique")) {
-        setFormError("Conflicto de código, inténtalo de nuevo")
-      } else {
-        setFormError(message)
-      }
+      setFormError(positionSaveErrorMessage(err))
     } finally {
       setSubmitting(false)
     }
@@ -477,7 +330,7 @@ export const PositionForm: React.FC<PositionFormProps> = ({
             id="position-quantity"
             type="number"
             min={1}
-            max={MAX_QUANTITY}
+            max={MAX_AUTHORIZED_QUANTITY}
             value={authorizedQuantity}
             onChange={(e) => setAuthorizedQuantity(e.target.value)}
             required
@@ -752,6 +605,3 @@ export const PositionForm: React.FC<PositionFormProps> = ({
     </form>
   )
 }
-
-/** Helper local para comparar horas ya normalizadas. */
-const normalized = (time: string): string => normalizeTime(time)

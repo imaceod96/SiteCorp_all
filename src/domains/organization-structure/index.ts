@@ -3,6 +3,14 @@
  *
  * Reexporta explícitamente los símbolos originales de los módulos migrados
  * para preservar la interfaz pública durante la migración DDD.
+ *
+ * La dependencia va siempre en un solo sentido:
+ *   presentación → aplicación → dominio → infraestructura → Supabase
+ * así que no puede formarse ningún ciclo. Las pantallas consumen CASOS DE USO: no componen
+ * consultas ni hablan con Supabase.
+ *
+ * Alcance de este bloque: configuración de la estructura organizativa (áreas, cargos,
+ * puestos con su horario y administración de escalas, grupos y valores salariales).
  */
 
 // --- Tipos e interfaces ---
@@ -11,6 +19,34 @@ export type { PreparationLevel } from "./domain/entities"
 export type { WeekDay } from "./domain/entities"
 export type { PositionScheduleSegment } from "./domain/entities"
 export type { PositionWorkInfo } from "./domain/entities"
+
+// --- Configuración de la estructura: entidades ---
+export type { OrganizationArea } from "./domain/entities"
+export type { AreaNode } from "./domain/entities"
+export type { SalaryGroupSummary } from "./domain/entities"
+export type { OrganizationJob } from "./domain/entities"
+export type { OrganizationPositionJobRef } from "./domain/entities"
+export type { OrganizationPosition } from "./domain/entities"
+export type { JobClaNightSegment } from "./domain/entities"
+export type { JobClaDraft } from "./domain/entities"
+export type { JobClaConfig } from "./domain/entities"
+export type { PositionJobOption } from "./domain/entities"
+export type { PositionEditingData } from "./domain/entities"
+
+// --- Configuración de la estructura: comandos ---
+export type { SaveAreaInput } from "./domain/entities"
+export type { SaveJobInput } from "./domain/entities"
+export type { SavePositionInput } from "./domain/entities"
+
+// --- Escalas, grupos y valores salariales: entidades ---
+export type { SalaryScale } from "./domain/entities"
+export type { SalaryScaleScope } from "./domain/entities"
+export type { SalaryGroup } from "./domain/entities"
+export type { SalaryGroupValue } from "./domain/entities"
+export type { SalaryGroupCurrentValue } from "./domain/entities"
+export type { ResolvedSalaryGroupValue } from "./domain/entities"
+export type { SalaryGroupWithCurrent } from "./domain/entities"
+export type { SalaryScaleWithGroups } from "./domain/entities"
 
 // --- Constantes de etiqueta ---
 export { NO_OCCUPATIONAL_CATEGORY_LABEL } from "./infrastructure/catalogs.repository"
@@ -31,6 +67,81 @@ export {
   formatBreak,
   hasWorkInfo,
 } from "./domain/formatters"
+
+// --- Reglas puras de áreas ---
+export {
+  areaDescendantIds,
+  areaParentOptions,
+  buildAreaTree,
+  validateAreaInput,
+  areaSaveErrorMessage,
+} from "./domain/areas.rules"
+
+// --- Reglas puras de cargos ---
+export {
+  parseJobCla,
+  jobSaveErrorMessage,
+  validateJobCla,
+  validateJobInput,
+} from "./domain/jobs.rules"
+
+// --- Reglas puras de puestos ---
+export type { PositionFormValidation } from "./domain/positions.rules"
+export {
+  MAX_AUTHORIZED_QUANTITY,
+  addDraftScheduleSegments,
+  generatePositionCode,
+  normalizeScheduleTime,
+  parseNullableNumber,
+  positionSaveErrorMessage,
+  positionSchedulePayload,
+  removeScheduleSegment,
+  sortScheduleSegments,
+  validatePositionInput,
+} from "./domain/positions.rules"
+
+// --- Casos de uso: configuración de plantilla ---
+export type { StaffingConfigurationWorkspace } from "./application/staffing-configuration.queries"
+export { loadStaffingConfiguration } from "./application/staffing-configuration.queries"
+
+export {
+  saveArea,
+  saveJob,
+  savePosition,
+  setAreaActive,
+  setJobActive,
+  setPositionActive,
+} from "./application/staffing-configuration.commands"
+
+// --- Casos de uso: formulario del cargo ---
+export type { JobFormScaleInfo, JobFormWorkspace } from "./application/job-form.queries"
+export {
+  loadCurrentSalaryValueForGroup,
+  loadJobFormWorkspace,
+} from "./application/job-form.queries"
+
+// --- Casos de uso: administración de escalas salariales ---
+export {
+  canManageGlobalSalary,
+  canManageSalary,
+  canViewSalary,
+  loadCurrentSalaryGroupValue,
+  loadEntityEmpresarialScale,
+  loadGlobalPresupuestadaScale,
+  loadSalaryGroupValueHistory,
+  loadSalaryScaleForEntity,
+  loadSalaryScaleWithGroups,
+  resolveSalaryValueForGroup,
+} from "./application/salary-administration.queries"
+
+export {
+  addSalaryGroup,
+  addSalaryGroupValue,
+  createEntityEmpresarialScale,
+  createGlobalPresupuestadaScale,
+  deactivateSalaryGroup,
+  updateSalaryGroup,
+} from "./application/salary-administration.commands"
 
 // --- Funciones de infraestructura: catálogos ---
 export {

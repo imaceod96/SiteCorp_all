@@ -1,6 +1,5 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -11,8 +10,6 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SelectItem } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Dialog,
@@ -20,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Popover,
@@ -42,238 +38,54 @@ import {
   Briefcase,
   Network,
   Search,
-  Trash2,
-  Upload,
-  FileText,
-  FileSpreadsheet,
   Loader2,
+  FileSpreadsheet,
 } from "lucide-react"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import {
   NO_OCCUPATIONAL_CATEGORY_LABEL,
-  fetchOccupationalCategories,
-} from "@/domains/organization-structure"
-import {
   NO_PREPARATION_LEVEL_LABEL,
-  fetchJobPreparationLevels,
-  formatPreparationLevels,
-  type PreparationLevel,
-} from "@/domains/organization-structure"
-import {
+  NO_WORK_INFO_LABEL,
   buildAnexo14FileName,
   buildAnexo14WorkbookBlob,
+  buildAreaTree,
   fetchAnexo14Rows,
-  saveAnexo14Blob,
-} from "@/domains/organization-structure"
-import {
-  NO_WORK_INFO_LABEL,
-  fetchEntityScheduleSegments,
   formatBreak,
   formatJornada,
+  formatPreparationLevels,
   formatScheduleByDay,
   formatScheduleSummary,
   hasWorkInfo,
-  type PositionScheduleSegment,
+  loadStaffingConfiguration,
+  saveAnexo14Blob,
+  setAreaActive,
+  setJobActive,
+  setPositionActive,
+  type AreaNode,
+  type OrganizationArea,
+  type OrganizationJob,
+  type OrganizationPosition,
+  type PreparationLevel,
+  type SalaryValue,
 } from "@/domains/organization-structure"
 import { JobForm } from "@/components/JobForm"
 import { AreaForm } from "@/components/AreaForm"
 import { PositionForm, type PositionJobOption, type PositionEditingData } from "@/components/PositionForm"
-interface OrganizationArea {
-  id: string
-  organization_entity_id: string
-  parent_area_id: string | null
-  code: string
-  name: string
-  description: string | null
-  hierarchy_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
 
-interface AreaNode extends OrganizationArea {
-  children: AreaNode[]
-}
-
-interface OrganizationJob {
-  id: string
-  organization_entity_id: string
-  area_id: string
-  code: string
-  name: string
-  description: string | null
-  salary_group_id: string
-  hierarchy_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  // Fase 11A.2: información laboral del cargo
-  occupational_category_id: string | null
-  required_profession_or_trade: string | null
-  work_content: string | null
-  area: {
-    id: string
-    name: string
-    code: string
-    is_active: boolean
-    organization_entity_id: string
-  }
-  occupational_category: {
-    id: string
-    name: string
-    code: string
-  } | null
-  is_cuadro: boolean
-  is_principal_specialist: boolean
-  salary_group: {
-    id: string
-    salary_scale_id: string
-    sequence_number: number
-    description: string | null
-    is_active: boolean
-    current_value: {
-      amount: number
-      currency_code: string
-    } | null
-  } | null
-}
-
-// Forma cruda del cargo tal como la devuelve PostgREST: el grupo salarial
-// incluye su arreglo de valores vigentes antes de resolverse a `current_value`.
-interface OrganizationJobQueryRow {
-  id: string
-  organization_entity_id: string
-  area_id: string
-  code: string
-  name: string
-  description: string | null
-  salary_group_id: string
-  hierarchy_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  occupational_category_id: string | null
-  required_profession_or_trade: string | null
-  work_content: string | null
-  is_cuadro: boolean
-  is_principal_specialist: boolean
-  area: {
-    id: string
-    name: string
-    code: string
-    is_active: boolean
-    organization_entity_id: string
-  } | null
-  salary_group: {
-    id: string
-    salary_scale_id: string
-    sequence_number: number
-    description: string | null
-    is_active: boolean
-    salary_group_values: {
-      id: string
-      amount: number
-      currency_code: string
-      effective_from: string
-      effective_to: string | null
-      is_active: boolean
-    }[] | null
-  } | null
-}
-
-interface SalaryGroupValueQueryRow {
-  salary_group_id: string
-  amount: number
-  currency_code: string
-  effective_from: string
-}
+/**
+ * CONFIGURACIÓN DE PLANTILLA — áreas, cargos y puestos de la entidad.
+ *
+ * La pantalla no compone ninguna consulta: el caso de uso del dominio de estructura
+ * organizativa le entrega las áreas, los cargos (con su área, categoría ocupacional, grupo
+ * salarial e importe vigente), los puestos con su horario habitual, el árbol Área → Cargo →
+ * Puesto y los permisos internos. Las escrituras (crear, editar y activar) también se piden
+ * al dominio.
+ *
+ * El aislamiento es el de siempre: `organization_entity_id` (Grupo Empresarial → Empresa →
+ * UEB) + RLS por `company_client_id`, que nunca se envía desde el cliente.
+ */
 
 type StatusFilter = "active" | "inactive" | "all"
-
-interface OrganizationPosition {
-  id: string
-  organization_entity_id: string
-  job_id: string
-  code: string
-  name: string
-  description: string | null
-  position_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  authorized_quantity: number
-  // Fase 11A.3: información laboral del puesto
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
-  schedule_segments?: PositionScheduleSegment[]
-  job: {
-    id: string
-    name: string
-    code: string
-    is_active: boolean
-    area_id: string
-    occupational_category_id: string | null
-    area: {
-      id: string
-      name: string
-      code: string
-    }
-    salary_group: {
-      id: string
-      salary_scale_id: string
-      sequence_number: number
-    } | null
-  } | null
-}
-
-interface SalaryValue {
-  amount: number
-  currency_code: string
-}
-
-const ROOT_SENTINEL = "__root__"
-
-// Build a tree from a flat area list. Areas whose parent is not present in
-// the list are rendered as roots (useful when filtering by status).
-const buildTree = (areas: OrganizationArea[]): AreaNode[] => {
-  const byId = new Map<string, AreaNode>()
-  areas.forEach(a => byId.set(a.id, { ...a, children: [] }))
-
-  const roots: AreaNode[] = []
-  byId.forEach(node => {
-    const parent = node.parent_area_id ? byId.get(node.parent_area_id) : undefined
-    if (parent) {
-      parent.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  })
-
-  const sortNodes = (nodes: AreaNode[]) => {
-    nodes.sort(
-      (a, b) => a.hierarchy_order - b.hierarchy_order || a.name.localeCompare(b.name)
-    )
-    nodes.forEach(n => sortNodes(n.children))
-  }
-  sortNodes(roots)
-  return roots
-}
-
-// Ids of an area and all its descendants
-const getDescendantIds = (areaId: string, all: OrganizationArea[]): Set<string> => {
-  const result = new Set<string>()
-  const stack = [areaId]
-  while (stack.length > 0) {
-    const current = stack.pop()!
-    result.add(current)
-    all.filter(a => a.parent_area_id === current).forEach(c => stack.push(c.id))
-  }
-  return result
-}
 
 const EntitySettingsStaffing = () => {
   const { entityId } = useParams<{ entityId: string }>()
@@ -332,177 +144,25 @@ const EntitySettingsStaffing = () => {
     setError(null)
 
     try {
-      const { data: canView } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "staffing.view",
-      })
-      const { data: canViewManage } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "staffing.manage",
-      })
-      if (!canView && !canViewManage) {
+      // Caso de uso del dominio: permisos, entidad, áreas, cargos con su grupo salarial,
+      // puestos con su cargo y horario, escala aplicable e importes vigentes por grupo.
+      const workspace = await loadStaffingConfiguration(entityId)
+      if (!workspace.authorized) {
         setJobs([])
         setPositions([])
         setError("No tiene permiso para ver la configuración de plantilla de esta entidad")
         return
       }
 
-      const { data: canManageData } = await supabase.rpc("can_access_entity", {
-        target_entity_id: entityId,
-        permission_code: "staffing.manage",
-      })
-      setCanManage(!!canManageData)
-
-      const { data: entityData } = await supabase
-        .from("organization_entities")
-        .select("name")
-        .eq("id", entityId)
-        .maybeSingle()
-      setEntityName((entityData as { name: string } | null)?.name || "")
-
-      // Load areas
-      const { data: areasData, error: areasError } = await supabase
-        .from("organization_areas")
-        .select("*")
-        .eq("organization_entity_id", entityId)
-
-      if (areasError) throw areasError
-      setAreas((areasData as OrganizationArea[]) || [])
-
-      // Load jobs with area and salary group info
-      const { data: jobsData, error: jobsError } = await supabase
-        .from("organization_jobs")
-        .select(`
-          *,
-          area:organization_areas(id, name, code, is_active, organization_entity_id),
-          salary_group:salary_groups(
-            id,
-            salary_scale_id,
-            sequence_number,
-            description,
-            is_active,
-            salary_group_values(
-              id,
-              amount,
-              currency_code,
-              effective_from,
-              effective_to,
-              is_active
-            )
-          )
-        `)
-        .eq("organization_entity_id", entityId)
-        .order("hierarchy_order")
-
-      if (jobsError) throw jobsError
-
-      // Catálogo global de categorías ocupacionales (Fase 11A.2): se resuelve en
-      // cliente por id para no depender de la detección de la nueva FK por PostgREST.
-      const categories = await fetchOccupationalCategories({ includeInactive: true })
-      const categoryById = new Map(categories.map(c => [c.id, c]))
-      setCategoryNameById(Object.fromEntries(categories.map(c => [c.id, c.name])))
-
-      // Transform jobs to include current salary value
-      const jobsWithCurrentValue = (jobsData as OrganizationJobQueryRow[])?.map((job: OrganizationJobQueryRow) => {
-        const currentValue = job.salary_group?.salary_group_values?.length > 0
-          ? job.salary_group.salary_group_values[0]
-          : null
-
-        return {
-          ...job,
-          occupational_category: job.occupational_category_id
-            ? categoryById.get(job.occupational_category_id) || null
-            : null,
-          salary_group: job.salary_group
-            ? {
-                ...job.salary_group,
-                current_value: currentValue
-                  ? {
-                      amount: currentValue.amount,
-                      currency_code: currentValue.currency_code,
-                    }
-                  : null,
-              }
-            : null,
-        }
-      })
-
-      setJobs(jobsWithCurrentValue || [])
-
-      // Niveles de preparación configurados por cargo (derivados, sólo lectura)
-      setPreparationLevelsByJob(
-        await fetchJobPreparationLevels((jobsWithCurrentValue || []).map(j => j.id))
-      )
-
-      // Escala salarial aplicable a la entidad:
-      // PRESUPUESTADA → escala global; EMPRESARIAL → escala de esta entidad (sin fallback)
-      const { data: scaleIdData, error: scaleError } = await supabase.rpc(
-        "resolve_salary_scale_for_entity",
-        { entity_id: entityId }
-      )
-      if (scaleError) throw scaleError
-      const scaleId = (scaleIdData as string | null) || null
-      setApplicableScaleId(scaleId)
-
-      // Valores vigentes por grupo salarial (uno por grupo, effective_from más reciente)
-      const groupIds = Array.from(
-        new Set(
-          (jobsWithCurrentValue || [])
-            .map(j => j.salary_group?.id)
-            .filter((id): id is string => !!id)
-        )
-      )
-      const valuesMap: Record<string, SalaryValue | null> = {}
-      if (groupIds.length > 0) {
-        const { data: valuesData, error: valuesError } = await supabase
-          .from("salary_group_values")
-          .select("salary_group_id, amount, currency_code, effective_from")
-          .in("salary_group_id", groupIds)
-          .eq("is_active", true)
-          .order("effective_from", { ascending: false })
-
-        if (valuesError) throw valuesError
-        ;(valuesData as SalaryGroupValueQueryRow[])?.forEach(v => {
-          if (valuesMap[v.salary_group_id] === undefined) {
-            valuesMap[v.salary_group_id] = {
-              amount: v.amount,
-              currency_code: v.currency_code,
-            }
-          }
-        })
-      }
-      setSalaryValuesByGroup(valuesMap)
-
-      // Cargar puestos con Cargo → Área y Grupo salarial
-      const { data: positionsData, error: positionsError } = await supabase
-        .from("organization_positions")
-        .select(`
-          *,
-          job:organization_jobs(
-            id,
-            name,
-            code,
-            is_active,
-            area_id,
-            occupational_category_id,
-            area:organization_areas(id, name, code),
-            salary_group:salary_groups(id, salary_scale_id, sequence_number)
-          )
-        `)
-        .eq("organization_entity_id", entityId)
-        .order("created_at")
-
-      if (positionsError) throw positionsError
-
-      // Fase 11A.3: horarios habituales de todos los puestos de la entidad
-      const segmentsByPosition = await fetchEntityScheduleSegments(entityId)
-
-      setPositions(
-        ((positionsData as OrganizationPosition[]) || []).map(position => ({
-          ...position,
-          schedule_segments: segmentsByPosition[position.id] || [],
-        }))
-      )
+      setCanManage(workspace.canManage)
+      setEntityName(workspace.entityName)
+      setAreas(workspace.areas)
+      setJobs(workspace.jobs)
+      setCategoryNameById(workspace.categoryNameById)
+      setPreparationLevelsByJob(workspace.preparationLevelsByJob)
+      setApplicableScaleId(workspace.applicableScaleId)
+      setSalaryValuesByGroup(workspace.salaryValuesByGroup)
+      setPositions(workspace.positions)
     } catch (err) {
       console.error("Error loading data:", err)
       setError(err instanceof Error ? err.message : "Error al cargar los datos")
@@ -729,11 +389,7 @@ const EntitySettingsStaffing = () => {
     }
 
     try {
-      const { error: updateError } = await supabase
-        .from("organization_positions")
-        .update({ is_active: !position.is_active })
-        .eq("id", position.id)
-      if (updateError) throw updateError
+      await setPositionActive(position.id, !position.is_active)
       await loadData()
       showNotice("success", position.is_active ? "Puesto desactivado" : "Puesto reactivado")
     } catch (err) {
@@ -743,25 +399,7 @@ const EntitySettingsStaffing = () => {
     }
   }
 
-  const tree = React.useMemo(() => buildTree(areas), [areas])
-
-  // Options for the parent selector: active areas of this entity.
-  // When editing, exclude the area itself and all its descendants.
-  const parentOptions = React.useMemo(() => {
-    const excluded = editingArea ? getDescendantIds(editingArea.id, areas) : new Set<string>()
-    let options = areas.filter(a => a.is_active && !excluded.has(a.id))
-
-    // If editing, always include the current parent so the value is visible
-    if (editingArea?.parent_area_id) {
-      const currentParent = areas.find(a => a.id === editingArea.parent_area_id)
-      if (currentParent && !options.some(o => o.id === currentParent.id)) {
-        options = [...options, currentParent]
-      }
-    }
-    return options.sort(
-      (a, b) => a.hierarchy_order - b.hierarchy_order || a.name.localeCompare(b.name)
-    )
-  }, [areas, editingArea])
+  const tree = React.useMemo(() => buildAreaTree(areas), [areas])
 
   // Area dialog handlers
   const openCreateAreaDialog = () => {
@@ -809,11 +447,7 @@ const EntitySettingsStaffing = () => {
         }
     
         try {
-          const { error: updateError } = await supabase
-            .from("organization_areas")
-            .update({ is_active: !area.is_active })
-            .eq("id", area.id)
-          if (updateError) throw updateError
+          await setAreaActive(area.id, !area.is_active)
           await loadData()
           showNotice("success", area.is_active ? "Área desactivada" : "Área reactivada")
         } catch (err) {
@@ -837,11 +471,7 @@ const EntitySettingsStaffing = () => {
         }
     
         try {
-          const { error: updateError } = await supabase
-            .from("organization_jobs")
-            .update({ is_active: !job.is_active })
-            .eq("id", job.id)
-          if (updateError) throw updateError
+          await setJobActive(job.id, !job.is_active)
           await loadData()
           showNotice("success", job.is_active ? "Cargo desactivado" : "Cargo reactivado")
         } catch (err) {
@@ -850,24 +480,6 @@ const EntitySettingsStaffing = () => {
           showNotice("danger", message)
         }
       }
-
-  const handleDelete = async (job: OrganizationJob) => {
-    if (!confirm(`¿Desactivar el cargo "${job.name}"?`)) return
-
-    try {
-      const { error: updateError } = await supabase
-        .from("organization_jobs")
-        .update({ is_active: false })
-        .eq("id", job.id)
-      if (updateError) throw updateError
-      await loadData()
-      showNotice("success", "Cargo desactivado")
-    } catch (err) {
-      console.error("Error deactivating job:", err)
-      const message = err instanceof Error ? err.message : "Error al desactivar el cargo"
-      showNotice("danger", message)
-    }
-  }
 
   const renderNode = (node: AreaNode): React.ReactNode => {
     const hasChildren = node.children.length > 0
