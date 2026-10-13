@@ -1,4 +1,4 @@
-import { hasLinkedWorker } from "@/domains/people"
+import { hasLinkedWorker } from "@/domains/people/domain/rules"
 import type {
   CandidatesSummary,
   ContractDataReadiness,
@@ -15,6 +15,10 @@ import type {
  * módulos operativos (o el resultado ya resuelto por una RPC) y aplica exactamente
  * el mismo criterio de siempre. No se guardan estadísticas ni se deducen estados
  * históricos a partir del estado actual.
+ *
+ * El vínculo del candidato con su trabajador se toma de la regla COMPARTIDA del dominio de
+ * Personas (módulo de dominio, no su barrel): así existe un solo criterio y el dominio no
+ * arrastra infraestructura ajena.
  */
 
 /** Período mostrado para los movimientos de personal (días). */

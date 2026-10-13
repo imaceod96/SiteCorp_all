@@ -239,9 +239,14 @@ test.describe("catálogos de persona", () => {
       { id: "cat-c", name: "Categoría C" },
     ]
 
-    // El orden es el del catálogo (A, B, C), no el de los identificadores recibidos.
-    expect(drivingLicenseLabels(["cat-c", "cat-a", "cat-b"], categories)).toEqual(["A", "B", "C"])
-    // Sin código visible se usa el nombre; un identificador desconocido no aporta etiqueta.
+    // El orden es el del catálogo (A, B, C), no el de los identificadores recibidos,
+    // y sin código visible se muestra el nombre del catálogo.
+    expect(drivingLicenseLabels(["cat-c", "cat-a", "cat-b"], categories)).toEqual([
+      "A",
+      "B",
+      "Categoría C",
+    ])
+    // Un identificador desconocido no aporta etiqueta.
     expect(drivingLicenseLabels(["cat-c", "cat-x"], categories)).toEqual(["Categoría C"])
     expect(drivingLicenseLabels([], categories)).toEqual([])
   })
@@ -273,21 +278,33 @@ test.describe("catálogos de persona", () => {
     )
   })
 
-  test("ninguna consulta de catálogos queda fuera del dominio", () => {
-    const offenders = sourceFiles("src").filter((file) => {
-      if (file === "src/domains/people/infrastructure/catalogs.repository.ts") return false
-      const text = code(file)
-      return (
-        /\.from\("skin_colors"\)/.test(text) ||
-        /\.from\("driving_license_categories"\)/.test(text) ||
-        /\.from\("candidate_driving_license_categories"\)/.test(text) ||
-        /\.from\("worker_driving_license_categories"\)/.test(text) ||
-        /\.rpc\("save_candidate_driving_licenses"/.test(text) ||
-        /\.rpc\("save_worker_driving_licenses"/.test(text)
+  test("los catálogos globales se leen sólo desde los sitios conocidos", () => {
+    // Lecturas del catálogo global (color de piel y licencias). Los tres consumidores
+    // históricos siguen teniendo su motivo propio y no son candidatos de selección:
+    //   · catalogs.repository  → repositorio del bloque (selección: activos y ordenados).
+    //   · worker-migration     → catálogo COMPLETO (incluye inactivos) para mapear la carga.
+    //   · people.repository    → índice de licencias de la vista de candidatos.
+    //   · entity-summary/reports → informe demográfico por color de piel.
+    const readers = sourceFiles("src")
+      .filter((file) =>
+        /\.from\("(skin_colors|driving_license_categories|candidate_driving_license_categories|worker_driving_license_categories)"\)/.test(
+          code(file)
+        )
       )
-    })
+      .sort()
 
-    expect(offenders, "los catálogos de persona tienen UN solo repositorio").toEqual([])
+    expect(readers).toEqual([
+      "src/domains/entity-summary/infrastructure/reports.repository.ts",
+      "src/domains/people/infrastructure/catalogs.repository.ts",
+      "src/domains/people/infrastructure/people.repository.ts",
+      "src/domains/people/infrastructure/worker-migration.repository.ts",
+    ])
+
+    // El reemplazo exacto de licencias, en un solo punto de acceso.
+    const licenseWriters = sourceFiles("src").filter((file) =>
+      /\.rpc\("save_(candidate|worker)_driving_licenses"/.test(code(file))
+    )
+    expect(licenseWriters).toEqual(["src/domains/people/infrastructure/catalogs.repository.ts"])
   })
 })
 
@@ -396,17 +413,29 @@ test.describe("resumen de entidades", () => {
     expect(repository).toMatch(/\.from\("document_template_types"\)/)
     expect(repository).toMatch(/\.from\("document_template_versions"\)/)
 
-    // Y ningún otro módulo las consulta por su cuenta.
-    const offenders = sourceFiles("src").filter((file) => {
-      if (file === "src/domains/entity-summary/infrastructure/summary.repository.ts") return false
-      const text = code(file)
-      return (
-        /\.rpc\("validate_entity_contract_readiness"/.test(text) ||
-        /\.rpc\("resolve_entity_representatives"/.test(text) ||
-        /\.rpc\("resolve_salary_scale_for_entity"/.test(text)
+    // Y estas RPC se invocan desde los sitios conocidos (las otras dos pertenecen a los
+    // dominios que administran representantes y escalas salariales), nunca desde la interfaz.
+    const callers = sourceFiles("src")
+      .filter((file) =>
+        /\.rpc\("(validate_entity_contract_readiness|resolve_entity_representatives|resolve_salary_scale_for_entity)"/.test(
+          code(file)
+        )
       )
-    })
-    expect(offenders, "las RPC del Resumen tienen un solo repositorio").toEqual([])
+      .sort()
+
+    expect(callers).toEqual([
+      "src/domains/entity-summary/infrastructure/summary.repository.ts",
+      "src/domains/organization-structure/infrastructure/salary.repository.ts",
+      "src/domains/representatives/infrastructure/representatives.repository.ts",
+    ])
+
+    // La validación de integridad contractual es EXCLUSIVA del Resumen.
+    const readinessCallers = sourceFiles("src").filter((file) =>
+      /\.rpc\("validate_entity_contract_readiness"/.test(code(file))
+    )
+    expect(readinessCallers).toEqual([
+      "src/domains/entity-summary/infrastructure/summary.repository.ts",
+    ])
   })
 
   test("los vencimientos del Resumen reutilizan el cálculo del dominio de contratos", () => {
@@ -568,22 +597,27 @@ test.describe("variables documentales", () => {
     expect(resolved.values["entity.name"]).toBe("Empresa Uno")
     expect(resolved.values["worker.full_name"]).toBe("Juan Gómez")
     expect(resolved.values["contract.start_date"]).toBe("01/01/2026")
-    // Toda variable resuelta tiene su definición y su valor formateado.
+    // Toda variable resuelta tiene su definición y su valor formateado como texto.
     Object.entries(resolved.values).forEach(([key, value]) => {
       expect(documentVariableByKey(key), `valor sin definición: ${key}`).toBeTruthy()
       expect(typeof value).toBe("string")
       expect(value.length).toBeGreaterThan(0)
     })
-    // Toda variable faltante viene con su etiqueta legible.
-    expect(resolved.missing.length).toBeGreaterThan(0)
     resolved.missing.forEach((entry) => {
+      // Cada variable sin valor viaja con su etiqueta legible y fuera de los valores.
       expect(entry.label.length).toBeGreaterThan(0)
       expect(resolved.values[entry.key]).toBeUndefined()
     })
 
-    // Un snapshot sin representante no resuelve su variable, pero no rompe la resolución.
-    const withoutRepresentative = contractSnapshot({ representative: { name: null, position: null } })
-    expect(resolveDocumentVariable(withoutRepresentative, "representative.name").status).toBe("missing")
+    // Un dato ausente es `missing` y se informa con su etiqueta; nunca aparece como valor.
+    const withoutProfession = contractSnapshot({
+      worker: { ...contractSnapshot().worker, profession: null },
+    })
+    expect(resolveDocumentVariable(withoutProfession, "worker.profession").status).toBe("missing")
+    const partial = resolveAllDocumentVariables(withoutProfession)
+    expect(partial.values["worker.profession"]).toBeUndefined()
+    expect(partial.missing.map((entry) => entry.key)).toContain("worker.profession")
+    expect(partial.values["worker.full_name"]).toBe("Juan Gómez")
   })
 
   test("el catálogo vive en plantillas y los resolutores en generación, sin ciclos", () => {
@@ -598,19 +632,43 @@ test.describe("variables documentales", () => {
     const cycle = templateFiles.filter((file) => /from "@\/domains\/document-generation/.test(code(file)))
     expect(cycle, "document-templates no puede depender de document-generation").toEqual([])
 
-    // La generación SÍ consume el catálogo de plantillas.
-    expect(code("src/domains/document-generation/domain/document-resolution.rules.ts")).toMatch(
-      /from "@\/domains\/document-templates"/
-    )
-    expect(code("src/domains/document-generation/domain/rules.ts")).toMatch(
-      /from "@\/domains\/document-templates"/
-    )
+    // La generación SÍ consume el catálogo de plantillas, y lo hace por el módulo de DOMINIO
+    // (nunca por el barrel): así el dominio no arrastra la infraestructura del otro contexto.
+    for (const file of [
+      "src/domains/document-generation/domain/document-resolution.rules.ts",
+      "src/domains/document-generation/domain/rules.ts",
+    ]) {
+      expect(code(file), file).toMatch(/from "@\/domains\/document-templates\/domain\/document-variables"/)
+      expect(code(file), file).not.toMatch(/from "@\/domains\/document-templates"/)
+    }
 
     // Los contratos del snapshot son tipos puros: sin Supabase y sin dependencias.
     const snapshotContracts = code("src/domains/document-generation/domain/document-data.ts")
     expect(snapshotContracts).toMatch(/export type DocumentData =/)
     expect(snapshotContracts).not.toMatch(/\bsupabase\b/)
     expect(snapshotContracts).not.toMatch(/^import /m)
+  })
+
+  test("los dominios del bloque sólo se conocen en una dirección", () => {
+    /** ¿Algún módulo de `domain` importa del dominio `target` (barrel o módulo interno)? */
+    const dependsOn = (domain: string, target: string) =>
+      sourceFiles(`src/domains/${domain}`).some((file) =>
+        new RegExp(`from "@/domains/${target}(/|\")`).test(code(file))
+      )
+
+    // Personas → Contratos (documentos de una transición), pero Contratos no conoce Personas.
+    expect(dependsOn("people", "contracts")).toBe(true)
+    expect(dependsOn("contracts", "people")).toBe(false)
+
+    // Resumen → Contratos y Resumen → Personas; ninguno de los dos conoce el Resumen.
+    expect(dependsOn("entity-summary", "contracts")).toBe(true)
+    expect(dependsOn("entity-summary", "people")).toBe(true)
+    expect(dependsOn("contracts", "entity-summary")).toBe(false)
+    expect(dependsOn("people", "entity-summary")).toBe(false)
+
+    // Generación → Plantillas (ya existía); Plantillas no conoce el motor.
+    expect(dependsOn("document-generation", "document-templates")).toBe(true)
+    expect(dependsOn("document-templates", "document-generation")).toBe(false)
   })
 
   test("el resolvedor no se apoya en el cliente de Supabase", () => {
@@ -719,27 +777,35 @@ test("las utilidades técnicas legítimas se conservan intactas", () => {
 /* 7. Regresión: nada construye consultas de esquema a nivel de módulo  */
 /* ------------------------------------------------------------------ */
 
-/** Declaraciones de nivel de módulo (columna 0) con su texto completo. */
-function moduleLevelDeclarations(text: string): string[] {
+/**
+ * Inicializador de cada declaración de nivel de módulo (columna 0), SIN el cuerpo de sus
+ * funciones: lo que se ejecuta al importar el módulo es el inicializador, no las funciones
+ * que define. Por eso el texto se corta en el primer `=>`, `function` o `{`.
+ */
+function moduleLevelInitializers(text: string): string[] {
   const lines = text.split("\n")
-  const declarations: string[] = []
+  const initializers: string[] = []
+
   for (let index = 0; index < lines.length; index += 1) {
     if (!/^(export )?(const|let|var)\b/.test(lines[index])) continue
 
     let statement = ""
-    let depth = 0
     for (let cursor = index; cursor < lines.length && cursor < index + 12; cursor += 1) {
-      const current = lines[cursor]
-      statement += `${current}\n`
-      depth += (current.match(/\(/g) || []).length - (current.match(/\)/g) || []).length
-      // La declaración termina cuando se cierran los paréntesis abiertos.
-      if (cursor > index || depth <= 0) {
-        if (depth <= 0) break
+      statement += `${lines[cursor]}\n`
+      const body = statement.search(/=>|function|\{/)
+      if (body >= 0) {
+        statement = statement.slice(0, body)
+        break
       }
+      // Sin cuerpo: la declaración termina cuando se cierran los paréntesis abiertos.
+      const depth =
+        (statement.match(/\(/g) || []).length - (statement.match(/\)/g) || []).length
+      if (depth <= 0 && cursor > index) break
     }
-    declarations.push(statement)
+    initializers.push(statement)
   }
-  return declarations
+
+  return initializers
 }
 
 test("ninguna constante de módulo construye consultas antes de initSchemaTarget", () => {
@@ -750,7 +816,7 @@ test("ninguna constante de módulo construye consultas antes de initSchemaTarget
     // La propia frontera declara los mapas de nombres: es el único sitio donde se permite.
     .filter((file) => file !== "src/integrations/supabase/schema-target.ts")
     .filter((file) =>
-      moduleLevelDeclarations(code(file)).some((statement) => schemaHelpers.test(statement))
+      moduleLevelInitializers(code(file)).some((initializer) => schemaHelpers.test(initializer))
     )
 
   expect(

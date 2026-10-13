@@ -5,9 +5,12 @@
  * distingue `value` de `missing` y nunca produce undefined/null/[object Object] como texto.
  *
  * El CATÁLOGO de variables (tipos, catálogo, auxiliares y formateadores de presentación) vive
- * en el dominio de plantillas (`@/domains/document-templates`): es el contrato que las propias
- * plantillas declaran. Así la generación depende de las plantillas —dirección que ya existía— y
- * no se forma ningún ciclo entre dominios.
+ * en el dominio de plantillas: es el contrato que las propias plantillas declaran. Así la
+ * generación depende de las plantillas —dirección que ya existía— y no se forma ningún ciclo
+ * entre dominios.
+ *
+ * La importación apunta al módulo de DOMINIO del otro contexto (no a su barrel) porque este
+ * archivo es dominio puro: así no arrastra su infraestructura ni el cliente de Supabase.
  */
 
 import { toRomanNumeral } from "@/utils/roman-numerals"
@@ -26,7 +29,7 @@ import {
   type DocumentTypeCode,
   type DocumentVariableDefinition,
   type DocumentVariableResolution,
-} from "@/domains/document-templates"
+} from "@/domains/document-templates/domain/document-variables"
 import type {
   AddendumDocumentData,
   ContractDocumentData,
