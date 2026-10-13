@@ -2,8 +2,10 @@ import * as React from "react"
 import { Link } from "react-router-dom"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { AlertTriangle, Settings2, Info } from "lucide-react"
-import { type ContractFormalizationPending } from "@/lib/contract-conditions"
-import { fetchContractFormalizationPending } from "@/domains/contracts"
+import {
+  fetchContractFormalizationPending,
+  type ContractFormalizationPending,
+} from "@/domains/contracts"
 
 interface ContractFormalizationAlertsProps {
   entityId: string

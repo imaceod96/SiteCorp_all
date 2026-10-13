@@ -731,6 +731,10 @@ test("las fachadas sin consumidores se retiraron y nadie las importa", () => {
     "src/lib/salary.ts",
     "src/lib/vacations.ts",
     "src/lib/rpc/medical-certificates.ts",
+    "src/lib/addendums.ts",
+    "src/lib/contract-conditions.ts",
+    "src/lib/contract-automation.ts",
+    "src/lib/worker-salary.ts",
   ]
 
   for (const facade of retired) {
@@ -755,10 +759,6 @@ test("las utilidades técnicas legítimas se conservan intactas", () => {
     "src/lib/documents.ts",
     "src/lib/entity-filters.ts",
     "src/lib/tenure.ts",
-    "src/lib/addendums.ts",
-    "src/lib/contract-conditions.ts",
-    "src/lib/contract-automation.ts",
-    "src/lib/worker-salary.ts",
     "src/lib/worker-migration.ts",
   ]
   for (const module of kept) {

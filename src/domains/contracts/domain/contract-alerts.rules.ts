@@ -163,10 +163,9 @@ export function deadlineLabel(
   return `Vencido hace ${Math.abs(daysRemaining)} días`
 }
 
-/** Fecha laboral en formato dd/mm/aaaa (las fechas ISO son la fuente de verdad). */
-export function formatContractDate(isoDate: string | null | undefined): string {
-  if (!isoDate) return "—"
-  const [year, month, day] = isoDate.split("-")
-  if (!year || !month || !day) return isoDate
-  return `${day}/${month}/${year}`
-}
+/**
+ * Fecha laboral en formato dd/mm/aaaa. La implementación vive en `./formats` —UNA sola copia
+ * del formato de fecha del contexto— y se reexporta aquí para que el contrato público de las
+ * alertas de vencimiento siga siendo el mismo.
+ */
+export { formatContractDate } from "./formats"

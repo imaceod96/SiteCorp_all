@@ -1,5 +1,7 @@
+import type { AddendumReasonCode } from "./entities"
+
 /**
- * Fase 11A.6 — Anexos al contrato de trabajo: etiquetas y copy de presentación.
+ * Contratos — Etiquetas de los anexos al contrato (dominio, puro).
  *
  *   Contrato   → condiciones originales (snapshot histórico)
  *   Anexo 1..N → modificaciones formalizadas de esas condiciones
@@ -9,37 +11,10 @@
  *   FORMALIZED  → datos estructurados confirmados (todavía NO existe PDF/DOCX)
  *   CANCELLED   → anexo cancelado preservando la auditoría (nunca se borra)
  *
- * El número de anexo, los totales y la resolución de condiciones vigentes SIEMPRE los
- * calcula el backend. Los MODELOS y los CASOS DE USO viven en el contexto de contratos
- * (`@/domains/contracts`): este módulo conserva sólo lo que es copy de interfaz.
+ * Sólo vocabulario del contexto: los MODELOS viven en `./entities`, el criterio de negocio en
+ * `./rules` y el número de anexo, los totales y la resolución de condiciones vigentes SIEMPRE
+ * los calcula el backend. Nada de este archivo consulta datos.
  */
-
-import type {
-  AddendumStatus,
-  AddendumReasonCode,
-  AddendumSourceType,
-  AddendumChange,
-  ContractAddendum,
-  AddendumPending,
-  ManualAddendumResult,
-  AddendumChangeInput,
-  FormalizedConditions,
-  WorkerContractualConditions,
-} from "@/domains/contracts"
-
-/** Los modelos de los anexos se reexportan para no romper los consumidores actuales. */
-export type {
-  AddendumStatus,
-  AddendumReasonCode,
-  AddendumSourceType,
-  AddendumChange,
-  ContractAddendum,
-  AddendumPending,
-  ManualAddendumResult,
-  AddendumChangeInput,
-  FormalizedConditions,
-  WorkerContractualConditions,
-}
 
 export const ADDENDUM_STATUS_LABELS: Record<string, string> = {
   PENDING_TEMPLATE: "Pendiente de formalizar",

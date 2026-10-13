@@ -46,8 +46,8 @@ import {
 import { AlertTriangle, UserPlus, RefreshCw, Search } from "lucide-react"
 import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
 import { ContractReadinessChecklist } from "@/components/contracts/ContractReadinessChecklist"
-import { missingContractTemplateMessage } from "@/lib/contract-automation"
 import {
+  missingContractTemplateMessage,
   resolveContractTemplateAvailability,
   type TemplateAvailability,
 } from "@/domains/contracts"
@@ -65,13 +65,13 @@ import type { RepresentativePositionRow } from "@/domains/representatives"
 import {
   EMPTY_FORMALIZATION_PENDING,
   buildComponentsPayload,
+  fetchPaymentMethods,
   formatConditionDate,
   hasInvalidComponent,
   type CompensationComponentDraft,
   type ContractFormalizationPending,
   type PaymentMethodOption,
-} from "@/lib/contract-conditions"
-import { fetchPaymentMethods } from "@/domains/contracts"
+} from "@/domains/contracts"
 
 export interface HireCandidateTarget {
   id: string

@@ -18,22 +18,20 @@ import { RepresentativeSelect } from "@/components/representatives/Representativ
 import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
 import { ContractRetributionFields } from "@/components/contracts/ContractConditionsFields"
 import {
-  buildComponentsPayload,
-  componentsTotal,
-  formatContractMoney,
-  hasInvalidComponent,
-  type CompensationComponentDraft,
-  type CompensationComponentType,
-  type PaymentMethodOption,
-} from "@/lib/contract-conditions"
-import {
   MANUAL_ADDENDUM_REASON_CODES,
   addendumReasonLabel,
+  buildComponentsPayload,
+  componentsTotal,
+  createManualAddendum,
+  formatContractMoney,
+  hasInvalidComponent,
   type AddendumChange,
   type AddendumReasonCode,
+  type CompensationComponentDraft,
+  type CompensationComponentType,
   type FormalizedConditions,
-} from "@/lib/addendums"
-import { createManualAddendum } from "@/domains/contracts"
+  type PaymentMethodOption,
+} from "@/domains/contracts"
 import { showError, showSuccess } from "@/utils/toast"
 import { Info } from "lucide-react"
 

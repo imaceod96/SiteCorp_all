@@ -1,11 +1,11 @@
 import type { AddendumStatus } from "./entities"
 
 /**
- * Contratos y documentos — Reglas puras (dominio).
+ * Contratos y documentos — Reglas puras de estados del anexo (dominio).
  *
- * Sólo el criterio de negocio sobre los estados de un anexo: qué anexos todavía NO forman
- * parte de las condiciones contractuales formalizadas. Las etiquetas y los colores que usa
- * la interfaz siguen en `@/lib/addendums` (son copy de presentación, no reglas).
+ * Sólo el criterio de negocio: qué anexos todavía NO forman parte de las condiciones
+ * contractuales formalizadas. El vocabulario que usa la interfaz (etiquetas, colores, motivos
+ * y campos) vive en `./addendum-labels`, dentro de este mismo dominio.
  */
 
 /** Estados que todavía NO forman parte de las condiciones contractuales formalizadas. */

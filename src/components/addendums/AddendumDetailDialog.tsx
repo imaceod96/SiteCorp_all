@@ -17,19 +17,18 @@ import { Label } from "@/components/ui/label"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
 import { ContractualDocumentSection } from "@/components/documents/ContractualDocumentSection"
-import { formatContractMoney, formatConditionDate } from "@/lib/contract-conditions"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
-  type AddendumPending,
-  type ContractAddendum,
-} from "@/lib/addendums"
-import {
   cancelAddendum,
   fetchAddendumPending,
   formalizeAddendum,
+  formatConditionDate,
+  formatContractMoney,
   isAddendumPending,
+  type AddendumPending,
+  type ContractAddendum,
 } from "@/domains/contracts"
 import { showError, showSuccess } from "@/utils/toast"
 import { AlertTriangle, CheckCircle2, FileSignature, XCircle } from "lucide-react"

@@ -6,16 +6,18 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
 import { CreateManualAddendumDialog } from "@/components/addendums/CreateManualAddendumDialog"
 import { ContractualDocumentSection } from "@/components/documents/ContractualDocumentSection"
-import { formatContractMoney, formatConditionDate, type PaymentMethodOption } from "@/lib/contract-conditions"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
+  formatConditionDate,
+  formatContractMoney,
+  isAddendumPending,
   type ContractAddendum,
   type FormalizedConditions,
+  type PaymentMethodOption,
   type WorkerContractualConditions,
-} from "@/lib/addendums"
-import { isAddendumPending } from "@/domains/contracts"
+} from "@/domains/contracts"
 import { ArrowRight, FilePlus2, UserCheck } from "lucide-react"
 
 interface ContractRow {

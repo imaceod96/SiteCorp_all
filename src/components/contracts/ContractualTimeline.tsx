@@ -2,13 +2,14 @@ import * as React from "react"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { ArrowRight, FilePlus2, FileSignature } from "lucide-react"
-import { formatConditionDate, formatContractMoney } from "@/lib/contract-conditions"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
+  formatConditionDate,
+  formatContractMoney,
   type ContractAddendum,
-} from "@/lib/addendums"
+} from "@/domains/contracts"
 
 export interface TimelineContractRow {
   id: string

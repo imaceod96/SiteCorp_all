@@ -21,13 +21,13 @@ import { ContractFormalizationSummary } from "@/components/contracts/ContractFor
 import {
   EMPTY_FORMALIZATION_PENDING,
   buildComponentsPayload,
+  fetchPaymentMethods,
   formatConditionDate,
   hasInvalidComponent,
   type CompensationComponentDraft,
   type ContractFormalizationPending,
   type PaymentMethodOption,
-} from "@/lib/contract-conditions"
-import { fetchPaymentMethods } from "@/domains/contracts"
+} from "@/domains/contracts"
 import type { PositionScheduleSegment } from "@/domains/organization-structure"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"

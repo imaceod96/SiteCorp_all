@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { PENDING_ADDENDUM_STATUSES, isAddendumPending } from "../src/domains/contracts/domain/rules"
 
 /**
@@ -103,17 +103,31 @@ test("el contexto de contratos concentra las consultas del contrato, del anexo y
 })
 
 test("los servicios de contratos y de salario ya no consultan Supabase", () => {
+  // Las etiquetas de los anexos, las condiciones contractuales, la automatización y el
+  // historial salarial ya no son módulos de `src/lib`: son reglas puras del dominio de
+  // contratos y siguen sin hablar con Supabase.
   const services = [
-    "src/lib/addendums.ts",
-    "src/lib/contract-conditions.ts",
-    "src/lib/contract-automation.ts",
-    "src/lib/worker-salary.ts",
+    "src/domains/contracts/domain/addendum-labels.ts",
+    "src/domains/contracts/domain/compensation.rules.ts",
+    "src/domains/contracts/domain/automation.messages.ts",
+    "src/domains/contracts/domain/salary-labels.ts",
+    "src/domains/contracts/domain/formats.ts",
   ]
 
   for (const service of services) {
     const source = read(service)
     expect(source, `${service} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
     expect(source, `${service} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
+  }
+
+  // Y las fachadas legacy se retiraron cuando el último consumidor migró al dominio.
+  for (const facade of [
+    "src/lib/addendums.ts",
+    "src/lib/contract-conditions.ts",
+    "src/lib/contract-automation.ts",
+    "src/lib/worker-salary.ts",
+  ]) {
+    expect(existsSync(facade), `${facade} no debe seguir existiendo`).toBe(false)
   }
 })
 

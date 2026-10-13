@@ -90,17 +90,6 @@ import { CurrentContractSummary } from "@/components/contracts/CurrentContractSu
 import { ContractualTimeline } from "@/components/contracts/ContractualTimeline"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
 import type { RepresentativePositionRow } from "@/domains/representatives"
-import {
-  EMPTY_FORMALIZATION_PENDING,
-  buildComponentsPayload,
-  formatConditionDate,
-  formatContractMoney,
-  hasInvalidComponent,
-  type CompensationComponentDraft,
-  type ContractCompensationComponent,
-  type ContractFormalizationPending,
-  type PaymentMethodOption,
-} from "@/lib/contract-conditions"
 import { SelectItem } from "@/components/ui/select"
 import {
   fetchSalaryValuesForGroups,
@@ -109,18 +98,13 @@ import {
   type SalaryValue,
 } from "@/domains/organization-structure"
 import {
-  SALARY_CHANGE_TYPE_LABELS,
-  type WorkerSalaryHistoryEntry,
-} from "@/lib/worker-salary"
-import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
-  addendumReasonLabel,
-  type ContractAddendum,
-  type WorkerContractualConditions,
-} from "@/lib/addendums"
-import {
   CONTRACT_ALERT_META,
+  EMPTY_FORMALIZATION_PENDING,
+  SALARY_CHANGE_TYPE_LABELS,
+  addendumReasonLabel,
+  buildComponentsPayload,
   deadlineLabel,
   fetchComponentsByContract,
   fetchPaymentMethods,
@@ -128,9 +112,19 @@ import {
   fetchWorkerContractAlert,
   fetchWorkerContractualConditions,
   fetchWorkerSalaryHistory,
+  formatConditionDate,
   formatContractDate,
+  formatContractMoney,
+  hasInvalidComponent,
   isAddendumPending,
+  type CompensationComponentDraft,
+  type ContractAddendum,
   type ContractAlertRow,
+  type ContractCompensationComponent,
+  type ContractFormalizationPending,
+  type PaymentMethodOption,
+  type WorkerContractualConditions,
+  type WorkerSalaryHistoryEntry,
 } from "@/domains/contracts"
 import { ContractAddendumsSection } from "@/components/addendums/ContractAddendumsSection"
 

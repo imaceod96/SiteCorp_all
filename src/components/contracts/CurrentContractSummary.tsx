@@ -5,9 +5,14 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { FileSignature, FileText, UserMinus } from "lucide-react"
 import { toRomanNumeral } from "@/utils/roman-numerals"
-import { formatContractMoney, formatConditionDate } from "@/lib/contract-conditions"
-import type { FormalizedConditions } from "@/lib/addendums"
-import { CONTRACT_ALERT_META, deadlineLabel, type ContractAlertRow } from "@/domains/contracts"
+import {
+  CONTRACT_ALERT_META,
+  deadlineLabel,
+  formatConditionDate,
+  formatContractMoney,
+  type ContractAlertRow,
+  type FormalizedConditions,
+} from "@/domains/contracts"
 
 interface CurrentContractSummaryProps {
   className?: string

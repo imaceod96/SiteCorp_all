@@ -1,32 +1,22 @@
-import type {
-  ContractCompensationComponent,
-  ContractFormalizationPending,
-} from "@/domains/contracts"
+import type { ContractCompensationComponent, ContractFormalizationPending } from "./entities"
+
+/**
+ * Contratos — Conceptos retributivos: reglas de formulario y de payload (dominio, puro).
+ *
+ * Distinción clave:
+ *   SALARIO ACTUAL      → Puesto → Cargo → Grupo → Escala aplicable → valor vigente (derivado)
+ *   SALARIO FORMALIZADO → snapshot del contrato (firmado e histórico, nunca recalculado)
+ *
+ * El salario de escala y el total contractual SIEMPRE los calcula el backend. Estas reglas
+ * describen lo que el formulario admite (tipos aprobados, importes válidos) y construyen el
+ * payload que viaja al backend; el backend sigue siendo quien valida y rechaza.
+ */
 
 /** Tipos de componente retributivo aprobados por el backend. */
 export type CompensationComponentType =
   | "ADDITIONAL_PAYMENT"
   | "ABNORMAL_CONDITIONS"
   | "OTHER"
-
-/**
- * Fase 11A.5 — Condiciones específicas del contrato de trabajo: helpers de interfaz.
- *
- * Distinción clave (la mantiene el contexto de contratos):
- *   SALARIO ACTUAL      → Puesto → Cargo → Grupo → Escala aplicable → valor vigente (derivado)
- *   SALARIO FORMALIZADO → snapshot del contrato (firmado e histórico, nunca recalculado)
- *
- * El salario de escala y el total contractual SIEMPRE los calcula el backend. Los MODELOS y
- * las CONSULTAS viven en el contexto de contratos (`@/domains/contracts`): este módulo
- * conserva sólo lo que es ayuda de formulario y de formato.
- */
-
-export type {
-  ContractCompensationComponent,
-  ContractConditionsSnapshot,
-  ContractFormalizationPending,
-  PaymentMethodOption,
-} from "@/domains/contracts"
 
 export interface CompensationComponentTypeMeta {
   code: CompensationComponentType
@@ -82,7 +72,7 @@ export const EMPTY_FORMALIZATION_PENDING: ContractFormalizationPending = {
   warnings: [],
 }
 
-/** Importe de un concepto: sólo números finitos y no negativos. */
+/** Importe de un concepto: sólo números finitos y no negativos (vacío = 0). */
 export const componentAmountValue = (draft: CompensationComponentDraft): number | null => {
   const raw = draft.amount.trim().replace(",", ".")
   if (!raw) return 0
@@ -123,20 +113,3 @@ export const toComponentDrafts = (
     description: component.description,
     amount: String(component.amount),
   }))
-
-export const formatContractMoney = (amount: number | null, currency?: string | null): string => {
-  if (amount === null || amount === undefined) return "—"
-  const value = `${amount.toLocaleString("es-CU", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`
-  return currency ? `${value} ${currency}` : value
-}
-
-/** Fecha ISO (aaaa-mm-dd) → dd/mm/aaaa. */
-export const formatConditionDate = (isoDate: string | null | undefined): string => {
-  if (!isoDate) return "—"
-  const [year, month, day] = isoDate.split("-")
-  if (!year || !month || !day) return isoDate
-  return `${day}/${month}/${year}`
-}
