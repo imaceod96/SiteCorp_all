@@ -2,7 +2,6 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useSalary } from "@/contexts/SalaryContext"
-import { useAuth } from "@/contexts/AuthContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -43,19 +42,15 @@ const EntitySettingsSalary = () => {
     addSalaryGroup,
     addSalaryValue,
     fetchGlobalPresupuestadaScale,
-    createGlobalPresupuestadaScale,
     createEntityEmpresarialScale,
-    canManageGlobalSalary,
     canManageSalary,
     fetchSalaryHistory
   } = useSalary()
-  const { isPlatformSuperAdmin, user } = useAuth()
   const [scale, setScale] = React.useState<SalaryScale | null>(null)
   const [groups, setGroups] = React.useState<SalaryGroupRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [showAddGroup, setShowAddGroup] = React.useState(false)
-  const [canManageGlobal, setCanManageGlobal] = React.useState(false)
   const [canManageEntitySalary, setCanManageEntitySalary] = React.useState(false)
   // Cambio salarial en revisión (Fase 11A): nunca se guarda directamente.
   const [changeGroup, setChangeGroup] = React.useState<SalaryGroupRow | null>(null)
@@ -82,10 +77,9 @@ const EntitySettingsSalary = () => {
         setLoading(true)
         setError(null)
   
-        // Check global scale management permission
+        // PRESUPUESTADA: la escala global se muestra SIEMPRE en solo lectura dentro del
+        // contexto de la entidad; su administración vive en la pantalla de plataforma.
         if (currentEntityRegimeId === "PRESUPUESTADA") {
-          const canManage = await canManageGlobalSalary()
-          setCanManageGlobal(canManage)
   
           // Load global Presupuestada scale
           const globalScaleData = await fetchGlobalPresupuestadaScale()
@@ -136,7 +130,7 @@ const EntitySettingsSalary = () => {
       } finally {
         setLoading(false)
       }
-    }, [currentEntityId, currentEntityRegimeId, fetchEntityEmpresarialScale, fetchScaleWithGroups, fetchGlobalPresupuestadaScale, canManageGlobalSalary, canManageSalary])
+    }, [currentEntityId, currentEntityRegimeId, fetchEntityEmpresarialScale, fetchScaleWithGroups, fetchGlobalPresupuestadaScale, canManageSalary])
 
   React.useEffect(() => {
     loadScale()
@@ -188,23 +182,6 @@ const EntitySettingsSalary = () => {
     } finally {
       setHistoryLoading(false)
       setShowHistoryModal(true)
-    }
-  }
-
-  const handleCreateGlobalScale = async () => {
-    if (!user) return
-    try {
-      // Simple form for initial scale creation
-      const name = "Escala salarial presupuestada general"
-      const currencyCode = "CUP" // Default currency, could be made configurable
-      const effectiveFrom = new Date().toISOString().split('T')[0] // Today
-      
-      const newScale = await createGlobalPresupuestadaScale(name, currencyCode, effectiveFrom)
-      if (newScale) {
-        await loadScale() // Reload to show the new scale
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al crear la escala salarial")
     }
   }
 
@@ -269,7 +246,8 @@ const EntitySettingsSalary = () => {
       </SiteCorpAlert>
 
       {currentEntity.regime_id === "PRESUPUESTADA" ? (
-        /* PRESUPUESTADA: Show global scale management */
+        /* PRESUPUESTADA: la escala global se muestra SIEMPRE en solo lectura en el contexto
+           de la entidad; su administración vive en la pantalla de plataforma de SiteCorp. */
         <>
           {globalScale ? (
             <SiteCorpCard title="Escala salarial presupuestada general de SiteCorp" description="Esta escala es común para todas las entidades presupuestadas del sistema">
@@ -282,30 +260,11 @@ const EntitySettingsSalary = () => {
                     </p>
                   </div>
                   <div className="flex gap-2">
-                    {canManageGlobal && (
-                      <>
-                        <SiteCorpButton onClick={() => setShowAddGroup(true)}>
-                          <Plus className="mr-2 h-4 w-4" /> Añadir grupo salarial
-                        </SiteCorpButton>
-                        <SiteCorpButton variant="outline" onClick={() => navigate("/admin/settings/salary-scale")}>
-                          Gestionar escala
-                        </SiteCorpButton>
-                      </>
-                    )}
-                    {!canManageGlobal && (
-                      <SiteCorpButton variant="outline" onClick={() => navigate("/admin/settings/salary-scale")}>
-                        Ver escala
-                      </SiteCorpButton>
-                    )}
+                    <SiteCorpButton variant="outline" onClick={() => navigate("/admin/settings/salary-scale")}>
+                      Ver escala
+                    </SiteCorpButton>
                   </div>
                 </div>
-
-                {/* Add group dialog */}
-                <SalaryGroupDialog
-                  open={showAddGroup}
-                  onOpenChange={setShowAddGroup}
-                  onSubmit={handleAddGroup}
-                />
 
                 {/* Groups table */}
                                 <div className="space-y-3">
@@ -342,15 +301,6 @@ const EntitySettingsSalary = () => {
                                             <SiteCorpStatusBadge status={group.is_active ? "success" : "warning"}>
                                               {group.is_active ? "Activo" : "Inactivo"}
                                             </SiteCorpStatusBadge>
-                                            {canManageGlobal && (
-                                                                                          <SiteCorpButton
-                                                                                            size="sm"
-                                                                                            variant="outline"
-                                                                                            onClick={() => openSalaryChange(group)}
-                                                                                          >
-                                                                                            <Edit3 className="mr-1 h-3.5 w-3.5" /> Cambiar salario
-                                                                                          </SiteCorpButton>
-                                                                                        )}
                                             <SiteCorpButton
                                               size="sm"
                                               variant="outline"
@@ -377,16 +327,9 @@ const EntitySettingsSalary = () => {
                 <p className="text-sm text-muted-foreground">
                   No se ha configurado todavía la escala salarial presupuestada general.
                 </p>
-                {canManageGlobal && (
-                                  <SiteCorpButton onClick={handleCreateGlobalScale}>
-                                    Crear escala salarial
-                                  </SiteCorpButton>
-                                )}
-                                {!canManageGlobal && (
-                                  <p className="text-sm text-muted-foreground">
-                                    La escala debe ser configurada por un administrador autorizado de SiteCorp.
-                                  </p>
-                                )}
+                <p className="text-sm text-muted-foreground">
+                  La escala debe ser configurada por un administrador autorizado de SiteCorp.
+                </p>
                               </div>
                             </SiteCorpCard>
                           )}
@@ -404,9 +347,11 @@ const EntitySettingsSalary = () => {
                 <p className="text-sm text-muted-foreground">
                   Esta empresa todavía no tiene una escala salarial empresarial configurada.
                 </p>
-                <SiteCorpButton onClick={() => setShowCreateEnterpriseScale(true)}>
-                  Configurar escala salarial
-                </SiteCorpButton>
+                {canManageEntitySalary && (
+                  <SiteCorpButton onClick={() => setShowCreateEnterpriseScale(true)}>
+                    Configurar escala salarial
+                  </SiteCorpButton>
+                )}
               </div>
             </SiteCorpCard>
           ) : (
@@ -420,7 +365,7 @@ const EntitySettingsSalary = () => {
                     {groups.filter(g => g.is_active).length} grupo(s) activo(s)
                   </p>
                 </div>
-                {(isPlatformSuperAdmin || canManageEntitySalary) && (
+                {canManageEntitySalary && (
                   <SiteCorpButton onClick={() => setShowAddGroup(true)}>
                     <Plus className="mr-2 h-4 w-4" /> Añadir grupo salarial
                   </SiteCorpButton>
@@ -468,7 +413,7 @@ const EntitySettingsSalary = () => {
                       <SiteCorpStatusBadge status={group.is_active ? "success" : "warning"}>
                         {group.is_active ? "Activo" : "Inactivo"}
                       </SiteCorpStatusBadge>
-                      {(isPlatformSuperAdmin || canManageEntitySalary) && (
+                      {canManageEntitySalary && (
                                                   <SiteCorpButton
                                                     size="sm"
                                                     variant="outline"

@@ -1,7 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useSalary, type SalaryScale } from "@/contexts/SalaryContext"
-import { useAuth } from "@/contexts/AuthContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -35,7 +34,6 @@ interface SalaryHistoryValue {
 const AdminSettingsSalaryScale = () => {
   const navigate = useNavigate()
   const { fetchGlobalPresupuestadaScale, fetchScaleWithGroups, addSalaryGroup, addSalaryValue, createGlobalPresupuestadaScale, canManageGlobalSalary, fetchSalaryHistory } = useSalary()
-  const { isPlatformSuperAdmin } = useAuth()
   const [scale, setScale] = React.useState<SalaryScale | null>(null)
   const [groups, setGroups] = React.useState<SalaryGroupRow[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -169,7 +167,7 @@ const AdminSettingsSalaryScale = () => {
               <p className="text-sm text-muted-foreground">
                 No se ha configurado todavía la escala salarial presupuestada general.
               </p>
-              {(isPlatformSuperAdmin || canManageGlobal) && (
+              {(canManageGlobal) && (
                 <div className="space-y-3">
                   <SiteCorpButton onClick={() => setShowCreateScale(true)}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Crear escala salarial
@@ -211,7 +209,7 @@ const AdminSettingsSalaryScale = () => {
                   )}
                 </div>
               )}
-              {(!isPlatformSuperAdmin && !canManageGlobal) && (
+              {(!canManageGlobal) && (
                 <p className="text-sm text-muted-foreground">
                   La escala debe ser configurada por un administrador autorizado de SiteCorp.
                 </p>
@@ -247,16 +245,18 @@ const AdminSettingsSalaryScale = () => {
           <SiteCorpCard title={`Escala salarial presupuestada de ${scale.name}`} description={scale.description || "Escala salarial global de SiteCorp"}>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-ink">Moneda: {scale.currency_code}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {groups.filter(g => g.is_active).length} grupo(s) activo(s)
-                  </p>
-                </div>
+              <div>
+                <p className="text-sm font-medium text-ink">Moneda: {scale.currency_code}</p>
+                <p className="text-xs text-muted-foreground">
+                  {groups.filter(g => g.is_active).length} grupo(s) activo(s)
+                </p>
+              </div>
+              {canManageGlobal && (
                 <SiteCorpButton onClick={() => setShowAddGroup(true)}>
                   <Plus className="mr-2 h-4 w-4" /> Añadir grupo salarial
                 </SiteCorpButton>
-              </div>
+              )}
+            </div>
 
               {/* Add group dialog */}
               <SalaryGroupDialog
@@ -299,13 +299,15 @@ const AdminSettingsSalaryScale = () => {
                       <SiteCorpStatusBadge status={group.is_active ? "success" : "warning"}>
                         {group.is_active ? "Activo" : "Inactivo"}
                       </SiteCorpStatusBadge>
-                      <SiteCorpButton
-                                              size="sm"
-                                              variant="outline"
-                                              onClick={() => openSalaryChange(group)}
-                                            >
-                                              <Edit3 className="mr-1 h-3.5 w-3.5" /> Cambiar salario
-                                            </SiteCorpButton>
+                      {canManageGlobal && (
+                        <SiteCorpButton
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openSalaryChange(group)}
+                        >
+                          <Edit3 className="mr-1 h-3.5 w-3.5" /> Cambiar salario
+                        </SiteCorpButton>
+                      )}
                       <SiteCorpButton
                         size="sm"
                         variant="outline"

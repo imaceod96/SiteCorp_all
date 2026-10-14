@@ -550,3 +550,24 @@ test("los grupos y escalas salariales se administran sin duplicar la RPC del cam
   expect(queries).toMatch(/resolveApplicableScaleId/)
   expect(queries).not.toMatch(/@\/lib\/supabase/)
 })
+
+test("la escala presupuestada es de solo lectura en el contexto de la entidad, con independencia del usuario", () => {
+  const page = read("src/pages/EntitySettingsSalary.tsx")
+
+  // El contexto PRESUPUESTADA nunca ofrece gestión: ni alta de grupo, ni cambio de salario,
+  // ni creación de la escala. La administración vive en la pantalla de plataforma de SiteCorp.
+  expect(page).not.toMatch(/canManageGlobal/)
+  expect(page).not.toMatch(/handleCreateGlobalScale/)
+
+  // La única vía hacia la escala global desde la entidad es la consulta.
+  expect(page).toMatch(/Ver escala/)
+
+  // La gestión de la escala empresarial sigue dependiendo del permiso organizativo.
+  expect(page).toMatch(/canManageEntitySalary && \(/)
+
+  // La pantalla de plataforma sólo habilita la gestión con `salary.manage` de plataforma:
+  // nunca por el simple hecho de ser superadministrador.
+  const admin = read("src/pages/AdminSettingsSalaryScale.tsx")
+  expect(admin).toMatch(/canManageGlobalSalary/)
+  expect(admin).not.toMatch(/isPlatformSuperAdmin/)
+})

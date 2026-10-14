@@ -39,7 +39,7 @@ import {
  * los datos.
  */
 export const SalaryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isPlatformSuperAdmin } = useAuth()
+  const { user } = useAuth()
 
   const resolveScaleForEntity = React.useCallback(async (entityId: string): Promise<SalaryScale | null> => {
     if (!user) return null
@@ -198,35 +198,32 @@ export const SalaryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const canViewSalary = React.useCallback(async (entityId?: string): Promise<boolean> => {
     if (!user) return false
     try {
-      if (isPlatformSuperAdmin) return true
       return await canViewSalaryQuery(entityId)
     } catch (err) {
       console.error('[SalaryContext] Error checking salary view permission:', err)
       return false
     }
-  }, [user, isPlatformSuperAdmin])
+  }, [user])
 
   const canManageSalary = React.useCallback(async (entityId?: string): Promise<boolean> => {
     if (!user) return false
     try {
-      if (isPlatformSuperAdmin) return true
       return await canManageSalaryQuery(entityId)
     } catch (err) {
       console.error('[SalaryContext] Error checking salary manage permission:', err)
       return false
     }
-  }, [user, isPlatformSuperAdmin])
+  }, [user])
 
   const canManageGlobalSalary = React.useCallback(async (): Promise<boolean> => {
     if (!user) return false
     try {
-      if (isPlatformSuperAdmin) return true
       return await canManageGlobalSalaryQuery()
     } catch (err) {
       console.error('[SalaryContext] Error checking global salary manage permission:', err)
       return false
     }
-  }, [user, isPlatformSuperAdmin])
+  }, [user])
 
   return (
     <SalaryContext.Provider value={{
