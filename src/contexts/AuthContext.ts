@@ -31,8 +31,25 @@ interface AuthContextType {
   isPlatformUser: boolean
   isProfileActive: boolean
   memberships: AuthMembership[]
+  /**
+   * Hay una lectura de sesión o una resolución de identidad EN CURSO (la carga inicial o un
+   * evento de Auth). Mientras sea `true` no se puede elegir interfaz.
+   */
   authLoading: boolean
+  /**
+   * La identidad del usuario actual está RESUELTA y es fiable (o no hay sesión que resolver).
+   * Es la condición que habilita elegir plataforma o cliente: con `false` la aplicación
+   * muestra la pantalla de carga neutral, nunca un layout provisional.
+   */
   authReady: boolean
+  /**
+   * Mensaje de usuario (nunca técnico) cuando la identidad NO se pudo determinar por un
+   * fallo de red o de RPC. Con un valor distinto de `null` la aplicación muestra el estado
+   * neutral de error y NUNCA elige interfaz ni concede privilegios por defecto.
+   */
+  identityError: string | null
+  /** Reintento manual de la resolución de identidad. Nunca se ejecuta en bucle. */
+  retryIdentity: () => void
   logout: () => Promise<void>
   hasPlatformPermission: (code: string) => Promise<boolean>
   hasTenantPermission: (code: string) => Promise<boolean>

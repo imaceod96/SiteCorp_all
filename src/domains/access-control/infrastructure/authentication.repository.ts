@@ -11,8 +11,14 @@ import type { AuthMembershipRecord } from "../domain/entities"
  * redirecciones ni políticas; sólo se consultan la sesión, el inicio y el cierre de sesión
  * y el cambio de contraseña del propio usuario, con los mismos contratos de RPC.
  *
- * Política de errores (la que ya tenía el proveedor de autenticación, sin cambios):
- *   · LECTURAS de identidad: un fallo no rompe la carga (perfil `null`, listas vacías).
+ * Política de errores:
+ *   · LECTURAS de IDENTIDAD (`rpcIsPlatformSuperAdmin`, `rpcIsPlatformUser`,
+ *     `selectActiveMemberships`): un fallo de red o de RPC se PROPAGA. «No se pudo
+ *     determinar el privilegio» no es «no tiene el privilegio»: convertir un error en
+ *     `false` o en una lista vacía degradaba al usuario a otra interfaz sin avisar.
+ *     Quien decide qué hacer con el fallo es la capa de aplicación.
+ *   · PERFIL del usuario: lectura tolerante (un fallo deja `null`), porque la ausencia de
+ *     perfil no concede nada.
  *   · RPC de permisos: `has_platform_permission` propaga el fallo; la variante «segura»
  *     de la capa de aplicación lo traduce a «sin permiso».
  *   · COMANDOS (contraseña, cierre de sesión): propagan el error; la pantalla decide el
@@ -91,27 +97,44 @@ export async function uploadOwnAvatar(userId: string, file: File): Promise<strin
   return publicUrlData.publicUrl
 }
 
-/** Estado de superadministrador de plataforma (`is_platform_superadmin`). */
+/**
+ * Estado de superadministrador de plataforma (`is_platform_superadmin`).
+ *
+ * Un error de la RPC se propaga: no se traduce a `false` (eso convertiría un fallo de red
+ * en «no eres superadministrador» y degradaría al usuario a otra interfaz).
+ */
 export async function rpcIsPlatformSuperAdmin(): Promise<boolean> {
-  const { data } = await supabase.rpc("is_platform_superadmin")
+  const { data, error } = await supabase.rpc("is_platform_superadmin")
+  if (error) throw error
   return Boolean(data)
 }
 
-/** Nivel de usuario de plataforma (`is_platform_user`: al menos un rol activo). */
+/**
+ * Nivel de usuario de plataforma (`is_platform_user`: al menos un rol activo).
+ *
+ * Un error de la RPC se propaga, por la misma razón que en el caso anterior.
+ */
 export async function rpcIsPlatformUser(): Promise<boolean> {
-  const { data } = await supabase.rpc("is_platform_user")
+  const { data, error } = await supabase.rpc("is_platform_user")
+  if (error) throw error
   return Boolean(data)
 }
 
-/** Membresías ACTIVAS de la sesión, con su cliente propietario. */
+/**
+ * Membresías ACTIVAS de la sesión, con su cliente propietario.
+ *
+ * Un error de la consulta se propaga: una lista vacía por fallo de red no es «el usuario no
+ * tiene membresías», y esa confusión decidía a qué interfaz pertenece el usuario.
+ */
 export async function selectActiveMemberships(userId: string): Promise<AuthMembershipRecord[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from(tableName("memberships"))
     .select(selectQuery(`*, tenant:${tableName("clients")}(*)`))
     .eq("user_id", userId)
     .eq("is_active", true)
 
-  return (data as AuthMembershipRecord[] | null) || []
+  if (error) throw error
+  return (data as AuthMembershipRecord[] | null) ?? []
 }
 
 /**

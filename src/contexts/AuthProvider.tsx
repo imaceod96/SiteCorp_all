@@ -29,7 +29,28 @@ import {
  *   · `SIGNED_OUT` deja el estado en blanco;
  *   · el superadministrador conserva su atajo en los dos permisos;
  *   · un fallo de la comprobación de permisos devuelve `false` y nunca habilita nada.
+ *
+ * ORDEN DE PUBLICACIÓN (corrección de la interfaz provisional):
+ *   la sesión NO se publica como «lista para decidir interfaz» antes de que la identidad esté
+ *   resuelta. Al llegar un evento con usuario se marca `authReady = false` EN EL MISMO turno
+ *   en el que se publica el usuario, de modo que la presentación muestra la pantalla de carga
+ *   neutral y nunca elige layout por descarte. `authReady` sólo vuelve a `true` cuando la
+ *   resolución termina (o no hay sesión que resolver).
+ *
+ * COORDINACIÓN (sin duplicar la resolución de identidad):
+ *   · una ÚNICA función aplica la identidad, la use la carga inicial o un evento de Auth;
+ *   · cada resolución lleva un número de orden (`epoch`): una respuesta antigua se descarta
+ *     y nunca sobrescribe una sesión más reciente ni reaparece tras un cierre de sesión;
+ *   · no se repite la resolución del mismo usuario ya resuelto, ni se solapan dos
+ *     resoluciones del mismo usuario a la vez;
+ *   · un fallo de la resolución no concede nada: se publica un mensaje de usuario y la
+ *     presentación ofrece reintentar (siempre manual, nunca en bucle).
  */
+
+/** Mensaje de usuario del fallo de identidad: deliberadamente genérico, sin detalle técnico. */
+const IDENTITY_ERROR_MESSAGE =
+  "No se pudo verificar tu identidad. Comprueba tu conexión e inténtalo de nuevo."
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = React.useState<User | null>(null)
   const [profile, setProfile] = React.useState<AuthProfile | null>(null)
@@ -39,59 +60,125 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [memberships, setMemberships] = React.useState<AuthMembership[]>([])
   const [authLoading, setAuthLoading] = React.useState(true)
   const [authReady, setAuthReady] = React.useState(false)
+  const [identityError, setIdentityError] = React.useState<string | null>(null)
+
+  // Coordinación de resoluciones (referencias: no provocan renders).
+  const mountedRef = React.useRef(true)
+  const resolutionEpochRef = React.useRef(0)
+  const sessionUserRef = React.useRef<User | null>(null)
+  const inFlightUserIdRef = React.useRef<string | null>(null)
+  const resolvedUserIdRef = React.useRef<string | null>(null)
+  const identityErrorRef = React.useRef<string | null>(null)
+
+  /**
+   * Fallo de la resolución de identidad: se registra para diagnóstico y se publica un mensaje
+   * de usuario. NUNCA se concede un privilegio por defecto ni se elige interfaz.
+   */
+  const publishIdentityFailure = React.useCallback((error: unknown) => {
+    console.error("Auth identity resolution error:", error)
+    identityErrorRef.current = IDENTITY_ERROR_MESSAGE
+    setIdentityError(IDENTITY_ERROR_MESSAGE)
+    setAuthReady(false)
+  }, [])
+
+  /**
+   * ÚNICA aplicación de la identidad resuelta por el dominio.
+   *
+   * Los cinco estados de identidad se aplican conjuntamente (mismo turno de render), y sólo
+   * al final se marca la identidad como preparada.
+   */
+  const resolveIdentity = React.useCallback(
+    async (sessionUser: User) => {
+      const epoch = resolutionEpochRef.current + 1
+      resolutionEpochRef.current = epoch
+      inFlightUserIdRef.current = sessionUser.id
+      sessionUserRef.current = sessionUser
+
+      // Nada de layout hasta que la identidad esté determinada.
+      setAuthReady(false)
+      setIdentityError(null)
+      identityErrorRef.current = null
+      setUser(sessionUser)
+
+      try {
+        const identity: AuthenticatedIdentity = await loadAuthenticatedIdentity(sessionUser.id)
+
+        // Respuesta antigua: otra sesión (o un cierre de sesión) la ha invalidado.
+        if (!mountedRef.current || epoch !== resolutionEpochRef.current) return
+
+        if (identity.signedOut) {
+          await signOutSession()
+          return
+        }
+
+        setProfile(identity.profile)
+        setIsProfileActive(identity.isProfileActive)
+        setIsPlatformSuperAdmin(identity.isPlatformSuperAdmin)
+        setIsPlatformUser(identity.isPlatformUser)
+        setMemberships(identity.memberships)
+
+        resolvedUserIdRef.current = sessionUser.id
+        setAuthReady(true)
+      } catch (error) {
+        // Un fallo no se interpreta como «no tiene privilegios».
+        if (!mountedRef.current || epoch !== resolutionEpochRef.current) return
+        publishIdentityFailure(error)
+      } finally {
+        if (epoch === resolutionEpochRef.current) inFlightUserIdRef.current = null
+      }
+    },
+    [publishIdentityFailure]
+  )
+
+  /**
+   * ¿Hace falta resolver? No si el mismo usuario ya está resuelto, ni si su resolución está
+   * en curso. Tras un fallo sí se permite reintentar con el siguiente evento.
+   */
+  const needsResolution = React.useCallback((sessionUser: User): boolean => {
+    if (inFlightUserIdRef.current === sessionUser.id) return false
+    return resolvedUserIdRef.current !== sessionUser.id || identityErrorRef.current !== null
+  }, [])
 
   React.useEffect(() => {
-    let mounted = true
+    mountedRef.current = true
 
     /** Estado en blanco al cerrar sesión (se conserva literalmente). */
     const resetAuthState = () => {
+      // Invalida cualquier resolución pendiente: su resultado ya no puede pintar nada.
+      resolutionEpochRef.current += 1
+      inFlightUserIdRef.current = null
+      resolvedUserIdRef.current = null
+      sessionUserRef.current = null
+      identityErrorRef.current = null
+
       setUser(null)
       setProfile(null)
       setIsPlatformSuperAdmin(false)
       setIsPlatformUser(false)
       setIsProfileActive(true)
       setMemberships([])
+      setIdentityError(null)
       setAuthLoading(false)
       setAuthReady(true)
-    }
-
-    /**
-     * Aplica la identidad cargada por el dominio.
-     *
-     * Si el perfil está inactivo se cierra la sesión, y NO se tocan los indicadores de
-     * plataforma ni las membresías: es el mismo orden de efectos que ya tenía el proveedor.
-     */
-    const applyIdentity = async (identity: AuthenticatedIdentity) => {
-      if (!mounted) return
-
-      setProfile(identity.profile)
-      setIsProfileActive(identity.isProfileActive)
-
-      if (identity.signedOut) {
-        await signOutSession()
-        return
-      }
-
-      setIsPlatformSuperAdmin(identity.isPlatformSuperAdmin)
-      setIsPlatformUser(identity.isPlatformUser)
-      setMemberships(identity.memberships)
     }
 
     const loadAuth = async () => {
       try {
         const sessionUser = await loadSessionUser()
-        if (!mounted) return
+        if (!mountedRef.current) return
 
         if (sessionUser) {
-          setUser(sessionUser)
-          await applyIdentity(await loadAuthenticatedIdentity(sessionUser.id))
+          await resolveIdentity(sessionUser)
+        } else {
+          // Sin sesión no hay identidad que resolver: la pantalla de acceso puede mostrarse.
+          setAuthReady(true)
         }
       } catch (error) {
-        console.error("Auth loading error:", error)
+        if (!mountedRef.current) return
+        publishIdentityFailure(error)
       } finally {
-        if (mounted) {
+        if (mountedRef.current) {
           setAuthLoading(false)
-          setAuthReady(true)
         }
       }
     }
@@ -99,12 +186,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadAuth()
 
     const unsubscribe = subscribeAuthChanges(async (event, sessionUser) => {
-      if (!mounted) return
+      if (!mountedRef.current) return
 
       if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
-        if (sessionUser) {
-          setUser(sessionUser)
-          await applyIdentity(await loadAuthenticatedIdentity(sessionUser.id))
+        if (sessionUser && needsResolution(sessionUser)) {
+          await resolveIdentity(sessionUser)
         }
       } else if (event === "SIGNED_OUT") {
         resetAuthState()
@@ -112,10 +198,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     })
 
     return () => {
-      mounted = false
+      mountedRef.current = false
       unsubscribe()
     }
-  }, [])
+  }, [needsResolution, publishIdentityFailure, resolveIdentity])
+
+  /**
+   * Reintento manual: vuelve a resolver la identidad de la sesión conocida. No hay reintento
+   * automático, así que no puede entrar en bucle.
+   */
+  const retryIdentity = React.useCallback(() => {
+    const sessionUser = sessionUserRef.current
+
+    if (!sessionUser) {
+      identityErrorRef.current = null
+      setIdentityError(null)
+      setAuthReady(true)
+      return
+    }
+
+    void resolveIdentity(sessionUser)
+  }, [resolveIdentity])
 
   const logout = async () => {
     await signOutSession()
@@ -154,6 +257,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         memberships,
         authLoading,
         authReady,
+        identityError,
+        retryIdentity,
         logout,
         hasPlatformPermission,
         hasTenantPermission,

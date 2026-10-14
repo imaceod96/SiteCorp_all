@@ -19,8 +19,13 @@ import { selectUserProfileById } from "../infrastructure/user-profiles.repositor
  *   perfil → estado del perfil → (si es inactivo, se informa para cerrar la sesión) →
  *   superadministrador → usuario de plataforma → membresías ACTIVAS
  *
- * Las lecturas toleran fallos (perfil `null`, listas vacías) igual que antes: un problema
- * puntual de red no debe dejar la aplicación sin sesión.
+ * POLÍTICA DE ERRORES de las lecturas que determinan el NIVEL de acceso: los fallos de
+ * infraestructura (red o RPC) de `is_platform_superadmin`, `is_platform_user` y de las
+ * membresías PROPAGAN. «No se pudo determinar el privilegio» no es «no tiene el
+ * privilegio»: interpretarlos como negativos degradaba a un usuario de plataforma a la
+ * interfaz de cliente sin aviso. La lectura del PERFIL sigue siendo tolerante (un perfil
+ * `null` no concede nada) y las variantes «seguras» de permisos conservan su política
+ * (un fallo se traduce a «sin permiso», nunca a «con permiso»).
  */
 
 /**
@@ -39,6 +44,10 @@ export async function loadSessionUser() {
  * `signedOut` se limita a INFORMAR de que el perfil está inactivo: quien cierra la sesión es
  * el comando `signOut`, desde la presentación, conservando el mismo orden de efectos que ya
  * tenía el proveedor de autenticación.
+ *
+ * Puede LANZAR si no se puede determinar el nivel de acceso (fallo de red o de RPC): la
+ * presentación lo trata como «identidad no resuelta» y ofrece reintentar, en lugar de
+ * suponer que el usuario no tiene privilegios.
  */
 export async function loadAuthenticatedIdentity(userId: string): Promise<AuthenticatedIdentity> {
   const profile = await selectUserProfileById(userId)

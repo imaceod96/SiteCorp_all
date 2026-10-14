@@ -14,6 +14,7 @@ import { PlatformAdminLayout } from "@/components/platform-admin-layout"
 import EntityRouteWrapper from "@/components/entity-route-wrapper"
 import { CompanyClientLayout } from "@/components/company-client-layout"
 import { SiteCorpBrand } from "@/components/sitecorp-brand"
+import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import Login from "./pages/Login"
 import Index from "./pages/Index"
 import Organization from "./pages/Organization"
@@ -101,11 +102,56 @@ class AppErrorBoundary extends React.Component<
 }
 
 // Loading screen component
+//
+// Pantalla NEUTRAL obligatoria: se muestra mientras se resuelve la sesión y la identidad
+// (perfil, nivel de plataforma y membresías) y hasta que se puede decidir la interfaz. Fondo
+// blanco a pantalla completa, logo oficial centrado e indicador de carga accesible. Sin menú
+// lateral, sin encabezado de cliente, sin tarjetas y sin ningún contenido cargando detrás.
+// No introduce ningún retraso: desaparece en cuanto la identidad y el destino están resueltos.
 const LoadingScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-sitecorp-background">
-    <div className="flex flex-col items-center text-center">
-      <SiteCorpBrand variant="isotype" size="lg" className="mb-4 animate-pulse" />
+  <div className="flex min-h-screen w-full items-center justify-center bg-white">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center gap-6 px-6 text-center"
+    >
+      <SiteCorpBrand
+        variant="full"
+        size="lg"
+        className="w-full max-w-[280px] sm:max-w-[420px]"
+        alt="SiteCorp"
+      />
+      <span
+        aria-hidden="true"
+        className="h-8 w-8 animate-spin rounded-full border-[3px] border-sitecorp-primary/25 border-t-sitecorp-primary motion-reduce:animate-none"
+      />
       <p className="text-sm text-muted-foreground">Cargando SiteCorp...</p>
+    </div>
+  </div>
+)
+
+// Identity error screen component
+//
+// Estado neutral de error: la identidad NO se pudo determinar (fallo de red o de RPC). No se
+// elige ninguna interfaz ni se concede ningún privilegio por defecto; el usuario puede
+// reintentar sin cerrar el navegador. El mensaje no expone detalle técnico.
+const IdentityErrorScreen = ({ onRetry }: { onRetry: () => void }) => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-white">
+    <div role="alert" className="w-full max-w-md px-6 text-center">
+      <SiteCorpBrand
+        variant="full"
+        size="md"
+        className="mx-auto w-full max-w-[240px]"
+        alt="SiteCorp"
+      />
+      <p className="mt-6 text-sm font-semibold text-ink">No se pudo verificar tu identidad</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Comprueba tu conexión e inténtalo de nuevo. Si el problema continúa, cierra sesión y
+        vuelve a entrar.
+      </p>
+      <SiteCorpButton className="mt-6" onClick={onRetry}>
+        Reintentar
+      </SiteCorpButton>
     </div>
   </div>
 )
@@ -119,13 +165,28 @@ const EntityPanelRedirect = () => {
 
 // Main routing logic
 const AppRoutes = () => {
-  const { authLoading, authReady, user, isPlatformUser, isProfileActive } = useAuth()
+  const {
+    authLoading,
+    authReady,
+    identityError,
+    retryIdentity,
+    user,
+    isPlatformUser,
+    isProfileActive,
+  } = useAuth()
   const location = useLocation()
 
   if (authLoading) {
     return <LoadingScreen />
   }
 
+  // La identidad no se pudo determinar (fallo de red o de RPC): estado neutral de error con
+  // reintento manual. Nunca se elige interfaz ni se conceden privilegios por defecto.
+  if (identityError) {
+    return <IdentityErrorScreen onRetry={retryIdentity} />
+  }
+
+  // Mientras la identidad no esté resuelta NO se decide ninguna interfaz: pantalla neutral.
   if (!authReady) {
     return <LoadingScreen />
   }
@@ -202,6 +263,10 @@ const AppRoutes = () => {
 
   // Client user -> Company Client application
   // Las rutas `/tenant/*` se conservan: son el contrato de navegación vigente.
+  //
+  // Esta rama es la ÚLTIMA y se alcanza SÓLO con la identidad resuelta y sin error: un usuario
+  // de cliente se identifica DESPUÉS de resolver su identidad (perfil, nivel de plataforma y
+  // membresías), nunca por descarte prematuro mientras la identidad es desconocida.
   return (
     <Routes>
       <Route element={<CompanyClientLayout />}>
