@@ -32,7 +32,7 @@ import {
 } from "@/domains/organization-structure"
 import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
+import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
 import {
   loadEntityStaffingBoard,
   type PositionOccupant,

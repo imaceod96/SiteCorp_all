@@ -13,22 +13,21 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { MigratedWorkerDialog } from "@/components/migration/MigratedWorkerDialog"
-// Formato del archivo (plantilla y lectura del Excel): lo aporta el módulo del formato.
+// Todo lo aporta el dominio Personas: el formato del archivo (plantilla oficial y lectura del
+// Excel) junto a los casos de uso de la carga inicial (catálogos, validación por fila,
+// importación e historial).
 import {
   buildWorkerMigrationTemplate,
   downloadWorkerMigrationTemplate,
-  readWorkerMigrationExcel,
-  WorkerMigrationTemplateError,
-  type MigrationPreviewRow,
-  type MigrationRow,
-} from "@/lib/worker-migration"
-// Catálogos, validación por fila, importación e historial: casos de uso del dominio Personas.
-import {
   importWorkerMigration,
   loadEntityMigrationHistory,
   mapMigrationRows,
+  readWorkerMigrationExcel,
   validateWorkerMigration,
+  WorkerMigrationTemplateError,
   type MigrationBatchHistory,
+  type MigrationPreviewRow,
+  type MigrationRow,
 } from "@/domains/people"
 
 interface ImportSummary {

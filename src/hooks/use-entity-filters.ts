@@ -1,7 +1,7 @@
 import * as React from "react"
 
 /**
- * Sistema de filtros acumulativos de SiteCorp.
+ * Sistema de filtros acumulativos de SiteCorp (lógica de presentación).
  *
  * Un módulo declara sus CRITERIOS (EntityFilterDefinition[]) y este módulo se
  * encarga de la lógica común: combinar varios filtros con AND, comparar el mismo
@@ -14,6 +14,10 @@ import * as React from "react"
  *   · Un mismo criterio con varios valores se combina con OR (multiselección).
  *   · No se hardcodean catálogos: los `options` los aporta cada módulo desde los
  *     catálogos globales reales.
+ *
+ * Vive en `src/hooks` porque es lógica de interfaz (estado de React y filtrado de
+ * listados ya cargados): no contiene reglas de negocio ni consultas de datos, así
+ * que no pertenece a ningún dominio. Los criterios siguen declarándose en cada pantalla.
  */
 
 export type EntityFilterType =

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { FileSpreadsheet, RefreshCw, Lock, Unlock, Eye, ChevronDown, ChevronRight } from "lucide-react"
 import WorkerPrenominaDialog from "@/components/prenomina/WorkerPrenominaDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/lib/entity-filters"
+import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
 import { academicCategoryLabel } from "@/domains/organization-structure"
 import {
   MONTH_LABELS,

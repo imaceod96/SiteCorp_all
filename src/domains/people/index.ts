@@ -6,14 +6,19 @@
  *   · domain/rules.ts           → clasificación excluyente, ficha, validación del alta y
  *                                 reglas de las transiciones laborales (efecto esperado y
  *                                 validaciones previas con sus mensajes)
+ *   · domain/tenure.rules.ts    → antigüedad y edad del trabajador (cálculo de calendario):
+ *                                 la ÚNICA implementación en TypeScript del cálculo
  *   · application/              → casos de uso de las tres vistas, del alta y de la
  *                                 contratación y las transiciones
- *   · infrastructure/           → repositorios (consultas Supabase, RPC y Storage)
+ *   · infrastructure/           → repositorios (consultas Supabase, RPC y Storage) y el
+ *                                 adaptador del Excel de la Carga inicial
  *
- * El dominio NO importa de `@/lib/*` ni de la presentación: la dependencia va siempre en
+ * El dominio NO importa de la presentación ni de otros dominios: la dependencia va siempre en
  * un solo sentido (presentación → aplicación → dominio → infraestructura → Supabase), así
  * que no puede formarse ningún ciclo. Las páginas consumen CASOS DE USO: no componen
- * consultas ni repiten el criterio de clasificación.
+ * consultas ni repiten el criterio de clasificación. La única utilidad compartida que usa la
+ * frontera de Storage es el saneado de nombres de archivo de `@/lib/documents` (junto a la
+ * estructura organizativa), porque define la compatibilidad de las rutas ya almacenadas.
  *
  * Alcance de este bloque: registro y ciclo laboral de Personas (Candidatos · Trabajadores
  * · Reingresos), contratación y transiciones laborales (baja, reincorporación, reubicación
@@ -382,3 +387,19 @@ export {
   createMigratedWorker,
   linkMigratedWorker,
 } from "./application/worker-migration.commands"
+
+/* Formato del archivo de la Carga inicial (plantilla oficial y lectura del .xlsx) */
+export {
+  MIGRATION_HEADERS,
+  buildWorkerMigrationTemplate,
+  downloadWorkerMigrationTemplate,
+  readWorkerMigrationExcel,
+  WorkerMigrationTemplateError,
+} from "./infrastructure/worker-migration.workbook"
+
+export type { WorkerMigrationFileErrorCode } from "./infrastructure/worker-migration.workbook"
+
+/* Trayectoria laboral: antigüedad y edad del trabajador (reglas puras) */
+export type { TenureResult } from "./domain/tenure.rules"
+
+export { calculateTenure, calculateAge, ageRange } from "./domain/tenure.rules"

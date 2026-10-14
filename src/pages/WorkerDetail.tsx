@@ -35,7 +35,6 @@ import WorkerVacationsTab from "@/components/vacations/WorkerVacationsTab"
 import WorkerMedicalCertificatesTab from "@/components/worker/WorkerMedicalCertificatesTab"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import { toRomanNumeral } from "@/utils/roman-numerals"
-import { calculateTenure, calculateAge, ageRange } from "@/lib/tenure"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
 import { WorkerForm } from "@/components/workers/WorkerForm"
 import { WorkerDocumentsTab } from "@/components/workers/WorkerDocumentsTab"
@@ -47,6 +46,9 @@ import {
   saveWorkerExpedientePersonalData,
   validatePersonProfileFields,
   validateWorkerContractInput,
+  ageRange,
+  calculateAge,
+  calculateTenure,
   type CatalogOption,
   type CatalogRow,
   type WorkerEmploymentMovement,

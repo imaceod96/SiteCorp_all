@@ -1,11 +1,17 @@
 /**
- * Cálculo de antigüedad laboral.
+ * Personas — Reglas puras de antigüedad y edad (trayectoria laboral).
  *
- * La antigüedad se calcula desde la fecha REAL de contratación (hire_date)
- * hasta la fecha actual, utilizando diferencias de calendario (NO asumiendo
- * 365 días = 1 año ni 30 días = 1 mes).
+ * La antigüedad se calcula desde la fecha REAL de incorporación (`employment_start_date`,
+ * con respaldo histórico en `hire_date`) hasta la fecha de referencia, con diferencias de
+ * calendario (NO asumiendo 365 días = 1 año ni 30 días = 1 mes). La antigüedad NO se
+ * almacena como texto: se calcula dinámicamente para la ficha del trabajador.
  *
- * La antigüedad NO se almacena como texto en BD; se calcula dinámicamente.
+ * La fecha de referencia es un parámetro porque Prenómina evalúa la antigüedad al cierre
+ * del período (último día del mes), no a la fecha actual. Los valores de antigüedad que
+ * consume Prenómina vienen calculados del backend; este módulo es la ÚNICA implementación
+ * en TypeScript del cálculo, y no duplica ninguna regla de otro dominio.
+ *
+ * Este módulo no importa React, Supabase ni `@/lib/*`: puede verificarse de forma aislada.
  */
 
 /** Resultado del cálculo de antigüedad. */

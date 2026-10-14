@@ -757,9 +757,6 @@ test("las utilidades técnicas legítimas se conservan intactas", () => {
     "src/lib/supabase.ts",
     "src/lib/utils.ts",
     "src/lib/documents.ts",
-    "src/lib/entity-filters.ts",
-    "src/lib/tenure.ts",
-    "src/lib/worker-migration.ts",
   ]
   for (const module of kept) {
     expect(existsSync(module), `${module} se conserva`).toBe(true)

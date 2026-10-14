@@ -480,7 +480,6 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
     "src/components/migration/LinkWorkerToPositionDialog.tsx",
     "src/components/migration/MigrationDialog.tsx",
     "src/components/migration/ExcelImportDialog.tsx",
-    "src/lib/worker-migration.ts",
   ]
 
   for (const file of presentation) {
@@ -512,9 +511,10 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
   expect(initialImport).toMatch(/readWorkerMigrationExcel/)
   expect(initialImport).not.toMatch(/\.from\("workers"\)/)
 
-  // El m√≥dulo del formato del Excel ya no resuelve cat√°logos ni llama a las RPC.
-  const excel = read("src/lib/worker-migration.ts")
-  expect(excel).toMatch(/@\/domains\/people/)
+  // El adaptador del formato del Excel vive en el dominio Personas: no resuelve cat√°logos
+  // ni llama a las RPC (las filas que produce son las que consumen sus casos de uso).
+  const excel = read("src/domains/people/infrastructure/worker-migration.workbook.ts")
+  expect(excel).toMatch(/from "\.\.\/domain\/entities"/)
   expect(excel).toMatch(/readWorkerMigrationExcel/)
   expect(excel).not.toMatch(/migration_validate_rows/)
   expect(excel).not.toMatch(/migration_import_rows/)
@@ -535,7 +535,7 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
   for (const file of [
     "src/pages/EntityStaffing.tsx",
     "src/pages/EntitySettingsInitialImport.tsx",
-    "src/lib/worker-migration.ts",
+    "src/domains/people/infrastructure/worker-migration.workbook.ts",
     "src/domains/people/application/worker-migration.queries.ts",
     "src/domains/people/application/worker-migration.commands.ts",
   ]) {

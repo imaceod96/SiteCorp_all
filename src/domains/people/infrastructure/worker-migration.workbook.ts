@@ -1,15 +1,18 @@
-import type { MigrationRow } from "@/domains/people"
+import type { MigrationRow } from "../domain/entities"
 import type { Workbook, Cell, Row } from "exceljs"
 
 /**
- * Plantilla y lectura del Excel de la Carga inicial de trabajadores.
+ * Personas — Adaptador del archivo Excel de la Carga inicial de trabajadores.
  *
  * Este módulo es SOLO el formato del archivo: construye la plantilla oficial, la descarga y
  * lee el .xlsx que sube el usuario. El formato de las columnas NO cambia.
  *
  * La resolución de catálogos, la validación por fila, el historial de lotes y las RPC de la
- * migración son casos de uso del dominio Personas (`@/domains/people`): las filas que
- * produce esta lectura son las mismas que consumen esos casos de uso.
+ * migración son casos de uso del propio dominio (`application/worker-migration.queries.ts`,
+ * `application/worker-migration.commands.ts` y `domain/worker-migration.rules.ts`): las filas
+ * que produce esta lectura son las mismas que consumen esos casos de uso.
+ *
+ * No consulta Supabase ni compone consultas: solo lee y escribe Excel en memoria.
  */
 
 /** Tipado mínimo del módulo ExcelJS usado por esta exportación (solo `Workbook`). */
@@ -17,8 +20,6 @@ type ExcelJSModule = {
   Workbook: typeof Workbook
   default?: { Workbook: typeof Workbook }
 }
-
-export type { MigrationRow, MigrationPreviewRow } from "@/domains/people"
 
 // Plantilla simplificada de Carga inicial. No incluye "Fecha nacimiento"
 // (se deriva de la identificación) ni "Código Puesto" (la carga inicial no
