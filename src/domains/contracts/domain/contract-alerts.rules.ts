@@ -95,6 +95,52 @@ export const ATTENTION_STATES: ContractAlertState[] = [
 export const requiresAttention = (row: ContractAlertRow) =>
   ATTENTION_STATES.includes(row.alert_state)
 
+/**
+ * Vocabulario de FILTRO del módulo de Vencimientos.
+ *
+ * Es un valor de filtro, NO un estado contractual: `"ATTENTION"` es el agrupador de los
+ * estados de `requiresAttention` y `"ALL"` no restringe nada. Este tipo es el que viaja entre
+ * la presentación y la regla de filtrado, de modo que un agrupador no pueda compararse nunca
+ * contra `alert_state` (esa comparación es imposible: `alert_state` sólo toma los siete
+ * estados reales).
+ */
+export type ContractAlertFilter = "ALL" | "ATTENTION" | ContractAlertState
+
+/**
+ * Regla ÚNICA de filtrado por estado de vencimiento (la usan la tabla, el desplegable y las
+ * tarjetas del módulo de Vencimientos):
+ *
+ *   · "ALL"       → cualquier estado;
+ *   · "ATTENTION" → los estados de `requiresAttention` (AGRUPADOR, no un estado);
+ *   · estado      → coincidencia EXACTA con ese estado.
+ *
+ * Existe para que la presentación no interprete el vocabulario de filtros por su cuenta: la
+ * comparación directa `alert_state === "ATTENTION"` nunca coincide con ningún estado y dejaba
+ * el listado vacío aunque el contador mostrara contratos que requieren atención.
+ */
+export function matchesContractAlertFilter(
+  row: ContractAlertRow,
+  filter: ContractAlertFilter
+): boolean {
+  if (filter === "ALL") return true
+  if (filter === "ATTENTION") return requiresAttention(row)
+  return row.alert_state === filter
+}
+
+/**
+ * ¿Este texto es un valor de filtro válido del módulo?
+ *
+ * Estrecha el valor que devuelve el control de selección (siempre `string`) al vocabulario del
+ * dominio, sin conversiones ciegas: si el control devolviera algo que no pertenece al
+ * vocabulario, el filtro NO cambia en lugar de aplicarse mal.
+ */
+export function isContractAlertFilter(value: string): value is ContractAlertFilter {
+  if (value === "ALL" || value === "ATTENTION") return true
+  // `CONTRACT_ALERT_META` es un Record exhaustivo de los estados reales: es el vocabulario
+  // canónico, con independencia de qué opciones muestre el control de selección.
+  return Object.keys(CONTRACT_ALERT_META).includes(value)
+}
+
 export interface ContractAlertSummary {
   overdue: number
   dueToday: number

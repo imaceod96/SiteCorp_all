@@ -138,6 +138,7 @@ export { applySalaryChange, finalizeSalaryChangeEvent } from "./application/sala
 
 /* Modelos y reglas puras: alertas de vencimiento contractual */
 export type {
+  ContractAlertFilter,
   ContractAlertState,
   ContractAlertRow,
   ContractAlertSummary,
@@ -151,6 +152,8 @@ export {
   CONTRACT_ALERT_LOOKAHEAD_DAYS,
   CONTRACT_ALERT_META,
   deadlineLabel,
+  isContractAlertFilter,
+  matchesContractAlertFilter,
   needsCorrection,
   requiresAttention,
   summarizeContractAlerts,

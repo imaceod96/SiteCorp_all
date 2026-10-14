@@ -20,7 +20,10 @@ import {
   CONTRACT_ALERT_META,
   deadlineLabel,
   formatContractDate,
+  isContractAlertFilter,
+  matchesContractAlertFilter,
   summarizeContractAlerts,
+  type ContractAlertFilter,
   type ContractAlertRow,
 } from "@/domains/contracts"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
@@ -79,7 +82,9 @@ const EntityContractAlerts = () => {
   }, [alertsQuery])
 
   const [search, setSearch] = React.useState("")
-  const [stateFilter, setStateFilter] = React.useState<string>("ATTENTION")
+  // Vocabulario de filtro del dominio: «ATTENTION» es el agrupador de los estados que
+  // requieren atención, no un estado contractual.
+  const [stateFilter, setStateFilter] = React.useState<ContractAlertFilter>("ATTENTION")
   const [areaFilter, setAreaFilter] = React.useState("ALL")
   const [jobFilter, setJobFilter] = React.useState("ALL")
   const [positionFilter, setPositionFilter] = React.useState("ALL")
@@ -157,7 +162,9 @@ const EntityContractAlerts = () => {
     const term = search.trim().toLowerCase()
 
     return rows.filter((row) => {
-      if (stateFilter !== "ALL" && row.alert_state !== stateFilter) return false
+      // Regla ÚNICA del dominio: resuelve «ALL», el agrupador «requiere atención» y cada
+      // estado individual. La presentación no interpreta el vocabulario de filtros.
+      if (!matchesContractAlertFilter(row, stateFilter)) return false
       if (areaFilter !== "ALL" && row.area_name !== areaFilter) return false
       if (jobFilter !== "ALL" && row.job_name !== jobFilter) return false
       if (positionFilter !== "ALL" && row.position_name !== positionFilter) return false
@@ -217,7 +224,7 @@ const EntityContractAlerts = () => {
     key: string
     label: string
     value: number
-    filter: string
+    filter: ContractAlertFilter
     tone: "primary" | "danger" | "warning" | "info" | "neutral"
     hint?: string
   }[] = [
@@ -349,7 +356,14 @@ const EntityContractAlerts = () => {
 
                 <div className="space-y-1.5">
                   <label className="text-xs text-muted-foreground">Estado de vencimiento</label>
-                  <SiteCorpSelect value={stateFilter} onValueChange={setStateFilter}>
+                  <SiteCorpSelect
+                    value={stateFilter}
+                    onValueChange={(value) => {
+                      // El vocabulario de filtros lo define el dominio: un valor fuera del
+                      // catálogo no cambia el filtro en lugar de aplicarse mal.
+                      if (isContractAlertFilter(value)) setStateFilter(value)
+                    }}
+                  >
                     {CONTRACT_ALERT_FILTER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
