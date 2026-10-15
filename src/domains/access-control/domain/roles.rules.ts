@@ -60,9 +60,12 @@ export const friendlyRoleSaveError = (scope: RoleScope, error: unknown): string 
     return "Los permisos del rol Administrador no pueden reducirse ni cambiarse."
   }
   if (normalized.includes("system platform role permissions cannot")) {
-    return "Los permisos de un rol del sistema de la plataforma no pueden reducirse ni cambiarse."
-  }
-  if (normalized.includes("permission denied") || normalized.includes("row-level security")) {
+      return "Los permisos de un rol del sistema de la plataforma no pueden reducirse ni cambiarse."
+    }
+    if (normalized.includes("system platform roles cannot be deleted")) {
+      return "El rol del sistema de la plataforma no puede eliminarse."
+    }
+    if (normalized.includes("permission denied") || normalized.includes("row-level security")) {
     return scope === "platform"
       ? "No tienes permiso para gestionar roles de plataforma."
       : "Necesitas el permiso «Gestionar roles y permisos» dentro de esta entidad."
