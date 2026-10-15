@@ -1,5 +1,6 @@
 import { fetchEntityPermissionCatalog, fetchPlatformPermissionCatalog } from "../infrastructure/permissions.repository"
 import { selectRoleScopeRows } from "../infrastructure/roles.repository"
+import { loadPlatformPermissionSafe } from "./platform-permissions.queries"
 import type { PermissionOption, RoleRecord, RoleScope, RoleScopeWorkspace } from "../domain/entities"
 
 /**
@@ -22,11 +23,21 @@ export async function loadRoleScopeWorkspace(input: {
   const isPlatform = input.scope === "platform"
 
   if (!isPlatform && !input.organizationEntityId) {
-    return { roles: [], permissions: [] }
+    return { roles: [], permissions: [], canReadPermissionMatrix: true }
   }
 
+  // La matriz rol↔permiso de PLATAFORMA sólo la devuelve el backend a quien tiene
+  // `platform_roles.manage` efectivo (o es SuperAdmin): `platform_roles.view` permite ver
+  // los roles, no sus permisos. En el ámbito de entidad la matriz es la del cliente y no
+  // está afectada por esta restricción.
+  const canReadPermissionMatrix = isPlatform
+    ? await loadPlatformPermissionSafe("platform_roles.manage")
+    : true
+
   const [rows, permissions] = await Promise.all([
-    selectRoleScopeRows(input.scope, input.organizationEntityId),
+    selectRoleScopeRows(input.scope, input.organizationEntityId, {
+      includePermissionMatrix: canReadPermissionMatrix,
+    }),
     isPlatform ? fetchPlatformPermissionCatalog() : fetchEntityPermissionCatalog(),
   ])
 
@@ -60,5 +71,9 @@ export async function loadRoleScopeWorkspace(input: {
     }
   })
 
-  return { roles, permissions: permissions as PermissionOption[] }
+  return {
+    roles,
+    permissions: permissions as PermissionOption[],
+    canReadPermissionMatrix,
+  }
 }

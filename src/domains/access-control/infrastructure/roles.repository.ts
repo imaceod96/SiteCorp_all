@@ -74,12 +74,19 @@ interface RolePermissionMappingRow {
  * Roles del ámbito con sus permisos y sus asignaciones. En el ámbito de entidad, las
  * asignaciones se cuentan sobre las DOS fuentes históricas (`entity_user_access` y la
  * tabla legacy de roles de usuario) para no perder ningún usuario asignado.
+ *
+ * `includePermissionMatrix` permite NO pedir la matriz rol↔permiso cuando el solicitante
+ * no puede consultarla (en plataforma, sin `platform_roles.manage`): la RLS la ocultaría
+ * igualmente, así que se evita una consulta inútil y, sobre todo, una lista vacía que la
+ * interfaz podría confundir con «este rol no tiene permisos».
  */
 export async function selectRoleScopeRows(
   scope: RoleScope,
-  organizationEntityId?: string
+  organizationEntityId?: string,
+  options: { includePermissionMatrix?: boolean } = {}
 ): Promise<RoleScopeRows> {
   const isPlatform = scope === "platform"
+  const includePermissionMatrix = options.includePermissionMatrix !== false
 
   if (!isPlatform && !organizationEntityId) {
     return { roleRows: [], permissionPairs: [], assignments: [] }
@@ -100,7 +107,7 @@ export async function selectRoleScopeRows(
   const roleIds = roleRows.map((role) => role.id)
 
   const mappingsRequest =
-    roleIds.length === 0
+    roleIds.length === 0 || !includePermissionMatrix
       ? Promise.resolve({ data: [] as RolePermissionMappingRow[], error: null })
       : isPlatform
         ? supabase

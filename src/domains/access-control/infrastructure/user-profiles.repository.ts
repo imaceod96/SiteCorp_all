@@ -34,7 +34,13 @@ export async function selectAllUserProfiles(): Promise<AuthProfileRecord[]> {
   return (data as AuthProfileRecord[] | null) || []
 }
 
-/** Edición de los datos de la CUENTA propia (nombre, usuario y avatar). */
+/**
+ * Edición de los datos de la CUENTA propia (nombre y usuario).
+ *
+ * El avatar NO se escribe aquí: `avatar_url` guarda la RUTA del objeto en el bucket privado y
+ * sólo la cambia la operación de avatar. Si se escribiera desde el formulario, una URL
+ * temporal acabaría almacenada como identificador permanente.
+ */
 export async function updateUserProfileAccount(
   userId: string,
   input: ProfileAccountInput
@@ -44,18 +50,23 @@ export async function updateUserProfileAccount(
     .update({
       full_name: input.fullName,
       username: input.username,
-      avatar_url: input.avatarUrl,
     })
     .eq("id", userId)
 
   if (error) throw error
 }
 
-/** Avatar de la cuenta propia ya alojado en Storage (URL pública resuelta). */
-export async function updateUserProfileAvatar(userId: string, avatarUrl: string): Promise<void> {
+/**
+ * Guarda en el perfil la RUTA del objeto de avatar (`<user_id>/<archivo>`), o `null` para
+ * dejarlo sin avatar. Nunca se guarda una URL firmada.
+ */
+export async function updateUserProfileAvatar(
+  userId: string,
+  avatarPath: string | null
+): Promise<void> {
   const { error } = await supabase
     .from("profiles")
-    .update({ avatar_url: avatarUrl })
+    .update({ avatar_url: avatarPath })
     .eq("id", userId)
 
   if (error) throw error

@@ -102,6 +102,9 @@ export const RolesManager = ({
   const [saving, setSaving] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [viewingRole, setViewingRole] = React.useState<RoleRecord | null>(null)
+  // Matriz rol↔permiso de plataforma legible (exige `platform_roles.manage` efectivo o
+  // SuperAdmin). En el ámbito de entidad siempre lo es.
+  const [canReadPermissionMatrix, setCanReadPermissionMatrix] = React.useState(true)
 
   const entityReady = scope === "organization" && Boolean(organizationEntityId)
   const dataKey = isPlatform ? "platform" : organizationEntityId || ""
@@ -110,6 +113,7 @@ export const RolesManager = ({
     if (scope === "organization" && !organizationEntityId) {
       setRoles([])
       setPermissions([])
+      setCanReadPermissionMatrix(true)
       setLoading(false)
       setLoadedKey(dataKey)
       return
@@ -123,6 +127,7 @@ export const RolesManager = ({
 
       setRoles(workspace.roles)
       setPermissions(workspace.permissions)
+      setCanReadPermissionMatrix(workspace.canReadPermissionMatrix)
       setLoadedKey(dataKey)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar la información de roles.")
@@ -163,11 +168,15 @@ export const RolesManager = ({
     setFormError(null)
   }
 
-  // El rol Administrador (y SuperAdmin en plataforma) es un rol del sistema:
-  // sus permisos y metadatos están completamente protegidos.
-  const isProtectedRole = (role: RoleRecord | null) => isProtectedRoleRule(role, isPlatform)
+  // Cualquier rol del sistema (SuperAdmin en plataforma, Administrador en una entidad)
+  // tiene sus permisos y metadatos completamente protegidos.
+  const isProtectedRole = (role: RoleRecord | null) => isProtectedRoleRule(role)
 
-  const permissionsLocked = isProtectedRole(editingRole)
+  // MODO CONSULTA: con `platform_roles.view` sin `platform_roles.manage` los roles se ven,
+  // pero su matriz de permisos no. No se muestran recuentos engañosos ni se permite editar.
+  const permissionsReadable = !isPlatform || canReadPermissionMatrix
+
+  const permissionsLocked = isProtectedRole(editingRole) || !permissionsReadable
 
   const saveRole = async (
     nextForm: RoleForm,
@@ -244,7 +253,11 @@ export const RolesManager = ({
       setSaving(true)
 
       if (isProtectedRole(role)) {
-        throw new Error("The system role Administrador is protected")
+        throw new Error(
+          isPlatform
+            ? "The platform system role is protected"
+            : "The system role Administrador is protected"
+        )
       }
 
       if (role.assignedUserCount > 0) {
@@ -336,6 +349,12 @@ export const RolesManager = ({
             Selecciona una entidad organizativa para gestionar sus roles internos.
           </SiteCorpAlert>
         )}
+        {!permissionsReadable && (
+          <SiteCorpAlert type="info" title="Modo consulta">
+            Necesitas permiso de gestión de roles para consultar los permisos de los roles de
+            plataforma. Puedes ver los roles y sus usuarios asignados.
+          </SiteCorpAlert>
+        )}
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -343,7 +362,10 @@ export const RolesManager = ({
             {roles.length} {roles.length === 1 ? "rol" : "roles"} ·{" "}
             {selectablePermissions.length} permisos {isPlatform ? "de plataforma" : "internos"}
           </div>
-          <SiteCorpButton onClick={openCreate} disabled={scope === "organization" && !entityReady}>
+          <SiteCorpButton
+            onClick={openCreate}
+            disabled={(scope === "organization" && !entityReady) || !permissionsReadable}
+          >
             <Plus className="mr-2 h-4 w-4" />
             {isPlatform ? "Nuevo rol de plataforma" : "Nuevo rol"}
           </SiteCorpButton>
@@ -391,7 +413,9 @@ export const RolesManager = ({
                         <ShieldCheck className="h-3.5 w-3.5 text-sitecorp-primary" />
                         {isPlatform && role.name === "SuperAdmin"
                           ? "Acceso completo por diseño"
-                          : `${role.permissionIds.length} permisos`}
+                          : permissionsReadable
+                            ? `${role.permissionIds.length} permisos`
+                            : "Permisos no consultables"}
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Users className="h-3.5 w-3.5 text-sitecorp-primary" />
@@ -401,13 +425,18 @@ export const RolesManager = ({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <SiteCorpButton size="sm" variant="outline" onClick={() => setViewingRole(role)}>
+                    <SiteCorpButton
+                      size="sm"
+                      variant="outline"
+                      disabled={!permissionsReadable}
+                      onClick={() => setViewingRole(role)}
+                    >
                       <Eye className="mr-1 h-3.5 w-3.5" /> Ver permisos
                     </SiteCorpButton>
                     <SiteCorpButton
                       size="sm"
                       variant="outline"
-                      disabled={protectedRole}
+                      disabled={protectedRole || !permissionsReadable}
                       onClick={() => openEdit(role)}
                     >
                       <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
@@ -472,13 +501,18 @@ export const RolesManager = ({
               </SiteCorpAlert>
             )}
 
-            {permissionsLocked && (
+            {isProtectedRole(editingRole) ? (
               <SiteCorpAlert type="info" title="Rol del sistema protegido">
                 {isPlatform
-                  ? "SuperAdmin tiene acceso completo mediante la función reservada del sistema. Sus permisos normales no pueden reducirse ni cambiarse."
+                  ? "Es un rol del sistema de la plataforma: su nombre, su estado y su conjunto de permisos están protegidos y no pueden reducirse ni cambiarse."
                   : "Administrador es el rol del sistema de esta entidad: conserva todos los permisos internos y no puede modificarse, desactivarse ni eliminarse."}
               </SiteCorpAlert>
-            )}
+            ) : !permissionsReadable ? (
+              <SiteCorpAlert type="info" title="Modo consulta">
+                Necesitas permiso de gestión de roles para consultar o modificar los permisos de
+                este rol.
+              </SiteCorpAlert>
+            ) : null}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid gap-4 md:grid-cols-3">
@@ -513,6 +547,7 @@ export const RolesManager = ({
                 <SelectItem value="inactive">Inactivo</SelectItem>
               </SiteCorpSelect>
 
+              {!permissionsReadable ? null : (
               <div className="space-y-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -545,6 +580,7 @@ export const RolesManager = ({
                   )
                 })}
               </div>
+              )}
 
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <SiteCorpButton type="button" variant="outline" onClick={closeDialog} disabled={saving}>
@@ -584,15 +620,21 @@ export const RolesManager = ({
                   <SiteCorpStatusBadge status={viewingRole.is_active ? "success" : "warning"}>
                     {viewingRole.is_active ? "Activo" : "Inactivo"}
                   </SiteCorpStatusBadge>
-                  <SiteCorpStatusBadge status="neutral">
-                    {viewingRole.permissionIds.length} permisos
-                  </SiteCorpStatusBadge>
+                  {permissionsReadable && (
+                    <SiteCorpStatusBadge status="neutral">
+                      {viewingRole.permissionIds.length} permisos
+                    </SiteCorpStatusBadge>
+                  )}
                   <SiteCorpStatusBadge status="neutral">
                     {viewingRole.assignedUserCount} usuarios
                   </SiteCorpStatusBadge>
                 </div>
 
-                {isPlatform && viewingRole.name === "SuperAdmin" ? (
+                {!permissionsReadable ? (
+                  <SiteCorpAlert type="info" title="Modo consulta">
+                    Necesitas permiso de gestión de roles para consultar los permisos de este rol.
+                  </SiteCorpAlert>
+                ) : isPlatform && viewingRole.name === "SuperAdmin" ? (
                   <SiteCorpAlert type="info" title="Acceso completo reservado">
                     SuperAdmin no depende de la lista normal de permisos. La autorización reservada le
                     otorga acceso completo a la plataforma.

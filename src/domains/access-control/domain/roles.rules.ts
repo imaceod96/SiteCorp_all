@@ -59,8 +59,11 @@ export const friendlyRoleSaveError = (scope: RoleScope, error: unknown): string 
   if (normalized.includes("system organization role permissions cannot be reduced")) {
     return "Los permisos del rol Administrador no pueden reducirse ni cambiarse."
   }
-  if (normalized.includes("superadmin permissions cannot")) {
-    return "Los permisos reservados de SuperAdmin no pueden reducirse ni cambiarse."
+  if (normalized.includes("system platform role permissions cannot")) {
+    return "Los permisos de un rol del sistema de la plataforma no pueden reducirse ni cambiarse."
+  }
+  if (normalized.includes("platform system role is protected")) {
+    return "Un rol del sistema de la plataforma no puede eliminarse."
   }
   if (normalized.includes("permission denied") || normalized.includes("row-level security")) {
     return scope === "platform"
@@ -92,11 +95,14 @@ export const friendlyRoleSaveError = (scope: RoleScope, error: unknown): string 
 }
 
 /**
- * Un rol del sistema está PROTEGIDO: en plataforma sólo SuperAdmin; en una entidad,
- * cualquier rol del sistema (Administrador). Sus metadatos y permisos no se tocan.
+ * Un rol del sistema está PROTEGIDO en los DOS ámbitos: sus metadatos (nombre y estado) y
+ * su conjunto de permisos no se tocan. El backend lo impone para cualquier rol de sistema
+ * (`save_platform_role`, `protect_system_platform_role_permissions`,
+ * `protect_system_company_client_role_permissions`), así que la interfaz no debe ofrecer
+ * una edición que el servidor va a rechazar.
  */
-export const isProtectedRole = (role: RoleRecord | null, isPlatform: boolean): boolean =>
-  Boolean(role?.is_system_role) && (isPlatform ? role?.name === "SuperAdmin" : true)
+export const isProtectedRole = (role: RoleRecord | null): boolean =>
+  Boolean(role?.is_system_role)
 
 /**
  * Permisos que se pueden ofrecer en cada ámbito:

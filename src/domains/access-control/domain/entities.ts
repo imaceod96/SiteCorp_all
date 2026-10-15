@@ -74,6 +74,15 @@ export interface RoleForm {
 export interface RoleScopeWorkspace {
   roles: RoleRecord[]
   permissions: PermissionOption[]
+  /**
+   * Si el solicitante puede consultar la MATRIZ rol↔permiso de este ámbito.
+   *
+   * En plataforma la matriz sólo la devuelve el backend a quien tiene
+   * `platform_roles.manage` efectivo (o es SuperAdmin): `platform_roles.view` permite ver
+   * los roles, pero NO sus permisos. Cuando es `false`, los roles llegan SIN permisos y la
+   * interfaz debe mostrar el modo consulta en lugar de una lista vacía engañosa.
+   */
+  canReadPermissionMatrix: boolean
 }
 
 /** Comando de alta/edición de un rol (incluye el cambio de estado y de permisos). */
@@ -237,11 +246,24 @@ export interface AuthenticatedIdentity {
   signedOut: boolean
 }
 
-/** Datos editables por el propio usuario en su cuenta. */
+/**
+ * Datos editables por el propio usuario en su cuenta.
+ *
+ * El avatar no forma parte de este formulario: `profiles.avatar_url` guarda la RUTA del objeto
+ * en el bucket privado y la cambia exclusivamente la operación de avatar.
+ */
 export interface ProfileAccountInput {
   fullName: string
   username: string
-  avatarUrl: string
+}
+
+/** Ruta del objeto de avatar guardada en `profiles.avatar_url` (nunca una URL). */
+export type AvatarPath = string
+
+/** URL firmada vigente del avatar, con su caducidad en milisegundos. */
+export interface SignedAvatarUrl {
+  url: string
+  expiresAt: number
 }
 
 /* ------------------------------------------------------------------ */

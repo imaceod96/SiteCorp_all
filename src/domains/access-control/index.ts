@@ -30,6 +30,7 @@
 export type {
   AccessScope,
   AssignEntityAccessInput,
+  AvatarPath,
   ClientMembership,
   EntityAccessOverview,
   EntityAccessRow,
@@ -45,8 +46,17 @@ export type {
   RoleScope,
   RoleScopeWorkspace,
   SaveRoleInput,
+  SignedAvatarUrl,
   UserProfile,
 } from "./domain/entities"
+
+/* Reglas puras de la cuenta propia (avatar) */
+export {
+  AVATAR_SIGNED_URL_TTL_SECONDS,
+  avatarObjectPath,
+  avatarPathFromStored,
+  avatarSignedUrlNeedsRenewal,
+} from "./domain/account.rules"
 
 /* Catálogos de permisos (reglas puras) */
 export {
@@ -102,6 +112,7 @@ export {
   loadPlatformPermissionSafe,
 } from "./application/platform-permissions.queries"
 export { loadRoleScopeWorkspace } from "./application/roles.queries"
+export { loadAvatarSignedUrl } from "./application/account.queries"
 
 /* Comandos */
 export {
@@ -157,6 +168,7 @@ export {
 } from "./application/authentication.queries"
 export {
   changePassword,
+  removeOwnAvatar,
   signIn,
   signOut,
   subscribeAuthChanges,

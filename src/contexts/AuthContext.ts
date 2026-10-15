@@ -27,6 +27,13 @@ export type AuthMembership = AuthMembershipRecord
 interface AuthContextType {
   user: User | null
   profile: AuthProfile | null
+  /**
+   * URL FIRMADA vigente del avatar del usuario (o `null` si no tiene avatar o no se pudo
+   * firmar). El bucket es privado, así que `profile.avatar_url` guarda la RUTA del objeto y
+   * NUNCA se pinta directamente: la imagen se resuelve con esta URL temporal, que se renueva
+   * al montar, al recuperar el foco de la ventana y al alcanzar el 80 % de su vida útil.
+   */
+  avatarUrl: string | null
   isPlatformSuperAdmin: boolean
   isPlatformUser: boolean
   isProfileActive: boolean
@@ -50,6 +57,12 @@ interface AuthContextType {
   identityError: string | null
   /** Reintento manual de la resolución de identidad. Nunca se ejecuta en bucle. */
   retryIdentity: () => void
+  /**
+   * Vuelve a resolver la URL firmada del avatar. Sin argumento reutiliza la ruta guardada
+   * conocida; con argumento (`null` incluido) adopta la ruta indicada, lo que permite
+   * publicar de inmediato un avatar recién subido o eliminado.
+   */
+  refreshAvatar: (storedAvatar?: string | null) => Promise<void>
   logout: () => Promise<void>
   hasPlatformPermission: (code: string) => Promise<boolean>
   hasTenantPermission: (code: string) => Promise<boolean>

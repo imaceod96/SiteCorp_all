@@ -213,19 +213,18 @@ test("la creación y la edición de roles validan el nombre y protegen los roles
   )
 })
 
-test("los roles del sistema quedan protegidos según su ámbito", () => {
-  // En una entidad, CUALQUIER rol del sistema está protegido (Administrador).
-  const administrador = role({ is_system_role: true, name: "Administrador" })
-  expect(isProtectedRole(administrador, false)).toBe(true)
+test("los roles del sistema quedan protegidos en los dos ámbitos", () => {
+  // En una entidad, el rol del sistema (Administrador) está protegido.
+  expect(isProtectedRole(role({ is_system_role: true, name: "Administrador" }))).toBe(true)
 
-  // En plataforma sólo lo está SuperAdmin: un rol del sistema con otro nombre no lo es.
-  expect(isProtectedRole(administrador, true)).toBe(false)
-  expect(isProtectedRole(role({ is_system_role: true, name: "SuperAdmin" }), true)).toBe(true)
+  // En plataforma, TODOS los roles del sistema están protegidos, no sólo SuperAdmin.
+  expect(isProtectedRole(role({ is_system_role: true, name: "SuperAdmin" }))).toBe(true)
+  expect(isProtectedRole(role({ is_system_role: true, name: "OtroSistema" }))).toBe(true)
 
   // Un rol personalizado nunca está protegido.
-  expect(isProtectedRole(role(), false)).toBe(false)
-  expect(isProtectedRole(role(), true)).toBe(false)
-  expect(isProtectedRole(null, false)).toBe(false)
+  expect(isProtectedRole(role())).toBe(false)
+  expect(isProtectedRole(role({ is_system_role: false, name: "SuperAdmin" }))).toBe(false)
+  expect(isProtectedRole(null)).toBe(false)
 })
 
 // ---------------------------------------------------------------------------
@@ -345,7 +344,10 @@ test("el guardado y el borrado de roles usan las RPC reales con sus parámetros"
     expect(source).not.toMatch(/supabase\.from\(/)
   }
   expect(commands).toMatch(/if \(!input\.name\.trim\(\)\)/)
-  expect(queries).toMatch(/selectRoleScopeRows\(input\.scope, input\.organizationEntityId\)/)
+  // La matriz de permisos se pide SÓLO si el solicitante puede consultarla.
+  expect(queries).toMatch(/selectRoleScopeRows\(input\.scope, input\.organizationEntityId, \{/)
+  expect(queries).toMatch(/includePermissionMatrix: canReadPermissionMatrix/)
+  expect(queries).toMatch(/loadPlatformPermissionSafe\("platform_roles\.manage"\)/)
 })
 
 // ---------------------------------------------------------------------------

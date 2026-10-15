@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { rpcName, selectQuery, tableName } from "@/integrations/supabase/schema-target"
+import { avatarObjectPath } from "../domain/account.rules"
 import type { User } from "@supabase/supabase-js"
 import type { AuthMembershipRecord } from "../domain/entities"
 
@@ -25,7 +26,7 @@ import type { AuthMembershipRecord } from "../domain/entities"
  *     mensaje que ve el usuario.
  */
 
-/** Bucket privado/publicado de los avatares de usuario (no cambia). */
+/** Bucket PRIVADO de los avatares de usuario (`public = false`). */
 const AVATARS_BUCKET = "avatars"
 
 /** Usuario de la sesión actual, o `null` si no hay sesión. */
@@ -80,21 +81,48 @@ export async function updateOwnPassword(password: string): Promise<void> {
 }
 
 /**
- * Avatar del propio usuario: subida al bucket de avatares y URL pública resuelta.
+ * Sube el avatar del PROPIO usuario al bucket privado y devuelve la RUTA del objeto.
  *
- * La ruta es la MISMA que usaba la pantalla (`<user_id>/<nombre del archivo>`), de modo que
- * las políticas de Storage de cada usuario siguen resolviéndose igual.
+ * Nunca devuelve una URL: el bucket es privado y la única URL válida es la firmada y temporal
+ * que se resuelve al pintar. La ruta la compone el dominio (`<user_id>/<archivo>`), de modo que
+ * un nombre de archivo con separadores no puede salir de la carpeta del usuario.
+ *
+ * `upsert: true` permite reemplazar el avatar anterior sin dejar objetos huérfanos con el
+ * mismo nombre; las políticas de Storage siguen exigiendo que el titular esté activo.
  */
 export async function uploadOwnAvatar(userId: string, file: File): Promise<string> {
-  const filePath = `${userId}/${file.name}`
+  const filePath = avatarObjectPath(userId, file.name)
 
   const { error: uploadError } = await supabase.storage
     .from(AVATARS_BUCKET)
-    .upload(filePath, file, { contentType: file.type })
+    .upload(filePath, file, { contentType: file.type, upsert: true })
   if (uploadError) throw uploadError
 
-  const { data: publicUrlData } = supabase.storage.from(AVATARS_BUCKET).getPublicUrl(filePath)
-  return publicUrlData.publicUrl
+  return filePath
+}
+
+/**
+ * URL TEMPORAL (firmada) de un objeto de avatar, con su caducidad en milisegundos.
+ * Devuelve `null` si Storage no pudo firmar (objeto ausente o sin permiso de lectura): la
+ * interfaz cae entonces a las iniciales y nunca rompe la pantalla.
+ */
+export async function createAvatarSignedUrl(
+  path: string,
+  expiresInSeconds: number
+): Promise<{ url: string; expiresAt: number } | null> {
+  const { data, error } = await supabase.storage
+    .from(AVATARS_BUCKET)
+    .createSignedUrl(path, expiresInSeconds)
+
+  if (error || !data?.signedUrl) return null
+
+  return { url: data.signedUrl, expiresAt: Date.now() + expiresInSeconds * 1000 }
+}
+
+/** Retira un objeto de avatar (reemplazo del anterior o baja del avatar propio). */
+export async function deleteAvatarObject(path: string): Promise<void> {
+  const { error } = await supabase.storage.from(AVATARS_BUCKET).remove([path])
+  if (error) throw error
 }
 
 /**

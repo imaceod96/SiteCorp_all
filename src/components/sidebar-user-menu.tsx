@@ -32,7 +32,7 @@ interface SidebarUserMenuProps {
  * personal pertenece al usuario, no a la entidad.
  */
 export function SidebarUserMenu({ accountPath = null, className }: SidebarUserMenuProps) {
-  const { user, profile, logout } = useAuth()
+  const { user, profile, avatarUrl, logout } = useAuth()
   const navigate = useNavigate()
 
   // Fuente de verdad del nombre: profiles.full_name (igual que la pantalla de
@@ -83,9 +83,11 @@ export function SidebarUserMenu({ accountPath = null, className }: SidebarUserMe
           )}
         >
           <Avatar className="h-9 w-9">
-            {profile?.avatar_url ? (
-              <AvatarImage src={profile.avatar_url} alt={displayName} />
-            ) : null}
+            {/*
+              La imagen se pinta con la URL FIRMADA del contexto, nunca con la ruta guardada
+              en `profiles.avatar_url`: el bucket de avatares es privado.
+            */}
+            {avatarUrl ? <AvatarImage src={avatarUrl} alt={displayName} /> : null}
             <AvatarFallback className="bg-sitecorp-primary text-xs font-bold text-white">
               {initials}
             </AvatarFallback>

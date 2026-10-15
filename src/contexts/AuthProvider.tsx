@@ -1,7 +1,9 @@
 import * as React from "react"
 import type { User } from "@supabase/supabase-js"
 import {
+  avatarSignedUrlNeedsRenewal,
   loadAuthenticatedIdentity,
+  loadAvatarSignedUrl,
   loadClientPermissionSafe,
   loadPlatformPermissionSafe,
   loadSessionUser,
@@ -54,6 +56,7 @@ const IDENTITY_ERROR_MESSAGE =
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = React.useState<User | null>(null)
   const [profile, setProfile] = React.useState<AuthProfile | null>(null)
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null)
   const [isPlatformSuperAdmin, setIsPlatformSuperAdmin] = React.useState(false)
   const [isPlatformUser, setIsPlatformUser] = React.useState(false)
   const [isProfileActive, setIsProfileActive] = React.useState(true)
@@ -69,6 +72,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const inFlightUserIdRef = React.useRef<string | null>(null)
   const resolvedUserIdRef = React.useRef<string | null>(null)
   const identityErrorRef = React.useRef<string | null>(null)
+  // Ruta guardada del avatar (`profiles.avatar_url`) y caducidad de su URL firmada (ms).
+  const storedAvatarRef = React.useRef<string | null>(null)
+  const avatarExpiresAtRef = React.useRef(0)
+
+  /**
+   * Resuelve la URL FIRMADA del avatar a partir de la ruta guardada. El bucket es privado, así
+   * que `profiles.avatar_url` nunca se pinta directamente.
+   *
+   * Un fallo de firma NO rompe la pantalla: se publica `null` y la interfaz muestra las
+   * iniciales. Nunca se concede nada por el hecho de tener avatar.
+   */
+  const applyAvatar = React.useCallback(async (storedAvatar: string | null) => {
+    storedAvatarRef.current = storedAvatar
+
+    if (!storedAvatar) {
+      avatarExpiresAtRef.current = 0
+      if (mountedRef.current) setAvatarUrl(null)
+      return
+    }
+
+    try {
+      const signed = await loadAvatarSignedUrl(storedAvatar)
+      if (!mountedRef.current) return
+      avatarExpiresAtRef.current = signed?.expiresAt ?? 0
+      setAvatarUrl(signed?.url ?? null)
+    } catch {
+      if (!mountedRef.current) return
+      avatarExpiresAtRef.current = 0
+      setAvatarUrl(null)
+    }
+  }, [])
+
+  /**
+   * Renueva la URL firmada si ya alcanzó el 80 % de su vida útil. Se invoca al recuperar el
+   * foco de la ventana y de forma periódica: así una imagen visible no caduca nunca en
+   * pantalla, y no se firma de más.
+   */
+  const renewAvatarIfNeeded = React.useCallback(() => {
+    const storedAvatar = storedAvatarRef.current
+    if (!storedAvatar) return
+    if (!avatarSignedUrlNeedsRenewal(avatarExpiresAtRef.current, Date.now())) return
+    void applyAvatar(storedAvatar)
+  }, [applyAvatar])
+
+  /** Reintento manual (o publicación inmediata de un avatar recién subido o eliminado). */
+  const refreshAvatar = React.useCallback(
+    async (storedAvatar?: string | null) => {
+      await applyAvatar(storedAvatar === undefined ? storedAvatarRef.current : storedAvatar)
+    },
+    [applyAvatar]
+  )
 
   /**
    * Fallo de la resolución de identidad: se registra para diagnóstico y se publica un mensaje
@@ -119,6 +173,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         resolvedUserIdRef.current = sessionUser.id
         setAuthReady(true)
+
+        // El avatar no bloquea la publicación de la identidad: se resuelve en paralelo y
+        // mientras tanto se muestran las iniciales.
+        void applyAvatar(identity.profile?.avatar_url ?? null)
       } catch (error) {
         // Un fallo no se interpreta como «no tiene privilegios».
         if (!mountedRef.current || epoch !== resolutionEpochRef.current) return
@@ -151,8 +209,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionUserRef.current = null
       identityErrorRef.current = null
 
+      storedAvatarRef.current = null
+      avatarExpiresAtRef.current = 0
+
       setUser(null)
       setProfile(null)
+      setAvatarUrl(null)
       setIsPlatformSuperAdmin(false)
       setIsPlatformUser(false)
       setIsProfileActive(true)
@@ -204,6 +266,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [needsResolution, publishIdentityFailure, resolveIdentity])
 
   /**
+   * Renovación de la URL firmada del avatar: al recuperar el foco de la ventana, al volver a
+   * la pestaña y de forma periódica. Sólo vuelve a firmar cuando la URL ha alcanzado el 80 %
+   * de su vida útil, así que no se generan firmas innecesarias.
+   */
+  React.useEffect(() => {
+    const handleWake = () => {
+      if (document.visibilityState === "visible") renewAvatarIfNeeded()
+    }
+
+    window.addEventListener("focus", handleWake)
+    document.addEventListener("visibilitychange", handleWake)
+    const timer = window.setInterval(handleWake, 60_000)
+
+    return () => {
+      window.removeEventListener("focus", handleWake)
+      document.removeEventListener("visibilitychange", handleWake)
+      window.clearInterval(timer)
+    }
+  }, [renewAvatarIfNeeded])
+
+  /**
    * Reintento manual: vuelve a resolver la identidad de la sesión conocida. No hay reintento
    * automático, así que no puede entrar en bucle.
    */
@@ -251,6 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         profile,
+        avatarUrl,
         isPlatformSuperAdmin,
         isPlatformUser,
         isProfileActive,
@@ -259,6 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authReady,
         identityError,
         retryIdentity,
+        refreshAvatar,
         logout,
         hasPlatformPermission,
         hasTenantPermission,
