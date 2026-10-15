@@ -13,8 +13,10 @@ import { loadEntityPermission } from "@/domains/access-control"
  * Muestra exclusivamente los roles internos de la entidad actual: aunque otra
  * entidad del mismo workspace tenga un rol con el mismo nombre, es un rol distinto.
  *
- * La comprobación de acceso la responde el backend (`can_access_entity`); si falla,
- * se muestra el error en lugar de asumir un permiso.
+ * Acceso: consultar y administrar los roles de OTROS usuarios exige el permiso de
+ * gestión `roles.manage` (no existe una vía de consulta independiente: `roles.view`
+ * no habilita esta pantalla). La comprobación de acceso la responde el backend
+ * (`can_access_entity`); si falla, se muestra el error en lugar de asumir un permiso.
  */
 const EntitySettingsRoles = () => {
   const { currentEntity } = useCurrentEntity()
@@ -36,7 +38,7 @@ const EntitySettingsRoles = () => {
       setLoading(true)
       setError(null)
       try {
-        const allowed = await loadEntityPermission(entityId, "roles.view")
+        const allowed = await loadEntityPermission(entityId, "roles.manage")
         if (!cancelled) setCanView(allowed)
       } catch (err) {
         if (!cancelled) {

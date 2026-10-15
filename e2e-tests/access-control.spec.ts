@@ -363,9 +363,11 @@ test("los distintos niveles de acceso se deciden por permisos efectivos, nunca p
   expect(overview).not.toMatch(/@\/lib\/supabase/)
   expect(overview).not.toMatch(/\.rpc\(/)
 
-  // La pantalla de roles exige `roles.view` y muestra el error si la comprobación falla.
+  // La pantalla de roles exige el permiso de GESTIÓN de roles (`roles.manage`): no existe
+  // una vía de consulta independiente, así que `roles.view` NO habilita la pantalla.
   const rolesPage = read("src/pages/EntitySettingsRoles.tsx")
-  expect(rolesPage).toMatch(/loadEntityPermission\(entityId, "roles\.view"\)/)
+  expect(rolesPage).toMatch(/loadEntityPermission\(entityId, "roles\.manage"\)/)
+  expect(rolesPage).not.toMatch(/"roles\.view"/)
   expect(rolesPage).not.toMatch(/@\/lib\/supabase/)
   expect(rolesPage).not.toMatch(/\.rpc\(/)
 

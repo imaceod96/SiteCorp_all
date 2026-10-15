@@ -5,6 +5,7 @@ import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import {
   loadEntityPermission,
   loadEntityUserAccess,
+  loadPlatformPermission,
   type EntityAccessRow,
 } from "@/domains/access-control"
 import {
@@ -104,6 +105,7 @@ const OrganizationDetail = () => {
   const [deleteEntity, setDeleteEntity] = React.useState<OrganizationEntity | null>(null)
   const [deleting, setDeleting] = React.useState(false)
   const [canDeleteEntities, setCanDeleteEntities] = React.useState(false)
+  const [canConsultRoles, setCanConsultRoles] = React.useState(false)
   
   const loadEntityData = React.useCallback(async () => {
     if (!entityId) return
@@ -161,6 +163,25 @@ const OrganizationDetail = () => {
   React.useEffect(() => {
     checkDeletePermissions()
   }, [checkDeletePermissions])
+
+  // Consultar los roles de otros usuarios exige gestión de roles: `roles.manage` en la
+  // entidad (lo concede `can_access_entity`, incluido el superadministrador) o el permiso
+  // de plataforma `tenant_roles.manage`. `roles.view` NO habilita esta superficie.
+  const checkRolePermissions = React.useCallback(async () => {
+    const targetEntityId = entity?.id
+    if (!targetEntityId) return
+
+    const [entityAllowed, platformAllowed] = await Promise.all([
+      loadEntityPermission(targetEntityId, "roles.manage").catch(() => false),
+      loadPlatformPermission("tenant_roles.manage").catch(() => false),
+    ])
+
+    setCanConsultRoles(entityAllowed || platformAllowed)
+  }, [entity?.id])
+
+  React.useEffect(() => {
+    checkRolePermissions()
+  }, [checkRolePermissions])
   
   const openCreateChildEntity = () => {
     if (!entity) return
@@ -534,10 +555,13 @@ const OrganizationDetail = () => {
         </SiteCorpCard>
       </div>
       
-      {/* Roles y permisos de la entidad */}
-      <SiteCorpCard title="Roles y permisos" description="Gestiona los roles y permisos específicos para esta entidad organizativa">
-        <RolesManager scope="organization" companyClientId={currentCompanyClient?.id} organizationEntityId={entity?.id} />
-      </SiteCorpCard>
+      {/* Roles y permisos de la entidad. Solo con permiso de GESTIÓN de roles: sin él
+          no se consulta el catálogo de roles de otros usuarios. */}
+      {canConsultRoles && (
+        <SiteCorpCard title="Roles y permisos" description="Gestiona los roles y permisos específicos para esta entidad organizativa">
+          <RolesManager scope="organization" companyClientId={currentCompanyClient?.id} organizationEntityId={entity?.id} />
+        </SiteCorpCard>
+      )}
       
       {/* Entity actions */}
       <div className="flex flex-col gap-3 md:flex-row md:justify-end">

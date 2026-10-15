@@ -34,7 +34,9 @@ const EntitySettings = () => {
         description: "Roles internos propios de esta entidad y sus capacidades.",
         icon: Shield,
         href: `/entity/${currentEntity?.id}/settings/roles`,
-        permissions: ["roles.view", "roles.manage"],
+        // Consultar/administrar los roles de otros usuarios exige gestión de roles:
+        // `roles.view` no habilita esta sección.
+        permissions: ["roles.manage"],
       },
       {
               title: "Escala salarial",

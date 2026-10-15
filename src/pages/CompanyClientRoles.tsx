@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
+import { loadEntityPermission, loadPlatformPermission } from "@/domains/access-control"
 import { loadClientEntities, type OrganizationEntity } from "@/domains/organization-structure"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -34,6 +35,7 @@ const CompanyClientRoles = () => {
   const [selectedEntityId, setSelectedEntityId] = React.useState<string>("")
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [canConsultRoles, setCanConsultRoles] = React.useState(false)
 
   React.useEffect(() => {
     if (!currentCompanyClientId) return
@@ -57,6 +59,30 @@ const CompanyClientRoles = () => {
 
     loadEntities()
   }, [currentCompanyClientId])
+
+  // Consultar los roles de otros usuarios exige gestión de roles (`roles.manage` en la
+  // entidad o `tenant_roles.manage` de plataforma). `roles.view` NO habilita la pantalla.
+  React.useEffect(() => {
+    if (!selectedEntityId) {
+      setCanConsultRoles(false)
+      return
+    }
+
+    let cancelled = false
+
+    const check = async () => {
+      const [entityAllowed, platformAllowed] = await Promise.all([
+        loadEntityPermission(selectedEntityId, "roles.manage").catch(() => false),
+        loadPlatformPermission("tenant_roles.manage").catch(() => false),
+      ])
+      if (!cancelled) setCanConsultRoles(entityAllowed || platformAllowed)
+    }
+
+    check()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedEntityId])
 
   const selectedEntity = entities.find((entity) => entity.id === selectedEntityId)
 
@@ -120,12 +146,18 @@ const CompanyClientRoles = () => {
             </div>
           </SiteCorpCard>
 
-          {selectedEntityId && (
+          {selectedEntityId && canConsultRoles && (
             <RolesManager
               scope="organization"
               companyClientId={currentCompanyClient.id}
               organizationEntityId={selectedEntityId}
             />
+          )}
+
+          {selectedEntityId && !canConsultRoles && (
+            <SiteCorpAlert type="danger">
+              No tiene permiso para consultar los roles de otros usuarios de esta entidad.
+            </SiteCorpAlert>
           )}
         </>
       )}
