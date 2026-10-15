@@ -339,14 +339,22 @@ export interface ClientUser {
   created_at: string
 }
 
-/** Fila de `tenant_invitations` con su rol embebido. */
+/**
+ * Fila de `list_company_client_invitations`: la invitación con su rol, ENMASCARADO
+ * (`role_id`/`role_name` nulos) cuando el solicitante no puede gestionar roles en el
+ * ámbito de la invitación. La consulta de invitaciones NO depende del rol.
+ */
 export interface ClientInvitationRow {
-  id: string
+  invitation_id: string
   email: string
   status: string
   expires_at: string | null
+  accepted_at: string | null
   created_at: string
-  tenant_role: { name: string | null } | null
+  organization_entity_id: string | null
+  access_scope: string | null
+  role_id: string | null
+  role_name: string | null
 }
 
 /** Invitación de un cliente, ya compuesta para el listado. */

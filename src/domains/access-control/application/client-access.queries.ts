@@ -1,4 +1,5 @@
 import type { ClientInvitation, ClientUser } from "../domain/entities"
+import { accessRoleLabel } from "../domain/access.rules"
 import {
   selectClientInvitations,
   selectClientMembershipRows,
@@ -64,16 +65,22 @@ export async function loadClientUsers(companyClientId: string): Promise<ClientUs
   })
 }
 
-/** Invitaciones de un cliente, ya compuestas para el listado. */
+/**
+ * Invitaciones de un cliente, ya compuestas para el listado.
+ *
+ * El rol lo enmascara el backend (`list_company_client_invitations`) para quien no puede
+ * gestionar roles: aquí se etiqueta con la MISMA regla que los accesos de usuario, de modo
+ * que la interfaz distingue «restringido» de «sin rol».
+ */
 export async function loadClientInvitations(
   companyClientId: string
 ): Promise<ClientInvitation[]> {
   const rows = await selectClientInvitations(companyClientId)
 
   return rows.map((invitation) => ({
-    id: invitation.id,
+    id: invitation.invitation_id,
     email: invitation.email,
-    role_name: invitation.tenant_role?.name || "Sin rol",
+    role_name: accessRoleLabel(invitation),
     status: invitation.status,
     expires_at: invitation.expires_at,
     created_at: invitation.created_at,

@@ -416,11 +416,28 @@ test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
   expect(read("src/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
 
   // El registro SQL de la fase documenta el enmascaramiento y su reversión real.
-  const record = read("docs/fase-2-definiciones-sql.md")
-  expect(record).toMatch(/can_view_entity_user_access/)
-  expect(record).toMatch(/entity_user_access_select/)
-  expect(record).toMatch(/NO recuperables/i)
-})
+    const record = read("docs/fase-2-definiciones-sql.md")
+    expect(record).toMatch(/can_view_entity_user_access/)
+    expect(record).toMatch(/entity_user_access_select/)
+    expect(record).toMatch(/NO recuperables/i)
+  
+    // Las INVITACIONES siguen la misma regla: el rol de una invitación ajena llega enmascarado
+    // desde el backend y el identificador del rol no es alcanzable sin gestión de roles, porque
+    // la tabla NO se lee de forma directa.
+    const invitationRepository = read(
+      "src/domains/access-control/infrastructure/client-access.repository.ts"
+    )
+    expect(invitationRepository).toMatch(/\.rpc\("list_company_client_invitations", \{/)
+    expect(invitationRepository).toMatch(/p_company_client_id: companyClientId,/)
+    expect(invitationRepository).not.toMatch(/company_client_role_id/)
+    expect(read("src/domains/access-control/application/client-access.queries.ts")).toMatch(
+      /role_name: accessRoleLabel\(invitation\)/
+    )
+    // La consulta de invitaciones se conserva para todos los perfiles del ámbito.
+    expect(record).toMatch(/list_company_client_invitations/)
+    expect(record).toMatch(/can_view_invitation_role/)
+    expect(record).toMatch(/company_client_invitations_select/)
+  })
 
 test("el reparto de accesos y los mensajes de error de usuarios se conservan", () => {
   // Un acceso DIRECTO y otro HEREDADO nunca se mezclan en la interfaz.
@@ -929,15 +946,22 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
       ],
     ],
     [
-      "src/domains/access-control/infrastructure/roles.repository.ts",
-      [
-        /\.rpc\("save_platform_role", \{/,
-        /\.rpc\("save_entity_role", \{/,
-        /\.rpc\("delete_entity_role", \{ p_role_id: input\.roleId \}\)/,
-      ],
-    ],
-    [
-      "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
+          "src/domains/access-control/infrastructure/roles.repository.ts",
+          [
+            /\.rpc\("save_platform_role", \{/,
+            /\.rpc\("save_entity_role", \{/,
+            /\.rpc\("delete_entity_role", \{ p_role_id: input\.roleId \}\)/,
+          ],
+        ],
+        [
+          "src/domains/access-control/infrastructure/client-access.repository.ts",
+          [
+            /\.rpc\("list_company_client_invitations", \{/,
+            /p_company_client_id: companyClientId,/,
+          ],
+        ],
+        [
+          "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
       [
         /\.rpc\("get_academic_category_payment_config", \{/,
         /\.rpc\("save_academic_category_payment", \{/,
@@ -969,12 +993,15 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
     "src/domains/access-control/infrastructure/entity-access.repository.ts",
     "src/domains/access-control/infrastructure/roles.repository.ts",
     "src/domains/access-control/infrastructure/permissions.repository.ts",
-    "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
-    "src/domains/representatives/infrastructure/representatives.repository.ts",
-  ]
-  const knownRpcs = new Set([
-    "can_access_entity",
-    // Estas dos comprobaciones ya existían en el backend y las usaba la aplicación
+        "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
+        "src/domains/representatives/infrastructure/representatives.repository.ts",
+        "src/domains/access-control/infrastructure/client-access.repository.ts",
+      ]
+      const knownRpcs = new Set([
+        "can_access_entity",
+        // Consulta de invitaciones de un cliente con el rol enmascarado en el backend.
+        "list_company_client_invitations",
+        // Estas dos comprobaciones ya existían en el backend y las usaba la aplicación
     // (estructura organizativa y módulos internos): la consolidación las traslada al
     // único envoltorio de control de acceso sin cambiar sus parámetros.
     "can_view_entity",

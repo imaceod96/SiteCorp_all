@@ -149,27 +149,13 @@ AS $function$
     OR public.has_platform_permission('tenant_roles.manage')
     OR public.can_access_entity(p_organization_entity_id, 'roles.manage')
     OR EXISTS (
-      SELECT 1
-      FROM public.company_client_memberships row_m
-      WHERE row_m.id = p_membership_id
-        AND EXISTS (
           SELECT 1
-          FROM public.company_client_memberships mine
-          JOIN public.company_client_user_roles cur ON cur.company_client_membership_id = mine.id
-          JOIN public.company_client_roles r ON r.id = cur.company_client_role_id
-          JOIN public.company_client_role_permissions rp ON rp.company_client_role_id = r.id
-          JOIN public.company_client_permissions p ON p.id = rp.company_client_permission_id
-          WHERE mine.user_id = auth.uid()
-            AND mine.is_active = true
-            AND mine.company_client_id = row_m.company_client_id
-            AND r.company_client_id = row_m.company_client_id
-            AND r.is_active = true
-            AND r.organization_entity_id IS NULL
-            AND p.code = 'roles.manage'
-        )
-    );
-$function$;
-```
+          FROM public.company_client_memberships row_m
+          WHERE row_m.id = p_membership_id
+            AND public.has_company_wide_role_management(row_m.company_client_id)
+        );
+    $function$;
+    ```
 
 ```sql
 -- Protección efectiva de `profiles.is_active`. NO es SECURITY DEFINER: `current_user`
@@ -197,12 +183,66 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
   END IF;
-  RETURN NEW;
-END;
-$function$;
-```
-
-### 1.2 Funciones centrales modificadas en la FASE 2
+    RETURN NEW;
+  END;
+  $function$;
+  ```
+  
+  ```sql
+  -- Gestión de roles con alcance de EMPRESA (no de entidad): el llamante tiene un rol
+  -- activo de empresa (`organization_entity_id IS NULL`) en ese cliente cuyos permisos
+  -- incluyen `roles.manage`. Requiere usuario de plataforma activo.
+  CREATE OR REPLACE FUNCTION public.has_company_wide_role_management(p_company_client_id uuid)
+   RETURNS boolean
+   LANGUAGE sql
+   STABLE SECURITY DEFINER
+   SET search_path TO 'public', 'auth'
+  AS $function$
+    SELECT public.is_platform_user_active() AND EXISTS (
+      SELECT 1
+      FROM public.company_client_memberships mine
+      JOIN public.company_client_user_roles cur ON cur.company_client_membership_id = mine.id
+      JOIN public.company_client_roles r ON r.id = cur.company_client_role_id
+      JOIN public.company_client_role_permissions rp ON rp.company_client_role_id = r.id
+      JOIN public.company_client_permissions p ON p.id = rp.company_client_permission_id
+      WHERE mine.user_id = auth.uid()
+        AND mine.is_active = true
+        AND mine.company_client_id = p_company_client_id
+        AND r.company_client_id = p_company_client_id
+        AND r.is_active = true
+        AND r.organization_entity_id IS NULL
+        AND p.code = 'roles.manage'
+    );
+  $function$;
+  ```
+  
+  ```sql
+  -- ¿Puede el llamante consultar el ROL de esta invitación? El rol de una invitación ajena
+  -- sólo es visible con gestión de roles efectiva en su ámbito (empresa o entidad) o para
+  -- administradores de plataforma autorizados. La invitación PROPIA es la excepción.
+  CREATE OR REPLACE FUNCTION public.can_view_invitation_role(p_company_client_id uuid, p_organization_entity_id uuid, p_email text)
+   RETURNS boolean
+   LANGUAGE sql
+   STABLE SECURITY DEFINER
+   SET search_path TO 'public', 'auth'
+  AS $function$
+    SELECT public.is_platform_user_active() AND (
+      -- Invitación PROPIA: el invitado puede consultar el rol de su invitación.
+      (auth.uid() IS NOT NULL
+        AND p_email IS NOT NULL
+        AND lower(p_email) = lower(COALESCE(auth.jwt() ->> 'email', '')))
+      OR public.is_platform_superadmin()
+      OR public.has_platform_permission('tenant_roles.manage')
+      -- Gestión de roles de EMPRESA: rol de empresa con `roles.manage` en ese cliente.
+      OR public.has_company_wide_role_management(p_company_client_id)
+      -- Gestión de roles DENTRO de la entidad de la invitación.
+      OR (p_organization_entity_id IS NOT NULL
+          AND public.can_access_entity(p_organization_entity_id, 'roles.manage'))
+    );
+  $function$;
+  ```
+  
+  ### 1.2 Funciones centrales modificadas en la FASE 2
 
 ```sql
 CREATE OR REPLACE FUNCTION public.is_platform_superadmin()
@@ -341,6 +381,57 @@ AS $function$
 $function$;
 ```
 
+```sql
+-- Consulta de invitaciones de un cliente. Sustituye la lectura DIRECTA de la tabla por
+-- parte de la app: la tabla ya no es legible sin gestión de roles (ver 1.4.5), así que el
+-- identificador del rol no es alcanzable; aquí se devuelve la fila con el rol ENMASCARADO
+-- (NULL) para quien no puede gestionar roles, conservando la consulta para todos los
+-- perfiles del ámbito. `ORDER BY created_at DESC` replica el orden que antes fijaba la app.
+CREATE OR REPLACE FUNCTION public.list_company_client_invitations(p_company_client_id uuid)
+ RETURNS TABLE(invitation_id uuid, email text, status text, expires_at timestamp with time zone, accepted_at timestamp with time zone, created_at timestamp with time zone, organization_entity_id uuid, access_scope text, role_id uuid, role_name text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+  SELECT
+    inv.id,
+    inv.email,
+    inv.status,
+    inv.expires_at,
+    inv.accepted_at,
+    inv.created_at,
+    inv.organization_entity_id,
+    inv.access_scope,
+    -- El identificador y el nombre del rol SÓLO se devuelven a quien puede gestionar roles
+    -- en el ámbito de la invitación (o al propio invitado).
+    CASE
+      WHEN public.can_view_invitation_role(inv.company_client_id, inv.organization_entity_id, inv.email)
+        THEN inv.company_client_role_id
+    END,
+    CASE
+      WHEN public.can_view_invitation_role(inv.company_client_id, inv.organization_entity_id, inv.email)
+        THEN r.name
+    END
+  FROM public.company_client_invitations inv
+  LEFT JOIN public.company_client_roles r ON r.id = inv.company_client_role_id
+  WHERE inv.company_client_id = p_company_client_id
+    -- Misma visibilidad de filas que la política actual: nadie pierde la consulta de
+    -- invitaciones de su ámbito (plataforma, empresa o entidad).
+    AND (
+      public.is_platform_superadmin()
+      OR public.has_platform_permission('users.view_all')
+      OR public.has_platform_permission('users.manage_all')
+      OR public.can_use_company_client_permission(inv.company_client_id, 'users.view')
+      OR public.can_use_company_client_permission(inv.company_client_id, 'users.invite')
+      OR (inv.organization_entity_id IS NOT NULL
+          AND public.can_access_entity(inv.organization_entity_id, 'users.invite'))
+      OR (auth.uid() IS NOT NULL
+          AND lower(inv.email) = lower(COALESCE(auth.jwt() ->> 'email', '')))
+    )
+  ORDER BY inv.created_at DESC;
+$function$;
+```
+
 ### 1.4 Políticas RLS actuales (todas `TO authenticated`)
 
 ```sql
@@ -408,9 +499,20 @@ CREATE POLICY "company_client_invitations_update" ON public.company_client_invit
      OR ((organization_entity_id IS NULL) AND public.can_invite_to_company_client(company_client_id))
      OR ((organization_entity_id IS NOT NULL) AND public.can_access_entity(organization_entity_id, 'users.invite')))
     AND public.can_grant_company_client_role(company_client_role_id, organization_entity_id, company_client_id)
-  );
-
--- 5. Eventos de generación documental: consulta y generación separadas.
+      );
+    
+    -- 4.b Lectura directa de invitaciones: el rol ajeno NO es alcanzable. La política exige
+    --     gestión de roles efectiva en el ámbito de la invitación (o ser el propio invitado),
+    --     de modo que quien sólo tiene `users.view` / `users.invite` consulta las invitaciones
+    --     por la RPC `list_company_client_invitations` (ver 1.3), ya con el rol enmascarado.
+    --     La tabla NO se lee de forma directa desde la app (el identificador del rol no es
+    --     alcanzable sin permiso de gestión de roles, que es lo que pedía la FASE 2).
+    --     (Alterada conservando nombre y rol: `ALTER POLICY ... USING (...)`.)
+    CREATE POLICY "company_client_invitations_select" ON public.company_client_invitations
+      FOR SELECT TO authenticated
+      USING (public.can_view_invitation_role(company_client_id, organization_entity_id, email));
+    
+    -- 5. Eventos de generación documental: consulta y generación separadas.
 CREATE POLICY "document_generation_events_select" ON public.document_generation_events
   FOR SELECT TO authenticated
   USING (public.can_access_document_generation_event(company_client_id, organization_entity_id, 'VIEW'));
@@ -499,6 +601,28 @@ Estas definiciones previas se reconstruyen con certeza porque el cambio aplicado
 | `profiles_update_policy` (USING) | `AND public.is_platform_user_active()` | `USING (auth.uid() = id)` (`WITH CHECK` nunca cambió) |
 | `list_entity_user_access` | dos `CASE ... END` de enmascaramiento | el `SELECT` actual devolviendo `eua.company_client_role_id` y `tr.name` directamente |
 | `company_client_user_roles_select` | reemplazo completo | `FOR SELECT TO authenticated USING (true)` (según el registro de auditoría de la FASE 2: «permitía a cualquier usuario autenticado ver todos los roles») |
+| `company_client_invitations_select` (USING) | reemplazo completo | la expresión de 6 ramas recuperada abajo (texto exacto capturado antes de reemplazarla) |
+
+Original exacto de `company_client_invitations_select` (USING), para restauración literal:
+
+```sql
+-- Original (antes de la FASE 2): sin gestión de roles, sólo visibilidad de filas.
+CREATE POLICY "company_client_invitations_select" ON public.company_client_invitations
+  FOR SELECT TO authenticated
+  USING (
+    public.is_platform_superadmin()
+    OR public.has_platform_permission('users.view_all')
+    OR public.has_platform_permission('users.manage_all')
+    OR public.can_use_company_client_permission(company_client_id, 'users.view')
+    OR public.can_use_company_client_permission(company_client_id, 'users.invite')
+    OR ((organization_entity_id IS NOT NULL)
+        AND public.can_access_entity(organization_entity_id, 'users.invite'))
+  );
+```
+
+Restaurar el original exige además revertir el contrato de lectura de la app (que ya no
+consulta la tabla de forma directa) o mantener la RPC `list_company_client_invitations`;
+sin ese ajuste la pantalla de invitaciones dejaría de mostrar filas.
 
 Retirar los objetos **añadidos** es además inmediato:
 
@@ -510,7 +634,14 @@ DROP FUNCTION IF EXISTS public.can_view_company_client_user_roles(uuid);
 DROP FUNCTION IF EXISTS public.can_grant_company_client_role(uuid, uuid, uuid);
 DROP FUNCTION IF EXISTS public.can_access_document_generation_event(uuid, uuid, text);
 DROP FUNCTION IF EXISTS public.can_access_document_generation_event(uuid, uuid);
+DROP FUNCTION IF EXISTS public.has_company_wide_role_management(uuid);
+DROP FUNCTION IF EXISTS public.can_view_invitation_role(uuid, uuid, text);
+DROP FUNCTION IF EXISTS public.list_company_client_invitations(uuid);
 ```
+
+`has_company_wide_role_management` está además referenciada por
+`can_view_entity_user_access`; retirarla exige primero volver a esa función a su versión
+inline (misma condición, sin delegación).
 
 ---
 
@@ -549,7 +680,10 @@ los helpers no es equivalente.
 ## 4. Estado de reversión
 
 - **Reversible de forma exacta**: todo lo añadido (§2, `DROP`) y todo lo alterado por
-  adición mecánica (§2, retirando el prefijo o el `AND`).
+  adición mecánica (§2, retirando el prefijo o el `AND`). `company_client_invitations_select`
+  también es restaurable **literalmente** porque su expresión original se capturó (§2), con
+  la salvedad de que hay que devolver además la lectura directa de la tabla en la app o
+  mantener la RPC de consulta.
 - **Reversible sólo por reescritura manual**: los seis objetos de §3. En ese caso la
   reversión **no** es exacta y debe declararse así.
 - Los datos **no** se ven afectados por ninguna reversión de políticas, funciones o

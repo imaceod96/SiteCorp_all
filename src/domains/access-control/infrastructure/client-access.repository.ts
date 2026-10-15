@@ -82,15 +82,20 @@ export async function updateClientMembershipActive(
   if (error) throw error
 }
 
-/** Invitaciones de un cliente con su rol embebido, de la más reciente a la más antigua. */
+/**
+ * Invitaciones de un cliente, de la más reciente a la más antigua.
+ *
+ * Se leen por la RPC `list_company_client_invitations` y NO de la tabla: el rol asociado a
+ * una invitación ajena se enmascara en el backend cuando el solicitante no puede gestionar
+ * roles en su ámbito (la consulta de la invitación se conserva para todos). Así el
+ * identificador del rol no es alcanzable mediante una lectura directa de la tabla.
+ */
 export async function selectClientInvitations(
   companyClientId: string
 ): Promise<ClientInvitationRow[]> {
-  const { data, error } = await supabase
-    .from(tableName("invitations"))
-    .select(selectQuery(`*, tenant_role:${tableName("roles")}(name)`))
-    .eq(columnName("clientId"), companyClientId)
-    .order("created_at", { ascending: false })
+  const { data, error } = await supabase.rpc("list_company_client_invitations", {
+    p_company_client_id: companyClientId,
+  })
 
   if (error) throw error
   return (data as ClientInvitationRow[] | null) || []

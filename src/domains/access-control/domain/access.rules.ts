@@ -82,11 +82,11 @@ export function accessUsername(
 export const RESTRICTED_ROLE_LABEL = "Restringido"
 
 /**
- * Etiqueta del rol de una fila de acceso. El backend oculta el rol (`null`) a quien no
- * tiene permisos de gestión de roles, de modo que la interfaz NUNCA afirma que un usuario
- * no tiene rol: distingue «oculto» de «sin rol».
+ * Etiqueta del rol de una fila con rol (acceso de usuario o invitación). El backend oculta
+ * el rol (`null`) a quien no tiene permisos de gestión de roles, de modo que la interfaz
+ * NUNCA afirma que no hay rol: distingue «restringido» de «sin rol».
  */
-export function accessRoleLabel(row: Pick<EntityAccessRow, "role_name">): string {
+export function accessRoleLabel(row: { role_name: string | null }): string {
   return row.role_name ?? RESTRICTED_ROLE_LABEL
 }
 

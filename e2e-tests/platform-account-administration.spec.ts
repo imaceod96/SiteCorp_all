@@ -289,11 +289,16 @@ test("los usuarios y las invitaciones de un cliente conservan su aislamiento y s
   expect(repository).toMatch(/selectEmbed\("roles", "tenant_roles"\)\}\(name\)/)
   expect(repository).toMatch(/\.in\(columnName\("membershipId"\), membershipIds\)/)
 
-  // Invitaciones: mismas columnas, mismo orden y misma vigencia.
-  expect(repository).toMatch(/tableName\("invitations"\)/)
-  expect(repository).toMatch(/tenant_role:\$\{tableName\("roles"\)\}\(name\)/)
-  expect(repository).toMatch(/\.order\("created_at", \{ ascending: false \}\)/)
-  expect(repository).toMatch(/\[columnName\("clientId"\)\]: input\.clientId/)
+  // Invitaciones: la LECTURA pasa por la RPC (el rol ajeno llega enmascarado desde el
+    // backend y el identificador del rol no se consulta nunca) y el orden lo fija la RPC.
+    expect(repository).toMatch(/tableName\("invitations"\)/)
+    expect(repository).toMatch(/\.rpc\("list_company_client_invitations", \{/)
+    expect(repository).toMatch(/p_company_client_id: companyClientId,/)
+    expect(repository).not.toMatch(/tenant_role:\$\{tableName\("roles"\)\}/)
+    expect(repository).not.toMatch(/company_client_role_id/)
+    expect(repository).not.toMatch(/\.order\(/)
+    // El alta conserva sus columnas y la vigencia la fija el dominio.
+    expect(repository).toMatch(/\[columnName\("clientId"\)\]: input\.clientId/)
   expect(repository).toMatch(/\[columnName\("roleId"\)\]: input\.roleId/)
   expect(repository).toMatch(/invited_by: input\.invitedBy/)
   expect(repository).toMatch(/status: "pending"/)
@@ -310,7 +315,10 @@ test("los usuarios y las invitaciones de un cliente conservan su aislamiento y s
   expect(queries).toMatch(/selectClientUserRoles\(memberships\.map\(\(member\) => member\.id\)\)/)
   expect(queries).toMatch(/profile\?\.full_name \|\| "Usuario"/)
   expect(queries).toMatch(/role_name: rolesByMembership\[member\.id\]\?\.name \|\| "Sin rol"/)
-})
+    // El rol de una invitación se etiqueta con la regla del dominio: «Restringido» cuando el
+      // backend lo enmascara, nunca como si la invitación no llevara rol.
+      expect(queries).toMatch(/role_name: accessRoleLabel\(invitation\)/)
+    })
 
 test("los documentos rectores conservan bucket, ruta, metadatos y ciclo de vida", () => {
   const repository = code(
