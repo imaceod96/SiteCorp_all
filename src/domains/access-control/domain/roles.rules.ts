@@ -62,9 +62,6 @@ export const friendlyRoleSaveError = (scope: RoleScope, error: unknown): string 
   if (normalized.includes("system platform role permissions cannot")) {
     return "Los permisos de un rol del sistema de la plataforma no pueden reducirse ni cambiarse."
   }
-  if (normalized.includes("platform system role is protected")) {
-    return "Un rol del sistema de la plataforma no puede eliminarse."
-  }
   if (normalized.includes("permission denied") || normalized.includes("row-level security")) {
     return scope === "platform"
       ? "No tienes permiso para gestionar roles de plataforma."

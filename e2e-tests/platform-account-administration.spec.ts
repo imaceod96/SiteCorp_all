@@ -212,10 +212,13 @@ test("la cuenta y la sesión se resuelven con los mismos contratos de Auth y RPC
   expect(repository).toMatch(/tableName\("memberships"\)/)
   expect(repository).toMatch(/tenant:\$\{tableName\("clients"\)\}/)
   expect(repository).toMatch(/\.eq\("is_active", true\)/)
-  // Avatares: mismo bucket y misma ruta `<usuario>/<archivo>`.
-  expect(repository).toMatch(/"avatars"/)
-  expect(repository).toMatch(/\$\{userId\}\/\$\{file\.name\}/)
-  expect(repository).toMatch(/getPublicUrl/)
+  // Avatares: bucket PRIVADO, ruta `<usuario>/<archivo>` construida por la regla del dominio y
+  // URL TEMPORAL firmada. Nunca se guarda ni se devuelve una URL pública.
+  expect(repository).toMatch(/AVATARS_BUCKET = "avatars"/)
+  expect(repository).toMatch(/avatarObjectPath\(userId, file\.name\)/)
+  expect(repository).toMatch(/\.createSignedUrl\(path, expiresInSeconds\)/)
+  expect(repository).toMatch(/export async function deleteAvatarObject/)
+  expect(repository).not.toMatch(/getPublicUrl/)
   // La consulta de identidad NO decide autorización por su cuenta.
   expect(repository).not.toMatch(/is_superadmin/i)
 
@@ -234,7 +237,11 @@ test("la cuenta y la sesión se resuelven con los mismos contratos de Auth y RPC
   expect(profiles).toMatch(/\.from\("profiles"\)/)
   expect(profiles).toMatch(/full_name: input\.fullName/)
   expect(profiles).toMatch(/username: input\.username/)
-  expect(profiles).toMatch(/avatar_url: input\.avatarUrl/)
+  // El avatar se escribe SÓLO con la RUTA del objeto, en su operación dedicada: el formulario
+  // de la cuenta ya no arrastra ninguna URL.
+  expect(profiles).toMatch(/export async function updateUserProfileAvatar\(/)
+  expect(profiles).toMatch(/\.update\(\{ avatar_url: avatarPath \}\)/)
+  expect(profiles).not.toMatch(/avatarUrl/)
   expect(profiles).toMatch(/update\(\{ is_active: isActive \}\)/)
   expect(profiles).toMatch(/\.order\("created_at", \{ ascending: false \}\)/)
 })

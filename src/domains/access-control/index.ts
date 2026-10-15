@@ -52,7 +52,10 @@ export type {
 
 /* Reglas puras de la cuenta propia (avatar) */
 export {
+  AVATAR_ALLOWED_MIME_TYPES,
+  AVATAR_MAX_BYTES,
   AVATAR_SIGNED_URL_TTL_SECONDS,
+  avatarFileError,
   avatarObjectPath,
   avatarPathFromStored,
   avatarSignedUrlNeedsRenewal,

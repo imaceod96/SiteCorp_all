@@ -257,10 +257,12 @@ test("un error de las RPC de identidad no se interpreta como «no tiene privileg
     /supabase\.rpc\("is_platform_user"\)[\s\S]{0,120}?if \(error\) throw error/
   )
   expect(repository).toMatch(/selectActiveMemberships[\s\S]*?if \(error\) throw error/)
-  // Ya no se degradan a un negativo implícito.
-  expect(repository).not.toMatch(/const \{ data \} = await supabase\.rpc/)
+  // Ya no se degradan a un negativo implícito: NINGUNA lectura de este repositorio se queda sin
+  // comprobar el error (el único `?? []` traduce `data` nulo a lista vacía y va DESPUÉS de
+  // lanzar el fallo, así que un error nunca se convierte en «no tiene membresías»).
+  expect(repository).not.toMatch(/const \{ data \} = await supabase/)
   expect(repository).not.toMatch(/\) \|\| \[\]/)
-  expect(repository).not.toMatch(/\?\? \[\]\s*\}?\s*\n\s*\}/)
+  expect(repository).toMatch(/if \(error\) throw error[\s\S]{0,80}?\?\? \[\]/)
 
   // La capa de aplicación documenta y conserva esa política: los fallos llegan a la
   // presentación, que decide (estado neutral + reintento) sin conceder nada.
@@ -334,10 +336,12 @@ test("la corrección respeta la arquitectura DDD, la frontera de Supabase y evit
     expect(code(file), `${file} no debe depender de la presentación`).not.toMatch(/@\/contexts\//)
   }
 
-  // …y el contrato del contexto no importa a quien lo consume (AuthContext ↔ AuthProvider).
+  // …y el contrato del contexto no IMPORTA a quien lo implementa (AuthContext ↔ AuthProvider):
+  // la única mención al proveedor es el mensaje del guard del hook, que explica dónde usarlo.
   const context = code("src/contexts/AuthContext.ts")
-  expect(context).not.toMatch(/AuthProvider/)
+  expect(context).not.toMatch(/import[^\n]*AuthProvider/)
   expect(context).not.toMatch(/Provider\.tsx/)
+  expect(context).toMatch(/throw new Error\("useAuth must be used within an AuthProvider"\)/)
 
   // Capas del dominio intactas (la corrección no traslada responsabilidades).
   expect(existsSync("src/domains/access-control/domain/authentication.rules.ts")).toBe(true)

@@ -1,8 +1,10 @@
 import * as React from "react"
 import { useAuth } from "@/contexts/AuthContext"
 import {
+  avatarFileError,
   changePassword,
   passwordChangeError,
+  removeOwnAvatar,
   updateOwnAvatar,
   updateOwnProfile,
 } from "@/domains/access-control"
@@ -12,15 +14,17 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Pencil, KeyRound, Upload, Check } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { KeyRound, Upload, Check, Trash2 } from "lucide-react"
 
 const Account = () => {
-  const { user, profile, isPlatformSuperAdmin, isProfileActive, logout } = useAuth()
+  const { user, profile, avatarUrl, isPlatformSuperAdmin, isProfileActive, refreshAvatar, logout } =
+    useAuth()
+  // El formulario NO incluye el avatar: `profiles.avatar_url` guarda la RUTA del objeto en el
+  // bucket privado y la cambia exclusivamente la operación de avatar.
   const [formData, setFormData] = React.useState({
     full_name: profile?.full_name || "",
     username: profile?.username || "",
-    avatar_url: profile?.avatar_url || "",
   })
   const [passwordData, setPasswordData] = React.useState({
     current_password: "",
@@ -32,6 +36,26 @@ const Account = () => {
   const [error, setError] = React.useState<string | null>(null)
   const [success, setSuccess] = React.useState<string | null>(null)
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null)
+  const [avatarBusy, setAvatarBusy] = React.useState(false)
+  // Previsualización: la URL FIRMADA del contexto, o el archivo recién elegido sin subir.
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = React.useState<string | null>(null)
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null)
+  const localPreviewRef = React.useRef<string | null>(null)
+
+  const releaseLocalPreview = React.useCallback(() => {
+    if (localPreviewRef.current) {
+      URL.revokeObjectURL(localPreviewRef.current)
+      localPreviewRef.current = null
+    }
+  }, [])
+
+  // La URL firmada se renueva sola en el contexto (foco y 80 % de vida): aquí sólo se refleja.
+  React.useEffect(() => {
+    if (avatarFile) return
+    setAvatarPreviewUrl(avatarUrl)
+  }, [avatarUrl, avatarFile])
+
+  React.useEffect(() => releaseLocalPreview, [releaseLocalPreview])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -40,15 +64,22 @@ const Account = () => {
     setSuccess(null)
 
     try {
-      // Los datos de la cuenta y el avatar los guarda el dominio de control de acceso.
+      // Los datos de la cuenta los guarda el dominio de control de acceso (sin avatar).
       await updateOwnProfile(user?.id ?? "", {
         fullName: formData.full_name,
         username: formData.username,
-        avatarUrl: formData.avatar_url,
       })
 
       if (avatarFile) {
-        await updateOwnAvatar(user?.id ?? "", avatarFile)
+        // Sube, guarda la RUTA en el perfil y retira el objeto anterior (reemplazo).
+        const avatarPath = await updateOwnAvatar(
+          user?.id ?? "",
+          avatarFile,
+          profile?.avatar_url ?? null
+        )
+        await refreshAvatar(avatarPath)
+        releaseLocalPreview()
+        setAvatarFile(null)
       }
 
       setSuccess("Cambios guardados correctamente.")
@@ -57,7 +88,26 @@ const Account = () => {
       setError("No se pudieron guardar los cambios.")
     } finally {
       setLoading(false)
+    }
+  }
+
+  /** Baja del avatar propio: limpia la ruta del perfil y retira el objeto. */
+  const handleRemoveAvatar = async () => {
+    setAvatarBusy(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      await removeOwnAvatar(user?.id ?? "", profile?.avatar_url ?? null)
+      await refreshAvatar(null)
+      releaseLocalPreview()
       setAvatarFile(null)
+      setSuccess("Avatar eliminado correctamente.")
+    } catch (err) {
+      console.error("Error removing avatar:", err)
+      setError("No se pudo eliminar el avatar.")
+    } finally {
+      setAvatarBusy(false)
     }
   }
 
@@ -90,10 +140,31 @@ const Account = () => {
     }
   }
 
+  /**
+   * Selección del archivo: se valida ANTES de subir (tipo y tamaño del bucket) y se
+   * previsualiza en local. La subida real ocurre al guardar, para que cancelar no deje basura.
+   */
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setAvatarFile(e.target.files[0])
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setError(null)
+    setSuccess(null)
+
+    const fileError = avatarFileError(file)
+    if (fileError) {
+      releaseLocalPreview()
+      setAvatarFile(null)
+      setAvatarPreviewUrl(avatarUrl)
+      setError(fileError)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      return
     }
+
+    releaseLocalPreview()
+    localPreviewRef.current = URL.createObjectURL(file)
+    setAvatarPreviewUrl(localPreviewRef.current)
+    setAvatarFile(file)
   }
 
   return (
@@ -119,29 +190,59 @@ const Account = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16">
-                {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt="Avatar" className="h-16 w-16 rounded-full object-cover" />
-                ) : (
-                  <AvatarFallback className="bg-sitecorp-primary text-lg font-bold text-white">
-                    {profile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
-                  </AvatarFallback>
-                )}
+                {/*
+                  La imagen se pinta con una URL FIRMADA (temporal): el bucket de avatares es
+                  privado y `profiles.avatar_url` guarda sólo la ruta del objeto.
+                */}
+                {avatarPreviewUrl ? (
+                  <AvatarImage
+                    src={avatarPreviewUrl}
+                    alt="Avatar"
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-sitecorp-primary text-lg font-bold text-white">
+                  {profile?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || "U"}
+                </AvatarFallback>
               </Avatar>
               <div className="space-y-2">
-                <label className="text-sm font-medium text-ink">Foto de perfil</label>
-                <SiteCorpButton type="button" variant="outline" size="sm" className="w-full justify-center">
-                  <Upload className="h-4 w-4 mr-2" /> Cambiar foto
-                </SiteCorpButton>
+                <label className="text-sm font-medium text-ink" htmlFor="avatar-upload">
+                  Foto de perfil
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <SiteCorpButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" /> Cambiar foto
+                  </SiteCorpButton>
+                  {(profile?.avatar_url || avatarFile) && (
+                    <SiteCorpButton
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={avatarBusy || loading}
+                      onClick={() => void handleRemoveAvatar()}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                    </SiteCorpButton>
+                  )}
+                </div>
                 <input
+                  ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/png,image/jpeg,image/webp"
                   onChange={handleAvatarChange}
                   className="hidden"
                   id="avatar-upload"
                 />
-                <label htmlFor="avatar-upload" className="sr-only">
-                  Subir avatar
-                </label>
+                <p className="text-xs text-muted-foreground">
+                  {avatarFile
+                    ? `Seleccionado: ${avatarFile.name}. Pulsa «Guardar cambios» para aplicarlo.`
+                    : "PNG, JPG o WEBP · máximo 2 MB"}
+                </p>
               </div>
             </div>
 

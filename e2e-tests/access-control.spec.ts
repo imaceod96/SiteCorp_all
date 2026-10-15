@@ -173,9 +173,14 @@ test("la creación y la edición de roles validan el nombre y protegen los roles
   expect(
     friendlyRoleSaveError("organization", new Error("system organization role permissions cannot be reduced"))
   ).toBe("Los permisos del rol Administrador no pueden reducirse ni cambiarse.")
-  expect(friendlyRoleSaveError("platform", new Error("superadmin permissions cannot be reduced"))).toBe(
-    "Los permisos reservados de SuperAdmin no pueden reducirse ni cambiarse."
-  )
+  // Mensaje ACTUAL del backend: la protección cubre el conjunto de permisos de CUALQUIER rol
+  // de sistema de la plataforma, no sólo los reservados de SuperAdmin.
+  expect(
+    friendlyRoleSaveError(
+      "platform",
+      new Error("System platform role permissions cannot be reduced or changed")
+    )
+  ).toBe("Los permisos de un rol del sistema de la plataforma no pueden reducirse ni cambiarse.")
   expect(friendlyRoleSaveError("organization", new Error("System role names cannot be changed"))).toBe(
     "El nombre de un rol del sistema no puede cambiarse."
   )
