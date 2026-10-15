@@ -18,6 +18,7 @@ import { SelectItem } from "@/components/ui/select"
 import {
   ACCESS_SCOPE_LABELS,
   accessDisplayName,
+  accessRoleLabel,
   accessRowsByOwnership,
   accessUsername,
   assignEntityAccess,
@@ -232,7 +233,7 @@ export const EntityUsersDialog = ({
                 <p className="truncate text-sm font-medium text-ink">{displayName}</p>
                 <p className="truncate text-xs text-muted-foreground">@{username}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <SiteCorpStatusBadge status="info">{row.role_name}</SiteCorpStatusBadge>
+                  <SiteCorpStatusBadge status="info">{accessRoleLabel(row)}</SiteCorpStatusBadge>
                   <SiteCorpStatusBadge status="neutral">
                     {ACCESS_SCOPE_LABELS[row.access_scope]}
                   </SiteCorpStatusBadge>

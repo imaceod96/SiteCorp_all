@@ -78,6 +78,18 @@ export function accessUsername(
   return row.username || profile?.username || "sin usuario"
 }
 
+/** Etiqueta que sustituye al rol cuando el solicitante no puede gestionar roles. */
+export const RESTRICTED_ROLE_LABEL = "Restringido"
+
+/**
+ * Etiqueta del rol de una fila de acceso. El backend oculta el rol (`null`) a quien no
+ * tiene permisos de gestión de roles, de modo que la interfaz NUNCA afirma que un usuario
+ * no tiene rol: distingue «oculto» de «sin rol».
+ */
+export function accessRoleLabel(row: Pick<EntityAccessRow, "role_name">): string {
+  return row.role_name ?? RESTRICTED_ROLE_LABEL
+}
+
 /** Etiqueta de una membresía del cliente en el selector de usuarios. */
 export function membershipLabel(
   membership: { id: string; user_id: string },

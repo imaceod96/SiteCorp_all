@@ -9,7 +9,9 @@ import {
 import {
   ACCESS_SCOPE_LABELS,
   INVITATION_VALIDITY_DAYS,
+  RESTRICTED_ROLE_LABEL,
   accessDisplayName,
+  accessRoleLabel,
   accessRowsByOwnership,
   accessUsername,
   friendlyAccessError,
@@ -386,6 +388,38 @@ test("los distintos niveles de acceso se deciden por permisos efectivos, nunca p
   expect(dialog).toMatch(/deactivateEntityAccess/)
   expect(dialog).toMatch(/inviteToEntity/)
   expect(dialog).not.toMatch(/@\/lib\/supabase/)
+})
+
+test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
+  // El backend enmascara el rol (`null`); la interfaz distingue «oculto» de «sin rol».
+  expect(accessRoleLabel(accessRow())).toBe("Operador")
+  expect(accessRoleLabel(accessRow({ role_name: null }))).toBe(RESTRICTED_ROLE_LABEL)
+  expect(RESTRICTED_ROLE_LABEL).toBe("Restringido")
+
+  // Las tres superficies que listan accesos usan la etiqueta del dominio, no el dato crudo.
+  for (const file of [
+    "src/components/entity-users-dialog.tsx",
+    "src/pages/EntitySettingsUsers.tsx",
+    "src/pages/OrganizationDetail.tsx",
+  ]) {
+    const source = read(file)
+    expect(source, `${file} debe etiquetar el rol con la regla del dominio`).toMatch(/accessRoleLabel\(/)
+    expect(source, `${file} no debe imprimir el rol en crudo`).not.toMatch(/role_name\}/)
+  }
+
+  // El contrato de la fila admite el rol oculto (lo decide `list_entity_user_access`).
+  const entities = read("src/domains/access-control/domain/entities.ts")
+  expect(entities).toMatch(/tenant_role_id: string \| null/)
+  expect(entities).toMatch(/role_name: string \| null/)
+
+  // La consulta de USUARIOS se conserva: `users.view` sigue habilitando el listado.
+  expect(read("src/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
+
+  // El registro SQL de la fase documenta el enmascaramiento y su reversión real.
+  const record = read("docs/fase-2-definiciones-sql.md")
+  expect(record).toMatch(/can_view_entity_user_access/)
+  expect(record).toMatch(/entity_user_access_select/)
+  expect(record).toMatch(/NO recuperables/i)
 })
 
 test("el reparto de accesos y los mensajes de error de usuarios se conservan", () => {

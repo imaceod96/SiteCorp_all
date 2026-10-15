@@ -103,8 +103,14 @@ export interface EntityAccessRow {
   full_name: string | null
   username: string | null
   profile_is_active: boolean
-  tenant_role_id: string
-  role_name: string
+  /**
+   * Rol asignado, OCULTO (`null`) cuando el solicitante no puede gestionar roles: el
+   * backend (`list_entity_user_access`) sólo lo devuelve a quien tiene permisos de
+   * gestión de roles en ese ámbito o al propio interesado. `users.view` permite ver los
+   * usuarios de la entidad, pero no los roles que tienen asignados.
+   */
+  tenant_role_id: string | null
+  role_name: string | null
   source_entity_id: string
   source_entity_name: string
   access_scope: AccessScope

@@ -74,7 +74,9 @@ export {
 export {
   ACCESS_SCOPE_LABELS,
   INVITATION_VALIDITY_DAYS,
+  RESTRICTED_ROLE_LABEL,
   accessDisplayName,
+  accessRoleLabel,
   accessRowsByOwnership,
   accessUsername,
   friendlyAccessError,

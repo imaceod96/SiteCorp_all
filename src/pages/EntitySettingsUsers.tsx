@@ -10,6 +10,7 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { UserPlus, Users } from "lucide-react"
 import {
   ACCESS_SCOPE_LABELS,
+  accessRoleLabel,
   loadEntityAccessOverview,
   type EntityAccessRow,
 } from "@/domains/access-control"
@@ -103,7 +104,7 @@ const EntitySettingsUsers = () => {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <SiteCorpStatusBadge status="info">{row.role_name}</SiteCorpStatusBadge>
+              <SiteCorpStatusBadge status="info">{accessRoleLabel(row)}</SiteCorpStatusBadge>
               <SiteCorpStatusBadge status="neutral">
                 {ACCESS_SCOPE_LABELS[row.access_scope]}
               </SiteCorpStatusBadge>

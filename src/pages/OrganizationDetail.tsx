@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import {
+  accessRoleLabel,
   loadEntityPermission,
   loadEntityUserAccess,
   loadPlatformPermission,
@@ -493,7 +494,7 @@ const OrganizationDetail = () => {
                       @{user.username || "sin usuario"}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <SiteCorpStatusBadge status="info">{user.role_name}</SiteCorpStatusBadge>
+                      <SiteCorpStatusBadge status="info">{accessRoleLabel(user)}</SiteCorpStatusBadge>
                       <SiteCorpStatusBadge status="neutral">{scopeLabels[user.access_scope]}</SiteCorpStatusBadge>
                     </div>
                   </div>
@@ -539,7 +540,7 @@ const OrganizationDetail = () => {
                       @{user.username || "sin usuario"}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <SiteCorpStatusBadge status="info">{user.role_name}</SiteCorpStatusBadge>
+                      <SiteCorpStatusBadge status="info">{accessRoleLabel(user)}</SiteCorpStatusBadge>
                       <SiteCorpStatusBadge status="neutral">{scopeLabels[user.access_scope]}</SiteCorpStatusBadge>
                       {user.source_entity_name && (
                         <SiteCorpStatusBadge status="warning">
