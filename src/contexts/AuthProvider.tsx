@@ -10,7 +10,7 @@ import {
   signOut as signOutSession,
   subscribeAuthChanges,
   type AuthenticatedIdentity,
-} from "@/domains/access-control"
+} from "@/modules/access-control"
 import {
   AuthContext,
   type AuthProfile,

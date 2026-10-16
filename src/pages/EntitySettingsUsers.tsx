@@ -13,7 +13,7 @@ import {
   accessRoleLabel,
   loadEntityAccessOverview,
   type EntityAccessRow,
-} from "@/domains/access-control"
+} from "@/modules/access-control"
 
 /**
  * Ajustes → Usuarios de UNA entidad.

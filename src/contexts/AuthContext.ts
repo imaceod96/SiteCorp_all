@@ -4,7 +4,7 @@ import type {
   AuthMembershipRecord,
   AuthProfileRecord,
   AuthTenantSummary as AuthTenantSummaryRecord,
-} from "@/domains/access-control"
+} from "@/modules/access-control"
 
 /**
  * Contrato PÚBLICO del contexto de autenticación.

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { loadEntityPermissionCodes } from "@/domains/access-control"
+import { loadEntityPermissionCodes } from "@/modules/access-control"
 
 /**
  * Permisos internos efectivos del usuario en UNA entidad.

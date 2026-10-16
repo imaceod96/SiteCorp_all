@@ -32,9 +32,9 @@ import {
   type EntityAccessRow,
   type EntityRoleOption,
   type UserProfile,
-} from "@/domains/access-control"
+} from "@/modules/access-control"
 import { ArrowUpFromLine, Mail, Power, ShieldCheck, UserPlus } from "lucide-react"
-import type { OrganizationEntity } from "@/domains/organization-structure"
+import type { OrganizationEntity } from "@/modules/organization-structure"
 
 // Compatibilidad: el tipo de la entidad organizativa se sigue exponiendo desde este
 // módulo porque las páginas de organización ya lo importaban desde aquí.

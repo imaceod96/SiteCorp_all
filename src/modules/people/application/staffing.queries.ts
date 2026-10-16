@@ -11,7 +11,7 @@ import type {
   SalaryValue,
   StaffingExportRow,
 } from "@/domains/organization-structure"
-import { loadEntityPermissionSafe } from "@/domains/access-control"
+import { loadEntityPermissionSafe } from "@/modules/access-control"
 import {
   fetchActiveContractTypes,
   fetchEntityHireablePeople,

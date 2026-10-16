@@ -14,7 +14,7 @@ import {
   type ConfigurationJobRow,
 } from "../infrastructure/jobs.repository"
 import { selectConfigurationPositionRows } from "../infrastructure/positions.repository"
-import { loadEntityPermission } from "@/domains/access-control"
+import { loadEntityPermission } from "@/modules/access-control"
 import type {
   OccupationalCategory,
   OrganizationArea,

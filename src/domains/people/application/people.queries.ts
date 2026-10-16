@@ -1,4 +1,4 @@
-import { loadEntityPermission } from "@/domains/access-control"
+import { loadEntityPermission } from "@/modules/access-control"
 import { isPendingCandidate, isReentryWorker } from "../domain/rules"
 import { fetchPersonIdentificationStatus } from "../infrastructure/candidate-registration.repository"
 import { rpcMigrationTemplateData } from "../infrastructure/worker-migration.repository"

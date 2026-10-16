@@ -1,4 +1,4 @@
-import { loadEntityPermission } from "@/domains/access-control"
+import { loadEntityPermission } from "@/modules/access-control"
 import {
   fetchEntityContractData,
   fetchRepresentativePositionList,

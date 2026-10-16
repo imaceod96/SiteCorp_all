@@ -6,6 +6,12 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   signOut: () => Promise<void>
+  authLoading: boolean
+  authReady: boolean
+  identityError: string | null
+  retryIdentity: () => void
+  isPlatformUser: boolean
+  isProfileActive: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -33,7 +39,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signOut,
+        authLoading: false,
+        authReady: true,
+        identityError: null,
+        retryIdentity: () => {},
+        isPlatformUser: false,
+        isProfileActive: true,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

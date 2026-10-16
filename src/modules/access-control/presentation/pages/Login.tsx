@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { signIn } from "@/domains/access-control"
+import { signIn } from "@/modules/access-control"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"

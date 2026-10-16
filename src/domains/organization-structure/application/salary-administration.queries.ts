@@ -1,4 +1,4 @@
-import { loadEntityPermission, loadPlatformPermission } from "@/domains/access-control"
+import { loadEntityPermission, loadPlatformPermission } from "@/modules/access-control"
 import { resolveApplicableScaleId } from "../infrastructure/salary.repository"
 import {
   rpcResolveSalaryValue,

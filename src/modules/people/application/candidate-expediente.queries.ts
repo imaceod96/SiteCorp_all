@@ -15,7 +15,7 @@ import {
   fetchSkinColorsCatalog,
   fetchLicenseCategories,
 } from "../infrastructure/people.repository"
-import { loadEntityPermissionSafe } from "@/domains/access-control"
+import { loadEntityPermissionSafe } from "@/modules/access-control"
 import type {
   CandidateExpediente,
   CandidateExpedienteRelated,

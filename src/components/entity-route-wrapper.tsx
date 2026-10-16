@@ -2,7 +2,7 @@ import * as React from "react"
 import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { canViewEntity } from "@/domains/access-control"
+import { canViewEntity } from "@/modules/access-control"
 import {
   SITECORP_MODULES_DISABLED_MESSAGE,
   SITECORP_MODULES_DISABLED_TITLE,

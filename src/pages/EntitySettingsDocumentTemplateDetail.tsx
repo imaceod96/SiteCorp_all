@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { loadEntityPermissionSafe } from "@/domains/access-control"
+import { loadEntityPermissionSafe } from "@/modules/access-control"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"

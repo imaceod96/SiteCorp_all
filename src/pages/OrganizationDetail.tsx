@@ -8,7 +8,7 @@ import {
   loadEntityUserAccess,
   loadPlatformPermission,
   type EntityAccessRow,
-} from "@/domains/access-control"
+} from "@/modules/access-control"
 import {
   deleteOrganizationEntity,
   loadOrganizationEntityDetail,

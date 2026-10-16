@@ -28,8 +28,8 @@ import {
   type PermissionOption,
   type RoleForm,
   type RoleRecord,
-  type RoleScope,
-} from "@/domains/access-control"
+    type RoleScope,
+  } from "@/modules/access-control"
 import {
   BadgeCheck,
   Eye,
@@ -42,7 +42,7 @@ import {
   Users,
 } from "lucide-react"
 
-export type { RoleScope } from "@/domains/access-control"
+export type { RoleScope } from "@/modules/access-control"
 
 /**
  * Gestión de roles de UN ámbito: plataforma (SiteCorp) o una entidad organizativa.

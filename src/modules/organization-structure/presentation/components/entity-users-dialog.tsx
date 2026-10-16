@@ -32,7 +32,7 @@ import {
   type EntityAccessRow,
   type EntityRoleOption,
   type UserProfile,
-} from "@/domains/access-control"
+} from "@/modules/access-control"
 import { ArrowUpFromLine, Mail, Power, ShieldCheck, UserPlus } from "lucide-react"
 import type { OrganizationEntity } from "@/domains/organization-structure"
 

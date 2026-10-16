@@ -2,7 +2,7 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
-import { loadEntityPermission } from "@/domains/access-control"
+import { loadEntityPermission } from "@/modules/access-control"
 import {
   buildOrganizationTree,
   deleteOrganizationEntity,

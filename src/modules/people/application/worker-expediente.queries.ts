@@ -8,7 +8,7 @@ import {
   fetchWorkerLicenseIds,
   fetchWorkerTenurePayment,
 } from "../infrastructure/worker-expediente.repository"
-import { loadEntityPermissionSafe } from "@/domains/access-control"
+import { loadEntityPermissionSafe } from "@/modules/access-control"
 import type {
   CatalogOption,
   TenurePaymentRule,

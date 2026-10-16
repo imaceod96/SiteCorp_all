@@ -5,7 +5,7 @@ import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { RolesManager } from "@/components/roles-manager"
-import { loadEntityPermission } from "@/domains/access-control"
+import { loadEntityPermission } from "@/modules/access-control"
 
 /**
  * Ajustes → Roles y permisos de UNA entidad.
