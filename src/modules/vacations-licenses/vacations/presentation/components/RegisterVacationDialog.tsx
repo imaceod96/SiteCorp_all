@@ -22,7 +22,7 @@ import {
   registerWorkerVacation,
   formatVacationDays,
 } from "@/modules/vacations-licenses/vacations"
-import { invalidateVacationData } from "@/hooks/use-vacations"
+import { invalidateVacationData } from "../hooks/use-vacations"
 import { CalendarCheck2 } from "lucide-react"
 
 interface VacationWorkerOption {

@@ -23,7 +23,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
 import { createMedicalCertificate } from "@/modules/vacations-licenses/medical-certificates"
 import { loadEntityActiveWorkerOptions, type EntityWorkerOption } from "@/modules/people"
-import { invalidateMedicalCertificateData } from "@/hooks/use-medical-certificates"
+import { invalidateMedicalCertificateData } from "../hooks/use-medical-certificates"
 import { Loader2, X } from "lucide-react"
 
 interface MedicalCertificateFormDialogProps {

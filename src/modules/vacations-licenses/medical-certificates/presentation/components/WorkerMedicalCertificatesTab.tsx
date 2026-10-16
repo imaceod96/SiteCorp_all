@@ -19,10 +19,10 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { useToast } from "@/hooks/use-toast"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
-import { useWorkerMedicalCertificates } from "@/hooks/use-medical-certificates"
+import { useWorkerMedicalCertificates } from "../hooks/use-medical-certificates"
 import { useSc404Generation } from "@/hooks/use-sc404"
 import { getCertificateSignedUrl } from "@/modules/vacations-licenses/medical-certificates"
-import MedicalCertificateFormDialog from "@/components/medical-certificates/MedicalCertificateFormDialog"
+import MedicalCertificateFormDialog from "./MedicalCertificateFormDialog"
 import { Upload, FileText, Loader2, RefreshCw } from "lucide-react"
 
 interface WorkerMedicalCertificatesTabProps {

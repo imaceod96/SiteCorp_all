@@ -8,11 +8,11 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
-import RegisterVacationDialog from "@/components/vacations/RegisterVacationDialog"
+import RegisterVacationDialog from "../components/RegisterVacationDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
-import { useEntityVacationOverview } from "@/hooks/use-vacations"
+import { useEntityVacationOverview } from "../hooks/use-vacations"
 import {
   VACATION_STATUS_LABELS,
   formatVacationDays,
