@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useQuery } from "@tanstack/react-query"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import {
   buildDistribution,
   fetchCandidatesSummary,

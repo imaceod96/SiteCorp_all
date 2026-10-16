@@ -17,7 +17,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import {
   Dialog,
   DialogContent,

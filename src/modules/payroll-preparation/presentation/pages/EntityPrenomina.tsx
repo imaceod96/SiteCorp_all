@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { FileSpreadsheet, RefreshCw, Lock, Unlock, Eye, ChevronDown, ChevronRight } from "lucide-react"
 import WorkerPrenominaDialog from "@/components/prenomina/WorkerPrenominaDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
+import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import { academicCategoryLabel } from "@/modules/organization-structure"
 import {
   MONTH_LABELS,

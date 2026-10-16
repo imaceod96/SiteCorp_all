@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { MigratedWorkerDialog } from "@/components/migration/MigratedWorkerDialog"
 import { LinkWorkerToPositionDialog } from "@/components/migration/LinkWorkerToPositionDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
+import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import {
   ArrowLeft,
   Users,

@@ -10,7 +10,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Building2, Factory, Layers, Plus, ShieldOff } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/shared/hooks/use-toast"
 import {
   ENTITY_TYPE_OPTIONS,
   REGIME_OPTIONS,

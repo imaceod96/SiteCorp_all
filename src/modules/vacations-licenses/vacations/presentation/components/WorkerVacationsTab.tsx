@@ -9,7 +9,7 @@ import VacationPeriodsList from "./VacationPeriodsList"
 import VacationMovementsList from "./VacationMovementsList"
 import RegisterVacationDialog from "./RegisterVacationDialog"
 import { invalidateVacationData, useWorkerVacation } from "../hooks/use-vacations"
-import { useSc404Generation } from "@/hooks/use-sc404"
+import { useSc404Generation } from "@/modules/access-control/presentation/hooks/use-sc404"
 import { cancelWorkerVacation, type VacationPeriod } from "@/modules/vacations-licenses/vacations"
 import { CalendarPlus } from "lucide-react"
 

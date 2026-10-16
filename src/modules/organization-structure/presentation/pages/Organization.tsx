@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Building2, ChevronDown, ChevronRight, Factory, Layers, Pencil, Plus, Search, Trash2, Users } from "lucide-react"
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { OrganizationEntityDialog } from "@/components/organization-entity-dialog"
+import { OrganizationEntityDialog } from "@/modules/organization-structure/presentation/components/organization-entity-dialog"
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",

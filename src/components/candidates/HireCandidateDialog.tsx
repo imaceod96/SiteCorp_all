@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
-import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
+import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import {
   Dialog,
   DialogContent,

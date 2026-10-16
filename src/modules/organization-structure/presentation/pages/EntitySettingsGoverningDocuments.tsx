@@ -9,7 +9,7 @@ import {
   saveGoverningDocument,
   type GoverningDocument,
 } from "@/modules/organization-structure"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"

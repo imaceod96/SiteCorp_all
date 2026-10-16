@@ -14,7 +14,7 @@ import { Plus, SlidersHorizontal, X } from "lucide-react"
 import type {
   ActiveEntityFilter,
   EntityFilterDefinition,
-} from "@/hooks/use-entity-filters"
+} from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 
 /**
  * Constructor de filtros de SiteCorp (patrón «+ Añadir filtro»).

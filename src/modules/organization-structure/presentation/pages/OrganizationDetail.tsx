@@ -61,8 +61,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { EntityUsersDialog } from "@/components/entity-users-dialog"
-import { OrganizationEntityDialog } from "@/components/organization-entity-dialog"
+import { EntityUsersDialog } from "@/modules/organization-structure/presentation/components/entity-users-dialog"
+import { OrganizationEntityDialog } from "@/modules/organization-structure/presentation/components/organization-entity-dialog"
 import RolesManager from "@/modules/access-control/presentation/components/roles-manager"
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {

@@ -14,7 +14,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { showSuccess, showError } from "@/utils/toast"
-import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
+import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import {
   loadSeparationReasons,
   registerWorkerSeparation,

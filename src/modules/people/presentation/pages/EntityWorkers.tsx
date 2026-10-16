@@ -8,7 +8,7 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
+import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import {
   loadEntityWorkersDirectory,
   missingPersonProfileFields,

@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { EntityUsersDialog, type OrganizationEntity } from "@/components/entity-users-dialog"
+import { EntityUsersDialog, type OrganizationEntity } from "@/modules/organization-structure/presentation/components/entity-users-dialog"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"

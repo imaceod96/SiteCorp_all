@@ -10,8 +10,8 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import RegisterVacationDialog from "../components/RegisterVacationDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { useEntityVacationOverview } from "../hooks/use-vacations"
 import {
   VACATION_STATUS_LABELS,

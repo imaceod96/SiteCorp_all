@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { SelectItem } from "@/components/ui/select"
-import EntityUsersDialog from "@/components/entity-users-dialog"
+import EntityUsersDialog from "@/modules/organization-structure/presentation/components/entity-users-dialog"
 import {
   companyClientNameError,
   createCompanyClient,
@@ -42,7 +42,7 @@ import {
 } from "@/modules/organization-structure"
 import {
   OrganizationEntityDialog,
-} from "@/components/organization-entity-dialog"
+} from "@/modules/organization-structure/presentation/components/organization-entity-dialog"
 import {
   Building2,
   ChevronDown,

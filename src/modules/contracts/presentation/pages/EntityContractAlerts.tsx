@@ -26,11 +26,11 @@ import {
   type ContractAlertFilter,
   type ContractAlertRow,
 } from "@/modules/contracts"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import {
   invalidateContractAlertData,
   useEntityContractAlerts,
-} from "@/hooks/use-contract-alerts"
+} from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import {
   formatSalary,
   fetchSalaryValuesForGroups,

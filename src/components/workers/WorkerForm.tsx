@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
+import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"

@@ -389,7 +389,7 @@ test("los distintos niveles de acceso se deciden por permisos efectivos, nunca p
   expect(repository).toMatch(/target_entity_id: entityId,/)
 
   // La visibilidad de usuarios la decide el backend: la interfaz no filtra por usuario.
-  const dialog = read("src/components/entity-users-dialog.tsx")
+  const dialog = read("src/modules/organization-structure/presentation/components/entity-users-dialog.tsx")
   expect(dialog).toMatch(/loadEntityAccessWorkspace/)
   expect(dialog).toMatch(/assignEntityAccess/)
   expect(dialog).toMatch(/deactivateEntityAccess/)
@@ -405,7 +405,7 @@ test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
 
   // Las tres superficies que listan accesos usan la etiqueta del dominio, no el dato crudo.
   for (const file of [
-    "src/components/entity-users-dialog.tsx",
+    "src/modules/organization-structure/presentation/components/entity-users-dialog.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx",
     "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
   ]) {
@@ -529,7 +529,7 @@ test("las membresías y las invitaciones se acotan SIEMPRE al cliente de la enti
   expect(repository).toMatch(/\.update\(\{ is_active: false \}\)/)
 
   // El diálogo usa la entidad del contexto y su cliente; nunca un cliente fijo.
-  const dialog = read("src/components/entity-users-dialog.tsx")
+  const dialog = read("src/modules/organization-structure/presentation/components/entity-users-dialog.tsx")
   expect(dialog).toMatch(/clientId: entity\.tenant_id/)
   expect(dialog).not.toMatch(/company_client_id:/)
 })
@@ -711,7 +711,7 @@ test("la entidad se asocia al cliente actual al crear y NUNCA se reasigna al edi
   expect(commands).not.toMatch(/@\/lib\/supabase/)
 
   // El diálogo consume el caso de uso y no habla con Supabase.
-  const dialog = read("src/components/organization-entity-dialog.tsx")
+  const dialog = read("src/modules/organization-structure/presentation/components/organization-entity-dialog.tsx")
   expect(dialog).toMatch(/saveOrganizationEntity/)
   expect(dialog).toMatch(/resolveParentCandidates/)
   expect(dialog).toMatch(/describeEntityError/)
@@ -1069,9 +1069,9 @@ test("este bloque no modifica el esquema ni crea mecanismos alternativos de auto
 
 test("los componentes y pantallas migrados no consultan Supabase directamente", () => {
   const presentation = [
-    "src/components/organization-entity-dialog.tsx",
+    "src/modules/organization-structure/presentation/components/organization-entity-dialog.tsx",
     "src/modules/access-control/presentation/components/roles-manager.tsx",
-    "src/components/entity-users-dialog.tsx",
+    "src/modules/organization-structure/presentation/components/entity-users-dialog.tsx",
     "src/components/settings/AcademicCategoryPaymentSection.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx",
@@ -1097,12 +1097,12 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
   expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/deleteRole as deleteRoleCommand/)
   expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/friendlyRoleSaveError/)
   expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/isProtectedRole as isProtectedRoleRule/)
-  expect(read("src/components/entity-users-dialog.tsx")).toMatch(/loadEntityAccessWorkspace/)
+  expect(read("src/modules/organization-structure/presentation/components/entity-users-dialog.tsx")).toMatch(/loadEntityAccessWorkspace/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx")).toMatch(/loadEntityPermission/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx")).toMatch(/loadEntityContractDataWorkspace/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsTenureScale.tsx")).toMatch(/loadTenureScaleRanges/)
-  expect(read("src/components/organization-entity-dialog.tsx")).toMatch(/saveOrganizationEntity/)
+  expect(read("src/modules/organization-structure/presentation/components/organization-entity-dialog.tsx")).toMatch(/saveOrganizationEntity/)
 })
 
 test("el dominio de control de acceso no depende de la presentación ni de otros dominios", () => {

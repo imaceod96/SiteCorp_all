@@ -2,8 +2,8 @@ import * as React from "react"
 import { Outlet, Link } from "react-router-dom"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { cn } from "@/lib/utils"
-import { SiteCorpBrand } from "@/components/sitecorp-brand"
-import { SidebarUserMenu } from "@/components/sidebar-user-menu"
+import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
+import { SidebarUserMenu } from "@/modules/access-control/presentation/components/sidebar-user-menu"
 import { toCompanyClient } from "@/modules/company-client"
 import {
   LayoutDashboard,

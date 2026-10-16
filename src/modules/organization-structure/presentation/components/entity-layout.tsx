@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { cn } from "@/lib/utils"
-import { SiteCorpBrand } from "@/components/sitecorp-brand"
+import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
 import {
   LayoutDashboard,
   Users,
@@ -22,7 +22,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from "lucide-react"
-import { SidebarUserMenu } from "@/components/sidebar-user-menu"
+import { SidebarUserMenu } from "@/modules/access-control/presentation/components/sidebar-user-menu"
 import {
   ENTITY_NAV,
   hasSiteCorpAccount,
@@ -30,7 +30,7 @@ import {
   type EntityNavGroup,
   type EntityNavLink,
 } from "@/modules/organization-structure"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 
 /** Iconos de los elementos del menú (la estructura está en ENTITY_NAV). */
 const navIcons: Record<string, React.ReactNode> = {

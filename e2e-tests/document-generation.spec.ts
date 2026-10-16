@@ -390,7 +390,7 @@ test("el motor vive en un solo dominio y la presentación ya no consulta Supabas
   const presentation = [
     "src/components/documents/ContractualDocumentSection.tsx",
     "src/modules/document-generation/presentation/pages/EntityPendingDocuments.tsx",
-    "src/hooks/use-sc404.ts",
+    "src/modules/access-control/presentation/hooks/use-sc404.ts",
     "src/components/salary/ReviewSalaryChangeDialog.tsx",
   ]
 

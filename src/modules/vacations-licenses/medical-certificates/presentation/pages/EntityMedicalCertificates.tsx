@@ -20,16 +20,16 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { useEntityPermissions } from "@/hooks/use-entity-permissions"
+import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import {
   useEntityMedicalCertificates,
 } from "../hooks/use-medical-certificates"
 import { getCertificateSignedUrl, type EntityMedicalCertificateRow } from "@/modules/vacations-licenses/medical-certificates"
 import MedicalCertificateFormDialog from "../components/MedicalCertificateFormDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
-import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
-import { useToast } from "@/hooks/use-toast"
-import { useSc404Generation } from "@/hooks/use-sc404"
+import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
+import { useToast } from "@/shared/hooks/use-toast"
+import { useSc404Generation } from "@/modules/access-control/presentation/hooks/use-sc404"
 import {
   CalendarDays,
   FileText,

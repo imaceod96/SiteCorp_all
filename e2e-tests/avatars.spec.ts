@@ -205,14 +205,14 @@ test("la cuenta propia sube, reemplaza y borra su avatar sin escribir URLs en el
   expect(code("src/contexts/AuthContext.ts")).toMatch(/avatarUrl: string \| null/)
 
   // El menú del usuario usa la misma URL firmada del contexto, no el valor guardado en el perfil.
-  const menu = code("src/components/sidebar-user-menu.tsx")
+  const menu = code("src/modules/access-control/presentation/components/sidebar-user-menu.tsx")
   expect(menu).toMatch(/avatarUrl, logout \} = useAuth\(\)/)
   expect(menu).toMatch(/<AvatarImage src=\{avatarUrl\}/)
 
   // Frontera: la presentación no habla con Storage ni con Supabase.
   for (const file of [
     "src/pages/Account.tsx",
-    "src/components/sidebar-user-menu.tsx",
+    "src/modules/access-control/presentation/components/sidebar-user-menu.tsx",
     "src/contexts/AuthProvider.tsx",
   ]) {
     const source = code(file)

@@ -19,7 +19,7 @@ import {
   matchesEntityFilter,
   useEntityFilters,
   type EntityFilterDefinition,
-} from "../src/hooks/use-entity-filters"
+} from "../src/modules/organization-structure/presentation/hooks/use-entity-filters"
 import {
   ALLOWED_DOCUMENT_EXTENSIONS,
   DOCUMENT_ACCEPT_ATTR,
@@ -351,7 +351,7 @@ test("el hook de filtros arranca sin filtros activos y con todos los criterios d
 })
 
 test("el motor de filtros es presentación: lo consumen las pantallas y no conoce dominios", () => {
-  const hook = read("src/hooks/use-entity-filters.ts")
+  const hook = read("src/modules/organization-structure/presentation/hooks/use-entity-filters.ts")
   // Solo depende de React: no importa dominios, ni casos de uso, ni el cliente de Supabase.
   expect(hook).toMatch(/^import \* as React from "react"/m)
   expect(hook).not.toMatch(/from "@\/lib\//)
@@ -373,7 +373,7 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
   for (const consumer of consumers) {
     const source = read(consumer)
     expect(source, `${consumer} debe consumir el hook de presentación`).toMatch(
-      /from "@\/hooks\/use-entity-filters"/
+      /from "@\/modules\/organization-structure\/presentation\/hooks\/use-entity-filters"/
     )
     expect(source, `${consumer} no debe importar utilidades retiradas`).not.toMatch(
       /@\/lib\/(entity-filters|tenure|worker-migration)/
@@ -688,7 +688,7 @@ test("ningún otro contexto cambió por el traslado de las utilidades", () => {
     ...sourceFiles("src/domains/payroll-movements"),
   ]) {
     expect(read(file), `${file} no debe depender de las utilidades movidas`).not.toMatch(
-      /@\/lib\/(tenure|entity-filters|worker-migration)|@\/hooks\/use-entity-filters/
+      /@\/lib\/(tenure|entity-filters|worker-migration)|@\/modules\/organization-structure\/presentation\/hooks\/use-entity-filters/
     )
   }
 
@@ -721,7 +721,7 @@ test("las utilidades movidas no construyen consultas de esquema ni de entidad", 
   for (const file of [
     "src/domains/people/domain/tenure.rules.ts",
     "src/domains/people/infrastructure/worker-migration.workbook.ts",
-    "src/hooks/use-entity-filters.ts",
+    "src/modules/organization-structure/presentation/hooks/use-entity-filters.ts",
     "src/lib/documents.ts",
   ]) {
     const scope = read(file)

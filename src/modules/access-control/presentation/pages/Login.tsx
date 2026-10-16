@@ -6,7 +6,7 @@ import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
-import { SiteCorpBrand } from "@/components/sitecorp-brand"
+import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
 
 const Login = () => {
   const navigate = useNavigate()
