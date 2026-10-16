@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import type { CatalogOption } from "@/domains/people"
+import type { CatalogOption } from "@/modules/people"
 
 interface DrivingLicenseSelectorProps {
   /** Catálogo global de SiteCorp (A, B, C, D, E) cargado desde la base de datos. */

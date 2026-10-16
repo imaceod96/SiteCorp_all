@@ -37,7 +37,7 @@ import {
   validatePositionChangeInput,
   type PositionChangePreview,
   type StaffingPosition,
-} from "@/domains/people"
+} from "@/modules/people"
 import {
   MISSING_ADDENDUM_TEMPLATE_MESSAGE,
   formatConditionDate,

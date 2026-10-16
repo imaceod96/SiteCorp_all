@@ -15,7 +15,7 @@ import {
   personFullName,
   type CatalogRow,
   type PersonDirectoryWorker,
-} from "@/domains/people"
+} from "@/modules/people"
 import { ArrowLeft, Search, Users, UserCheck, AlertTriangle } from "lucide-react"
 
 /**

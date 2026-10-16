@@ -54,7 +54,7 @@ import {
   type WorkerEmploymentMovement,
   type WorkerExpediente as WorkerDetail,
   type WorkerExpedienteInput,
-} from "@/domains/people"
+} from "@/modules/people"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
@@ -91,7 +91,7 @@ import { ContractRetributionSummary } from "@/components/contracts/ContractRetri
 import { CurrentContractSummary } from "@/components/contracts/CurrentContractSummary"
 import { ContractualTimeline } from "@/components/contracts/ContractualTimeline"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
-import type { RepresentativePositionRow } from "@/domains/representatives"
+import type { RepresentativePositionRow } from "@/modules/representatives"
 import { SelectItem } from "@/components/ui/select"
 import {
   fetchSalaryValuesForGroups,

@@ -28,7 +28,7 @@ import {
   type MigrationBatchHistory,
   type MigrationPreviewRow,
   type MigrationRow,
-} from "@/domains/people"
+} from "@/modules/people"
 
 interface ImportSummary {
   created: number

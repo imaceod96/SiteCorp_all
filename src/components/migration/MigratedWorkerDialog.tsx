@@ -7,7 +7,7 @@ import {
   loadPersonIdentificationStatus,
   type CatalogOption,
   type MigrationRow,
-} from "@/domains/people"
+} from "@/modules/people"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"

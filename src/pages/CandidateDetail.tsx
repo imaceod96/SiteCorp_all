@@ -73,7 +73,7 @@ import {
   type CatalogRow,
   type DocumentTypeOption as DocumentType,
   type ExpedienteDocumentRow as CandidateDocument,
-} from "@/domains/people"
+} from "@/modules/people"
 
 /**
  * El expediente del candidato se describe con los modelos del dominio Personas: la ficha

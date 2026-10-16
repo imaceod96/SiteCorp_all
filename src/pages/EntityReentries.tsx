@@ -15,7 +15,7 @@ import {
   type CatalogRow,
   type PersonReentryWorker,
   type PersonSeparation,
-} from "@/domains/people"
+} from "@/modules/people"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
 

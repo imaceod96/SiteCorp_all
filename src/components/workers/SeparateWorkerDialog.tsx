@@ -20,7 +20,7 @@ import {
   registerWorkerSeparation,
   validateSeparationInput,
   type SeparationReason,
-} from "@/domains/people"
+} from "@/modules/people"
 import { formatSalary } from "@/modules/organization-structure"
 import type { WorkerCurrentSituation } from "@/components/workers/ChangePositionDialog"
 import { AlertTriangle, UserMinus } from "lucide-react"

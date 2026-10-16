@@ -7,7 +7,7 @@ import {
   fetchValidRepresentatives,
   formatRepresentativeDate,
   type RepresentativePositionRow,
-} from "@/domains/representatives"
+} from "@/modules/representatives"
 import { Settings2, UserCheck } from "lucide-react"
 
 interface RepresentativeSelectProps {

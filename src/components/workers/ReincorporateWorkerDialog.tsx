@@ -23,7 +23,7 @@ import {
   type SalaryValue,
 } from "@/modules/organization-structure"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
-import type { RepresentativePositionRow } from "@/domains/representatives"
+import type { RepresentativePositionRow } from "@/modules/representatives"
 import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
 import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
 import {
@@ -58,7 +58,7 @@ import {
   type ContractTypeOption,
   type StaffingPosition,
   type WorkerIdentity,
-} from "@/domains/people"
+} from "@/modules/people"
 import { AlertTriangle, FileSignature, UserPlus } from "lucide-react"
 
 interface ReincorporateWorkerDialogProps {

@@ -5,7 +5,7 @@ import {
   loadEntityCandidatesView,
   type CatalogOption,
   type PersonCandidate,
-} from "@/domains/people"
+} from "@/modules/people"
 import { useNavigate } from "react-router-dom"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"

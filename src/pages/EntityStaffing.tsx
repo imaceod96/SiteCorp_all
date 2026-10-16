@@ -54,7 +54,7 @@ import {
   pendingStaffingWorkers,
   type StaffingPosition,
   type StaffingWorkerRow,
-} from "@/domains/people"
+} from "@/modules/people"
 
 const fullName = (w: StaffingWorkerRow) =>
   [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")

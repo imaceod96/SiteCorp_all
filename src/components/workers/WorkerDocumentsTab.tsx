@@ -8,7 +8,7 @@ import {
   type DocumentTypeOption,
   type WorkerDocumentContractRef,
   type WorkerDocumentRow,
-} from "@/domains/people"
+} from "@/modules/people"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"

@@ -4,8 +4,8 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Label } from "@/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
-import { fetchEntityContractData, saveEntityContractData } from "@/domains/representatives"
-import type { RepresentativePositionRow } from "@/domains/representatives"
+import { fetchEntityContractData, saveEntityContractData } from "@/modules/representatives"
+import type { RepresentativePositionRow } from "@/modules/representatives"
 import {
   fetchResolutionContext,
   fetchResolutionRequiredVariables,

@@ -37,7 +37,7 @@ import {
   loadEntityStaffingBoard,
   type PositionOccupant,
   type StaffingPosition,
-} from "@/domains/people"
+} from "@/modules/people"
 
 const EntityHiring = () => {
   const { entityId } = useParams<{ entityId: string }>()

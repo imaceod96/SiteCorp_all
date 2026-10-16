@@ -18,10 +18,10 @@ import {
   loadContractChangeWorkspace,
   validateContractChangeInput,
   type ContractTypeOption,
-} from "@/domains/people"
+} from "@/modules/people"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
-import type { RepresentativePositionRow } from "@/domains/representatives"
+import type { RepresentativePositionRow } from "@/modules/representatives"
 import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
 import {
   ContractRetributionFields,
