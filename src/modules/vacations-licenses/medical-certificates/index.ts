@@ -2,7 +2,7 @@
  * Certificados Médicos — Interfaz pública del dominio.
  *
  * Punto único de importación para la presentación y para cualquier consumidor:
- *   import { createMedicalCertificate } from "@/domains/vacations-licenses/medical-certificates"
+ *   import { createMedicalCertificate } from "@/modules/vacations-licenses/medical-certificates"
  *
  * No crea una instancia nueva de Supabase: el acceso a datos vive únicamente en
  * `infrastructure/medical-certificates.repository.ts`, que reutiliza el cliente

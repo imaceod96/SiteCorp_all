@@ -10,7 +10,7 @@ import VacationMovementsList from "@/components/vacations/VacationMovementsList"
 import RegisterVacationDialog from "@/components/vacations/RegisterVacationDialog"
 import { invalidateVacationData, useWorkerVacation } from "@/hooks/use-vacations"
 import { useSc404Generation } from "@/hooks/use-sc404"
-import { cancelWorkerVacation, type VacationPeriod } from "@/domains/vacations-licenses/vacations"
+import { cancelWorkerVacation, type VacationPeriod } from "@/modules/vacations-licenses/vacations"
 import { CalendarPlus } from "lucide-react"
 
 interface WorkerVacationsTabProps {

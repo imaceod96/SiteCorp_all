@@ -5,11 +5,11 @@ import {
   vacationOverviewQueryKey,
   workerVacationQueryKey,
   invalidateVacationData,
-} from "@/domains/vacations-licenses/vacations"
+} from "@/modules/vacations-licenses/vacations"
 import type {
   VacationOverviewRow,
   WorkerVacationData,
-} from "@/domains/vacations-licenses/vacations"
+} from "@/modules/vacations-licenses/vacations"
 
 /**
  * Vacaciones — queries de React Query (Fase 18).

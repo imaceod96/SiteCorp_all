@@ -7,7 +7,7 @@ import {
   formatVacationDays,
   type VacationSummary,
   type VacationStatus,
-} from "@/domains/vacations-licenses/vacations"
+} from "@/modules/vacations-licenses/vacations"
 import { AlertTriangle, CalendarClock, CalendarPlus, CalendarCheck2, TrendingUp } from "lucide-react"
 
 const statusTone: Record<VacationStatus, "success" | "warning" | "danger"> = {

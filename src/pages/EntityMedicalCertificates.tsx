@@ -24,7 +24,7 @@ import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import {
   useEntityMedicalCertificates,
 } from "@/hooks/use-medical-certificates"
-import { getCertificateSignedUrl, type EntityMedicalCertificateRow } from "@/domains/vacations-licenses/medical-certificates"
+import { getCertificateSignedUrl, type EntityMedicalCertificateRow } from "@/modules/vacations-licenses/medical-certificates"
 import MedicalCertificateFormDialog from "@/components/medical-certificates/MedicalCertificateFormDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"

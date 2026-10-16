@@ -18,7 +18,7 @@ import {
   formatVacationDays,
   type VacationOverviewRow,
   type VacationStatus,
-} from "@/domains/vacations-licenses/vacations"
+} from "@/modules/vacations-licenses/vacations"
 import {
   AlertTriangle,
   CalendarCheck2,

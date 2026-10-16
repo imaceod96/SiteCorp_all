@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import { useWorkerMedicalCertificates } from "@/hooks/use-medical-certificates"
 import { useSc404Generation } from "@/hooks/use-sc404"
-import { getCertificateSignedUrl } from "@/domains/vacations-licenses/medical-certificates"
+import { getCertificateSignedUrl } from "@/modules/vacations-licenses/medical-certificates"
 import MedicalCertificateFormDialog from "@/components/medical-certificates/MedicalCertificateFormDialog"
 import { Upload, FileText, Loader2, RefreshCw } from "lucide-react"
 
