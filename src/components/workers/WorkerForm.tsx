@@ -11,7 +11,7 @@ import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } fr
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/modules/representatives"
-import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
+import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
 import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
 import {
   ContractRetributionFields,
@@ -29,8 +29,8 @@ import {
   type PaymentMethodOption,
 } from "@/modules/contracts"
 import type { PositionScheduleSegment } from "@/modules/organization-structure"
-import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
-import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
+import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
+import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/components/AcademicDegreeCheckboxes"
 import {
   candidateRequiresSpecialty,
   checkWorkerIdentification,

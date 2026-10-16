@@ -23,7 +23,7 @@ import {
   type SalaryValue,
 } from "@/modules/organization-structure"
 import { ArrowRight, AlertTriangle, FileSignature, Info } from "lucide-react"
-import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
+import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
 import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,

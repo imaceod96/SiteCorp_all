@@ -43,7 +43,7 @@ import {
   UserPlus,
 } from "lucide-react"
 import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
-import { AcademicBadges } from "@/components/person/AcademicBadges"
+import { AcademicBadges } from "@/modules/people/presentation/components/AcademicBadges"
 import {
   addCandidateAcademicFormation,
   addCandidateAdditionalInfo,

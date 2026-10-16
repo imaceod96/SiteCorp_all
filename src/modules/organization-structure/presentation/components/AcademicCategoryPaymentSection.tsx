@@ -5,13 +5,13 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
 import { Loader2, Save, GraduationCap } from "lucide-react"
+import type { AcademicCategoryPaymentConfig } from "@/modules/organization-structure/domain/entities"
 import {
   formatAcademicAmount,
-  loadAcademicCategoryPaymentConfig,
   parseAcademicAmount,
-  saveAcademicCategoryPaymentAmounts,
-  type AcademicCategoryPaymentConfig,
-} from "@/modules/organization-structure"
+} from "@/modules/organization-structure/domain/academic-payment.rules"
+import { loadAcademicCategoryPaymentConfig } from "@/modules/organization-structure/application/academic-payment.queries"
+import { saveAcademicCategoryPaymentAmounts } from "@/modules/organization-structure/application/academic-payment.commands"
 
 interface AcademicCategoryPaymentSectionProps {
   entityId: string

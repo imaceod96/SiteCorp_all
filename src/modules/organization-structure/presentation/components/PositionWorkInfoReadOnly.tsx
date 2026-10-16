@@ -1,12 +1,12 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import type { PositionScheduleSegment } from "@/modules/organization-structure/domain/entities"
+import { NO_WORK_INFO_LABEL } from "@/modules/organization-structure/domain/rules"
 import {
-  NO_WORK_INFO_LABEL,
   formatBreak,
   formatJornada,
   formatScheduleByDay,
-  type PositionScheduleSegment,
-} from "@/modules/organization-structure"
+} from "@/modules/organization-structure/domain/formatters"
 
 interface PositionWorkInfoReadOnlyProps {
   workLocation?: string | null

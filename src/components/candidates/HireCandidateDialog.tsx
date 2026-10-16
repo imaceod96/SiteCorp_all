@@ -44,7 +44,7 @@ import {
   type StaffingPosition,
 } from "@/modules/people"
 import { AlertTriangle, UserPlus, RefreshCw, Search } from "lucide-react"
-import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
+import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
 import { ContractReadinessChecklist } from "@/components/contracts/ContractReadinessChecklist"
 import {
   missingContractTemplateMessage,

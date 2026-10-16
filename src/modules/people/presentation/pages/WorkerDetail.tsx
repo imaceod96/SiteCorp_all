@@ -55,8 +55,8 @@ import {
   type WorkerExpediente as WorkerDetail,
   type WorkerExpedienteInput,
 } from "@/modules/people"
-import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
-import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
+import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
+import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/components/AcademicDegreeCheckboxes"
 import {
   academicCategoryLabel,
   formatAcademicAmount,

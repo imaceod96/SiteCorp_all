@@ -881,7 +881,7 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
   expect(commands).not.toMatch(/@\/lib\/supabase/)
 
   // La sección consume el dominio y conserva sus mensajes.
-  const section = read("src/components/settings/AcademicCategoryPaymentSection.tsx")
+  const section = read("src/modules/organization-structure/presentation/components/AcademicCategoryPaymentSection.tsx")
   expect(section).toMatch(/loadAcademicCategoryPaymentConfig/)
   expect(section).toMatch(/saveAcademicCategoryPaymentAmounts/)
   expect(section).toMatch(/parseAcademicAmount/)
@@ -1072,7 +1072,7 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
     "src/modules/organization-structure/presentation/components/organization-entity-dialog.tsx",
     "src/modules/access-control/presentation/components/roles-manager.tsx",
     "src/modules/organization-structure/presentation/components/entity-users-dialog.tsx",
-    "src/components/settings/AcademicCategoryPaymentSection.tsx",
+    "src/modules/organization-structure/presentation/components/AcademicCategoryPaymentSection.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx",

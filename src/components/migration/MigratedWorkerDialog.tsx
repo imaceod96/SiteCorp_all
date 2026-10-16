@@ -14,7 +14,7 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { Label } from "@/components/ui/label"
 import { SelectItem } from "@/components/ui/select"
-import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
+import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
 
 interface Props {
   onSuccess: (workerId: string) => void

@@ -21,8 +21,8 @@ import {
 } from "@/components/ui/dialog"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
-import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
-import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
+import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
+import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/components/AcademicDegreeCheckboxes"
 import {
   PeopleRuleError,
   candidateRequiresSpecialty,

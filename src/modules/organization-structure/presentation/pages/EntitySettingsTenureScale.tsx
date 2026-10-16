@@ -30,7 +30,7 @@ import {
   ChevronDown,
 } from "lucide-react"
 import { SelectItem } from "@/components/ui/select"
-import AcademicCategoryPaymentSection from "@/components/settings/AcademicCategoryPaymentSection"
+import AcademicCategoryPaymentSection from "@/modules/organization-structure/presentation/components/AcademicCategoryPaymentSection"
 import {
   EMPTY_TENURE_FORM,
   createTenureScaleRange,
