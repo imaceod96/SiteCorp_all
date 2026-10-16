@@ -33,7 +33,7 @@ import {
   type CompanyClient,
   type CompanyClientDeletionSummary,
   type CompanyClientRecord,
-} from "@/domains/company-client"
+} from "@/modules/company-client"
 import {
   buildOrganizationTree,
   deleteOrganizationEntity,

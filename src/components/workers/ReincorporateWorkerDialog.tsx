@@ -40,7 +40,7 @@ import {
   type CompensationComponentDraft,
   type ContractFormalizationPending,
   type PaymentMethodOption,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,

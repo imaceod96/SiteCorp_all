@@ -43,7 +43,7 @@ import {
   formatConditionDate,
   resolveAddendumTemplateAvailability,
   type TemplateAvailability,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"

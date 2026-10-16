@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { LegacyTenantSummary } from "@/domains/company-client"
+import type { LegacyTenantSummary } from "@/modules/company-client"
 
 /**
  * Company Client — Estado de INTERFAZ del cliente activo.

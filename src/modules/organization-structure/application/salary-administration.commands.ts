@@ -1,4 +1,4 @@
-import { applySalaryChange } from "@/domains/contracts"
+import { applySalaryChange } from "@/modules/contracts"
 import {
   deactivateSalaryGroupRecord,
   insertEntityEmpresarialScale,

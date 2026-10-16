@@ -50,7 +50,7 @@ import {
   missingContractTemplateMessage,
   resolveContractTemplateAvailability,
   type TemplateAvailability,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,
@@ -71,7 +71,7 @@ import {
   type CompensationComponentDraft,
   type ContractFormalizationPending,
   type PaymentMethodOption,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 export interface HireCandidateTarget {
   id: string

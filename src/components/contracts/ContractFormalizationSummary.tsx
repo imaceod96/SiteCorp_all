@@ -6,7 +6,7 @@ import {
   formatConditionDate,
   formatContractMoney,
   type CompensationComponentDraft,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 interface ContractFormalizationSummaryProps {
   /** Persona que suscribe el contrato */

@@ -2,7 +2,7 @@
  * Company Client — Interfaz pública del dominio.
  *
  * Punto único de entrada para consumidores:
- *   import { toCompanyClient } from "@/domains/company-client"
+ *   import { toCompanyClient } from "@/modules/company-client"
  *
  * Estructura:
  *   domain/entities.ts                             → tipos y contratos

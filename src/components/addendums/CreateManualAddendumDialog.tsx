@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { invalidateContractAlertData } from "@/hooks/use-contract-alerts"
-import { ensureAddendumDocumentGenerated } from "@/domains/contracts"
+import { ensureAddendumDocumentGenerated } from "@/modules/contracts"
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,7 @@ import {
   type CompensationComponentType,
   type FormalizedConditions,
   type PaymentMethodOption,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import { showError, showSuccess } from "@/utils/toast"
 import { Info } from "lucide-react"
 

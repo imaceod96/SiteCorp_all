@@ -17,7 +17,7 @@ import {
   type FormalizedConditions,
   type PaymentMethodOption,
   type WorkerContractualConditions,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import { ArrowRight, FilePlus2, UserCheck } from "lucide-react"
 
 interface ContractRow {

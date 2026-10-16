@@ -6,7 +6,7 @@ import {
   formatConditionDate,
   formatContractMoney,
   type ContractCompensationComponent,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 interface ContractRetributionSummaryProps {
   /** Snapshot contractual (histórico, nunca recalculado) */

@@ -4,7 +4,7 @@ import {
   fetchContractAlerts,
   requiresAttention,
   type ContractAlertRow,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 /**
  * Alertas de vencimiento contractual vía React Query.

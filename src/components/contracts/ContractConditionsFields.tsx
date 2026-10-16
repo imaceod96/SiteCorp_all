@@ -15,7 +15,7 @@ import {
   type CompensationComponentDraft,
   type CompensationComponentType,
   type PaymentMethodOption,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 
 /* ------------------------------------------------------------------ *

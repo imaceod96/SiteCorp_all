@@ -39,7 +39,7 @@ import {
   type CompensationComponentDraft,
   type ContractFormalizationPending,
   type PaymentMethodOption,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import { FileSignature } from "lucide-react"
 
 export interface CurrentContractInfo {

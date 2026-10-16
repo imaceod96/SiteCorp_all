@@ -5,7 +5,7 @@ import { AlertTriangle, Settings2, Info } from "lucide-react"
 import {
   fetchContractFormalizationPending,
   type ContractFormalizationPending,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 interface ContractFormalizationAlertsProps {
   entityId: string

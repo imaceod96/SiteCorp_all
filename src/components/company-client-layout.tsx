@@ -4,7 +4,7 @@ import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { cn } from "@/lib/utils"
 import { SiteCorpBrand } from "@/components/sitecorp-brand"
 import { SidebarUserMenu } from "@/components/sidebar-user-menu"
-import { toCompanyClient } from "@/domains/company-client"
+import { toCompanyClient } from "@/modules/company-client"
 import {
   LayoutDashboard,
   Building2,

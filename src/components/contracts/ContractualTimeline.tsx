@@ -9,7 +9,7 @@ import {
   formatConditionDate,
   formatContractMoney,
   type ContractAddendum,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 export interface TimelineContractRow {
   id: string

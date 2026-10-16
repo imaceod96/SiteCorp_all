@@ -25,7 +25,7 @@ import {
   summarizeContractAlerts,
   type ContractAlertFilter,
   type ContractAlertRow,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import {
   invalidateContractAlertData,

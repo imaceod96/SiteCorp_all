@@ -12,7 +12,7 @@ import {
   formatContractMoney,
   type ContractAlertRow,
   type FormalizedConditions,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 
 interface CurrentContractSummaryProps {
   className?: string

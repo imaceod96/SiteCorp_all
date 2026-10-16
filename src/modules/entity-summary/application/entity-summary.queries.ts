@@ -4,7 +4,7 @@ import {
   fetchContractAlerts,
   summarizeContractAlerts,
   type ContractAlertSummary,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import {
   MOVEMENTS_WINDOW_DAYS,
   summarizeCandidates,

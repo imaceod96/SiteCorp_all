@@ -127,7 +127,7 @@ import {
   type PaymentMethodOption,
   type WorkerContractualConditions,
   type WorkerSalaryHistoryEntry,
-} from "@/domains/contracts"
+} from "@/modules/contracts"
 import { ContractAddendumsSection } from "@/components/addendums/ContractAddendumsSection"
 
 /**
