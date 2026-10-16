@@ -405,7 +405,7 @@ test("la unicidad de la persona sigue resolviéndose con el mismo criterio", () 
 test("ninguna de las cuatro pantallas del expediente consulta Supabase directamente", () => {
   const screens = [
     "src/modules/people/presentation/pages/CandidateDetail.tsx",
-    "src/components/candidates/CandidateForm.tsx",
+    "src/modules/people/presentation/components/CandidateForm.tsx",
     "src/modules/people/presentation/pages/WorkerDetail.tsx",
     "src/components/workers/WorkerForm.tsx",
   ]

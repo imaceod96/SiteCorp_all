@@ -26,17 +26,21 @@ import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/componen
 import {
   PeopleRuleError,
   candidateRequiresSpecialty,
+  specialtyForEducationLevel,
+  validateCandidateRegistration,
+} from "@/modules/people/domain/rules"
+import { registerCandidate } from "@/modules/people/application/people.commands"
+import { updateCandidateExpediente } from "@/modules/people/application/candidate-expediente.commands"
+import {
   loadCandidateFormCatalogs,
   loadCandidateFormData,
-  registerCandidate,
-  specialtyForEducationLevel,
-  updateCandidateExpediente,
-  validateCandidateRegistration,
-  type CandidateExpediente as Candidate,
-  type CandidateExpedienteInput,
-  type CatalogOption,
-  type CandidateRegistrationInput,
-} from "@/modules/people"
+} from "@/modules/people/application/candidate-expediente.queries"
+import type {
+  CandidateExpediente as Candidate,
+  CandidateExpedienteInput,
+  CandidateRegistrationInput,
+  CatalogOption,
+} from "@/modules/people/domain/entities"
 
 /**
  * Ficha del candidato tal y como la edita este formulario. El modelo vive en el dominio

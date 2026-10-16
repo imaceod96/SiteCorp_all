@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import CandidateForm from "@/components/candidates/CandidateForm"
+import CandidateForm from "@/modules/people/presentation/components/CandidateForm"
 
 const CandidateEdit = () => {
   const { entityId, candidateId } = useParams<{ entityId: string; candidateId: string }>()
