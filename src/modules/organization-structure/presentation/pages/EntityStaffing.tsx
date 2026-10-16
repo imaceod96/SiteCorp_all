@@ -40,7 +40,7 @@ import {
   type PositionScheduleSegment,
   type SalaryValue,
   type StaffingExportRow,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import {
   WorkerForm,
   type WorkerPositionOption,
@@ -54,7 +54,7 @@ import {
   pendingStaffingWorkers,
   type StaffingPosition,
   type StaffingWorkerRow,
-} from "@/domains/people"
+} from "@/modules/people"
 
 const fullName = (w: StaffingWorkerRow) =>
   [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")

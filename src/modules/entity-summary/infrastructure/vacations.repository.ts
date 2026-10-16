@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import type { VacationOverviewRow } from "@/domains/vacations-licenses/vacations"
+import type { VacationOverviewRow } from "@/modules/vacations-licenses/vacations"
 import type { VacationsSummary } from "../domain/entities"
 
 /**

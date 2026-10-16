@@ -1,4 +1,4 @@
-import { hasLinkedWorker } from "@/domains/people/domain/rules"
+import { hasLinkedWorker } from "@/modules/people/domain/rules"
 import type {
   CandidatesSummary,
   ContractDataReadiness,

@@ -18,7 +18,7 @@ import {
   resolveParentCandidates,
   saveOrganizationEntity,
   type OrganizationEntity,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 
 /**
  * Alta y edición de una entidad organizativa (Grupo Empresarial → Empresa → UEB).
