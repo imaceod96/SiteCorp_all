@@ -929,7 +929,7 @@ test("los datos contractuales y los cargos de representación no consultan Supab
   // Los datos contractuales se escriben con la RPC que exige el permiso.
   expect(repository).toMatch(/\.rpc\("save_entity_contract_data", \{/)
 
-  const page = read("src/pages/EntitySettingsContractData.tsx")
+  const page = read("src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx")
   expect(page).toMatch(/loadEntityContractDataWorkspace/)
   expect(page).toMatch(/No tiene permiso para ver los datos contractuales de esta entidad\./)
   expect(page).not.toMatch(/@\/lib\/supabase/)
@@ -1075,7 +1075,7 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
     "src/components/settings/AcademicCategoryPaymentSection.tsx",
     "src/pages/EntitySettingsUsers.tsx",
     "src/pages/EntitySettingsRoles.tsx",
-    "src/pages/EntitySettingsContractData.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx",
     "src/pages/EntitySettingsTenureScale.tsx",
   ]
 
@@ -1100,7 +1100,7 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
   expect(read("src/components/entity-users-dialog.tsx")).toMatch(/loadEntityAccessWorkspace/)
   expect(read("src/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
   expect(read("src/pages/EntitySettingsRoles.tsx")).toMatch(/loadEntityPermission/)
-  expect(read("src/pages/EntitySettingsContractData.tsx")).toMatch(/loadEntityContractDataWorkspace/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx")).toMatch(/loadEntityContractDataWorkspace/)
   expect(read("src/pages/EntitySettingsTenureScale.tsx")).toMatch(/loadTenureScaleRanges/)
   expect(read("src/components/organization-entity-dialog.tsx")).toMatch(/saveOrganizationEntity/)
 })

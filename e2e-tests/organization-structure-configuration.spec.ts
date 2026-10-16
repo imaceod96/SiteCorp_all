@@ -423,7 +423,7 @@ test("la configuración de la estructura no consulta Supabase desde la presentac
     "src/contexts/SalaryProvider.tsx",
     "src/contexts/SalaryContext.ts",
     "src/pages/EntitySettingsSalary.tsx",
-    "src/pages/AdminSettingsSalaryScale.tsx",
+    "src/modules/organization-structure/presentation/pages/AdminSettingsSalaryScale.tsx",
   ]
 
   for (const file of presentation) {
@@ -567,7 +567,7 @@ test("la escala presupuestada es de solo lectura en el contexto de la entidad, c
 
   // La pantalla de plataforma sólo habilita la gestión con `salary.manage` de plataforma:
   // nunca por el simple hecho de ser superadministrador.
-  const admin = read("src/pages/AdminSettingsSalaryScale.tsx")
+  const admin = read("src/modules/organization-structure/presentation/pages/AdminSettingsSalaryScale.tsx")
   expect(admin).toMatch(/canManageGlobalSalary/)
   expect(admin).not.toMatch(/isPlatformSuperAdmin/)
 })

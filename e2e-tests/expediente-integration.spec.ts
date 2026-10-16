@@ -196,7 +196,7 @@ test("la pestaña de documentos resuelve su expediente con el dominio Personas",
 })
 
 test("el listado de candidatos y la ficha de edición comparten un único formulario", () => {
-  const list = read("src/pages/EntityCandidates.tsx")
+  const list = read("src/modules/people/presentation/pages/EntityCandidates.tsx")
   expect(list).toMatch(/components\/candidates\/CandidateForm/)
   expect(list).toMatch(/mode="create"/)
   // Sin formulario paralelo: no hay estado de formulario ni datos vacíos propios del listado.

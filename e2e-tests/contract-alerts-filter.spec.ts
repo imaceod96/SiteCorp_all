@@ -14,7 +14,7 @@ import {
 /**
  * FILTRO DE VENCIMIENTOS CONTRACTUALES — regresión del listado vacío con «Requieren atención».
  *
- * El módulo de Vencimientos (`src/pages/EntityContractAlerts.tsx`) arranca con el filtro
+ * El módulo de Vencimientos (`src/modules/contracts/presentation/pages/EntityContractAlerts.tsx`) arranca con el filtro
  * «Requieren atención». Ese valor es un AGRUPADOR, no un estado contractual, así que
  * compararlo directamente contra `alert_state` nunca coincide con ninguna fila: el contador
  * mostraba contratos y el listado quedaba vacío.
@@ -161,7 +161,7 @@ test.describe("regresión: el contador y el listado cuentan lo mismo", () => {
 
 test.describe("filtro de vencimientos: frontera de la presentación", () => {
   test("la página usa la regla del dominio y ya no compara el agrupador con el estado", () => {
-    const page = code("src/pages/EntityContractAlerts.tsx")
+    const page = code("src/modules/contracts/presentation/pages/EntityContractAlerts.tsx")
 
     expect(page).toContain("matchesContractAlertFilter(row, stateFilter)")
     // La regla se consume por la API PÚBLICA del dominio, no desde el módulo interno.
@@ -174,7 +174,7 @@ test.describe("filtro de vencimientos: frontera de la presentación", () => {
   })
 
   test("el estado del filtro está tipado con el vocabulario del dominio", () => {
-    const page = code("src/pages/EntityContractAlerts.tsx")
+    const page = code("src/modules/contracts/presentation/pages/EntityContractAlerts.tsx")
 
     expect(page).toContain('React.useState<ContractAlertFilter>("ATTENTION")')
     // El valor del control de selección (siempre `string`) se estrecha con la regla.

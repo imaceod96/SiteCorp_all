@@ -359,10 +359,10 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
   expect(hook).not.toMatch(/\.rpc\(/)
 
   const consumers = [
-    "src/pages/EntityCandidates.tsx",
+    "src/modules/people/presentation/pages/EntityCandidates.tsx",
     "src/modules/people/presentation/pages/EntityHiring.tsx",
     "src/pages/EntityMedicalCertificates.tsx",
-    "src/pages/EntityPrenomina.tsx",
+    "src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx",
     "src/modules/people/presentation/pages/EntityReentries.tsx",
     "src/pages/EntityStaffing.tsx",
     "src/pages/EntityVacations.tsx",

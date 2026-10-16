@@ -384,8 +384,8 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
     "src/pages/Account.tsx",
     "src/pages/Admin.tsx",
     "src/pages/PlatformUsers.tsx",
-    "src/pages/CompanyClientUsers.tsx",
-    "src/pages/CompanyClientInvitations.tsx",
+    "src/modules/company-client/presentation/pages/CompanyClientUsers.tsx",
+    "src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx",
     "src/pages/EntitySettingsGoverningDocuments.tsx",
     "src/components/entity-layout.tsx",
     "src/components/entity-route-wrapper.tsx",
@@ -418,12 +418,12 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
   expect(code("src/pages/PlatformUsers.tsx")).toMatch(/loadPlatformUsers\(\)/)
   expect(code("src/pages/PlatformUsers.tsx")).toMatch(/loadActivePlatformRoles\(\)/)
   expect(code("src/pages/PlatformUsers.tsx")).toMatch(/createPlatformUser\(/)
-  expect(code("src/pages/CompanyClientUsers.tsx")).toMatch(/loadClientUsers\(/)
-  expect(code("src/pages/CompanyClientUsers.tsx")).toMatch(/setClientMembershipActive\(/)
-  expect(code("src/pages/CompanyClientInvitations.tsx")).toMatch(/loadClientInvitations\(/)
-  expect(code("src/pages/CompanyClientInvitations.tsx")).toMatch(/sendClientInvitation\(/)
-  expect(code("src/pages/CompanyClientInvitations.tsx")).toMatch(/cancelClientInvitation\(/)
-  expect(code("src/pages/CompanyClientInvitations.tsx")).toMatch(/resendClientInvitation\(/)
+  expect(code("src/modules/company-client/presentation/pages/CompanyClientUsers.tsx")).toMatch(/loadClientUsers\(/)
+  expect(code("src/modules/company-client/presentation/pages/CompanyClientUsers.tsx")).toMatch(/setClientMembershipActive\(/)
+  expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/loadClientInvitations\(/)
+  expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/sendClientInvitation\(/)
+  expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/cancelClientInvitation\(/)
+  expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/resendClientInvitation\(/)
   expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/loadGoverningDocuments\(/)
   expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/saveGoverningDocument\(/)
   expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/removeGoverningDocument\(/)
@@ -431,7 +431,7 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
   expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/downloadGoverningDocument\(/)
 
   // Mensajes de usuario conservados en las pantallas migradas.
-  expect(read("src/pages/CompanyClientInvitations.tsx")).toMatch(
+  expect(read("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(
     /No se pudo enviar la invitación\./
   )
   expect(read("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(

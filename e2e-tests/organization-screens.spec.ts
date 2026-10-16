@@ -143,9 +143,9 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
     "src/pages/Organizations.tsx",
     "src/pages/Organization.tsx",
     "src/pages/OrganizationDetail.tsx",
-    "src/pages/CompanyClientRoles.tsx",
+    "src/modules/company-client/presentation/pages/CompanyClientRoles.tsx",
     "src/pages/RolesPermissions.tsx",
-    "src/pages/EntitySettings.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettings.tsx",
     "src/components/entity-route-wrapper.tsx",
     "src/hooks/use-entity-permissions.ts",
   ]
@@ -180,8 +180,8 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
   expect(wrapper).toMatch(/canViewEntity/)
   expect(wrapper).toMatch(/loadEntitySiteCorpFlag/)
 
-  expect(read("src/pages/CompanyClientRoles.tsx")).toMatch(/loadClientEntities/)
-  expect(read("src/pages/EntitySettings.tsx")).toMatch(/useEntityPermissions/)
+  expect(read("src/modules/company-client/presentation/pages/CompanyClientRoles.tsx")).toMatch(/loadClientEntities/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettings.tsx")).toMatch(/useEntityPermissions/)
   expect(read("src/hooks/use-entity-permissions.ts")).toMatch(/loadEntityPermissionCodes/)
   expect(read("src/pages/RolesPermissions.tsx")).toMatch(/RolesManager/)
 })

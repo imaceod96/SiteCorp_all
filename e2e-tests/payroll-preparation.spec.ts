@@ -698,7 +698,7 @@ test("los permisos prenomina.view y prenomina.manage se conservan sin cambios", 
   expect(catalog).toMatch(/"prenomina\.manage": "Gestionar prenómina"/)
 
   // La pantalla sigue preguntando al dominio de control de acceso y usa las reglas puras.
-  const page = code("src/pages/EntityPrenomina.tsx")
+  const page = code("src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx")
   expect(page).toMatch(/useEntityPermissions\(entityId\)/)
   expect(page).toMatch(/canViewPrenomina\(permissions\)/)
   expect(page).toMatch(/canManagePrenomina\(permissions\)/)
@@ -713,7 +713,7 @@ test("los permisos prenomina.view y prenomina.manage se conservan sin cambios", 
 
 test("las pantallas de prenómina consumen el dominio y no consultan Supabase", () => {
   const presentation = [
-    "src/pages/EntityPrenomina.tsx",
+    "src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx",
     "src/components/prenomina/WorkerPrenominaDialog.tsx",
   ]
 
@@ -741,7 +741,7 @@ test("las pantallas de prenómina consumen el dominio y no consultan Supabase", 
   }
 
   // La pantalla delega en el dominio la resolución del CLA del período.
-  expect(code("src/pages/EntityPrenomina.tsx")).toMatch(
+  expect(code("src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx")).toMatch(
     /resolveEntryClaConfig\(entry, period\?\.status\)/
   )
 })
