@@ -10,7 +10,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SelectItem } from "@/components/ui/select"
-import RolesManager from "@/components/roles-manager"
+import RolesManager from "@/modules/access-control/presentation/components/roles-manager"
 import { Building2, Layers, Factory } from "lucide-react"
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {

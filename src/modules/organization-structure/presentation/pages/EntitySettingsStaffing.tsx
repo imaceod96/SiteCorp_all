@@ -68,9 +68,9 @@ import {
   type PreparationLevel,
   type SalaryValue,
 } from "@/modules/organization-structure"
-import { JobForm } from "@/components/JobForm"
-import { AreaForm } from "@/components/AreaForm"
-import { PositionForm, type PositionJobOption, type PositionEditingData } from "@/components/PositionForm"
+import { JobForm } from "@/modules/organization-structure/presentation/components/JobForm"
+import { AreaForm } from "@/modules/organization-structure/presentation/components/AreaForm"
+import { PositionForm, type PositionJobOption, type PositionEditingData } from "@/modules/organization-structure/presentation/components/PositionForm"
 
 /**
  * CONFIGURACIÓN DE PLANTILLA — áreas, cargos y puestos de la entidad.

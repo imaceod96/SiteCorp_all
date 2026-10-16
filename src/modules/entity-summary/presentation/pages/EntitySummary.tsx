@@ -7,7 +7,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useEntitySummaryDashboard } from "@/hooks/use-entity-summary"
+import { useEntitySummaryDashboard } from "@/modules/entity-summary/presentation/hooks/use-entity-summary"
 import type {
   AgeReport,
   DistributionSlice,

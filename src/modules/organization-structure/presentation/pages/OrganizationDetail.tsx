@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { EntityUsersDialog } from "@/components/entity-users-dialog"
 import { OrganizationEntityDialog } from "@/components/organization-entity-dialog"
-import RolesManager from "@/components/roles-manager"
+import RolesManager from "@/modules/access-control/presentation/components/roles-manager"
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",

@@ -415,11 +415,11 @@ test("la configuración de la estructura no repite el cálculo de plazas ocupada
 
 test("la configuración de la estructura no consulta Supabase desde la presentación", () => {
   const presentation = [
-    "src/components/AreaForm.tsx",
-    "src/components/JobForm.tsx",
-    "src/components/PositionForm.tsx",
+    "src/modules/organization-structure/presentation/components/AreaForm.tsx",
+    "src/modules/organization-structure/presentation/components/JobForm.tsx",
+    "src/modules/organization-structure/presentation/components/PositionForm.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx",
-    "src/components/salary-group-dialog.tsx",
+    "src/modules/organization-structure/presentation/components/salary-group-dialog.tsx",
     "src/contexts/SalaryProvider.tsx",
     "src/contexts/SalaryContext.ts",
     "src/modules/organization-structure/presentation/pages/EntitySettingsSalary.tsx",
@@ -435,12 +435,12 @@ test("la configuración de la estructura no consulta Supabase desde la presentac
   }
 
   // Las pantallas y formularios consumen CASOS DE USO del dominio.
-  expect(read("src/components/AreaForm.tsx")).toMatch(/saveArea/)
-  expect(read("src/components/AreaForm.tsx")).toMatch(/validateAreaInput/)
-  expect(read("src/components/JobForm.tsx")).toMatch(/loadJobFormWorkspace/)
-  expect(read("src/components/JobForm.tsx")).toMatch(/saveJob/)
-  expect(read("src/components/PositionForm.tsx")).toMatch(/savePosition/)
-  expect(read("src/components/PositionForm.tsx")).toMatch(/validatePositionInput/)
+  expect(read("src/modules/organization-structure/presentation/components/AreaForm.tsx")).toMatch(/saveArea/)
+  expect(read("src/modules/organization-structure/presentation/components/AreaForm.tsx")).toMatch(/validateAreaInput/)
+  expect(read("src/modules/organization-structure/presentation/components/JobForm.tsx")).toMatch(/loadJobFormWorkspace/)
+  expect(read("src/modules/organization-structure/presentation/components/JobForm.tsx")).toMatch(/saveJob/)
+  expect(read("src/modules/organization-structure/presentation/components/PositionForm.tsx")).toMatch(/savePosition/)
+  expect(read("src/modules/organization-structure/presentation/components/PositionForm.tsx")).toMatch(/validatePositionInput/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/loadStaffingConfiguration/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/setAreaActive/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/setJobActive/)

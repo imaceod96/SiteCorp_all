@@ -16,7 +16,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import { EntityLayout } from "@/components/entity-layout"
+import { EntityLayout } from "@/modules/organization-structure/presentation/components/entity-layout"
 import { Outlet } from "react-router-dom"
 import { ShieldOff } from "lucide-react"
 

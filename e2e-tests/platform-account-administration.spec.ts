@@ -387,8 +387,8 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
     "src/modules/company-client/presentation/pages/CompanyClientUsers.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx",
-    "src/components/entity-layout.tsx",
-    "src/components/entity-route-wrapper.tsx",
+    "src/modules/organization-structure/presentation/components/entity-layout.tsx",
+    "src/modules/access-control/presentation/components/entity-route-wrapper.tsx",
     "src/contexts/AuthProvider.tsx",
     "src/contexts/AuthContext.ts",
   ]
@@ -510,10 +510,10 @@ test("las fachadas sin consumidores se retiraron y las utilidades legítimas se 
   }
 
   // Las reglas y el catálogo viven ahora en el dominio de estructura organizativa.
-  expect(code("src/components/entity-layout.tsx")).toMatch(
+  expect(code("src/modules/organization-structure/presentation/components/entity-layout.tsx")).toMatch(
     /from "@\/domains\/organization-structure"/
   )
-  expect(code("src/components/entity-route-wrapper.tsx")).toMatch(
+  expect(code("src/modules/access-control/presentation/components/entity-route-wrapper.tsx")).toMatch(
     /from "@\/domains\/organization-structure"/
   )
   expect(code("src/domains/organization-structure/domain/organization-entities.rules.ts")).toMatch(

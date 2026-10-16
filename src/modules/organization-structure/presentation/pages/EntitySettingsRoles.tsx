@@ -4,7 +4,7 @@ import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
-import { RolesManager } from "@/components/roles-manager"
+import { RolesManager } from "@/modules/access-control/presentation/components/roles-manager"
 import { loadEntityPermission } from "@/modules/access-control"
 
 /**

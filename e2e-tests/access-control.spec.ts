@@ -1070,7 +1070,7 @@ test("este bloque no modifica el esquema ni crea mecanismos alternativos de auto
 test("los componentes y pantallas migrados no consultan Supabase directamente", () => {
   const presentation = [
     "src/components/organization-entity-dialog.tsx",
-    "src/components/roles-manager.tsx",
+    "src/modules/access-control/presentation/components/roles-manager.tsx",
     "src/components/entity-users-dialog.tsx",
     "src/components/settings/AcademicCategoryPaymentSection.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx",
@@ -1092,11 +1092,11 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
   }
 
   // Cada pantalla consume SU caso de uso, no una consulta propia.
-  expect(read("src/components/roles-manager.tsx")).toMatch(/loadRoleScopeWorkspace/)
-  expect(read("src/components/roles-manager.tsx")).toMatch(/saveRole as saveRoleCommand/)
-  expect(read("src/components/roles-manager.tsx")).toMatch(/deleteRole as deleteRoleCommand/)
-  expect(read("src/components/roles-manager.tsx")).toMatch(/friendlyRoleSaveError/)
-  expect(read("src/components/roles-manager.tsx")).toMatch(/isProtectedRole as isProtectedRoleRule/)
+  expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/loadRoleScopeWorkspace/)
+  expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/saveRole as saveRoleCommand/)
+  expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/deleteRole as deleteRoleCommand/)
+  expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/friendlyRoleSaveError/)
+  expect(read("src/modules/access-control/presentation/components/roles-manager.tsx")).toMatch(/isProtectedRole as isProtectedRoleRule/)
   expect(read("src/components/entity-users-dialog.tsx")).toMatch(/loadEntityAccessWorkspace/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx")).toMatch(/loadEntityPermission/)
