@@ -27,7 +27,7 @@ import {
   type PositionEditingData,
   type PositionJobOption,
   type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { CalendarClock, Plus, X } from "lucide-react"
 
 export type { PositionJobOption, PositionEditingData } from "@/domains/organization-structure"

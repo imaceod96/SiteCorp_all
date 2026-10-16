@@ -24,7 +24,7 @@ import {
   type PreparationLevel,
   type SalaryGroupWithCurrent,
   type SalaryValue,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 
 /**
  * Cargo de la entidad: alta y edición.
