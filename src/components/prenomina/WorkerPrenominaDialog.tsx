@@ -32,7 +32,7 @@ import {
   validateClaMinutes,
   validateNightInput,
   validateWorkedDays,
-} from "@/domains/payroll-preparation"
+} from "@/modules/payroll-preparation"
 
 interface NightRow {
   id: string | null

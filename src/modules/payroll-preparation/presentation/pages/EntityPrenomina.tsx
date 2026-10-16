@@ -47,7 +47,7 @@ import {
   savePrenominaExcelBlob,
   savePrenominaInputs,
   savePrenominaNight,
-} from "@/domains/payroll-preparation"
+} from "@/modules/payroll-preparation"
 
 interface SaveNightInput {
   id: string | null

@@ -13,7 +13,7 @@ import {
   MISSING_RESOLUTION_TEMPLATE_MESSAGE,
   type ResolutionContext,
   type ResolutionTemplateAvailability,
-} from "@/domains/resolutions"
+} from "@/modules/resolutions"
 
 /**
  * Formulario de Resolución (Cargo Especialista Principal) — COMPONENTE ÚNICO

@@ -47,7 +47,7 @@ import {
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"
-import { updateJobWorkContent } from "@/domains/resolutions"
+import { updateJobWorkContent } from "@/modules/resolutions"
 
 export interface WorkerCurrentSituation {
   positionId: string | null

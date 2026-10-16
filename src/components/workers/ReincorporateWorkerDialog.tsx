@@ -48,7 +48,7 @@ import {
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"
-import { updateJobWorkContent } from "@/domains/resolutions"
+import { updateJobWorkContent } from "@/modules/resolutions"
 import {
   loadTransitionWorkspace,
   reincorporateWorkerWithContract,

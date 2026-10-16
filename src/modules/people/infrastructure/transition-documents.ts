@@ -3,8 +3,8 @@ import {
   ensureContractDocumentGenerated,
   type DocumentAutomationResult,
 } from "@/modules/contracts"
-import { ensurePayrollMovementDocumentGenerated } from "@/domains/payroll-movements"
-import { ensureResolutionDocumentGenerated } from "@/domains/resolutions"
+import { ensurePayrollMovementDocumentGenerated } from "@/modules/payroll-movements"
+import { ensureResolutionDocumentGenerated } from "@/modules/resolutions"
 import type { PayrollMovementType } from "../domain/entities"
 
 /**
