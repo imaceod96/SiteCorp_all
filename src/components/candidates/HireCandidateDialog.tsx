@@ -23,12 +23,12 @@ import {
   salaryForGroup,
   formatSalary,
   type SalaryValue,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"
-import { updateJobWorkContent } from "@/domains/resolutions"
+import { updateJobWorkContent } from "@/modules/resolutions"
 import {
   checkHiringReadiness,
   hireCandidateWithContract,
@@ -42,7 +42,7 @@ import {
   type HireablePerson,
   type ReadinessResult,
   type StaffingPosition,
-} from "@/domains/people"
+} from "@/modules/people"
 import { AlertTriangle, UserPlus, RefreshCw, Search } from "lucide-react"
 import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
 import { ContractReadinessChecklist } from "@/components/contracts/ContractReadinessChecklist"
@@ -54,14 +54,14 @@ import {
 import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import {
   ContractRetributionFields,
   ContractSignatureFields,
 } from "@/components/contracts/ContractConditionsFields"
 import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
 import { ContractFormalizationSummary } from "@/components/contracts/ContractFormalizationSummary"
-import type { RepresentativePositionRow } from "@/domains/representatives"
+import type { RepresentativePositionRow } from "@/modules/representatives"
 import {
   EMPTY_FORMALIZATION_PENDING,
   buildComponentsPayload,

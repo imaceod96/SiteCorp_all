@@ -36,7 +36,7 @@ import {
   type CandidateExpedienteInput,
   type CatalogOption,
   type CandidateRegistrationInput,
-} from "@/domains/people"
+} from "@/modules/people"
 
 /**
  * Ficha del candidato tal y como la edita este formulario. El modelo vive en el dominio

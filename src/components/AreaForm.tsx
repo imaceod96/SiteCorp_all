@@ -11,7 +11,7 @@ import {
   saveArea,
   validateAreaInput,
   type OrganizationArea,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 
 /**
  * Área de la entidad: alta y edición.
