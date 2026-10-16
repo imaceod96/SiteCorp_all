@@ -1,5 +1,5 @@
 import * as React from "react"
-import { templateVersionPeriodLabel, type DocumentTemplateVersion } from "@/domains/document-templates"
+import { templateVersionPeriodLabel, type DocumentTemplateVersion } from "@/modules/document-templates"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"

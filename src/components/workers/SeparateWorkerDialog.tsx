@@ -21,7 +21,7 @@ import {
   validateSeparationInput,
   type SeparationReason,
 } from "@/domains/people"
-import { formatSalary } from "@/domains/organization-structure"
+import { formatSalary } from "@/modules/organization-structure"
 import type { WorkerCurrentSituation } from "@/components/workers/ChangePositionDialog"
 import { AlertTriangle, UserMinus } from "lucide-react"
 

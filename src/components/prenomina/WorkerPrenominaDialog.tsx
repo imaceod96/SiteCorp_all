@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Plus, Trash2 } from "lucide-react"
-import { academicCategoryLabel } from "@/domains/organization-structure"
+import { academicCategoryLabel } from "@/modules/organization-structure"
 import {
   type PrenominaWorkerEntry,
   type PrenominaNightEntry,

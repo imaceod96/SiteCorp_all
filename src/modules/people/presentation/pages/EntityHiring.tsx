@@ -29,7 +29,7 @@ import {
   salaryForGroup,
   formatSalary,
   type SalaryValue,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"

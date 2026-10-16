@@ -21,7 +21,7 @@ import {
   fetchWorkersBySex,
   fetchWorkersBySkinColor,
   type SummaryScope,
-} from "@/domains/entity-summary"
+} from "@/modules/entity-summary"
 
 /**
  * Datos REALES del dashboard de entidad (Resumen) vía React Query.

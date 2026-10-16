@@ -29,7 +29,7 @@ import {
   type EntityNavEntry,
   type EntityNavGroup,
   type EntityNavLink,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 
 /** Iconos de los elementos del menú (la estructura está en ENTITY_NAV). */

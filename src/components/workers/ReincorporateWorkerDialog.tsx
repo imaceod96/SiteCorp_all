@@ -21,7 +21,7 @@ import {
   salaryForGroup,
   formatSalary,
   type SalaryValue,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/domains/representatives"
 import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
@@ -44,7 +44,7 @@ import {
 import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/components/resolutions/ResolutionForm"

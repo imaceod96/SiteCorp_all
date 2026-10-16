@@ -36,7 +36,7 @@ import {
   type PendingBatch,
   type PendingBatchItem,
   DOCUMENT_TYPE_LABELS,
-} from "@/domains/document-generation"
+} from "@/modules/document-generation"
 import { showError, showSuccess } from "@/utils/toast"
 import {
   AlertTriangle,

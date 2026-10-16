@@ -4,7 +4,7 @@ import {
   documentTypeCodeForTemplateType,
   type DocumentVariableDefinition,
   type TemplateOccurrence,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"

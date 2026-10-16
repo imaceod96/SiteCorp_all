@@ -4,7 +4,7 @@ import type {
   SalaryScaleWithGroups,
   SalaryGroup,
   SalaryGroupValue,
-} from '@/domains/organization-structure'
+} from '@/modules/organization-structure'
 
 /**
  * Contexto de escalas salariales (presentación).
@@ -21,7 +21,7 @@ export type {
   ResolvedSalaryGroupValue,
   SalaryGroupWithCurrent,
   SalaryScaleWithGroups,
-} from '@/domains/organization-structure'
+} from '@/modules/organization-structure'
 
 interface SalaryContextType {
   // Scale operations

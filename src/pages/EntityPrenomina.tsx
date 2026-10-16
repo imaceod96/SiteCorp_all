@@ -16,7 +16,7 @@ import { FileSpreadsheet, RefreshCw, Lock, Unlock, Eye, ChevronDown, ChevronRigh
 import WorkerPrenominaDialog from "@/components/prenomina/WorkerPrenominaDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/hooks/use-entity-filters"
-import { academicCategoryLabel } from "@/domains/organization-structure"
+import { academicCategoryLabel } from "@/modules/organization-structure"
 import {
   MONTH_LABELS,
   PRENOMINA_STATUS_LABELS,

@@ -21,13 +21,13 @@ import {
   salaryForGroup,
   formatSalary,
   type SalaryValue,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { ArrowRight, AlertTriangle, FileSignature, Info } from "lucide-react"
 import { PositionWorkInfoReadOnly } from "@/components/positions/PositionWorkInfoReadOnly"
 import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
 import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
 import {

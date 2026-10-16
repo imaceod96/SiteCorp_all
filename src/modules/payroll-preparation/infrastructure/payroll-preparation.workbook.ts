@@ -1,7 +1,7 @@
 import type { Workbook } from "exceljs"
 // Regla pura de la categoría académica, tomada directamente del dominio que la define: la
 // exportación sólo necesita la etiqueta y así no arrastra la capa de datos de ese dominio.
-import { academicCategoryLabel } from "@/domains/organization-structure/domain/academic-payment.rules"
+import { academicCategoryLabel } from "@/modules/organization-structure/domain/academic-payment.rules"
 import { formatDateDMY, formatTenureLabel } from "../domain/formatters"
 import { MONTH_LABELS, PRENOMINA_STATUS_LABELS } from "../domain/rules"
 import type { PrenominaExportMeta, PrenominaNightEntry, PrenominaWorkerEntry } from "../domain/entities"

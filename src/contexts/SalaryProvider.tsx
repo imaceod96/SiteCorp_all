@@ -17,7 +17,7 @@ import {
   loadSalaryScaleWithGroups,
   resolveSalaryValueForGroup,
   updateSalaryGroup as updateSalaryGroupCommand,
-} from '@/domains/organization-structure'
+} from '@/modules/organization-structure'
 import {
   SalaryContext,
   type SalaryScale,

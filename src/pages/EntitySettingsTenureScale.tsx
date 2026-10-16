@@ -41,7 +41,7 @@ import {
   updateTenureScaleRangeById,
   type TenureScaleFormValues,
   type TenureScaleRange,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 
 /**
  * Escala de pago de antigüedad de UNA entidad.

@@ -11,7 +11,7 @@ import {
   parseAcademicAmount,
   saveAcademicCategoryPaymentAmounts,
   type AcademicCategoryPaymentConfig,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 
 interface AcademicCategoryPaymentSectionProps {
   entityId: string

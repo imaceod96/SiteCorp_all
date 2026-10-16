@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { loadEntityPermission, loadPlatformPermission } from "@/modules/access-control"
-import { loadClientEntities, type OrganizationEntity } from "@/domains/organization-structure"
+import { loadClientEntities, type OrganizationEntity } from "@/modules/organization-structure"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"

@@ -40,7 +40,7 @@ import {
   type PositionScheduleSegment,
   type SalaryValue,
   type StaffingExportRow,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import {
   WorkerForm,
   type WorkerPositionOption,

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { linkMigratedWorker } from "@/domains/people"
-import { fetchEntityPositionHierarchy } from "@/domains/organization-structure"
+import { fetchEntityPositionHierarchy } from "@/modules/organization-structure"
 import type { WorkerPositionOption } from "@/components/workers/WorkerForm"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button } from "@/components/ui/sitecorp-button"

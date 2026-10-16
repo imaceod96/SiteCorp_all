@@ -1,5 +1,5 @@
 import { fetchPersonCatalogs } from "../infrastructure/catalogs.repository"
-import { resolveApplicableScaleId } from "@/domains/organization-structure"
+import { resolveApplicableScaleId } from "@/modules/organization-structure"
 import {
   fetchSalaryScaleName,
   fetchWorkerEmploymentMovements,

@@ -1,4 +1,4 @@
-import type { GeneratedDocumentRow } from "@/domains/document-generation"
+import type { GeneratedDocumentRow } from "@/modules/document-generation"
 
 /**
  * Movimientos de Nómina — Reglas PURAS del dominio.

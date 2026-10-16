@@ -13,7 +13,7 @@ import {
   deleteOrganizationEntity,
   loadOrganizationEntityDetail,
   type OrganizationEntity,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"

@@ -39,7 +39,7 @@ import {
   deleteOrganizationEntity,
   loadVisibleEntities,
   type OrganizationEntity,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import {
   OrganizationEntityDialog,
 } from "@/components/organization-entity-dialog"

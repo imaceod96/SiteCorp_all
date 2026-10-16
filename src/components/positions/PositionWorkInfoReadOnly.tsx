@@ -6,7 +6,7 @@ import {
   formatJornada,
   formatScheduleByDay,
   type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 
 interface PositionWorkInfoReadOnlyProps {
   workLocation?: string | null

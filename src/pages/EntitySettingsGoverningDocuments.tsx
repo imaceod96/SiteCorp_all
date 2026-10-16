@@ -8,7 +8,7 @@ import {
   removeGoverningDocument,
   saveGoverningDocument,
   type GoverningDocument,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { useEntityPermissions } from "@/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"

@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { loadEntityPermissionSafe } from "@/modules/access-control"
-import { fetchEntityName } from "@/domains/organization-structure"
+import { fetchEntityName } from "@/modules/organization-structure"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
@@ -21,7 +21,7 @@ import {
   type DocumentTemplate,
   type DocumentTemplateVersion,
   type DocumentTemplateType,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import CreateDocumentTemplateDialog from "@/components/document-templates/CreateDocumentTemplateDialog"
 import { FileText, Plus, ArrowRight, Download, FilePlus2, PowerOff } from "lucide-react"
 

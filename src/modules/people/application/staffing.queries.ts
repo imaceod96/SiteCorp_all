@@ -5,12 +5,12 @@ import {
   fetchSalaryValuesForGroups,
   fetchStaffingExportRows,
   resolveApplicableScaleId,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import type {
   PositionScheduleSegment,
   SalaryValue,
   StaffingExportRow,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { loadEntityPermissionSafe } from "@/modules/access-control"
 import {
   fetchActiveContractTypes,

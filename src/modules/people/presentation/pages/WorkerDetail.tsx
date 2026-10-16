@@ -62,7 +62,7 @@ import {
   formatAcademicAmount,
   loadAcademicCategoryPayment,
   type AcademicCategoryPaymentResolution,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import ChangePositionDialog, {
   type WorkerCurrentSituation,
 } from "@/components/workers/ChangePositionDialog"
@@ -77,7 +77,7 @@ import {
   formatScheduleByDay,
   formatScheduleSummary,
   type PositionScheduleSegment,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import ChangeContractDialog, {
   type CurrentContractInfo,
 } from "@/components/workers/ChangeContractDialog"
@@ -98,7 +98,7 @@ import {
   salaryForGroup,
   formatSalary,
   type SalaryValue,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,

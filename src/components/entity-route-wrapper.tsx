@@ -10,7 +10,7 @@ import {
   loadEntitySiteCorpFlag,
   loadOrganizationEntity,
   organizationFallbackPath,
-} from "@/domains/organization-structure"
+} from "@/modules/organization-structure"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"

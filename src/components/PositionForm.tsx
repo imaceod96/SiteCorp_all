@@ -30,7 +30,7 @@ import {
 } from "@/modules/organization-structure"
 import { CalendarClock, Plus, X } from "lucide-react"
 
-export type { PositionJobOption, PositionEditingData } from "@/domains/organization-structure"
+export type { PositionJobOption, PositionEditingData } from "@/modules/organization-structure"
 
 /**
  * Puesto de la plantilla: alta y edición.

@@ -1,5 +1,5 @@
 import * as React from "react"
-import type { TemplateValidation } from "@/domains/document-templates"
+import type { TemplateValidation } from "@/modules/document-templates"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"

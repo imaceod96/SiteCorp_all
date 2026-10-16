@@ -7,7 +7,7 @@ import {
   templateFileFormatLabel,
   templateVersionPeriodLabel,
   type DocumentTemplateVersion,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"

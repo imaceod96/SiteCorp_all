@@ -28,7 +28,7 @@ import {
   type ContractFormalizationPending,
   type PaymentMethodOption,
 } from "@/modules/contracts"
-import type { PositionScheduleSegment } from "@/domains/organization-structure"
+import type { PositionScheduleSegment } from "@/modules/organization-structure"
 import { DrivingLicenseSelector } from "@/components/person/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/components/person/AcademicDegreeCheckboxes"
 import {
