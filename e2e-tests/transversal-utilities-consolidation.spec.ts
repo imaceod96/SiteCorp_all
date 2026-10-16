@@ -112,7 +112,7 @@ test("la antigüedad se calcula en las reglas puras del dominio Personas, sin de
   }
 
   // La ficha del trabajador ya no importa de `src/lib`.
-  const workerDetail = read("src/pages/WorkerDetail.tsx")
+  const workerDetail = read("src/modules/people/presentation/pages/WorkerDetail.tsx")
   expect(workerDetail).toMatch(/calculateTenure/)
   expect(workerDetail).not.toMatch(/@\/lib\//)
 })
@@ -360,13 +360,13 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
 
   const consumers = [
     "src/pages/EntityCandidates.tsx",
-    "src/pages/EntityHiring.tsx",
+    "src/modules/people/presentation/pages/EntityHiring.tsx",
     "src/pages/EntityMedicalCertificates.tsx",
     "src/pages/EntityPrenomina.tsx",
-    "src/pages/EntityReentries.tsx",
+    "src/modules/people/presentation/pages/EntityReentries.tsx",
     "src/pages/EntityStaffing.tsx",
     "src/pages/EntityVacations.tsx",
-    "src/pages/EntityWorkers.tsx",
+    "src/modules/people/presentation/pages/EntityWorkers.tsx",
     "src/components/filters/filter-builder.tsx",
   ]
 

@@ -369,7 +369,7 @@ const CONTRACT_CONSUMERS = [
   "src/components/workers/ChangePositionDialog.tsx",
   "src/components/workers/ReincorporateWorkerDialog.tsx",
   "src/components/workers/WorkerForm.tsx",
-  "src/pages/WorkerDetail.tsx",
+  "src/modules/people/presentation/pages/WorkerDetail.tsx",
 ]
 
 test("la presentación del contrato usa el dominio y ya no importa las fachadas retiradas", () => {

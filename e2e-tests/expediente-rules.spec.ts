@@ -406,7 +406,7 @@ test("ninguna de las cuatro pantallas del expediente consulta Supabase directame
   const screens = [
     "src/pages/CandidateDetail.tsx",
     "src/components/candidates/CandidateForm.tsx",
-    "src/pages/WorkerDetail.tsx",
+    "src/modules/people/presentation/pages/WorkerDetail.tsx",
     "src/components/workers/WorkerForm.tsx",
   ]
 

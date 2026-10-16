@@ -894,7 +894,7 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
   // donde vive el pago académico es el dominio de estructura organizativa.
   expect(existsSync("src/lib/academic-payment.ts")).toBe(false)
 
-  const workerDetail = read("src/pages/WorkerDetail.tsx")
+  const workerDetail = read("src/modules/people/presentation/pages/WorkerDetail.tsx")
   expect(workerDetail).toMatch(/from "@\/domains\/organization-structure"/)
   expect(workerDetail).toMatch(/loadAcademicCategoryPayment\(entityId, workerId\)/)
   expect(workerDetail).not.toMatch(/@\/lib\/academic-payment/)
