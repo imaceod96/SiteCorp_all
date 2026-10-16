@@ -183,11 +183,11 @@ test("las pantallas y los componentes migrados ya no consultan Supabase", () => 
   const presentation = [
     "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates.tsx",
     "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail.tsx",
-    "src/components/document-templates/CreateDocumentTemplateDialog.tsx",
+    "src/modules/document-templates/presentation/components/CreateDocumentTemplateDialog.tsx",
     "src/modules/document-templates/presentation/components/DocumentTemplateFilesPanel.tsx",
     "src/modules/document-templates/presentation/components/DocumentTemplateValidationPanel.tsx",
     "src/modules/document-templates/presentation/components/DocumentTemplateVariablesPanel.tsx",
-    "src/components/document-templates/DocumentTemplateVersionsPanel.tsx",
+    "src/modules/document-templates/presentation/components/DocumentTemplateVersionsPanel.tsx",
   ]
 
   for (const file of presentation) {

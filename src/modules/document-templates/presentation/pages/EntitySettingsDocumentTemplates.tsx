@@ -22,7 +22,7 @@ import {
   type DocumentTemplateVersion,
   type DocumentTemplateType,
 } from "@/modules/document-templates"
-import CreateDocumentTemplateDialog from "@/components/document-templates/CreateDocumentTemplateDialog"
+import CreateDocumentTemplateDialog from "@/modules/document-templates/presentation/components/CreateDocumentTemplateDialog"
 import { FileText, Plus, ArrowRight, Download, FilePlus2, PowerOff } from "lucide-react"
 
 /**

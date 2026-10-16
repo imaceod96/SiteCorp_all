@@ -25,7 +25,7 @@ import {
 } from "@/modules/document-templates"
 import DocumentTemplateFilesPanel from "@/modules/document-templates/presentation/components/DocumentTemplateFilesPanel"
 import DocumentTemplateValidationPanel from "@/modules/document-templates/presentation/components/DocumentTemplateValidationPanel"
-import DocumentTemplateVersionsPanel from "@/components/document-templates/DocumentTemplateVersionsPanel"
+import DocumentTemplateVersionsPanel from "@/modules/document-templates/presentation/components/DocumentTemplateVersionsPanel"
 import DocumentTemplateVariablesPanel from "@/modules/document-templates/presentation/components/DocumentTemplateVariablesPanel"
 import { ArrowLeft, ListChecks } from "lucide-react"
 

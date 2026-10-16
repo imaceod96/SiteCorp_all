@@ -36,7 +36,7 @@ import WorkerMedicalCertificatesTab from "@/modules/vacations-licenses/medical-c
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
-import { WorkerForm } from "@/components/workers/WorkerForm"
+import { WorkerForm } from "@/modules/people/presentation/components/WorkerForm"
 import { WorkerDocumentsTab } from "@/components/workers/WorkerDocumentsTab"
 import {
   drivingLicenseLabels,

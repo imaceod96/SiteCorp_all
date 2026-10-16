@@ -45,7 +45,7 @@ import {
   WorkerForm,
   type WorkerPositionOption,
   type WorkerEditingData,
-} from "@/components/workers/WorkerForm"
+} from "@/modules/people/presentation/components/WorkerForm"
 import {
   activeStaffingWorkers,
   countAssignmentsByPosition,

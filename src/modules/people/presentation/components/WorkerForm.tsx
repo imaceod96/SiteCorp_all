@@ -31,22 +31,31 @@ import {
 import type { PositionScheduleSegment } from "@/modules/organization-structure"
 import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/components/AcademicDegreeCheckboxes"
+// `fetchPersonCatalogs` se publica directamente desde la infraestructura del módulo (catálogos
+// globales de la persona) sin envoltorio de aplicación: se conserva el punto de entrada público
+// del módulo, igual que en su ubicación anterior.
+import { fetchPersonCatalogs } from "@/modules/people"
 import {
   candidateRequiresSpecialty,
-  checkWorkerIdentification,
-  createWorkerExpediente,
-  fetchPersonCatalogs,
+  validateWorkerPersonalData,
+  validateWorkerRegistrationInput,
+} from "@/modules/people/domain/rules"
+import type {
+  CatalogOption,
+  NewWorkerInput,
+  WorkerExpedienteInput,
+} from "@/modules/people/domain/entities"
+import {
   loadWorkerExpedienteLicenseIds,
   loadWorkerFormPermissions,
   loadWorkerReferenceCatalogs,
+} from "@/modules/people/application/worker-expediente.queries"
+import {
+  checkWorkerIdentification,
+  createWorkerExpediente,
   saveWorkerExpedienteLicenseIds,
   saveWorkerExpedientePersonalData,
-  validateWorkerPersonalData,
-  validateWorkerRegistrationInput,
-  type CatalogOption,
-  type NewWorkerInput,
-  type WorkerExpedienteInput,
-} from "@/modules/people"
+} from "@/modules/people/application/worker-expediente.commands"
 
 export interface WorkerPositionOption {
   id: string

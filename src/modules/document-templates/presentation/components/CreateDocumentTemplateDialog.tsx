@@ -1,14 +1,18 @@
 import * as React from "react"
 import {
-  templateAcceptForType,
   TEMPLATE_TYPE_USES_XLSX,
-  createDocumentTemplate,
+  templateAcceptForType,
   describeTemplateFileProblem,
-  fetchDocumentTemplateTypes,
+} from "@/modules/document-templates/domain/rules"
+import {
+  createDocumentTemplate,
   registerTemplateFile,
-  type DocumentTemplateType,
-  type DocumentTemplateTypeCode,
-} from "@/modules/document-templates"
+} from "@/modules/document-templates/application/document-templates.commands"
+import { fetchDocumentTemplateTypes } from "@/modules/document-templates/application/document-templates.queries"
+import type {
+  DocumentTemplateType,
+  DocumentTemplateTypeCode,
+} from "@/modules/document-templates/domain/entities"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"

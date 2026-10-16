@@ -407,7 +407,7 @@ test("ninguna de las cuatro pantallas del expediente consulta Supabase directame
     "src/modules/people/presentation/pages/CandidateDetail.tsx",
     "src/modules/people/presentation/components/CandidateForm.tsx",
     "src/modules/people/presentation/pages/WorkerDetail.tsx",
-    "src/components/workers/WorkerForm.tsx",
+    "src/modules/people/presentation/components/WorkerForm.tsx",
   ]
 
   for (const screen of screens) {
