@@ -1,13 +1,13 @@
 import * as React from "react"
+import { formatDocumentDate } from "@/modules/document-templates/domain/document-variables"
 import {
-  formatDocumentDate,
-  templateAcceptForType,
   formatTemplateFileSize,
-  getTemplateFileUrl,
+  templateAcceptForType,
   templateFileFormatLabel,
   templateVersionPeriodLabel,
-  type DocumentTemplateVersion,
-} from "@/modules/document-templates"
+} from "@/modules/document-templates/domain/rules"
+import { getTemplateFileUrl } from "@/modules/document-templates/application/document-templates.queries"
+import type { DocumentTemplateVersion } from "@/modules/document-templates/domain/entities"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"

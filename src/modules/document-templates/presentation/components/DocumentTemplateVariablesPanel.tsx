@@ -1,10 +1,10 @@
 import * as React from "react"
 import {
   DOCUMENT_VARIABLES,
-  documentTypeCodeForTemplateType,
   type DocumentVariableDefinition,
-  type TemplateOccurrence,
-} from "@/modules/document-templates"
+} from "@/modules/document-templates/domain/document-variables"
+import { documentTypeCodeForTemplateType } from "@/modules/document-templates/domain/rules"
+import type { TemplateOccurrence } from "@/modules/document-templates/domain/entities"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"

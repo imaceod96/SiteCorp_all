@@ -23,10 +23,10 @@ import {
   type DocumentTemplateVersion,
   type TemplateValidation,
 } from "@/modules/document-templates"
-import DocumentTemplateFilesPanel from "@/components/document-templates/DocumentTemplateFilesPanel"
-import DocumentTemplateValidationPanel from "@/components/document-templates/DocumentTemplateValidationPanel"
+import DocumentTemplateFilesPanel from "@/modules/document-templates/presentation/components/DocumentTemplateFilesPanel"
+import DocumentTemplateValidationPanel from "@/modules/document-templates/presentation/components/DocumentTemplateValidationPanel"
 import DocumentTemplateVersionsPanel from "@/components/document-templates/DocumentTemplateVersionsPanel"
-import DocumentTemplateVariablesPanel from "@/components/document-templates/DocumentTemplateVariablesPanel"
+import DocumentTemplateVariablesPanel from "@/modules/document-templates/presentation/components/DocumentTemplateVariablesPanel"
 import { ArrowLeft, ListChecks } from "lucide-react"
 
 /**
