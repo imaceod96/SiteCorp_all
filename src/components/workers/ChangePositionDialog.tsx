@@ -46,7 +46,7 @@ import {
 } from "@/modules/contracts"
 import ResolutionForm, {
   type ResolutionFormValues,
-} from "@/components/resolutions/ResolutionForm"
+} from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
 
 export interface WorkerCurrentSituation {

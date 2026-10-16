@@ -16,7 +16,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Label } from "@/components/ui/label"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
-import { ContractualDocumentSection } from "@/components/documents/ContractualDocumentSection"
+import { ContractualDocumentSection } from "@/modules/document-generation/presentation/components/ContractualDocumentSection"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,

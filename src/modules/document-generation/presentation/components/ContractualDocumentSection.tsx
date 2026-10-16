@@ -15,18 +15,24 @@ import { formatTemplateFileSize } from "@/modules/document-templates"
 import {
   BLOCKED_MESSAGES,
   documentVariableHint,
-  downloadGeneratedDocument,
-  fetchGeneratedDocuments,
   formatGenerationMoment,
+} from "@/modules/document-generation/domain/rules"
+import {
+  fetchGeneratedDocuments,
+  precheckDocumentGeneration,
+} from "@/modules/document-generation/application/document-generation.queries"
+import {
+  downloadGeneratedDocument,
   generateAddendumDocument,
   generateContractDocument,
-  precheckDocumentGeneration,
-  type DocumentGenerationPrecheck,
-  type DocumentGenerationResult,
-  type GeneratedDocumentRow,
-  type GenerationDocumentKind,
-  type TemplateResolution,
-} from "@/modules/document-generation"
+} from "@/modules/document-generation/application/document-generation.commands"
+import type {
+  DocumentGenerationPrecheck,
+  DocumentGenerationResult,
+  GeneratedDocumentRow,
+  GenerationDocumentKind,
+  TemplateResolution,
+} from "@/modules/document-generation/domain/entities"
 
 interface ContractualDocumentSectionProps {
   kind: GenerationDocumentKind

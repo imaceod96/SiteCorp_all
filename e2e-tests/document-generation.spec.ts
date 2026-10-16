@@ -388,7 +388,7 @@ test("la idempotencia del SC-4-04 y las fechas legibles conservan su formato", (
 
 test("el motor vive en un solo dominio y la presentación ya no consulta Supabase", () => {
   const presentation = [
-    "src/components/documents/ContractualDocumentSection.tsx",
+    "src/modules/document-generation/presentation/components/ContractualDocumentSection.tsx",
     "src/modules/document-generation/presentation/pages/EntityPendingDocuments.tsx",
     "src/modules/access-control/presentation/hooks/use-sc404.ts",
     "src/components/salary/ReviewSalaryChangeDialog.tsx",

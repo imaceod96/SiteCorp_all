@@ -5,7 +5,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
 import { CreateManualAddendumDialog } from "@/components/addendums/CreateManualAddendumDialog"
-import { ContractualDocumentSection } from "@/components/documents/ContractualDocumentSection"
+import { ContractualDocumentSection } from "@/modules/document-generation/presentation/components/ContractualDocumentSection"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,

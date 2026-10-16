@@ -47,7 +47,7 @@ import {
 } from "@/modules/organization-structure"
 import ResolutionForm, {
   type ResolutionFormValues,
-} from "@/components/resolutions/ResolutionForm"
+} from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
 import {
   loadTransitionWorkspace,

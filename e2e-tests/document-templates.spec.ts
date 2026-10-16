@@ -228,7 +228,7 @@ test("la fachada legacy se retiró: el dominio es el único punto de entrada", (
     "src/domains/document-generation/application/document-generation.commands.ts",
     "src/domains/contracts/infrastructure/contract-documents.repository.ts",
     "src/domains/resolutions/infrastructure/resolutions.repository.ts",
-    "src/components/documents/ContractualDocumentSection.tsx",
+    "src/modules/document-generation/presentation/components/ContractualDocumentSection.tsx",
   ]) {
     expect(read(file), `${file} debe consumir el dominio de plantillas`).toMatch(
       /from "@\/domains\/document-templates"/
@@ -250,9 +250,9 @@ test("el motor documental consume el dominio de plantillas, no la fachada", () =
   expect(commands).toMatch(/from "@\/domains\/document-templates"/)
 
   // La sección contractual del expediente también consume el dominio directamente.
-  expect(read("src/components/documents/ContractualDocumentSection.tsx")).toMatch(
-    /from "@\/domains\/document-templates"/
-  )
+  expect(
+    read("src/modules/document-generation/presentation/components/ContractualDocumentSection.tsx")
+  ).toMatch(/from "@\/domains\/document-templates"/)
 })
 
 test("el dominio de plantillas no depende de otros dominios ni de la presentación", () => {

@@ -27,7 +27,7 @@ import {
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import ResolutionForm, {
   type ResolutionFormValues,
-} from "@/components/resolutions/ResolutionForm"
+} from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
 import {
   checkHiringReadiness,

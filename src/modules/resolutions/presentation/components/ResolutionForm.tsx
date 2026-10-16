@@ -6,13 +6,18 @@ import { toRomanNumeral } from "@/utils/roman-numerals"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import { fetchEntityContractData, saveEntityContractData } from "@/modules/representatives"
 import type { RepresentativePositionRow } from "@/modules/representatives"
+import { MISSING_RESOLUTION_TEMPLATE_MESSAGE } from "@/modules/resolutions/domain/rules"
+import type {
+  ResolutionContext,
+  ResolutionTemplateAvailability,
+} from "@/modules/resolutions/domain/entities"
+// Las consultas de resolución sólo existen en la infraestructura del módulo (no hay capa de
+// aplicación): se consumen por su interfaz pública para no invertir presentación → dominio →
+// infraestructura.
 import {
   fetchResolutionContext,
   fetchResolutionRequiredVariables,
   resolveResolutionTemplateAvailability,
-  MISSING_RESOLUTION_TEMPLATE_MESSAGE,
-  type ResolutionContext,
-  type ResolutionTemplateAvailability,
 } from "@/modules/resolutions"
 
 /**
