@@ -144,7 +144,7 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
     "src/modules/organization-structure/presentation/pages/Organization.tsx",
     "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientRoles.tsx",
-    "src/pages/RolesPermissions.tsx",
+    "src/modules/access-control/presentation/pages/RolesPermissions.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettings.tsx",
     "src/components/entity-route-wrapper.tsx",
     "src/hooks/use-entity-permissions.ts",
@@ -183,7 +183,7 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
   expect(read("src/modules/company-client/presentation/pages/CompanyClientRoles.tsx")).toMatch(/loadClientEntities/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettings.tsx")).toMatch(/useEntityPermissions/)
   expect(read("src/hooks/use-entity-permissions.ts")).toMatch(/loadEntityPermissionCodes/)
-  expect(read("src/pages/RolesPermissions.tsx")).toMatch(/RolesManager/)
+  expect(read("src/modules/access-control/presentation/pages/RolesPermissions.tsx")).toMatch(/RolesManager/)
 })
 
 // ---------------------------------------------------------------------------
@@ -208,8 +208,8 @@ test("las comprobaciones de permiso viven sólo en el dominio de control de acce
     "src/modules/organization-structure/presentation/pages/Organization.tsx",
     "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
     "src/pages/Organizations.tsx",
-    "src/pages/EntitySettingsDocumentTemplates.tsx",
-    "src/pages/EntitySettingsDocumentTemplateDetail.tsx",
+    "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates.tsx",
+    "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail.tsx",
   ]
 
   for (const file of sinEnvoltorioPropio) {

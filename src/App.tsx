@@ -23,7 +23,7 @@ import Admin from "@/modules/access-control/presentation/pages/Admin"
 import Account from "@/modules/access-control/presentation/pages/Account"
 import Organizations from "@/modules/access-control/presentation/pages/Organizations"
 import PlatformUsers from "@/modules/access-control/presentation/pages/PlatformUsers"
-import RolesPermissions from "@/pages/RolesPermissions"
+import RolesPermissions from "@/modules/access-control/presentation/pages/RolesPermissions"
 import CompanyClientUsers from "@/modules/company-client/presentation/pages/CompanyClientUsers"
 import CompanyClientInvitations from "@/modules/company-client/presentation/pages/CompanyClientInvitations"
 import CompanyClientRoles from "@/modules/company-client/presentation/pages/CompanyClientRoles"
@@ -50,10 +50,10 @@ import EntitySettingsTenureScale from "@/modules/organization-structure/presenta
 import EntitySettingsGoverningDocuments from "@/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments"
 import EntitySettingsStaffing from "@/modules/organization-structure/presentation/pages/EntitySettingsStaffing"
 import EntitySettingsContractData from "@/modules/organization-structure/presentation/pages/EntitySettingsContractData"
-import EntitySettingsDocumentTemplates from "@/pages/EntitySettingsDocumentTemplates"
-import EntitySettingsDocumentTemplateDetail from "@/pages/EntitySettingsDocumentTemplateDetail"
+import EntitySettingsDocumentTemplates from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates"
+import EntitySettingsDocumentTemplateDetail from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail"
 import EntitySettingsInitialImport from "@/modules/organization-structure/presentation/pages/EntitySettingsInitialImport"
-import NotFound from "@/pages/NotFound"
+import NotFound from "@/app/pages/NotFound"
 
 const queryClient = new QueryClient()
 

@@ -181,8 +181,8 @@ test("el catálogo, las versiones y los archivos viven sólo en el dominio de pl
 
 test("las pantallas y los componentes migrados ya no consultan Supabase", () => {
   const presentation = [
-    "src/pages/EntitySettingsDocumentTemplates.tsx",
-    "src/pages/EntitySettingsDocumentTemplateDetail.tsx",
+    "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates.tsx",
+    "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail.tsx",
     "src/components/document-templates/CreateDocumentTemplateDialog.tsx",
     "src/components/document-templates/DocumentTemplateFilesPanel.tsx",
     "src/components/document-templates/DocumentTemplateValidationPanel.tsx",
@@ -204,13 +204,13 @@ test("las pantallas y los componentes migrados ya no consultan Supabase", () => 
 
   // Los permisos se preguntan al dominio de control de acceso y el nombre de la entidad al
   // de estructura organizativa: la pantalla no compone consultas.
-  const list = read("src/pages/EntitySettingsDocumentTemplates.tsx")
+  const list = read("src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates.tsx")
   expect(list).toMatch(/loadEntityPermissionSafe\(entityId, "document_templates.view"\)/)
   expect(list).toMatch(/loadEntityPermissionSafe\(entityId, "document_templates.manage"\)/)
   expect(list).toMatch(/fetchEntityName\(entityId\)/)
   expect(list).toMatch(/fetchDocumentTemplates\(entityId\)/)
 
-  const detail = read("src/pages/EntitySettingsDocumentTemplateDetail.tsx")
+  const detail = read("src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail.tsx")
   expect(detail).toMatch(/validateTemplateVersion/)
   expect(detail).toMatch(/activateTemplateVersion/)
   expect(detail).toMatch(/reanalyzeTemplateFile/)
