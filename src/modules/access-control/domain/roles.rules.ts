@@ -1,0 +1,6 @@
+// Roles rules
+export const ROLES_RULES = {
+  MAX_ROLE_NAME_LENGTH: 50,
+  MAX_PERMISSION_NAME_LENGTH: 50,
+  MIN_PERMISSION_NAME_LENGTH: 3,
+} as const

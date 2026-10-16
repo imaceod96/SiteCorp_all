@@ -4,58 +4,56 @@ import { Toaster as Sonner } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom"
-import { useAuth } from "@/contexts/AuthContext"
-import { AuthProvider } from "@/contexts/AuthProvider"
-import { CurrentCompanyClientProvider } from "@/contexts/CurrentCompanyClientProvider"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { CurrentEntityProvider } from "@/contexts/CurrentEntityProvider"
-import { SalaryProvider } from "@/contexts/SalaryProvider"
+import { AuthProvider } from "@/app/providers"
+import { CurrentCompanyClientProvider } from "@/app/providers"
+import { CurrentEntityProvider } from "@/app/providers"
+import { SalaryProvider } from "@/app/providers"
 import { PlatformAdminLayout } from "@/components/platform-admin-layout"
 import EntityRouteWrapper from "@/components/entity-route-wrapper"
 import { CompanyClientLayout } from "@/components/company-client-layout"
 import { SiteCorpBrand } from "@/components/sitecorp-brand"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import Login from "./pages/Login"
-import Index from "./pages/Index"
-import Organization from "./pages/Organization"
-import OrganizationDetail from "./pages/OrganizationDetail"
-import Candidates from "./pages/Candidates"
-import Hiring from "./pages/Hiring"
-import Admin from "./pages/Admin"
-import Account from "./pages/Account"
-import Organizations from "./pages/Organizations"
-import PlatformUsers from "./pages/PlatformUsers"
-import RolesPermissions from "./pages/RolesPermissions"
-import CompanyClientUsers from "./pages/CompanyClientUsers"
-import CompanyClientInvitations from "./pages/CompanyClientInvitations"
-import CompanyClientRoles from "./pages/CompanyClientRoles"
-import AdminSettingsSalaryScale from "./pages/AdminSettingsSalaryScale"
-import EntitySummary from "./pages/EntitySummary"
-import EntityCandidates from "./pages/EntityCandidates"
-import EntityPrenomina from "./pages/EntityPrenomina"
-import CandidateDetail from "./pages/CandidateDetail"
-import CandidateEdit from "./pages/CandidateEdit"
-import EntityStaffing from "./pages/EntityStaffing"
-import EntityWorkers from "./pages/EntityWorkers"
-import EntityReentries from "./pages/EntityReentries"
-import EntityHiring from "./pages/EntityHiring"
-import EntityContractAlerts from "./pages/EntityContractAlerts"
-import EntityVacations from "./pages/EntityVacations"
-import EntityMedicalCertificates from "./pages/EntityMedicalCertificates"
-import EntityPendingDocuments from "./pages/EntityPendingDocuments"
-import WorkerDetail from "./pages/WorkerDetail"
-import EntitySettings from "./pages/EntitySettings"
-import EntitySettingsUsers from "./pages/EntitySettingsUsers"
-import EntitySettingsRoles from "./pages/EntitySettingsRoles"
-import EntitySettingsSalary from "./pages/EntitySettingsSalary"
-import EntitySettingsTenureScale from "./pages/EntitySettingsTenureScale"
-import EntitySettingsGoverningDocuments from "./pages/EntitySettingsGoverningDocuments"
-import EntitySettingsStaffing from "./pages/EntitySettingsStaffing"
-import EntitySettingsContractData from "./pages/EntitySettingsContractData"
-import EntitySettingsDocumentTemplates from "./pages/EntitySettingsDocumentTemplates"
-import EntitySettingsDocumentTemplateDetail from "./pages/EntitySettingsDocumentTemplateDetail"
-import EntitySettingsInitialImport from "./pages/EntitySettingsInitialImport"
-import NotFound from "./pages/NotFound"
+import Login from "@/modules/access-control/presentation/pages/Login"
+import Index from "@/modules/organization-structure/presentation/pages/Index"
+import Organization from "@/modules/organization-structure/presentation/pages/Organization"
+import OrganizationDetail from "@/modules/organization-structure/presentation/pages/OrganizationDetail"
+import Candidates from "@/modules/people/presentation/pages/Candidates"
+import Hiring from "@/modules/people/presentation/pages/Hiring"
+import Admin from "@/modules/access-control/presentation/pages/Admin"
+import Account from "@/modules/access-control/presentation/pages/Account"
+import Organizations from "@/modules/access-control/presentation/pages/Organizations"
+import PlatformUsers from "@/modules/access-control/presentation/pages/PlatformUsers"
+import RolesPermissions from "@/modules/access-control/presentation/pages/RolesPermissions"
+import CompanyClientUsers from "@/modules/company-client/presentation/pages/CompanyClientUsers"
+import CompanyClientInvitations from "@/modules/company-client/presentation/pages/CompanyClientInvitations"
+import CompanyClientRoles from "@/modules/company-client/presentation/pages/CompanyClientRoles"
+import AdminSettingsSalaryScale from "@/modules/organization-structure/presentation/pages/AdminSettingsSalaryScale"
+import EntitySummary from "@/modules/entity-summary/presentation/pages/EntitySummary"
+import EntityCandidates from "@/modules/people/presentation/pages/EntityCandidates"
+import EntityPrenomina from "@/modules/payroll-preparation/presentation/pages/EntityPrenomina"
+import CandidateDetail from "@/modules/people/presentation/pages/CandidateDetail"
+import CandidateEdit from "@/modules/people/presentation/pages/CandidateEdit"
+import EntityStaffing from "@/modules/organization-structure/presentation/pages/EntityStaffing"
+import EntityWorkers from "@/modules/people/presentation/pages/EntityWorkers"
+import EntityReentries from "@/modules/people/presentation/pages/EntityReentries"
+import EntityHiring from "@/modules/people/presentation/pages/EntityHiring"
+import EntityContractAlerts from "@/modules/contracts/presentation/pages/EntityContractAlerts"
+import EntityVacations from "@/modules/vacations-licenses/presentation/pages/EntityVacations"
+import EntityMedicalCertificates from "@/modules/vacations-licenses/presentation/pages/EntityMedicalCertificates"
+import EntityPendingDocuments from "@/modules/document-generation/presentation/pages/EntityPendingDocuments"
+import WorkerDetail from "@/modules/people/presentation/pages/WorkerDetail"
+import EntitySettings from "@/modules/organization-structure/presentation/pages/EntitySettings"
+import EntitySettingsUsers from "@/modules/organization-structure/presentation/pages/EntitySettingsUsers"
+import EntitySettingsRoles from "@/modules/organization-structure/presentation/pages/EntitySettingsRoles"
+import EntitySettingsSalary from "@/modules/organization-structure/presentation/pages/EntitySettingsSalary"
+import EntitySettingsTenureScale from "@/modules/organization-structure/presentation/pages/EntitySettingsTenureScale"
+import EntitySettingsGoverningDocuments from "@/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments"
+import EntitySettingsStaffing from "@/modules/organization-structure/presentation/pages/EntitySettingsStaffing"
+import EntitySettingsContractData from "@/modules/organization-structure/presentation/pages/EntitySettingsContractData"
+import EntitySettingsDocumentTemplates from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates"
+import EntitySettingsDocumentTemplateDetail from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail"
+import EntitySettingsInitialImport from "@/modules/organization-structure/presentation/pages/EntitySettingsInitialImport"
+import NotFound from "@/modules/access-control/presentation/pages/NotFound"
 
 const queryClient = new QueryClient()
 
@@ -101,13 +99,6 @@ class AppErrorBoundary extends React.Component<
   }
 }
 
-// Loading screen component
-//
-// Pantalla NEUTRAL obligatoria: se muestra mientras se resuelve la sesión y la identidad
-// (perfil, nivel de plataforma y membresías) y hasta que se puede decidir la interfaz. Fondo
-// blanco a pantalla completa, logo oficial centrado e indicador de carga accesible. Sin menú
-// lateral, sin encabezado de cliente, sin tarjetas y sin ningún contenido cargando detrás.
-// No introduce ningún retraso: desaparece en cuanto la identidad y el destino están resueltos.
 const LoadingScreen = () => (
   <div className="flex min-h-screen w-full items-center justify-center bg-white">
     <div
@@ -130,11 +121,6 @@ const LoadingScreen = () => (
   </div>
 )
 
-// Identity error screen component
-//
-// Estado neutral de error: la identidad NO se pudo determinar (fallo de red o de RPC). No se
-// elige ninguna interfaz ni se concede ningún privilegio por defecto; el usuario puede
-// reintentar sin cerrar el navegador. El mensaje no expone detalle técnico.
 const IdentityErrorScreen = ({ onRetry }: { onRetry: () => void }) => (
   <div className="flex min-h-screen w-full items-center justify-center bg-white">
     <div role="alert" className="w-full max-w-md px-6 text-center">
@@ -156,14 +142,11 @@ const IdentityErrorScreen = ({ onRetry }: { onRetry: () => void }) => (
   </div>
 )
 
-// /panel compatibility redirect: resolves to the sibling canonical route
-// /entity/<REAL_ENTITY_ID>/summary (NOT /entity/<id>/panel/summary)
 const EntityPanelRedirect = () => {
   const { entityId } = useParams<{ entityId: string }>()
   return <Navigate to={`/entity/${entityId}/summary`} replace />
 }
 
-// Main routing logic
 const AppRoutes = () => {
   const {
     authLoading,
@@ -180,13 +163,10 @@ const AppRoutes = () => {
     return <LoadingScreen />
   }
 
-  // La identidad no se pudo determinar (fallo de red o de RPC): estado neutral de error con
-  // reintento manual. Nunca se elige interfaz ni se conceden privilegios por defecto.
   if (identityError) {
     return <IdentityErrorScreen onRetry={retryIdentity} />
   }
 
-  // Mientras la identidad no esté resuelta NO se decide ninguna interfaz: pantalla neutral.
   if (!authReady) {
     return <LoadingScreen />
   }
@@ -200,10 +180,6 @@ const AppRoutes = () => {
     )
   }
 
-  // Entity routes are evaluated BEFORE platform/company-client branching.
-  // currentCompanyClient is intentionally NOT used here: Platform users may have
-  // a null active client, and a stale non-null client must not hide entity
-  // routes. EntityRouteWrapper remains responsible for authorization.
   if (location.pathname.startsWith("/entity/")) {
     return (
       <Routes>
@@ -211,7 +187,7 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/summary" element={<EntitySummary />} />
           <Route path="/entity/:entityId/panel" element={<EntityPanelRedirect />} />
           <Route path="/entity/:entityId/candidates" element={<EntityCandidates />} />
-                    <Route path="/entity/:entityId/payroll-preparation" element={<EntityPrenomina />} />
+          <Route path="/entity/:entityId/payroll-preparation" element={<EntityPrenomina />} />
           <Route path="/entity/:entityId/candidates/:candidateId" element={<CandidateDetail />} />
           <Route path="/entity/:entityId/candidates/:candidateId/edit" element={<CandidateEdit />} />
           <Route path="/entity/:entityId/workers" element={<EntityWorkers />} />
@@ -240,10 +216,6 @@ const AppRoutes = () => {
     )
   }
 
-  // Platform User (any active Platform Role, including SuperAdmin)
-  // -> Global Platform Administration.
-  // currentCompanyClient is intentionally NOT required: a Platform User's
-  // default application is Global Administration.
   if (isPlatformUser) {
     return (
       <Routes>
@@ -261,12 +233,6 @@ const AppRoutes = () => {
     )
   }
 
-  // Client user -> Company Client application
-  // Las rutas `/tenant/*` se conservan: son el contrato de navegación vigente.
-  //
-  // Esta rama es la ÚLTIMA y se alcanza SÓLO con la identidad resuelta y sin error: un usuario
-  // de cliente se identifica DESPUÉS de resolver su identidad (perfil, nivel de plataforma y
-  // membresías), nunca por descarte prematuro mientras la identidad es desconocida.
   return (
     <Routes>
       <Route element={<CompanyClientLayout />}>
