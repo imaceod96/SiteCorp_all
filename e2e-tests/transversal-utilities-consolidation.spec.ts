@@ -364,7 +364,7 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
     "src/pages/EntityMedicalCertificates.tsx",
     "src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx",
     "src/modules/people/presentation/pages/EntityReentries.tsx",
-    "src/pages/EntityStaffing.tsx",
+    "src/modules/organization-structure/presentation/pages/EntityStaffing.tsx",
     "src/pages/EntityVacations.tsx",
     "src/modules/people/presentation/pages/EntityWorkers.tsx",
     "src/components/filters/filter-builder.tsx",
@@ -710,7 +710,7 @@ test("ningún otro contexto cambió por el traslado de las utilidades", () => {
   }
 
   // La pantalla de Carga inicial consume el dominio, no `src/lib`.
-  const initialImport = read("src/pages/EntitySettingsInitialImport.tsx")
+  const initialImport = read("src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx")
   expect(initialImport).toMatch(/from "@\/domains\/people"/)
   expect(initialImport).not.toMatch(/@\/lib\/(worker-migration|tenure|entity-filters)/)
 })

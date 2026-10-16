@@ -141,8 +141,8 @@ test("la jerarquía admite Grupo → Empresa → UEB y no cambia de cliente", ()
 test("las pantallas de organización y de roles no consultan Supabase", () => {
   const presentation = [
     "src/pages/Organizations.tsx",
-    "src/pages/Organization.tsx",
-    "src/pages/OrganizationDetail.tsx",
+    "src/modules/organization-structure/presentation/pages/Organization.tsx",
+    "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientRoles.tsx",
     "src/pages/RolesPermissions.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettings.tsx",
@@ -165,12 +165,12 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
   expect(organizations).toMatch(/buildOrganizationTree/)
   expect(organizations).toMatch(/deleteOrganizationEntity/)
 
-  const organization = read("src/pages/Organization.tsx")
+  const organization = read("src/modules/organization-structure/presentation/pages/Organization.tsx")
   expect(organization).toMatch(/loadClientEntities/)
   expect(organization).toMatch(/loadEntityPermission/)
   expect(organization).toMatch(/deleteOrganizationEntity/)
 
-  const detail = read("src/pages/OrganizationDetail.tsx")
+  const detail = read("src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx")
   expect(detail).toMatch(/loadOrganizationEntityDetail/)
   expect(detail).toMatch(/loadEntityUserAccess/)
   expect(detail).toMatch(/loadEntityPermission/)
@@ -205,8 +205,8 @@ test("las comprobaciones de permiso viven sólo en el dominio de control de acce
     "src/domains/organization-structure/infrastructure/entity-configuration.repository.ts",
     "src/domains/people/infrastructure/staffing.repository.ts",
     "src/domains/people/infrastructure/people.repository.ts",
-    "src/pages/Organization.tsx",
-    "src/pages/OrganizationDetail.tsx",
+    "src/modules/organization-structure/presentation/pages/Organization.tsx",
+    "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
     "src/pages/Organizations.tsx",
     "src/pages/EntitySettingsDocumentTemplates.tsx",
     "src/pages/EntitySettingsDocumentTemplateDetail.tsx",
@@ -387,7 +387,7 @@ test("la consulta de permisos de plataforma también vive sólo en control de ac
 // ---------------------------------------------------------------------------
 
 test("el hallazgo de organization.manage sigue documentado y sin corregir", () => {
-  const page = read("src/pages/Organization.tsx")
+  const page = read("src/modules/organization-structure/presentation/pages/Organization.tsx")
 
   // La comprobación sigue pasando el id del CLIENTE como id de entidad, tal como estaba.
   expect(page).toMatch(

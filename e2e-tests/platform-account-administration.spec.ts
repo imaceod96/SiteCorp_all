@@ -386,7 +386,7 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
     "src/pages/PlatformUsers.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientUsers.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx",
-    "src/pages/EntitySettingsGoverningDocuments.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx",
     "src/components/entity-layout.tsx",
     "src/components/entity-route-wrapper.tsx",
     "src/contexts/AuthProvider.tsx",
@@ -424,17 +424,17 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
   expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/sendClientInvitation\(/)
   expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/cancelClientInvitation\(/)
   expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/resendClientInvitation\(/)
-  expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/loadGoverningDocuments\(/)
-  expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/saveGoverningDocument\(/)
-  expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/removeGoverningDocument\(/)
-  expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/openGoverningDocument\(/)
-  expect(code("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/downloadGoverningDocument\(/)
+  expect(code("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/loadGoverningDocuments\(/)
+  expect(code("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/saveGoverningDocument\(/)
+  expect(code("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/removeGoverningDocument\(/)
+  expect(code("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/openGoverningDocument\(/)
+  expect(code("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(/downloadGoverningDocument\(/)
 
   // Mensajes de usuario conservados en las pantallas migradas.
   expect(read("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(
     /No se pudo enviar la invitación\./
   )
-  expect(read("src/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(
     /Usuario no autenticado/
   )
   expect(read("src/pages/PlatformUsers.tsx")).toMatch(/No se pudo cargar la lista de usuarios\./)

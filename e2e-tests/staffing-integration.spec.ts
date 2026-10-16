@@ -408,7 +408,7 @@ test("las identificaciones repetidas no bloquean la carga", () => {
   expect(repository).toMatch(/\.rpc\("migration_import_rows"/)
 
   // La pantalla sigue avisando de las identificaciones repetidas del lote importado.
-  const screen = read("src/pages/EntitySettingsInitialImport.tsx")
+  const screen = read("src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx")
   expect(screen).toMatch(/duplicateIdentifications/)
   expect(screen).toMatch(/Identificaciones repetidas detectadas/)
 })
@@ -474,8 +474,8 @@ test("el historial de lotes cuenta vinculados y pendientes sin tocar las relacio
 
 test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√≥n", () => {
   const presentation = [
-    "src/pages/EntityStaffing.tsx",
-    "src/pages/EntitySettingsInitialImport.tsx",
+    "src/modules/organization-structure/presentation/pages/EntityStaffing.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx",
     "src/components/migration/MigratedWorkerDialog.tsx",
     "src/components/migration/LinkWorkerToPositionDialog.tsx",
     "src/components/migration/MigrationDialog.tsx",
@@ -491,7 +491,7 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
   }
 
   // La Pantilla consume el caso de uso y las reglas de plazas; no conoce las tablas.
-  const staffing = read("src/pages/EntityStaffing.tsx")
+  const staffing = read("src/modules/organization-structure/presentation/pages/EntityStaffing.tsx")
   expect(staffing).toMatch(/loadEntityStaffingWorkspace/)
   expect(staffing).toMatch(/activeStaffingWorkers/)
   expect(staffing).toMatch(/pendingStaffingWorkers/)
@@ -503,7 +503,7 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
   expect(staffing).not.toMatch(/worker_position_assignments/)
 
   // La Carga inicial reparte el trabajo: formato del archivo y casos de uso del dominio.
-  const initialImport = read("src/pages/EntitySettingsInitialImport.tsx")
+  const initialImport = read("src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx")
   expect(initialImport).toMatch(/@\/domains\/people/)
   expect(initialImport).toMatch(/loadEntityMigrationHistory/)
   expect(initialImport).toMatch(/validateWorkerMigration/)
@@ -533,8 +533,8 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
   )
 
   for (const file of [
-    "src/pages/EntityStaffing.tsx",
-    "src/pages/EntitySettingsInitialImport.tsx",
+    "src/modules/organization-structure/presentation/pages/EntityStaffing.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx",
     "src/domains/people/infrastructure/worker-migration.workbook.ts",
     "src/domains/people/application/worker-migration.queries.ts",
     "src/domains/people/application/worker-migration.commands.ts",

@@ -367,14 +367,14 @@ test("los distintos niveles de acceso se deciden por permisos efectivos, nunca p
   expect(queries).toMatch(/rpcCanAccessEntity\(entityId, "users\.manage"\)\.catch\(\(\) => false\)/)
 
   // La pantalla de sólo lectura de usuarios pregunta por el permiso real.
-  const overview = read("src/pages/EntitySettingsUsers.tsx")
+  const overview = read("src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx")
   expect(overview).toMatch(/loadEntityAccessOverview/)
   expect(overview).not.toMatch(/@\/lib\/supabase/)
   expect(overview).not.toMatch(/\.rpc\(/)
 
   // La pantalla de roles exige el permiso de GESTIÓN de roles (`roles.manage`): no existe
   // una vía de consulta independiente, así que `roles.view` NO habilita la pantalla.
-  const rolesPage = read("src/pages/EntitySettingsRoles.tsx")
+  const rolesPage = read("src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx")
   expect(rolesPage).toMatch(/loadEntityPermission\(entityId, "roles\.manage"\)/)
   expect(rolesPage).not.toMatch(/"roles\.view"/)
   expect(rolesPage).not.toMatch(/@\/lib\/supabase/)
@@ -406,8 +406,8 @@ test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
   // Las tres superficies que listan accesos usan la etiqueta del dominio, no el dato crudo.
   for (const file of [
     "src/components/entity-users-dialog.tsx",
-    "src/pages/EntitySettingsUsers.tsx",
-    "src/pages/OrganizationDetail.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx",
+    "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
   ]) {
     const source = read(file)
     expect(source, `${file} debe etiquetar el rol con la regla del dominio`).toMatch(/accessRoleLabel\(/)
@@ -420,7 +420,7 @@ test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
   expect(entities).toMatch(/role_name: string \| null/)
 
   // La consulta de USUARIOS se conserva: `users.view` sigue habilitando el listado.
-  expect(read("src/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
 
   // El registro SQL de la fase documenta el enmascaramiento y su reversión real.
     const record = read("docs/fase-2-definiciones-sql.md")
@@ -821,7 +821,7 @@ test("los tramos de antigüedad se leen y se desactivan sin salir del dominio", 
   expect(repository).not.toMatch(/\.delete\(\)/)
 
   // La pantalla consume los casos de uso y no habla con Supabase.
-  const page = read("src/pages/EntitySettingsTenureScale.tsx")
+  const page = read("src/modules/organization-structure/presentation/pages/EntitySettingsTenureScale.tsx")
   expect(page).toMatch(/loadTenureScaleRanges/)
   expect(page).toMatch(/createTenureScaleRange/)
   expect(page).toMatch(/updateTenureScaleRangeById/)
@@ -1073,10 +1073,10 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
     "src/components/roles-manager.tsx",
     "src/components/entity-users-dialog.tsx",
     "src/components/settings/AcademicCategoryPaymentSection.tsx",
-    "src/pages/EntitySettingsUsers.tsx",
-    "src/pages/EntitySettingsRoles.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx",
-    "src/pages/EntitySettingsTenureScale.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsTenureScale.tsx",
   ]
 
   for (const file of presentation) {
@@ -1098,10 +1098,10 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
   expect(read("src/components/roles-manager.tsx")).toMatch(/friendlyRoleSaveError/)
   expect(read("src/components/roles-manager.tsx")).toMatch(/isProtectedRole as isProtectedRoleRule/)
   expect(read("src/components/entity-users-dialog.tsx")).toMatch(/loadEntityAccessWorkspace/)
-  expect(read("src/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
-  expect(read("src/pages/EntitySettingsRoles.tsx")).toMatch(/loadEntityPermission/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsUsers.tsx")).toMatch(/loadEntityAccessOverview/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsRoles.tsx")).toMatch(/loadEntityPermission/)
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsContractData.tsx")).toMatch(/loadEntityContractDataWorkspace/)
-  expect(read("src/pages/EntitySettingsTenureScale.tsx")).toMatch(/loadTenureScaleRanges/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsTenureScale.tsx")).toMatch(/loadTenureScaleRanges/)
   expect(read("src/components/organization-entity-dialog.tsx")).toMatch(/saveOrganizationEntity/)
 })
 

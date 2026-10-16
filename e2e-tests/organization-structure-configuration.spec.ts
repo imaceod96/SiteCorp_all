@@ -388,7 +388,7 @@ test("la configuración de la estructura no repite el cálculo de plazas ocupada
   const useCase = read(
     "src/domains/organization-structure/application/staffing-configuration.queries.ts"
   )
-  const page = read("src/pages/EntitySettingsStaffing.tsx")
+  const page = read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")
   const positions = read("src/domains/organization-structure/infrastructure/positions.repository.ts")
 
   for (const source of [useCase, page, positions]) {
@@ -418,11 +418,11 @@ test("la configuración de la estructura no consulta Supabase desde la presentac
     "src/components/AreaForm.tsx",
     "src/components/JobForm.tsx",
     "src/components/PositionForm.tsx",
-    "src/pages/EntitySettingsStaffing.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx",
     "src/components/salary-group-dialog.tsx",
     "src/contexts/SalaryProvider.tsx",
     "src/contexts/SalaryContext.ts",
-    "src/pages/EntitySettingsSalary.tsx",
+    "src/modules/organization-structure/presentation/pages/EntitySettingsSalary.tsx",
     "src/modules/organization-structure/presentation/pages/AdminSettingsSalaryScale.tsx",
   ]
 
@@ -441,10 +441,10 @@ test("la configuración de la estructura no consulta Supabase desde la presentac
   expect(read("src/components/JobForm.tsx")).toMatch(/saveJob/)
   expect(read("src/components/PositionForm.tsx")).toMatch(/savePosition/)
   expect(read("src/components/PositionForm.tsx")).toMatch(/validatePositionInput/)
-  expect(read("src/pages/EntitySettingsStaffing.tsx")).toMatch(/loadStaffingConfiguration/)
-  expect(read("src/pages/EntitySettingsStaffing.tsx")).toMatch(/setAreaActive/)
-  expect(read("src/pages/EntitySettingsStaffing.tsx")).toMatch(/setJobActive/)
-  expect(read("src/pages/EntitySettingsStaffing.tsx")).toMatch(/setPositionActive/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/loadStaffingConfiguration/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/setAreaActive/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/setJobActive/)
+  expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")).toMatch(/setPositionActive/)
 })
 
 test("las consultas y escrituras del bloque viven en sus repositorios, aisladas por entidad", () => {
@@ -552,7 +552,7 @@ test("los grupos y escalas salariales se administran sin duplicar la RPC del cam
 })
 
 test("la escala presupuestada es de solo lectura en el contexto de la entidad, con independencia del usuario", () => {
-  const page = read("src/pages/EntitySettingsSalary.tsx")
+  const page = read("src/modules/organization-structure/presentation/pages/EntitySettingsSalary.tsx")
 
   // El contexto PRESUPUESTADA nunca ofrece gestión: ni alta de grupo, ni cambio de salario,
   // ni creación de la escala. La administración vive en la pantalla de plataforma de SiteCorp.
