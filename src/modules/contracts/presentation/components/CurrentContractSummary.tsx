@@ -8,11 +8,10 @@ import { toRomanNumeral } from "@/utils/roman-numerals"
 import {
   CONTRACT_ALERT_META,
   deadlineLabel,
-  formatConditionDate,
-  formatContractMoney,
   type ContractAlertRow,
-  type FormalizedConditions,
-} from "@/modules/contracts"
+} from "@/modules/contracts/domain/contract-alerts.rules"
+import { formatConditionDate, formatContractMoney } from "@/modules/contracts/domain/formats"
+import type { FormalizedConditions } from "@/modules/contracts/domain/entities"
 
 interface CurrentContractSummaryProps {
   className?: string

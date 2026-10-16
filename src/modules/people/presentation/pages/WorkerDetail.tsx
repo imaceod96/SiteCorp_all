@@ -37,7 +37,7 @@ import { useEntityPermissions } from "@/modules/access-control/presentation/hook
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
 import { WorkerForm } from "@/modules/people/presentation/components/WorkerForm"
-import { WorkerDocumentsTab } from "@/components/workers/WorkerDocumentsTab"
+import { WorkerDocumentsTab } from "@/modules/people/presentation/components/WorkerDocumentsTab"
 import {
   drivingLicenseLabels,
   loadWorkerExpedienteView,
@@ -88,7 +88,7 @@ import {
 } from "@/components/contracts/ContractConditionsFields"
 import { ContractFormalizationSummary } from "@/components/contracts/ContractFormalizationSummary"
 import { ContractRetributionSummary } from "@/components/contracts/ContractRetributionSummary"
-import { CurrentContractSummary } from "@/components/contracts/CurrentContractSummary"
+import { CurrentContractSummary } from "@/modules/contracts/presentation/components/CurrentContractSummary"
 import { ContractualTimeline } from "@/components/contracts/ContractualTimeline"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
 import type { RepresentativePositionRow } from "@/modules/representatives"
@@ -128,7 +128,7 @@ import {
   type WorkerContractualConditions,
   type WorkerSalaryHistoryEntry,
 } from "@/modules/contracts"
-import { ContractAddendumsSection } from "@/components/addendums/ContractAddendumsSection"
+import { ContractAddendumsSection } from "@/modules/contracts/presentation/components/ContractAddendumsSection"
 
 /**
  * La ficha laboral se describe con el modelo del dominio Personas (`WorkerExpediente`,

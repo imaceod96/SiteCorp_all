@@ -10,14 +10,15 @@ import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
-  formatConditionDate,
-  formatContractMoney,
-  isAddendumPending,
-  type ContractAddendum,
-  type FormalizedConditions,
-  type PaymentMethodOption,
-  type WorkerContractualConditions,
-} from "@/modules/contracts"
+} from "@/modules/contracts/domain/addendum-labels"
+import { isAddendumPending } from "@/modules/contracts/domain/rules"
+import { formatConditionDate, formatContractMoney } from "@/modules/contracts/domain/formats"
+import type {
+  ContractAddendum,
+  FormalizedConditions,
+  PaymentMethodOption,
+  WorkerContractualConditions,
+} from "@/modules/contracts/domain/entities"
 import { ArrowRight, FilePlus2, UserCheck } from "lucide-react"
 
 interface ContractRow {

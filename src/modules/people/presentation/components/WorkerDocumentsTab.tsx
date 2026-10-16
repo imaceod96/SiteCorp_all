@@ -1,14 +1,16 @@
 import * as React from "react"
+import { loadWorkerDocumentsView } from "@/modules/people/application/worker-documents.queries"
 import {
   deleteWorkerDocument,
   downloadWorkerDocument,
-  loadWorkerDocumentsView,
   openWorkerDocument,
   uploadWorkerDocument,
-  type DocumentTypeOption,
-  type WorkerDocumentContractRef,
-  type WorkerDocumentRow,
-} from "@/modules/people"
+} from "@/modules/people/application/worker-documents.commands"
+import type {
+  DocumentTypeOption,
+  WorkerDocumentContractRef,
+  WorkerDocumentRow,
+} from "@/modules/people/domain/entities"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"

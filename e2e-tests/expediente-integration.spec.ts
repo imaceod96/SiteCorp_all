@@ -133,7 +133,7 @@ test("los servicios de contratos y de salario ya no consultan Supabase", () => {
 
 test("las pestañas del trabajador y los diálogos laborales consumen sus dominios", () => {
   const peopleScreens = [
-    "src/components/workers/WorkerDocumentsTab.tsx",
+    "src/modules/people/presentation/components/WorkerDocumentsTab.tsx",
     "src/components/medical-certificates/MedicalCertificateFormDialog.tsx",
     "src/modules/people/presentation/components/MigratedWorkerDialog.tsx",
     "src/components/workers/SeparateWorkerDialog.tsx",
@@ -150,7 +150,7 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
   }
 
   const contractsScreens = [
-    "src/components/addendums/ContractAddendumsSection.tsx",
+    "src/modules/contracts/presentation/components/ContractAddendumsSection.tsx",
     "src/components/addendums/AddendumDetailDialog.tsx",
     "src/components/addendums/CreateManualAddendumDialog.tsx",
     "src/components/contracts/ContractFormalizationAlerts.tsx",
@@ -176,7 +176,7 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
 })
 
 test("la pestaña de documentos resuelve su expediente con el dominio Personas", () => {
-  const tab = read("src/components/workers/WorkerDocumentsTab.tsx")
+  const tab = read("src/modules/people/presentation/components/WorkerDocumentsTab.tsx")
   expect(tab).toMatch(/@\/domains\/people/)
   expect(tab).toMatch(/loadWorkerDocumentsView/)
   expect(tab).toMatch(/uploadWorkerDocument/)
