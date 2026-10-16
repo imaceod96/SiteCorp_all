@@ -1,7 +1,7 @@
 import { resolveAllDocumentVariables } from "../domain/document-resolution.rules"
 import {
   fetchDocumentTemplateVersionsByIds,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import type { DocumentData, Sc404SourceType } from "../domain/document-data"
 import {
   buildMissingVariables,

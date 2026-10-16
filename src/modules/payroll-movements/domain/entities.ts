@@ -1,4 +1,4 @@
-import type { DocumentGenerationResult } from "@/domains/document-generation"
+import type { DocumentGenerationResult } from "@/modules/document-generation"
 
 /**
  * Movimientos de Nómina — Entidades y contratos de dominio.
@@ -16,7 +16,7 @@ import type { DocumentGenerationResult } from "@/domains/document-generation"
  *    documento y encargar su generación al dominio documental.
  *
  * La generación documental NO se reimplementa aquí: se consume
- * `@/domains/document-generation` (una sola dirección: movimientos → generación).
+ * `@/modules/document-generation` (una sola dirección: movimientos → generación).
  */
 
 /** Evento laboral que documenta un Movimiento de Nómina (vocabulario del backend). */

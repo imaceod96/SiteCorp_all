@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FileText, Loader2, RefreshCw, Sparkles } from "lucide-react"
-import { formatTemplateFileSize } from "@/domains/document-templates"
+import { formatTemplateFileSize } from "@/modules/document-templates"
 import {
   BLOCKED_MESSAGES,
   documentVariableHint,
@@ -26,7 +26,7 @@ import {
   type GeneratedDocumentRow,
   type GenerationDocumentKind,
   type TemplateResolution,
-} from "@/domains/document-generation"
+} from "@/modules/document-generation"
 
 interface ContractualDocumentSectionProps {
   kind: GenerationDocumentKind

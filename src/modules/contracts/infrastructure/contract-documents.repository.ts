@@ -3,8 +3,8 @@ import {
   fetchGeneratedDocuments,
   generateAddendumDocument,
   generateContractDocument,
-} from "@/domains/document-generation"
-import { resolveDocumentTemplateVersion } from "@/domains/document-templates"
+} from "@/modules/document-generation"
+import { resolveDocumentTemplateVersion } from "@/modules/document-templates"
 import type {
   DocumentAutomationResult,
   TemplateAvailability,

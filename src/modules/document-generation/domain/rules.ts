@@ -1,7 +1,7 @@
 import {
   DOCUMENT_VARIABLES,
   documentVariableByKey,
-} from "@/domains/document-templates/domain/document-variables"
+} from "@/modules/document-templates/domain/document-variables"
 import type { DocumentData, Sc404SourceType } from "./document-data"
 import type {
   DocumentGenerationPrecheck,

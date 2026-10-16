@@ -29,7 +29,7 @@ import {
   type DocumentTypeCode,
   type DocumentVariableDefinition,
   type DocumentVariableResolution,
-} from "@/domains/document-templates/domain/document-variables"
+} from "@/modules/document-templates/domain/document-variables"
 import type {
   AddendumDocumentData,
   ContractDocumentData,

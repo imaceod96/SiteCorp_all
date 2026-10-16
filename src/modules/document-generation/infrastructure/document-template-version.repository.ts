@@ -1,11 +1,11 @@
 import {
   fetchDocumentTemplateVersion,
   resolveDocumentTemplateVersion,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import type {
   DocumentTemplateVersionDetail,
   ResolvedDocumentTemplateVersion,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import type { TemplateResolution } from "../domain/entities"
 
 /**

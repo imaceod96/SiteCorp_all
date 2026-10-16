@@ -6,7 +6,7 @@ import {
   generateSc404Document,
   parseSc404ExistingId,
   type Sc404SourceType,
-} from "@/domains/document-generation"
+} from "@/modules/document-generation"
 
 /**
  * Fase 20 — Generación del modelo SC-4-04 desde Vacaciones o Certificados Médicos.

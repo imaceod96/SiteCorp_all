@@ -3,12 +3,12 @@ import {
   fetchGeneratedDocuments,
   generateResolutionDocument,
   type DocumentGenerationResult,
-} from "@/domains/document-generation"
+} from "@/modules/document-generation"
 import {
   fetchDocumentTemplateVersion,
   requiredVariableKeys,
   resolveDocumentTemplateVersion,
-} from "@/domains/document-templates"
+} from "@/modules/document-templates"
 import {
   RESOLUTION_DOCUMENT_TYPE,
   type ResolutionContext,

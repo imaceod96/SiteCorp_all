@@ -1,7 +1,7 @@
 import {
   fetchGeneratedDocuments,
   generatePayrollMovementDocument,
-} from "@/domains/document-generation"
+} from "@/modules/document-generation"
 import type {
   PayrollMovementAutomationResult,
   PayrollMovementEventType,

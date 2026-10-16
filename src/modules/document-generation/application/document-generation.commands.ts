@@ -1,4 +1,4 @@
-import { DOCX_MIME, XLSX_MIME, fetchTemplateFileContent } from "@/domains/document-templates"
+import { DOCX_MIME, XLSX_MIME, fetchTemplateFileContent } from "@/modules/document-templates"
 import type { Sc404SourceType } from "../domain/document-data"
 import {
   blockedMessageFor,

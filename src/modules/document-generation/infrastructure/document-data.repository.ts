@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { fetchPositionScheduleSegments } from "@/domains/organization-structure"
+import { fetchPositionScheduleSegments } from "@/modules/organization-structure"
 import type {
   AddendumDocumentData,
   ContractDocumentData,
