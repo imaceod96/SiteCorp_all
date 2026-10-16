@@ -29,7 +29,7 @@ import {
   type PositionScheduleSegment,
 } from "@/modules/organization-structure"
 import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
-import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
+import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import {
   changeWorkerPosition,
   loadTransitionWorkspace,

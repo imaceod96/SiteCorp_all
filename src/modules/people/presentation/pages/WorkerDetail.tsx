@@ -68,7 +68,7 @@ import ChangePositionDialog, {
 } from "@/components/workers/ChangePositionDialog"
 import SeparateWorkerDialog from "@/components/workers/SeparateWorkerDialog"
 import ReincorporateWorkerDialog from "@/components/workers/ReincorporateWorkerDialog"
-import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
+import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import {
   NO_WORK_INFO_LABEL,
   fetchPositionScheduleSegments,

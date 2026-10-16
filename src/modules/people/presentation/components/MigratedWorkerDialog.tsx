@@ -1,13 +1,12 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
+import { createMigratedWorker } from "@/modules/people/application/worker-migration.commands"
 import {
-  createMigratedWorker,
   loadCandidateRegistryCatalogs,
   loadPersonIdentificationStatus,
-  type CatalogOption,
-  type MigrationRow,
-} from "@/modules/people"
+} from "@/modules/people/application/people.queries"
+import type { CatalogOption, MigrationRow } from "@/modules/people/domain/entities"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"

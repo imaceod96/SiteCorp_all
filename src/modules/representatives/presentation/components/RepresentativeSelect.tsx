@@ -3,11 +3,12 @@ import { Link } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
-import {
-  fetchValidRepresentatives,
-  formatRepresentativeDate,
-  type RepresentativePositionRow,
-} from "@/modules/representatives"
+// `fetchValidRepresentatives` sólo existe en la capa de infraestructura del módulo: se consume
+// por la interfaz pública (el barrel) para no invertir el sentido presentación → dominio →
+// infraestructura. El resto son archivos concretos de dominio.
+import { fetchValidRepresentatives } from "@/modules/representatives"
+import { formatRepresentativeDate } from "@/modules/representatives/domain/rules"
+import type { RepresentativePositionRow } from "@/modules/representatives/domain/entities"
 import { Settings2, UserCheck } from "lucide-react"
 
 interface RepresentativeSelectProps {

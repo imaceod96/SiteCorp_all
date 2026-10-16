@@ -14,7 +14,7 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
-import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
+import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
 import { ContractRetributionFields } from "@/components/contracts/ContractConditionsFields"
 import {

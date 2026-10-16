@@ -22,7 +22,7 @@ import {
   formatSalary,
   type SalaryValue,
 } from "@/modules/organization-structure"
-import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
+import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
 import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"

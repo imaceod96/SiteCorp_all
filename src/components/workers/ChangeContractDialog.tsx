@@ -20,7 +20,7 @@ import {
   type ContractTypeOption,
 } from "@/modules/people"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
-import { RepresentativeSelect } from "@/components/representatives/RepresentativeSelect"
+import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
 import {

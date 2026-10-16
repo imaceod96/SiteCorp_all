@@ -714,7 +714,7 @@ test("los permisos prenomina.view y prenomina.manage se conservan sin cambios", 
 test("las pantallas de prenómina consumen el dominio y no consultan Supabase", () => {
   const presentation = [
     "src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx",
-    "src/components/prenomina/WorkerPrenominaDialog.tsx",
+    "src/modules/payroll-preparation/presentation/components/WorkerPrenominaDialog.tsx",
   ]
 
   for (const file of presentation) {
@@ -727,7 +727,7 @@ test("las pantallas de prenómina consumen el dominio y no consultan Supabase", 
   }
 
   // El diálogo usa las reglas y validaciones del dominio, no copias locales.
-  const dialog = code("src/components/prenomina/WorkerPrenominaDialog.tsx")
+  const dialog = code("src/modules/payroll-preparation/presentation/components/WorkerPrenominaDialog.tsx")
   for (const rule of [
     "validateWorkedDays",
     "validateNightInput",

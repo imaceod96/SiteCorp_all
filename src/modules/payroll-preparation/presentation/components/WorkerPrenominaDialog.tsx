@@ -13,13 +13,6 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Plus, Trash2 } from "lucide-react"
 import { academicCategoryLabel } from "@/modules/organization-structure"
 import {
-  type PrenominaWorkerEntry,
-  type PrenominaNightEntry,
-  type PrenominaClaConfig,
-  computeClaPreview,
-  computeEntryPreview,
-  computeNightPreview,
-  deletedNightIds,
   formatDateDMY,
   formatDecimalInput,
   formatHours,
@@ -29,10 +22,21 @@ import {
   formatTenureLabel,
   parseDecimalInput,
   parseIntegerInput,
+} from "@/modules/payroll-preparation/domain/formatters"
+import {
+  computeClaPreview,
+  computeEntryPreview,
+  computeNightPreview,
+  deletedNightIds,
   validateClaMinutes,
   validateNightInput,
   validateWorkedDays,
-} from "@/modules/payroll-preparation"
+} from "@/modules/payroll-preparation/domain/rules"
+import type {
+  PrenominaClaConfig,
+  PrenominaNightEntry,
+  PrenominaWorkerEntry,
+} from "@/modules/payroll-preparation/domain/entities"
 
 interface NightRow {
   id: string | null

@@ -135,7 +135,7 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
   const peopleScreens = [
     "src/components/workers/WorkerDocumentsTab.tsx",
     "src/components/medical-certificates/MedicalCertificateFormDialog.tsx",
-    "src/components/migration/MigratedWorkerDialog.tsx",
+    "src/modules/people/presentation/components/MigratedWorkerDialog.tsx",
     "src/components/workers/SeparateWorkerDialog.tsx",
     "src/components/workers/ChangePositionDialog.tsx",
     "src/components/workers/ChangeContractDialog.tsx",
