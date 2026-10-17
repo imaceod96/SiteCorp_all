@@ -29,8 +29,8 @@ import {
   AlertTriangle,
   Wallet,
 } from "lucide-react"
-import { Tabs, TabsContent } from "@/components/ui/tabs"
-import { SiteCorpTabsList, SiteCorpTabTrigger } from "@/components/ui/sitecorp-tabs"
+import { Tabs, TabsContent } from "@/shared/components/ui/tabs"
+import { SiteCorpTabsList, SiteCorpTabTrigger } from "@/shared/components/ui/sitecorp-tabs"
 import WorkerVacationsTab from "@/modules/vacations-licenses/vacations/presentation/components/WorkerVacationsTab"
 import WorkerMedicalCertificatesTab from "@/modules/vacations-licenses/medical-certificates/presentation/components/WorkerMedicalCertificatesTab"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"

@@ -10,7 +10,7 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpCheckbox } from "@/components/ui/sitecorp-checkbox"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/shared/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
 import {
   Dialog,
   DialogContent,

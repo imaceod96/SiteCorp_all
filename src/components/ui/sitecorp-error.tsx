@@ -1,6 +1,6 @@
 import * as React from "react"
 import { AlertCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/lib/utils"
 
 interface SiteCorpErrorProps extends React.HTMLAttributes<HTMLDivElement> {
