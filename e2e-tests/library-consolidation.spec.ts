@@ -708,7 +708,8 @@ test("los vencimientos se consultan sólo desde el repositorio de contratos", ()
 test("la presentación no consulta Supabase por su cuenta", () => {
   const offenders = sourceFiles("src").filter(
     (file) =>
-      /^src\/(pages|components|hooks|contexts)\//.test(file) &&
+      (/^src\/(pages|components|hooks|contexts)\//.test(file) ||
+        file.includes("/presentation/")) &&
       /from "@\/lib\/supabase"/.test(code(file))
   )
   expect(offenders, "la presentación consume casos de uso, nunca el cliente").toEqual([])

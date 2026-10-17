@@ -559,7 +559,12 @@ test("la administración global no forma ciclos ni depende de la presentación",
   // Se excluyen las PRUEBAS de contrato del propio dominio (`__tests__`): son artefactos de
   // verificación, no módulos del dominio, y algunas comprueban justamente que el tipo de la
   // presentación coincide con el del dominio.
-  const domainFiles = sourceFiles("src/modules").filter((file) => !file.includes("/__tests__/"))
+  // Se excluyen también las capas de PRESENTACIÓN: cada módulo compone su interfaz con los
+  // componentes UI compartidos (`@/components/ui`) y con la presentación de otros módulos,
+  // por lo que estas reglas de dominio se aplican sólo a dominio/aplicación/infraestructura.
+  const domainFiles = sourceFiles("src/modules")
+    .filter((file) => !file.includes("/__tests__/"))
+    .filter((file) => !file.includes("/presentation/"))
 
   for (const file of domainFiles) {
     const source = code(file)

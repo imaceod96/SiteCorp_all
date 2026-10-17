@@ -692,13 +692,18 @@ test("la plantilla oficial se construye y se vuelve a leer con las mismas column
 
 test("ningún otro contexto cambió por el traslado de las utilidades", () => {
   // Contratos, generación documental y prenómina no consumen ninguna utilidad movida.
-  for (const file of [
+  // Se comprueban las capas de dominio/aplicación/infraestructura: la PRESENTACIÓN de cada
+  // módulo sí es consumidora legítima del contrato compartido del sistema de filtros
+  // (verificado en la sección 5 de este mismo archivo).
+  const moduleLayers = [
     ...sourceFiles("src/modules/contracts"),
     ...sourceFiles("src/modules/document-generation"),
     ...sourceFiles("src/modules/document-templates"),
     ...sourceFiles("src/modules/payroll-preparation"),
     ...sourceFiles("src/modules/payroll-movements"),
-  ]) {
+  ].filter((file) => !file.includes("/presentation/"))
+
+  for (const file of moduleLayers) {
     expect(read(file), `${file} no debe depender de las utilidades movidas`).not.toMatch(
       /@\/lib\/(tenure|entity-filters|worker-migration)|@\/modules\/organization-structure\/presentation\/hooks\/use-entity-filters/
     )
