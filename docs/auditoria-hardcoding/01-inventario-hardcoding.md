@@ -185,8 +185,8 @@ en código · **D** internacionalización · **E** eliminar/consolidar · **F** 
 12. **Impacto**: alto · 13. **Riesgo**: alto (roles/usuarios de prueba activos)
 14. **Recomendación**: requerir investigación sobre si deben retirarse de la base conectada (ver categoría F de existencia en producción).
 15. **Tabla existente**: `platform_roles`, `tenant_roles`, `organization_entities`, `entity_user_access` · 16. **Tabla nueva**: ninguna
-17. **Prioridad**: P0 · 18. **Complejidad**: alta (depende de datos reales)
-19. **Dependencias**: datos productivos reales · 20. **Confianza**: media (los archivos existen; **no** se pudo verificar si esos registros siguen en producción → ver Documento 02, §Nivel de verificación).
+17. **Prioridad**: **P1** (reclasificado en el Bloque 35.1 — ver Documento 06; antes figuró como P0 “posible”). · 18. **Complejidad**: alta (depende de datos reales)
+19. **Dependencias**: datos productivos reales · 20. **Confianza**: **alta** (Bloque 35.1 verificó en modo solo lectura que persisten `TENANT-A`, entidades de prueba y roles de prueba, y que existe una cuenta `admin` **activa con rol `SuperAdmin`**). No hay bypass de autenticación/RLS; el acceso exige credenciales. `isael` ya no existe; `Platform Test` ya no existe.
 
 ---
 
@@ -268,6 +268,7 @@ Detalle completo en `07-auditoria-academica-salarial.md`. Resumen:
 | HC-076 | Salarial | salary-administration.repository.ts:80,105 | textos `description` | descripciones fijas | D/E | P3 | textos de creación |
 | HC-077 | Antigüedad | tenure-scale.rules.ts:4-9,16-23 | `MONTHS_PER_YEAR`/unidades | 12; "Meses"/"Años" | C/D | P3 | técnico + i18n |
 | HC-078 | Antigüedad | tenure-scale.rules.ts (validaciones) | `tenureFormToValues` | validaciones | C | P3 | lógica estructural |
+| HC-079 | Acceso/Seguridad | supabase/functions/create-sitecorp-user/index.ts:145; access-control/presentation/pages/PlatformUsers.tsx:45,84,96,117,128,330,364 | contraseña por defecto | `"temp1234!"` | E | P1 | credencial por defecto hardcodeada, alcanzable en producción; eliminar (ver Documento 06) |
 
 **Ampliaciones de hallazgos existentes** (mismo concepto, nuevas ubicaciones; no se duplican):
 HC-068→HC-035 · HC-069→HC-050 · HC-071→HC-052.
@@ -276,7 +277,7 @@ HC-068→HC-035 · HC-069→HC-050 · HC-071→HC-052.
 
 ## Final — Conteo y trazabilidad (ACTUALIZADO)
 
-- **Conceptos únicos registrados**: **78** (HC-001 … HC-064 + HC-065 … HC-078). No se inventaron conceptos.
+- **Conceptos únicos registrados**: **79** (HC-001 … HC-079; HC-065 … HC-078 de la ampliación académica/salarial y HC-079 de la verificación de seguridad). No se inventaron conceptos.
 - **Ocurrencias físicas detectadas**: > 100 (varias constantes duplicadas en 2–6 sitios; p. ej.
   HC-039 en 5+ archivos, HC-037 en 5+ sitios, HC-031 en UI + 3 RPC, HC-035 en 3 sitios,
   HC-050 en 4 RPC + frontend, HC-052/HC-071 en ~15 puntos).

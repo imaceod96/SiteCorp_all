@@ -170,6 +170,26 @@ Dividido en dos etapas para no dejar el sistema inconsistente (UI y RPC deben ca
 
 ---
 
+## BLOQUE 46 — Seguridad P1: credencial por defecto y saneamiento (HC-079 / HC-048)
+
+- **Objetivo**: eliminar la contraseña por defecto hardcodeada y sanear los datos de prueba.
+- **Hallazgos**: HC-079 (contraseña `temp1234!` en Edge Function + panel `PlatformUsers`),
+  HC-048 (registros/roles de prueba activos y cuenta `admin` con `SuperAdmin`).
+- **Archivos**: `supabase/functions/create-sitecorp-user/index.ts`,
+  `access-control/presentation/pages/PlatformUsers.tsx`; datos de `company_clients`,
+  `company_client_roles`, `organization_entities`, `profiles`/`platform_user_roles`.
+- **Fases**: A (decisión de negocio sobre `admin` y datos de prueba) → B (esquema/seguridad si
+  aplica) → C (saneamiento de datos con respaldo y verificación de FK) → D (código: eliminar el
+  fallback) → E (pruebas).
+- **Riesgo**: ALTO (autorización y datos). Requiere autorización expresa y revisión de seguridad.
+- **Pruebas**: Vitest del contrato de creación de usuarios; Playwright de alta de usuario y de
+  acceso por entidad; verificación de que ningún dato real depende de los IDs de prueba.
+- **Criterios de aceptación**: no existe ninguna contraseña por defecto en el código; la cuenta
+  `admin` y los datos de prueba quedan revisados/desactivados según decisión.
+- **Reversión**: respaldo previo de datos; cambio de código reversible.
+
+---
+
 ## Orden recomendado de implementación
 
 1. **Bloque 43 (investigar HC-048)** — primero por ser P0 de riesgo, aunque sea sólo diagnóstico.
@@ -181,7 +201,9 @@ Dividido en dos etapas para no dejar el sistema inconsistente (UI y RPC deben ca
 7. **Bloque 40** — conceptos retributivos.
 8. **Bloque 42** — education_levels.
 9. **Bloque 45** — categorías académicas (sólo con decisión de negocio).
-10. **Bloque 41** — flag de permisos (último por ser sensible en seguridad).
+10. **Bloque 41** — flag de permisos (sensible en seguridad).
+11. **Bloque 46** — seguridad P1 (HC-079 credencial por defecto / HC-048 saneamiento); puede
+    adelantarse por ser P1 confirmado, con autorización expresa.
 
 ---
 

@@ -13,8 +13,9 @@
 | Archivos revisados (lectura directa + búsqueda sistemática) | ~460 archivos bajo `src/` |
 | Tablas del esquema activo observadas | 76 |
 | Funciones RPC observadas | cientos (relevantes para el análisis: ~50) |
-| **Hallazgos (conceptos únicos)** | **78** (HC-001 … HC-064 + HC-065 … HC-078) |
+| **Hallazgos (conceptos únicos)** | **79** (HC-001 … HC-079) |
 | — añadidos en la ampliación | 14 (HC-065 … HC-078) |
+| — añadido en la verificación de seguridad | 1 (HC-079) |
 | — ampliados (mismo concepto, nuevas ubicaciones) | 3 (HC-035, HC-050, HC-052) |
 | **Ocurrencias físicas** | > 100 (varias constantes duplicadas en 2–6 sitios) |
 | **Candidatos a base de datos (A/B)** | 16 confirmados + 5 a confirmar por investigación |
@@ -65,7 +66,7 @@ Recordatorio: **categorías solapadas**; un hallazgo puede aparecer en varias li
 - **D (internacionalización)**: HC-004, HC-005, HC-006, HC-015, HC-017, HC-023, HC-032, HC-036,
   HC-059, HC-067, HC-074, HC-075, HC-076.
 - **E (eliminar/consolidar)**: HC-006, HC-026, HC-029, HC-039, HC-040, HC-042, HC-048, HC-053,
-  HC-054, HC-062, HC-068, HC-069, HC-071, HC-072, HC-076.
+  HC-054, HC-062, HC-068, HC-069, HC-071, HC-072, HC-076, HC-079.
 - **F (investigar)**: HC-014, HC-022, HC-024, HC-036, HC-046, HC-057, HC-061, HC-064, HC-065,
   HC-066, HC-073, HC-075.
 
@@ -84,13 +85,20 @@ Recordatorio: **categorías solapadas**; un hallazgo puede aparecer en varias li
 5. **Topes de vacaciones (HC-050)**: 24 y 15 en 4 RPC y en la migración del frontend.
 6. **Catálogos territoriales (HC-042)**: provincias/municipios estáticos frente a las tablas
    `provinces`/`municipalities`.
-7. **Datos de prueba aplicados (HC-048)**: `TENANT-A`, usuarios `admin`/`isael`, roles de prueba.
+7. **Datos de prueba aplicados (HC-048)** — **verificado (Bloque 35.1)**: persisten `TENANT-A`,
+   entidades de prueba (`GRUPO-A`, `EMPRESA-A/B`, `UEB-A1/A2`) y roles de prueba (`RRHH Test`,
+   `Viewer`×2, `HR Manager`) activos; existe una cuenta `admin` activa con rol **`SuperAdmin`**.
+   (`isael` y `Platform Test` ya no existen.) **HC-079**: contraseña por defecto `temp1234!`.
 
 ---
 
 ## 5. Riesgos críticos identificados
 
-- **P0 — HC-048**: roles y usuarios de prueba pueden conceder acceso real en la base conectada.
+- **P1 — HC-048 (confirmado, Bloque 35.1)**: existe una cuenta `admin` **activa con rol `SuperAdmin`**
+  y datos/roles de prueba en la base conectada. **No** es P0: no hay bypass de autenticación ni de
+  RLS y no se demostró acceso no autorizado; se desconoce si el entorno es producción.
+- **P1 — HC-079 (nuevo)**: contraseña por defecto hardcodeada `temp1234!` en la Edge Function
+  `create-sitecorp-user` y en el panel `PlatformUsers` (creación de usuarios de plataforma).
   Su existencia en producción **no está verificada** (nivel N4).
 - **Seguridad — HC-037**: la regla de exclusión de permisos legacy está replicada como regex en 5+
   RPC; un cambio debe hacerse con diseño de seguridad dedicado.
@@ -146,7 +154,8 @@ Recordatorio: **categorías solapadas**; un hallazgo puede aparecer en varias li
 | HC-037 | flag `is_internal_scope` + RPC | 41 |
 | HC-040/HC-016/HC-053 | constante única de identificación | 37 |
 | HC-042 | leer `provinces`/`municipalities` | 36 |
-| HC-048 | saneamiento de datos de prueba | 43 |
+| HC-048 | saneamiento de datos de prueba (P1 confirmado) | 43 |
+| HC-079 | eliminar credencial por defecto `temp1234!` | 46 |
 | HC-050 | tabla `vacation_policy_settings` | 39 |
 | HC-051 | parámetro de representantes [decisión] | (investigación) |
 | HC-052 | default de moneda desde `salary_scales` | 39 |
