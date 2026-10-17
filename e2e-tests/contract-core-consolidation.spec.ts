@@ -367,7 +367,7 @@ const CONTRACT_CONSUMERS = [
   "src/modules/people/presentation/components/HireCandidateDialog.tsx",
   "src/components/workers/ChangeContractDialog.tsx",
   "src/components/workers/ChangePositionDialog.tsx",
-  "src/components/workers/ReincorporateWorkerDialog.tsx",
+  "src/modules/people/presentation/components/ReincorporateWorkerDialog.tsx",
   "src/modules/people/presentation/components/WorkerForm.tsx",
   "src/modules/people/presentation/pages/WorkerDetail.tsx",
 ]

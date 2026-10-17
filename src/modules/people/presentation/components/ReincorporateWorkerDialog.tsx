@@ -49,16 +49,20 @@ import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
+import { loadTransitionWorkspace } from "@/modules/people/application/staffing.queries"
 import {
-  loadTransitionWorkspace,
   reincorporateWorkerWithContract,
   reincorporateWorkerWithResolution,
+} from "@/modules/people/application/worker-transitions.commands"
+import {
   requiresResolution,
   validateReincorporationInput,
-  type ContractTypeOption,
-  type StaffingPosition,
-  type WorkerIdentity,
-} from "@/modules/people"
+} from "@/modules/people/domain/rules"
+import type {
+  ContractTypeOption,
+  StaffingPosition,
+  WorkerIdentity,
+} from "@/modules/people/domain/entities"
 import { AlertTriangle, FileSignature, UserPlus } from "lucide-react"
 
 interface ReincorporateWorkerDialogProps {

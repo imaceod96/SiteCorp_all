@@ -6,7 +6,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import ReincorporateWorkerDialog from "@/components/workers/ReincorporateWorkerDialog"
+import ReincorporateWorkerDialog from "@/modules/people/presentation/components/ReincorporateWorkerDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import {

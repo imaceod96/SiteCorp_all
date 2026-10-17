@@ -1,7 +1,8 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { Check, AlertTriangle, Loader2 } from "lucide-react"
-import { READINESS_SECTION_LABELS, type ReadinessResult } from "@/modules/people"
+import { READINESS_SECTION_LABELS } from "@/modules/people/domain/rules"
+import type { ReadinessResult } from "@/modules/people/domain/entities"
 
 interface ContractReadinessChecklistProps {
   readiness: ReadinessResult | null

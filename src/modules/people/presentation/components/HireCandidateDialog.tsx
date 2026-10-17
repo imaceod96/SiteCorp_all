@@ -49,7 +49,7 @@ import type {
 } from "@/modules/people/domain/entities"
 import { AlertTriangle, UserPlus, RefreshCw, Search } from "lucide-react"
 import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
-import { ContractReadinessChecklist } from "@/components/contracts/ContractReadinessChecklist"
+import { ContractReadinessChecklist } from "@/modules/people/presentation/components/ContractReadinessChecklist"
 import {
   missingContractTemplateMessage,
   resolveContractTemplateAvailability,
