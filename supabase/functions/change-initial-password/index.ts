@@ -53,6 +53,14 @@ serve(async (req) => {
     { auth: { persistSession: false } }
   )
 
+  // Cliente anónimo EFÍMERO, solo para verificar en servidor que la contraseña
+  // nueva realmente quedó aplicada (ver paso E2). No persiste sesión.
+  const anonClient = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+
   try {
     // A. Verificar la identidad REAL del llamante (nunca se confía en el cuerpo).
     const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
@@ -101,6 +109,37 @@ serve(async (req) => {
     if (updateError) {
       console.error("[change-initial-password] auth update failed", updateError)
       return json({ error: "No se pudo actualizar la contraseña. Inténtalo de nuevo." }, 400)
+    }
+
+    // E2. VERIFICACIÓN EN SERVIDOR de que el cambio se aplicó de verdad: se intenta
+    //     iniciar sesión con la NUEVA contraseña usando un cliente anónimo efímero.
+    //     Si no inicia sesión, el cambio NO se da por válido y NO se confirma el
+    //     ciclo (el requisito permanece true). La prueba de cambio nunca proviene
+    //     del navegador ni de una afirmación del cliente.
+    const email = callerData.user.email
+    if (email) {
+      const { data: verifyData, error: verifyError } = await anonClient.auth.signInWithPassword({
+        email,
+        password: newPassword,
+      })
+      if (verifyError || !verifyData?.session) {
+        console.error("[change-initial-password] server-side verification failed", verifyError)
+        return json(
+          {
+            error: "No pudimos verificar el cambio de contraseña. Vuelve a intentarlo.",
+            needs_retry: true,
+          },
+          500
+        )
+      }
+      // Cerrar la sesión efímera de verificación: no se deja ninguna sesión abierta.
+      try {
+        await anonClient.auth.signOut({ scope: "local" })
+      } catch (signOutError) {
+        console.warn("[change-initial-password] ephemeral sign-out failed", signOutError)
+      }
+    } else {
+      console.warn("[change-initial-password] user has no email; skipping sign-in verification")
     }
 
     // F. Confirmar que Auth terminó sin error (aquí ya lo sabemos) y G. confirmar el ciclo de

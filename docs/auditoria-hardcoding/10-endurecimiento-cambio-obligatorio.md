@@ -45,6 +45,11 @@ cada función. Se propone:
 **BLOQUEO documentado:** el cierre de las 157 `SECURITY DEFINER` no cabe en este bloque; se
 detiene y se documenta como pendiente. **No se declara protección completa.**
 
+> **RESUELTO en Bloque 35.2C.3** (ver `11-resolucion-bloqueo-security-definer.md`): se descartó
+> `db-pre-request` (no disponible en Supabase gestionado) y se implementó el patrón **«envoltura con
+> guarda»** (`20261028_04_rpc_password_change_gate.sql`, preparado, no aplicado), que cubre **77 de
+> las 157** definer; quedan **80 pendientes** (SETOF/TABLE, OUT/INOUT, DEFAULT, VARIADIC).
+
 ## 4. Storage
 
 Buckets privados (`public = false`): `avatars`, `documents`, `document-templates`,
