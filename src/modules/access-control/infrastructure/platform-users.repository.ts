@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import type {
+  CreatedPlatformUser,
   CreatePlatformUserInput,
   PlatformRole,
   PlatformUserRoleRow,
@@ -67,20 +68,22 @@ export async function deletePlatformUserRole(userId: string, roleId: string): Pr
 /**
  * Alta de un usuario de plataforma mediante la Edge Function `create-sitecorp-user`.
  *
- * El cuerpo conserva EXACTAMENTE las claves del contrato del backend (nombre completo,
- * nombre de usuario, correo, contraseña temporal, estado y rol de plataforma): la función es
- * la que crea el usuario en `auth.users` con privilegios elevados, y el cliente nunca los
- * tiene.
+ * El cuerpo conserva las claves del contrato del backend (nombre completo, nombre de usuario,
+ * correo, estado y rol de plataforma) pero YA NO envía contraseña: la genera el servidor de
+ * forma aleatoria y segura. La función es la que crea el usuario en `auth.users` con
+ * privilegios elevados, y el cliente nunca los tiene.
+ *
+ * Devuelve la CONTRASEÑA INICIAL generada, que viaja UNA SOLA VEZ en la respuesta y nunca se
+ * persiste en el cliente.
  */
 export async function invokeCreatePlatformUser(
   input: CreatePlatformUserInput
-): Promise<void> {
+): Promise<CreatedPlatformUser> {
   const { data, error } = await supabase.functions.invoke("create-sitecorp-user", {
     body: {
       full_name: input.fullName,
       username: input.username,
       email: input.email,
-      password: input.password,
       is_active: input.isActive,
       platform_role_id: input.platformRoleId,
     },
@@ -88,4 +91,26 @@ export async function invokeCreatePlatformUser(
 
   if (error) throw error
   if (!data) throw new Error("Respuesta vacía del servidor")
+
+  const created = data as {
+    user_id: string
+    email: string
+    username: string
+    full_name: string
+    platform_role_id: string | null
+    initial_password?: string
+  }
+
+  if (!created.initial_password) {
+    throw new Error("El servidor no devolvió la contraseña inicial del usuario.")
+  }
+
+  return {
+    userId: created.user_id,
+    email: created.email,
+    username: created.username,
+    fullName: created.full_name,
+    platformRoleId: created.platform_role_id ?? null,
+    initialPassword: created.initial_password,
+  }
 }

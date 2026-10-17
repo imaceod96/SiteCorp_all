@@ -9,6 +9,7 @@ import {
   loadPlatformUsers,
   setPlatformUserActive,
   updatePlatformUser,
+  type CreatedPlatformUser,
   type PlatformRole,
   type PlatformUser,
 } from "@/modules/access-control"
@@ -25,7 +26,7 @@ import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { SiteCorpError } from "@/shared/components/ui/sitecorp-error"
 import { SelectItem } from "@/shared/components/ui/select"
 import { Checkbox } from "@/shared/components/ui/checkbox"
-import { Pencil, Plus, Power, UserMinus, UserCheck, Key, ShieldCheck } from "lucide-react"
+import { Check, Copy, Pencil, Plus, Power, UserMinus, UserCheck, Key, ShieldCheck } from "lucide-react"
 
 const PlatformUsers = () => {
   const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
@@ -42,10 +43,13 @@ const PlatformUsers = () => {
     full_name: "",
     username: "",
     email: "",
-    password: "temp1234!",
     is_active: true,
   })
   const [selectedRoleId, setSelectedRoleId] = React.useState("")
+  // Contraseña inicial generada por el servidor. Se muestra UNA SOLA VEZ y NO se persiste:
+  // vive únicamente en este estado y se limpia al cerrar.
+  const [createdUser, setCreatedUser] = React.useState<CreatedPlatformUser | null>(null)
+  const [passwordCopied, setPasswordCopied] = React.useState(false)
 
   const loadUsers = React.useCallback(async () => {
     try {
@@ -81,7 +85,6 @@ const PlatformUsers = () => {
       full_name: "",
       username: "",
       email: "",
-      password: "temp1234!",
       is_active: true,
     })
     setSelectedRoleId("")
@@ -93,7 +96,6 @@ const PlatformUsers = () => {
       full_name: user.full_name ?? "",
       username: user.username ?? "",
       email: user.email ?? "",
-      password: "",
       is_active: user.is_active,
     })
   }
@@ -109,15 +111,17 @@ const PlatformUsers = () => {
         })
       } else {
         // El alta de usuarios de plataforma sigue pasando por la Edge Function del backend:
-        // el cliente nunca crea usuarios ni maneja claves privilegiadas.
-        await createPlatformUser({
+        // el cliente nunca crea usuarios ni maneja claves privilegiadas. La contraseña
+        // inicial la genera el servidor y se devuelve UNA SOLA VEZ para mostrarla.
+        const created = await createPlatformUser({
           fullName: formData.full_name,
           username: formData.username,
           email: formData.email,
-          password: formData.password,
           isActive: formData.is_active,
           platformRoleId: selectedRoleId || null,
         })
+        setCreatedUser(created)
+        setPasswordCopied(false)
       }
       setEditingUser(null)
       setShowCreateForm(false)
@@ -125,7 +129,6 @@ const PlatformUsers = () => {
         full_name: "",
         username: "",
         email: "",
-        password: "temp1234!",
         is_active: true,
       })
       setSelectedRoleId("")
@@ -133,6 +136,23 @@ const PlatformUsers = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo guardar el usuario.")
     }
+  }
+
+  /** Copia la contraseña inicial al portapapeles (nunca se registra ni se persiste). */
+  const copyInitialPassword = async () => {
+    if (!createdUser) return
+    try {
+      await navigator.clipboard.writeText(createdUser.initialPassword)
+      setPasswordCopied(true)
+    } catch (err) {
+      console.error("No se pudo copiar la contraseña inicial.")
+    }
+  }
+
+  /** Limpia la contraseña del estado al cerrar: no debe quedar retenida en memoria de la vista. */
+  const closeCreatedUser = () => {
+    setCreatedUser(null)
+    setPasswordCopied(false)
   }
 
   const toggleActive = async (user: PlatformUser) => {
@@ -325,15 +345,6 @@ const PlatformUsers = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-ink">Contraseña temporal</label>
-                  <SiteCorpInput
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Mínimo 8 caracteres"
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm font-medium text-ink">
                     <Checkbox
                       checked={formData.is_active}
@@ -361,7 +372,6 @@ const PlatformUsers = () => {
                     full_name: "",
                     username: "",
                     email: "",
-                    password: "temp1234!",
                     is_active: true,
                   })
                   setSelectedRoleId("")
@@ -371,6 +381,49 @@ const PlatformUsers = () => {
               </SiteCorpButton>
             </div>
           </form>
+        </SiteCorpFormSection>
+      )}
+
+      {createdUser && (
+        <SiteCorpFormSection
+          title="Usuario creado — contraseña inicial"
+          description="La contraseña se genera de forma aleatoria y segura en el servidor. No podrá recuperarse posteriormente desde SiteCorp."
+        >
+          <SiteCorpAlert type="warning" title="Se muestra una sola vez">
+            Anota o copia esta contraseña ahora y comunícala al usuario por un canal seguro
+            (nunca por un medio compartido o sin cifrar). Al cerrar, desaparecerá de esta pantalla.
+          </SiteCorpAlert>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-ink">
+              Contraseña inicial de {createdUser.fullName}
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <code className="flex-1 select-all break-all rounded-lg border border-border bg-muted px-3 py-2 font-mono text-sm text-ink">
+                {createdUser.initialPassword}
+              </code>
+              <SiteCorpButton type="button" variant="outline" onClick={copyInitialPassword}>
+                {passwordCopied ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2" /> Copiada
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-2" /> Copiar
+                  </>
+                )}
+              </SiteCorpButton>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Usuario: {createdUser.username} · Email: {createdUser.email}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <SiteCorpButton type="button" onClick={closeCreatedUser}>
+              Entendido, cerrar
+            </SiteCorpButton>
+          </div>
         </SiteCorpFormSection>
       )}
 

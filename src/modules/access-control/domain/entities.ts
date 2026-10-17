@@ -311,14 +311,34 @@ export interface PlatformUser {
   roles: PlatformRoleRef[]
 }
 
-/** Alta de un usuario de plataforma (la ejecuta la Edge Function del backend). */
+/**
+ * Alta de un usuario de plataforma (la ejecuta la Edge Function del backend).
+ *
+ * NO incluye contraseña: la genera SIEMPRE el servidor de forma aleatoria y segura. El
+ * navegador nunca propone ni conoce la contraseña antes del alta.
+ */
 export interface CreatePlatformUserInput {
   fullName: string
   username: string
   email: string
-  password: string
   isActive: boolean
   platformRoleId: string | null
+}
+
+/**
+ * Resultado del alta de un usuario de plataforma.
+ *
+ * Transporta la CONTRASEÑA INICIAL generada por el servidor, que se muestra UNA SOLA VEZ al
+ * administrador autorizado y nunca se persiste. No debe guardarse en almacenamiento
+ * persistente ni incluirse en logs o telemetría.
+ */
+export interface CreatedPlatformUser {
+  userId: string
+  email: string
+  username: string
+  fullName: string
+  platformRoleId: string | null
+  initialPassword: string
 }
 
 /** Edición de los datos editables de un usuario (nunca el correo ni la contraseña). */

@@ -256,11 +256,13 @@ test("la administración de plataforma conserva sus tablas, su Edge Function y s
   expect(repository).toMatch(/\.order\("name"\)/)
   expect(repository).toMatch(/\.insert\(\{ user_id: userId, platform_role_id: roleId \}\)/)
   expect(repository).toMatch(/\.eq\("platform_role_id", roleId\)/)
-  // El alta sigue pasando por la Edge Function, con su contrato de cuerpo intacto.
+  // El alta sigue pasando por la Edge Function. El cuerpo ya NO envía contraseña: la
+  // contraseña inicial la genera el servidor de forma aleatoria y segura.
   expect(repository).toMatch(/functions\.invoke\("create-sitecorp-user", \{/)
-  for (const key of ["full_name", "username", "email", "password", "is_active", "platform_role_id"]) {
+  for (const key of ["full_name", "username", "email", "is_active", "platform_role_id"]) {
     expect(repository, `el cuerpo debe conservar ${key}`).toMatch(new RegExp(`${key}: `))
   }
+  expect(repository).not.toMatch(/password:\s*input\./)
   expect(repository).toMatch(/Respuesta vacía del servidor/)
   // RLS sigue siendo la autoridad: aquí no se comprueban privilegios.
   expect(repository).not.toMatch(/is_superadmin/i)

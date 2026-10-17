@@ -1,4 +1,8 @@
-import type { CreatePlatformUserInput, UpdatePlatformUserInput } from "../domain/entities"
+import type {
+  CreatedPlatformUser,
+  CreatePlatformUserInput,
+  UpdatePlatformUserInput,
+} from "../domain/entities"
 import {
   deletePlatformUserRole,
   insertPlatformUserRole,
@@ -21,10 +25,13 @@ import {
  * ALTA de un usuario de plataforma.
  *
  * Pasa por la Edge Function del backend —el cliente nunca crea usuarios ni maneja claves
- * privilegiadas— y conserva su mensaje de respuesta vacía.
+ * privilegiadas— y devuelve la contraseña inicial generada por el servidor para mostrarla
+ * UNA SOLA VEZ. El cliente no propone contraseña: no existe `password` en la entrada.
  */
-export async function createPlatformUser(input: CreatePlatformUserInput): Promise<void> {
-  await invokeCreatePlatformUser(input)
+export async function createPlatformUser(
+  input: CreatePlatformUserInput
+): Promise<CreatedPlatformUser> {
+  return invokeCreatePlatformUser(input)
 }
 
 /** EDICIÓN de los datos editables de un usuario de plataforma. */

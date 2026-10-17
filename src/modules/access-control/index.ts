@@ -146,6 +146,7 @@ export type {
   ClientMembershipRow,
   ClientUser,
   ClientUserRoleRow,
+  CreatedPlatformUser,
   CreatePlatformUserInput,
   PlatformRole,
   PlatformRoleRef,
