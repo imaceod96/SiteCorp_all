@@ -1,7 +1,7 @@
 import * as React from "react"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import {
   VACATION_PERIOD_STATUS_LABELS,
   formatVacationDays,

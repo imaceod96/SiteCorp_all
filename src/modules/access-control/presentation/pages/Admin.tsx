@@ -5,7 +5,7 @@ import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { Building2, Users, Shield, ArrowRight } from "lucide-react"
 
 const Admin = () => {

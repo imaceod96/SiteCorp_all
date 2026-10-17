@@ -6,8 +6,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Label } from "@/components/ui/label"

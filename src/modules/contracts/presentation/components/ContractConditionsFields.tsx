@@ -1,5 +1,5 @@
 import * as React from "react"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"

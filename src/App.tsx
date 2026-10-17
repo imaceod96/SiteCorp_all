@@ -12,7 +12,7 @@ import { PlatformAdminLayout } from "@/modules/access-control/presentation/compo
 import EntityRouteWrapper from "@/modules/access-control/presentation/components/entity-route-wrapper"
 import { CompanyClientLayout } from "@/modules/company-client/presentation/components/company-client-layout"
 import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import Login from "@/modules/access-control/presentation/pages/Login"
 import Index from "@/modules/organization-structure/presentation/pages/Index"
 import Organization from "@/modules/organization-structure/presentation/pages/Organization"

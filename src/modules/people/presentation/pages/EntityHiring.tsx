@@ -5,8 +5,8 @@ import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import {
   ArrowLeft,

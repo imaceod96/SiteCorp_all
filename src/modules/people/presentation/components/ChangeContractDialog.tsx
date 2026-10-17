@@ -7,8 +7,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"

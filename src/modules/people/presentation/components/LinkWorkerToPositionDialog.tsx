@@ -4,7 +4,7 @@ import { linkMigratedWorker } from "@/modules/people/application/worker-migratio
 import { fetchEntityPositionHierarchy } from "@/modules/organization-structure"
 import type { WorkerPositionOption } from "@/modules/people/presentation/components/WorkerForm"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { Button } from "@/components/ui/sitecorp-button"
+import { Button } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SelectItem } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"

@@ -716,6 +716,55 @@ test("la presentación no consulta Supabase por su cuenta", () => {
   expect(offenders, "la presentación consume casos de uso, nunca el cliente").toEqual([])
 })
 
+test("los componentes UI ya consolidados viven en shared y nadie usa la ruta antigua", () => {
+  // Consolidación gradual de `src/components/ui` hacia `src/shared/components/ui`
+  // (Bloques 29 a 31): por cada componente ya migrado se comprueba que (a) ya no existe
+  // en la ubicación antigua, (b) existe en la nueva y (c) ningún archivo del proyecto lo
+  // importa desde la ruta antigua. La lista crece con cada bloque de la consolidación.
+  const migrated = [
+    "aspect-ratio",
+    "avatar",
+    "breadcrumb",
+    "button-variants",
+    "button",
+    "collapsible",
+    "hover-card",
+    "input-otp",
+    "input",
+    "progress",
+    "resizable",
+    "sitecorp-button",
+    "sitecorp-input",
+    "sitecorp-tabs",
+    "slider",
+    "tabs",
+    "textarea",
+    "toggle-group",
+    "toggle-variants",
+    "toggle",
+  ]
+
+  const remaining: string[] = []
+  const missing: string[] = []
+  for (const name of migrated) {
+    for (const path of [`src/components/ui/${name}.tsx`, `src/components/ui/${name}.ts`]) {
+      if (existsSync(path)) remaining.push(path)
+    }
+    const shared = [`src/shared/components/ui/${name}.tsx`, `src/shared/components/ui/${name}.ts`]
+    if (!shared.some((path) => existsSync(path))) missing.push(name)
+  }
+  expect(remaining, "los componentes consolidados no deben seguir en src/components/ui").toEqual([])
+  expect(missing, "los componentes consolidados deben existir en src/shared/components/ui").toEqual(
+    []
+  )
+
+  const oldPath = new RegExp(`@/components/ui/(${migrated.join("|")})"`)
+  const offenders = sourceFiles("src").filter((file) => oldPath.test(code(file)))
+  expect(offenders, "nadie debe importar un componente consolidado desde la ruta antigua").toEqual(
+    []
+  )
+})
+
 /* ------------------------------------------------------------------ */
 /* 6. Limpieza controlada: fachadas retiradas y utilidades conservadas */
 /* ------------------------------------------------------------------ */

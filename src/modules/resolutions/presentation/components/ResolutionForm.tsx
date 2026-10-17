@@ -1,6 +1,6 @@
 import * as React from "react"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Label } from "@/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"

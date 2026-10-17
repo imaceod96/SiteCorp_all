@@ -11,7 +11,7 @@ import type { DocumentTemplateVersion } from "@/modules/document-templates/domai
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { showError } from "@/utils/toast"
 import { Download, FileText, RefreshCw, Upload } from "lucide-react"
 

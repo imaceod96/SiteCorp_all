@@ -2,7 +2,7 @@ import * as React from "react"
 import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { FileSignature, FileText, UserMinus } from "lucide-react"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import {

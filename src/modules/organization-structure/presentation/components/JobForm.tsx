@@ -1,11 +1,11 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { SiteCorpCheckbox } from "@/components/ui/sitecorp-checkbox"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/shared/components/ui/textarea"
 import {

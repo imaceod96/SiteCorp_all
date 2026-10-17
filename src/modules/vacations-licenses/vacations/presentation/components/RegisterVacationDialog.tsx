@@ -2,9 +2,9 @@ import * as React from "react"
 import { useState, useEffect } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useToast } from "@/shared/hooks/use-toast"
-import { SiteCorpInput } from "@/components/ui/sitecorp-input"
+import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import {
   Dialog,
