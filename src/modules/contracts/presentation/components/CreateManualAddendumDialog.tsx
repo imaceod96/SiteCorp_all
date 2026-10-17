@@ -14,9 +14,9 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
-import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import { AddendumChangesList } from "@/modules/contracts/presentation/components/AddendumChangesList"
 import { ContractRetributionFields } from "@/modules/contracts/presentation/components/ContractConditionsFields"
+import type { RepresentativeSelectSlotRenderer } from "@/modules/contracts/presentation/components/representative-select-slot"
 import {
   MANUAL_ADDENDUM_REASON_CODES,
   addendumReasonLabel,
@@ -45,6 +45,8 @@ interface CreateManualAddendumDialogProps {
   formalized: FormalizedConditions | null
   paymentMethods: PaymentMethodOption[]
   onCreated: () => void
+  /** Selector de representante inyectado por el contexto propietario (Personas). */
+  renderRepresentativeSelect: RepresentativeSelectSlotRenderer
 }
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -86,6 +88,7 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
   formalized,
   paymentMethods,
   onCreated,
+  renderRepresentativeSelect,
 }) => {
   const [reasonCode, setReasonCode] = React.useState<AddendumReasonCode>("COMPENSATION_CHANGE")
   const [reason, setReason] = React.useState("")
@@ -636,14 +639,14 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
                       />
                     </div>
                   </div>
-                  <RepresentativeSelect
-                    entityId={entityId}
-                    onDate={signatureDate}
-                    value={representativeAssignmentId}
-                    onChange={setRepresentativeAssignmentId}
-                    canManage={canManage}
-                    label="Representante que suscribe el anexo *"
-                  />
+                  {renderRepresentativeSelect({
+                    entityId,
+                    onDate: signatureDate,
+                    value: representativeAssignmentId,
+                    onChange: setRepresentativeAssignmentId,
+                    canManage,
+                    label: "Representante que suscribe el anexo *",
+                  })}
                 </>
               )}
             </div>

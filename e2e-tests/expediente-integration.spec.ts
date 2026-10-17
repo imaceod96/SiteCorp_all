@@ -151,10 +151,10 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
 
   const contractsScreens = [
     "src/modules/contracts/presentation/components/ContractAddendumsSection.tsx",
-    "src/components/addendums/AddendumDetailDialog.tsx",
-    "src/components/addendums/CreateManualAddendumDialog.tsx",
+    "src/modules/contracts/presentation/components/AddendumDetailDialog.tsx",
+    "src/modules/contracts/presentation/components/CreateManualAddendumDialog.tsx",
     "src/modules/contracts/presentation/components/ContractFormalizationAlerts.tsx",
-    "src/components/salary/ReviewSalaryChangeDialog.tsx",
+    "src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx",
   ]
 
   for (const screen of contractsScreens) {

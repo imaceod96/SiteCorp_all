@@ -355,9 +355,9 @@ test("los mensajes de la automatización documental se conservan palabra por pal
 
 const CONTRACT_CONSUMERS = [
   "src/modules/contracts/presentation/components/AddendumChangesList.tsx",
-  "src/components/addendums/AddendumDetailDialog.tsx",
+  "src/modules/contracts/presentation/components/AddendumDetailDialog.tsx",
   "src/modules/contracts/presentation/components/ContractAddendumsSection.tsx",
-  "src/components/addendums/CreateManualAddendumDialog.tsx",
+  "src/modules/contracts/presentation/components/CreateManualAddendumDialog.tsx",
   "src/modules/contracts/presentation/components/ContractualTimeline.tsx",
   "src/modules/contracts/presentation/components/CurrentContractSummary.tsx",
   "src/modules/contracts/presentation/components/ContractConditionsFields.tsx",

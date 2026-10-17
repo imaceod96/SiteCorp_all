@@ -367,7 +367,6 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
     "src/modules/organization-structure/presentation/pages/EntityStaffing.tsx",
     "src/pages/EntityVacations.tsx",
     "src/modules/people/presentation/pages/EntityWorkers.tsx",
-    "src/components/filters/filter-builder.tsx",
   ]
 
   for (const consumer of consumers) {
@@ -379,6 +378,19 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
       /@\/lib\/(entity-filters|tenure|worker-migration)/
     )
   }
+
+  // El constructor de filtros compartido ya no depende de la presentación de un módulo
+  // de negocio: consume el contrato compartido del sistema de filtros.
+  const filterBuilder = read("src/components/filters/filter-builder.tsx")
+  expect(filterBuilder, "filter-builder debe consumir el contrato compartido").toMatch(
+    /from "@\/components\/filters\/entity-filter-types"/
+  )
+  expect(filterBuilder, "filter-builder no debe importar módulos de negocio").not.toMatch(
+    /from "@\/modules\//
+  )
+  expect(filterBuilder, "filter-builder no debe importar utilidades retiradas").not.toMatch(
+    /@\/lib\/(entity-filters|tenure|worker-migration)/
+  )
 })
 
 /* ------------------------------------------------------------------ */

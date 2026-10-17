@@ -90,7 +90,7 @@ import { ContractFormalizationSummary } from "@/modules/contracts/presentation/c
 import { ContractRetributionSummary } from "@/modules/contracts/presentation/components/ContractRetributionSummary"
 import { CurrentContractSummary } from "@/modules/contracts/presentation/components/CurrentContractSummary"
 import { ContractualTimeline } from "@/modules/contracts/presentation/components/ContractualTimeline"
-import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
+import { AddendumDetailDialog } from "@/modules/contracts/presentation/components/AddendumDetailDialog"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import { SelectItem } from "@/components/ui/select"
 import {
@@ -1299,6 +1299,7 @@ const WorkerDetail = () => {
             }}
             paymentMethods={paymentMethods}
             onChanged={loadWorker}
+            renderRepresentativeSelect={(slot) => <RepresentativeSelect {...slot} />}
           />
 
           {/* Histórico contractual cronológico (§9/§10) */}
@@ -2005,6 +2006,7 @@ const WorkerDetail = () => {
         entityId={entityId as string}
         canManage={canManage}
         onChanged={loadWorker}
+        renderRepresentativeSelect={(slot) => <RepresentativeSelect {...slot} />}
       />
     </div>
   )

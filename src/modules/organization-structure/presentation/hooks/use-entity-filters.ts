@@ -1,4 +1,8 @@
 import * as React from "react"
+import type {
+  ActiveEntityFilter,
+  EntityFilterDefinition,
+} from "@/components/filters/entity-filter-types"
 
 /**
  * Sistema de filtros acumulativos de SiteCorp (lógica de presentación).
@@ -15,41 +19,23 @@ import * as React from "react"
  *   · No se hardcodean catálogos: los `options` los aporta cada módulo desde los
  *     catálogos globales reales.
  *
- * Vive en `src/hooks` porque es lógica de interfaz (estado de React y filtrado de
- * listados ya cargados): no contiene reglas de negocio ni consultas de datos, así
- * que no pertenece a ningún dominio. Los criterios siguen declarándose en cada pantalla.
+ * Es lógica de interfaz (estado de React y filtrado de listados ya cargados): no
+ * contiene reglas de negocio ni consultas de datos, así que no pertenece a ningún
+ * dominio. Los criterios siguen declarándose en cada pantalla.
+ *
+ * Los TIPOS del sistema (EntityFilterType, EntityFilterOption, EntityFilterDefinition,
+ * ActiveEntityFilter) viven en la capa compartida
+ * `src/components/filters/entity-filter-types` para que el constructor de filtros
+ * compartido no dependa de la presentación de un módulo de negocio; aquí se reexportan
+ * para conservar la interfaz pública de este hook.
  */
 
-export type EntityFilterType =
-  | "select"
-  | "multiselect"
-  | "boolean"
-  | "text"
-  | "date"
-  | "daterange"
-
-export interface EntityFilterOption {
-  value: string
-  label: string
-}
-
-export interface EntityFilterDefinition<T = unknown> {
-  key: string
-  label: string
-  type: EntityFilterType
-  options?: EntityFilterOption[]
-  /** Valor simple del registro (se compara como texto). */
-  getValue?: (item: T) => unknown
-  /** Valores múltiples del registro (OR dentro del mismo criterio). */
-  getValues?: (item: T) => string[]
-  /** Marcador de posición del control de texto/fecha. */
-  placeholder?: string
-}
-
-export interface ActiveEntityFilter {
-  key: string
-  values: string[]
-}
+export type {
+  ActiveEntityFilter,
+  EntityFilterDefinition,
+  EntityFilterOption,
+  EntityFilterType,
+} from "@/components/filters/entity-filter-types"
 
 const toText = (value: unknown): string =>
   value === null || value === undefined ? "" : String(value)

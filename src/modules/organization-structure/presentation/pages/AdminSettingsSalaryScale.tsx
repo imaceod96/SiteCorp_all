@@ -9,7 +9,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SalaryGroupDialog } from "@/modules/organization-structure/presentation/components/salary-group-dialog"
-import ReviewSalaryChangeDialog from "@/components/salary/ReviewSalaryChangeDialog"
+import ReviewSalaryChangeDialog from "@/modules/contracts/presentation/components/ReviewSalaryChangeDialog"
 import { showSuccess } from "@/utils/toast"
 import { Plus, Edit3, Clock, PlusCircle } from "lucide-react"
 

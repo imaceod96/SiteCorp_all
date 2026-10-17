@@ -191,7 +191,7 @@ test("el cierre del evento conserva sus parámetros y devuelve resultado por tra
   expect(salary).toMatch(/p_workers: workers\.map\(\(w\) => \(\{ worker_id: w\.worker_id, previous_amount: w\.previous_amount \}\)\)/)
 
   // La pantalla captura los afectados ANTES de aplicar y envía el salario anterior real.
-  const dialog = code("src/components/salary/ReviewSalaryChangeDialog.tsx")
+  const dialog = code("src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx")
   expect(dialog).toMatch(
     /impact\.map\(\(row\) => \(\{\s*worker_id: row\.worker_id,\s*previous_amount: row\.previous_amount,?\s*\}\)\)/
   )
@@ -314,7 +314,7 @@ test("las pantallas y componentes migrados ya no consultan Supabase", () => {
     "src/components/workers/ChangePositionDialog.tsx",
     "src/components/workers/SeparateWorkerDialog.tsx",
     "src/modules/people/presentation/components/HireCandidateDialog.tsx",
-    "src/components/salary/ReviewSalaryChangeDialog.tsx",
+    "src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx",
   ]
 
   for (const file of presentation) {
@@ -330,7 +330,7 @@ test("las pantallas y componentes migrados ya no consultan Supabase", () => {
   }
 
   // El cierre documental del evento se pide al motor, no se reimplementa en la pantalla.
-  expect(read("src/components/salary/ReviewSalaryChangeDialog.tsx")).toMatch(
+  expect(read("src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx")).toMatch(
     /import \{ ensureEventDocumentation \} from "@\/domains\/document-generation"/
   )
 })

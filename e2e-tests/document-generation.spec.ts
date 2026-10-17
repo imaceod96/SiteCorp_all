@@ -391,7 +391,7 @@ test("el motor vive en un solo dominio y la presentación ya no consulta Supabas
     "src/modules/document-generation/presentation/components/ContractualDocumentSection.tsx",
     "src/modules/document-generation/presentation/pages/EntityPendingDocuments.tsx",
     "src/modules/access-control/presentation/hooks/use-sc404.ts",
-    "src/components/salary/ReviewSalaryChangeDialog.tsx",
+    "src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx",
   ]
 
   for (const file of presentation) {

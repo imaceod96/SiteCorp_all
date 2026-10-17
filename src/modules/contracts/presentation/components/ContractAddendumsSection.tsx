@@ -3,8 +3,9 @@ import { SiteCorpCard } from "@/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
-import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
-import { CreateManualAddendumDialog } from "@/components/addendums/CreateManualAddendumDialog"
+import { AddendumDetailDialog } from "@/modules/contracts/presentation/components/AddendumDetailDialog"
+import { CreateManualAddendumDialog } from "@/modules/contracts/presentation/components/CreateManualAddendumDialog"
+import type { RepresentativeSelectSlotRenderer } from "@/modules/contracts/presentation/components/representative-select-slot"
 import { ContractualDocumentSection } from "@/modules/document-generation/presentation/components/ContractualDocumentSection"
 import {
   ADDENDUM_STATUS_BADGE,
@@ -47,6 +48,8 @@ interface ContractAddendumsSectionProps {
   operational: OperationalConditions
   paymentMethods: PaymentMethodOption[]
   onChanged: () => void
+  /** Selector de representante inyectado por el contexto propietario (Personas). */
+  renderRepresentativeSelect: RepresentativeSelectSlotRenderer
   className?: string
 }
 
@@ -68,6 +71,7 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
   operational,
   paymentMethods,
   onChanged,
+  renderRepresentativeSelect,
   className,
 }) => {
   const [detailAddendumId, setDetailAddendumId] = React.useState<string | null>(null)
@@ -357,6 +361,7 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
         entityId={entityId}
         canManage={canManage}
         onChanged={onChanged}
+        renderRepresentativeSelect={renderRepresentativeSelect}
       />
 
       <CreateManualAddendumDialog
@@ -368,6 +373,7 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
         formalized={formalized}
         paymentMethods={paymentMethods}
         onCreated={onChanged}
+        renderRepresentativeSelect={renderRepresentativeSelect}
       />
     </div>
   )

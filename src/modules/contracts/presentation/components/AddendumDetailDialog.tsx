@@ -14,9 +14,9 @@ import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Label } from "@/components/ui/label"
-import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import { AddendumChangesList } from "@/modules/contracts/presentation/components/AddendumChangesList"
 import { ContractualDocumentSection } from "@/modules/document-generation/presentation/components/ContractualDocumentSection"
+import type { RepresentativeSelectSlotRenderer } from "@/modules/contracts/presentation/components/representative-select-slot"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
@@ -40,6 +40,8 @@ interface AddendumDetailDialogProps {
   entityId: string
   canManage: boolean
   onChanged: () => void
+  /** Selector de representante inyectado por el contexto propietario (Personas). */
+  renderRepresentativeSelect: RepresentativeSelectSlotRenderer
 }
 
 const FORM_BLOCKING_ITEMS = [
@@ -72,6 +74,7 @@ export const AddendumDetailDialog: React.FC<AddendumDetailDialogProps> = ({
   entityId,
   canManage,
   onChanged,
+  renderRepresentativeSelect,
 }) => {
   const [signatureDate, setSignatureDate] = React.useState("")
   const [signaturePlace, setSignaturePlace] = React.useState("")
@@ -363,17 +366,17 @@ export const AddendumDetailDialog: React.FC<AddendumDetailDialogProps> = ({
                 </div>
               </div>
 
-              <RepresentativeSelect
-                entityId={entityId}
-                onDate={signatureDate}
-                value={representativeAssignmentId}
-                onChange={setRepresentativeAssignmentId}
-                canManage={canManage}
-                label="Representante que suscribe el anexo *"
-                dateHint={`Representante vigente en la fecha de firma${
+              {renderRepresentativeSelect({
+                entityId,
+                onDate: signatureDate,
+                value: representativeAssignmentId,
+                onChange: setRepresentativeAssignmentId,
+                canManage,
+                label: "Representante que suscribe el anexo *",
+                dateHint: `Representante vigente en la fecha de firma${
                   signatureDate ? ` (${formatConditionDate(signatureDate)})` : ""
-                }.`}
-              />
+                }.`,
+              })}
 
               {/* Checklist del anexo pendiente (§79) */}
               <div className="rounded-xl border border-border bg-muted/20 p-3">
