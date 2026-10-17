@@ -6,14 +6,14 @@ import {
   calculateAge,
   calculateTenure,
   ageRange,
-} from "../src/domains/people/domain/tenure.rules"
+} from "../src/modules/people/domain/tenure.rules"
 import {
   MIGRATION_HEADERS,
   WorkerMigrationTemplateError,
   buildWorkerMigrationTemplate,
   downloadWorkerMigrationTemplate,
   readWorkerMigrationExcel,
-} from "../src/domains/people/infrastructure/worker-migration.workbook"
+} from "../src/modules/people/infrastructure/worker-migration.workbook"
 import {
   applyEntityFilters,
   matchesEntityFilter,
@@ -94,7 +94,7 @@ test("las utilidades con dueño propio ya no viven en src/lib y nadie las import
 /* ------------------------------------------------------------------ */
 
 test("la antigüedad se calcula en las reglas puras del dominio Personas, sin dependencias", () => {
-  const rules = read("src/domains/people/domain/tenure.rules.ts")
+  const rules = read("src/modules/people/domain/tenure.rules.ts")
 
   // Reglas puras: no tiene una sola importación (ni React, ni Supabase, ni infraestructura,
   // ni otros módulos). El encabezado puede NOMBRAR esas dependencias para explicar por qué no
@@ -105,8 +105,8 @@ test("la antigüedad se calcula en las reglas puras del dominio Personas, sin de
   expect(rules).not.toMatch(/\.rpc\(/)
   expect(rules).toMatch(/export function calculateTenure/)
 
-  // Y el dominio lo publica en su interfaz pública.
-  const barrel = read("src/domains/people/index.ts")
+  // Y el módulo lo publica en su interfaz pública.
+  const barrel = read("src/modules/people/index.ts")
   for (const symbol of ["calculateTenure", "calculateAge", "ageRange", "TenureResult"]) {
     expect(barrel, `el dominio debe exportar ${symbol}`).toContain(symbol)
   }
@@ -355,17 +355,17 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
   // Solo depende de React: no importa dominios, ni casos de uso, ni el cliente de Supabase.
   expect(hook).toMatch(/^import \* as React from "react"/m)
   expect(hook).not.toMatch(/from "@\/lib\//)
-  expect(hook).not.toMatch(/from "@\/domains\//)
+  expect(hook).not.toMatch(/from "@\/(domains|modules)\//)
   expect(hook).not.toMatch(/\.rpc\(/)
 
   const consumers = [
     "src/modules/people/presentation/pages/EntityCandidates.tsx",
     "src/modules/people/presentation/pages/EntityHiring.tsx",
-    "src/pages/EntityMedicalCertificates.tsx",
+    "src/modules/vacations-licenses/medical-certificates/presentation/pages/EntityMedicalCertificates.tsx",
     "src/modules/payroll-preparation/presentation/pages/EntityPrenomina.tsx",
     "src/modules/people/presentation/pages/EntityReentries.tsx",
     "src/modules/organization-structure/presentation/pages/EntityStaffing.tsx",
-    "src/pages/EntityVacations.tsx",
+    "src/modules/vacations-licenses/vacations/presentation/pages/EntityVacations.tsx",
     "src/modules/people/presentation/pages/EntityWorkers.tsx",
   ]
 
@@ -412,8 +412,8 @@ test("el saneado de nombres sigue siendo el único y lo usan las dos fronteras d
   // Los expedientes y los documentos rectores siguen usando ESA implementación: las rutas
   // ya almacenadas en Storage no cambian.
   for (const repository of [
-    "src/domains/people/infrastructure/worker-expediente.repository.ts",
-    "src/domains/organization-structure/infrastructure/governing-documents.repository.ts",
+    "src/modules/people/infrastructure/worker-expediente.repository.ts",
+    "src/modules/organization-structure/infrastructure/governing-documents.repository.ts",
   ]) {
     expect(read(repository), `${repository} usa la utilidad compartida`).toMatch(
       /from "@\/lib\/documents"/
@@ -503,7 +503,7 @@ const rowFor = (values: Partial<Record<string, string>>): string[] =>
   MIGRATION_HEADERS.map((header) => values[header] ?? "")
 
 test("el formato del Excel es un adaptador de la infraestructura de Personas", () => {
-  const adapter = read("src/domains/people/infrastructure/worker-migration.workbook.ts")
+  const adapter = read("src/modules/people/infrastructure/worker-migration.workbook.ts")
 
   // Consume los tipos del propio dominio (sin volver a pasar por su interfaz pública).
   expect(adapter).toMatch(/from "\.\.\/domain\/entities"/)
@@ -519,7 +519,7 @@ test("el formato del Excel es un adaptador de la infraestructura de Personas", (
   expect(adapter).not.toMatch(/company_client_id|organization_entity_id/)
 
   // Y el dominio publica la API del formato para la pantalla de Carga inicial.
-  const barrel = read("src/domains/people/index.ts")
+  const barrel = read("src/modules/people/index.ts")
   for (const symbol of [
     "MIGRATION_HEADERS",
     "buildWorkerMigrationTemplate",
@@ -693,11 +693,11 @@ test("la plantilla oficial se construye y se vuelve a leer con las mismas column
 test("ningún otro contexto cambió por el traslado de las utilidades", () => {
   // Contratos, generación documental y prenómina no consumen ninguna utilidad movida.
   for (const file of [
-    ...sourceFiles("src/domains/contracts"),
-    ...sourceFiles("src/domains/document-generation"),
-    ...sourceFiles("src/domains/document-templates"),
-    ...sourceFiles("src/domains/payroll-preparation"),
-    ...sourceFiles("src/domains/payroll-movements"),
+    ...sourceFiles("src/modules/contracts"),
+    ...sourceFiles("src/modules/document-generation"),
+    ...sourceFiles("src/modules/document-templates"),
+    ...sourceFiles("src/modules/payroll-preparation"),
+    ...sourceFiles("src/modules/payroll-movements"),
   ]) {
     expect(read(file), `${file} no debe depender de las utilidades movidas`).not.toMatch(
       /@\/lib\/(tenure|entity-filters|worker-migration)|@\/modules\/organization-structure\/presentation\/hooks\/use-entity-filters/
@@ -706,7 +706,7 @@ test("ningún otro contexto cambió por el traslado de las utilidades", () => {
 
   // Prenómina calcula la antigüedad de cada período en el backend: su etiqueta propia
   // («X años, Y meses») sigue siendo la suya y no se duplica con el cálculo de Personas.
-  const payrollFormatters = read("src/domains/payroll-preparation/domain/formatters.ts")
+  const payrollFormatters = read("src/modules/payroll-preparation/domain/formatters.ts")
   expect(payrollFormatters).toMatch(/export const formatTenureLabel/)
   expect(payrollFormatters).not.toMatch(/calculateTenure|TenureResult/)
 
@@ -724,7 +724,7 @@ test("ningún otro contexto cambió por el traslado de las utilidades", () => {
 
   // La pantalla de Carga inicial consume el dominio, no `src/lib`.
   const initialImport = read("src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx")
-  expect(initialImport).toMatch(/from "@\/domains\/people"/)
+  expect(initialImport).toMatch(/from "@\/(domains|modules)\/people"/)
   expect(initialImport).not.toMatch(/@\/lib\/(worker-migration|tenure|entity-filters)/)
 })
 
@@ -732,8 +732,8 @@ test("las utilidades movidas no construyen consultas de esquema ni de entidad", 
   const schemaHelpers = /\b(tableName|columnName|rpcName|selectColumn|selectEmbed|physicalColumns|selectQuery)\s*\(/
 
   for (const file of [
-    "src/domains/people/domain/tenure.rules.ts",
-    "src/domains/people/infrastructure/worker-migration.workbook.ts",
+    "src/modules/people/domain/tenure.rules.ts",
+    "src/modules/people/infrastructure/worker-migration.workbook.ts",
     "src/modules/organization-structure/presentation/hooks/use-entity-filters.ts",
     "src/lib/documents.ts",
   ]) {

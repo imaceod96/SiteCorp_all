@@ -5,7 +5,7 @@ import {
   isProtectedRole,
   permissionGroupsFor,
   selectablePermissionsFor,
-} from "../src/domains/access-control/domain/roles.rules"
+} from "../src/modules/access-control/domain/roles.rules"
 import {
   ACCESS_SCOPE_LABELS,
   INVITATION_VALIDITY_DAYS,
@@ -17,7 +17,7 @@ import {
   friendlyAccessError,
   invitationExpiresAt,
   membershipLabel,
-} from "../src/domains/access-control/domain/access.rules"
+} from "../src/modules/access-control/domain/access.rules"
 import {
   ENTITY_PERMISSION_LABELS,
   LEGACY_PERMISSION_PATTERN,
@@ -26,7 +26,7 @@ import {
   groupPlatformPermissions,
   isInternalPermissionCode,
   platformPermissionLabel,
-} from "../src/domains/access-control/domain/permissions.catalog"
+} from "../src/modules/access-control/domain/permissions.catalog"
 import {
   ENTITY_TYPE_OPTIONS,
   REGIME_OPTIONS,
@@ -35,28 +35,28 @@ import {
   generateEntityCode,
   isParentTypeAllowed,
   resolveParentCandidates,
-} from "../src/domains/organization-structure/domain/organization-entities.rules"
+} from "../src/modules/organization-structure/domain/organization-entities.rules"
 import {
   EMPTY_TENURE_FORM,
   formatTenureRange,
   tenureFormToValues,
   tenureRangeToForm,
-} from "../src/domains/organization-structure/domain/tenure-scale.rules"
+} from "../src/modules/organization-structure/domain/tenure-scale.rules"
 import {
   academicCategoryLabel,
   formatAcademicAmount,
   parseAcademicAmount,
   resolveAcademicCategory,
-} from "../src/domains/organization-structure/domain/academic-payment.rules"
+} from "../src/modules/organization-structure/domain/academic-payment.rules"
 import type {
   OrganizationEntity,
   OrganizationEntityFormData,
-} from "../src/domains/organization-structure/domain/entities"
+} from "../src/modules/organization-structure/domain/entities"
 import type {
   EntityAccessRow,
   PermissionOption,
   RoleRecord,
-} from "../src/domains/access-control/domain/entities"
+} from "../src/modules/access-control/domain/entities"
 
 /**
  * CONTROL DE ACCESO Y CONFIGURACIÓN DE ENTIDAD — reglas, contratos de RPC y frontera de
@@ -310,7 +310,7 @@ test("el catálogo ofrecible no mezcla permisos internos con permisos de platafo
 })
 
 test("el guardado y el borrado de roles usan las RPC reales con sus parámetros", () => {
-  const repository = read("src/domains/access-control/infrastructure/roles.repository.ts")
+  const repository = read("src/modules/access-control/infrastructure/roles.repository.ts")
 
   // Nivel 1: plataforma. Nivel 2: SIEMPRE con la entidad propietaria del rol.
   expect(repository).toMatch(/\.rpc\("save_platform_role", \{/)
@@ -341,8 +341,8 @@ test("el guardado y el borrado de roles usan las RPC reales con sus parámetros"
   expect(repository).toMatch(/roleId: row\.tenant_role_id, userId: row\.tenant_membership_id/)
 
   // El caso de uso no habla con Supabase y no duplica la consulta.
-  const queries = read("src/domains/access-control/application/roles.queries.ts")
-  const commands = read("src/domains/access-control/application/roles.commands.ts")
+  const queries = read("src/modules/access-control/application/roles.queries.ts")
+  const commands = read("src/modules/access-control/application/roles.commands.ts")
   for (const source of [queries, commands]) {
     expect(source).not.toMatch(/@\/lib\/supabase/)
     expect(source).not.toMatch(/\.rpc\(/)
@@ -361,7 +361,7 @@ test("el guardado y el borrado de roles usan las RPC reales con sus parámetros"
 
 test("los distintos niveles de acceso se deciden por permisos efectivos, nunca por la interfaz", () => {
   // Sin `users.manage` no hay gestión; sin `users.invite` no hay invitación.
-  const queries = read("src/domains/access-control/application/entity-access.queries.ts")
+  const queries = read("src/modules/access-control/application/entity-access.queries.ts")
   expect(queries).toMatch(/rpcCanAccessEntity\(input\.entityId, "users\.manage"\)\.catch\(\(\) => false\)/)
   expect(queries).toMatch(/rpcCanAccessEntity\(input\.entityId, "users\.invite"\)\.catch\(\(\) => false\)/)
   expect(queries).toMatch(/rpcCanAccessEntity\(entityId, "users\.manage"\)\.catch\(\(\) => false\)/)
@@ -381,7 +381,7 @@ test("los distintos niveles de acceso se deciden por permisos efectivos, nunca p
   expect(rolesPage).not.toMatch(/\.rpc\(/)
 
   // Los permisos se preguntan al backend con la RPC real y sus parámetros.
-  const repository = read("src/domains/access-control/infrastructure/entity-access.repository.ts")
+  const repository = read("src/modules/access-control/infrastructure/entity-access.repository.ts")
   expect(repository).toMatch(/\.rpc\("can_access_entity", \{/)
   expect(repository).toMatch(/target_entity_id: entityId,/)
   expect(repository).toMatch(/permission_code: permissionCode,/)
@@ -415,7 +415,7 @@ test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
   }
 
   // El contrato de la fila admite el rol oculto (lo decide `list_entity_user_access`).
-  const entities = read("src/domains/access-control/domain/entities.ts")
+  const entities = read("src/modules/access-control/domain/entities.ts")
   expect(entities).toMatch(/tenant_role_id: string \| null/)
   expect(entities).toMatch(/role_name: string \| null/)
 
@@ -432,12 +432,12 @@ test("los roles ajenos sólo se muestran a quien puede gestionarlos", () => {
     // desde el backend y el identificador del rol no es alcanzable sin gestión de roles, porque
     // la tabla NO se lee de forma directa.
     const invitationRepository = read(
-      "src/domains/access-control/infrastructure/client-access.repository.ts"
+      "src/modules/access-control/infrastructure/client-access.repository.ts"
     )
     expect(invitationRepository).toMatch(/\.rpc\("list_company_client_invitations", \{/)
     expect(invitationRepository).toMatch(/p_company_client_id: companyClientId,/)
     expect(invitationRepository).not.toMatch(/company_client_role_id/)
-    expect(read("src/domains/access-control/application/client-access.queries.ts")).toMatch(
+    expect(read("src/modules/access-control/application/client-access.queries.ts")).toMatch(
       /role_name: accessRoleLabel\(invitation\)/
     )
     // La consulta de invitaciones se conserva para todos los perfiles del ámbito.
@@ -502,7 +502,7 @@ test("el reparto de accesos y los mensajes de error de usuarios se conservan", (
 // ---------------------------------------------------------------------------
 
 test("las membresías y las invitaciones se acotan SIEMPRE al cliente de la entidad", () => {
-  const repository = read("src/domains/access-control/infrastructure/entity-access.repository.ts")
+  const repository = read("src/modules/access-control/infrastructure/entity-access.repository.ts")
 
   // Membresías del cliente: la columna física la resuelve la frontera de nomenclatura.
   expect(repository).toMatch(/tableName\("memberships"\)/)
@@ -690,7 +690,7 @@ test("el alta y la edición de entidades conservan código, jerarquía y Cuenta 
 
 test("la entidad se asocia al cliente actual al crear y NUNCA se reasigna al editar", () => {
   const repository = read(
-    "src/domains/organization-structure/infrastructure/organization-entities.repository.ts"
+    "src/modules/organization-structure/infrastructure/organization-entities.repository.ts"
   )
 
   // El alta fija la columna física del cliente con la frontera de nomenclatura.
@@ -704,7 +704,7 @@ test("la entidad se asocia al cliente actual al crear y NUNCA se reasigna al edi
 
   // El comando exige un cliente al crear y no lo envía al editar.
   const commands = read(
-    "src/domains/organization-structure/application/organization-entities.commands.ts"
+    "src/modules/organization-structure/application/organization-entities.commands.ts"
   )
   expect(commands).toMatch(/if \(!editingEntity && !companyClientId\)/)
   expect(commands).toMatch(/insertOrganizationEntity\(payload, companyClientId\)/)
@@ -809,7 +809,7 @@ test("la escala de antigüedad convierte meses y años sin perder tramos ni vali
 
 test("los tramos de antigüedad se leen y se desactivan sin salir del dominio", () => {
   const repository = read(
-    "src/domains/organization-structure/infrastructure/tenure-scale.repository.ts"
+    "src/modules/organization-structure/infrastructure/tenure-scale.repository.ts"
   )
 
   expect(repository).toMatch(/\.from\("tenure_payment_scales"\)/)
@@ -858,7 +858,7 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
   expect(formatAcademicAmount(0)).not.toBe("No configurado")
 
   const repository = read(
-    "src/domains/organization-structure/infrastructure/academic-payment.repository.ts"
+    "src/modules/organization-structure/infrastructure/academic-payment.repository.ts"
   )
   expect(repository).toMatch(/\.rpc\("get_academic_category_payment_config", \{/)
   expect(repository).toMatch(/\.rpc\("save_academic_category_payment", \{/)
@@ -874,7 +874,7 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
 
   // Los dos importes se guardan en el orden de la pantalla (Máster y después Doctor).
   const commands = read(
-    "src/domains/organization-structure/application/academic-payment.commands.ts"
+    "src/modules/organization-structure/application/academic-payment.commands.ts"
   )
   expect(commands).toMatch(/saveAcademicCategoryPayment\(input\.entityId, "MASTER", input\.masterAmount\)/)
   expect(commands).toMatch(/saveAcademicCategoryPayment\(input\.entityId, "DOCTOR", input\.doctorAmount\)/)
@@ -895,7 +895,7 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
   expect(existsSync("src/lib/academic-payment.ts")).toBe(false)
 
   const workerDetail = read("src/modules/people/presentation/pages/WorkerDetail.tsx")
-  expect(workerDetail).toMatch(/from "@\/domains\/organization-structure"/)
+  expect(workerDetail).toMatch(/from "@\/(domains|modules)\/organization-structure"/)
   expect(workerDetail).toMatch(/loadAcademicCategoryPayment\(entityId, workerId\)/)
   expect(workerDetail).not.toMatch(/@\/lib\/academic-payment/)
   expect(workerDetail).not.toMatch(/@\/lib\/supabase/)
@@ -903,7 +903,7 @@ test("el pago por categoría académica conserva su regla y sus RPC", () => {
 })
 
 test("los datos contractuales y los cargos de representación no consultan Supabase desde la pantalla", () => {
-  const queries = read("src/domains/representatives/application/entity-contract-data.queries.ts")
+  const queries = read("src/modules/representatives/application/entity-contract-data.queries.ts")
 
   // Los dos permisos que gobiernan la pantalla se preguntan al backend.
   expect(queries).toMatch(/loadEntityPermission\(entityId, "contract_data\.view"\)/)
@@ -912,7 +912,7 @@ test("los datos contractuales y los cargos de representación no consultan Supab
   expect(queries).toMatch(/if \(!canView && !canManage\) return null/)
   expect(queries).not.toMatch(/@\/lib\/supabase/)
 
-  const repository = read("src/domains/representatives/infrastructure/representatives.repository.ts")
+  const repository = read("src/modules/representatives/infrastructure/representatives.repository.ts")
   // El listado ADMINISTRATIVO incluye los cargos inactivos (no filtra por is_active).
   const listBlock = repository.slice(
     repository.indexOf("export async function fetchRepresentativePositionList"),
@@ -944,7 +944,7 @@ test("los datos contractuales y los cargos de representación no consultan Supab
 test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
   const contracts: Array<[string, RegExp[]]> = [
     [
-      "src/domains/access-control/infrastructure/entity-access.repository.ts",
+      "src/modules/access-control/infrastructure/entity-access.repository.ts",
       [
         /\.rpc\("can_access_entity", \{/,
         /target_entity_id: entityId,/,
@@ -953,7 +953,7 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
       ],
     ],
     [
-          "src/domains/access-control/infrastructure/roles.repository.ts",
+          "src/modules/access-control/infrastructure/roles.repository.ts",
           [
             /\.rpc\("save_platform_role", \{/,
             /\.rpc\("save_entity_role", \{/,
@@ -961,14 +961,14 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
           ],
         ],
         [
-          "src/domains/access-control/infrastructure/client-access.repository.ts",
+          "src/modules/access-control/infrastructure/client-access.repository.ts",
           [
             /\.rpc\("list_company_client_invitations", \{/,
             /p_company_client_id: companyClientId,/,
           ],
         ],
         [
-          "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
+          "src/modules/organization-structure/infrastructure/academic-payment.repository.ts",
       [
         /\.rpc\("get_academic_category_payment_config", \{/,
         /\.rpc\("save_academic_category_payment", \{/,
@@ -977,7 +977,7 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
       ],
     ],
     [
-      "src/domains/representatives/infrastructure/representatives.repository.ts",
+      "src/modules/representatives/infrastructure/representatives.repository.ts",
       [
         /\.rpc\("resolve_entity_representatives", \{/,
         /\.rpc\("save_entity_contract_data", \{/,
@@ -997,12 +997,12 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
 
   // Ninguna RPC se renombra ni se inventa: las usadas son las que ya existían.
   const allRepositories = [
-    "src/domains/access-control/infrastructure/entity-access.repository.ts",
-    "src/domains/access-control/infrastructure/roles.repository.ts",
-    "src/domains/access-control/infrastructure/permissions.repository.ts",
-        "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
-        "src/domains/representatives/infrastructure/representatives.repository.ts",
-        "src/domains/access-control/infrastructure/client-access.repository.ts",
+    "src/modules/access-control/infrastructure/entity-access.repository.ts",
+    "src/modules/access-control/infrastructure/roles.repository.ts",
+    "src/modules/access-control/infrastructure/permissions.repository.ts",
+        "src/modules/organization-structure/infrastructure/academic-payment.repository.ts",
+        "src/modules/representatives/infrastructure/representatives.repository.ts",
+        "src/modules/access-control/infrastructure/client-access.repository.ts",
       ]
       const knownRpcs = new Set([
         "can_access_entity",
@@ -1038,17 +1038,17 @@ test("las RPC de este bloque conservan su nombre y sus parámetros", () => {
 
 test("este bloque no modifica el esquema ni crea mecanismos alternativos de autorización", () => {
   const files = [
-    "src/domains/access-control/infrastructure/entity-access.repository.ts",
-    "src/domains/access-control/infrastructure/roles.repository.ts",
-    "src/domains/access-control/infrastructure/permissions.repository.ts",
-    "src/domains/access-control/application/entity-access.queries.ts",
-    "src/domains/access-control/application/entity-access.commands.ts",
-    "src/domains/access-control/application/roles.queries.ts",
-    "src/domains/access-control/application/roles.commands.ts",
-    "src/domains/organization-structure/infrastructure/organization-entities.repository.ts",
-    "src/domains/organization-structure/infrastructure/tenure-scale.repository.ts",
-    "src/domains/organization-structure/infrastructure/academic-payment.repository.ts",
-    "src/domains/representatives/application/entity-contract-data.queries.ts",
+    "src/modules/access-control/infrastructure/entity-access.repository.ts",
+    "src/modules/access-control/infrastructure/roles.repository.ts",
+    "src/modules/access-control/infrastructure/permissions.repository.ts",
+    "src/modules/access-control/application/entity-access.queries.ts",
+    "src/modules/access-control/application/entity-access.commands.ts",
+    "src/modules/access-control/application/roles.queries.ts",
+    "src/modules/access-control/application/roles.commands.ts",
+    "src/modules/organization-structure/infrastructure/organization-entities.repository.ts",
+    "src/modules/organization-structure/infrastructure/tenure-scale.repository.ts",
+    "src/modules/organization-structure/infrastructure/academic-payment.repository.ts",
+    "src/modules/representatives/application/entity-contract-data.queries.ts",
   ]
 
   for (const file of files) {
@@ -1087,7 +1087,7 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
     expect(source, `${file} no debe usar Storage`).not.toMatch(/supabase\.storage/)
     // Consumen casos de uso del dominio.
     expect(source, `${file} debe consumir el dominio`).toMatch(
-      /@\/domains\/(access-control|organization-structure|representatives)/
+      /@\/(domains|modules)\/(access-control|organization-structure|representatives)/
     )
   }
 
@@ -1107,24 +1107,28 @@ test("los componentes y pantallas migrados no consultan Supabase directamente", 
 
 test("el dominio de control de acceso no depende de la presentación ni de otros dominios", () => {
   const domainFiles = [
-    "src/domains/access-control/domain/entities.ts",
-    "src/domains/access-control/domain/permissions.catalog.ts",
-    "src/domains/access-control/domain/roles.rules.ts",
-    "src/domains/access-control/domain/access.rules.ts",
-    "src/domains/access-control/application/entity-access.queries.ts",
-    "src/domains/access-control/application/entity-access.commands.ts",
-    "src/domains/access-control/application/roles.queries.ts",
-    "src/domains/access-control/application/roles.commands.ts",
-    "src/domains/access-control/application/platform-permissions.queries.ts",
+    "src/modules/access-control/domain/entities.ts",
+    "src/modules/access-control/domain/permissions.catalog.ts",
+    "src/modules/access-control/domain/roles.rules.ts",
+    "src/modules/access-control/domain/access.rules.ts",
+    "src/modules/access-control/application/entity-access.queries.ts",
+    "src/modules/access-control/application/entity-access.commands.ts",
+    "src/modules/access-control/application/roles.queries.ts",
+    "src/modules/access-control/application/roles.commands.ts",
+    "src/modules/access-control/application/platform-permissions.queries.ts",
   ]
 
   for (const file of domainFiles) {
     const source = read(file)
     // Sin dependencias circulares: el dominio no importa de la presentación ni de otros dominios.
-    expect(source, `${file} no debe importar componentes`).not.toMatch(/@\/components\//)
-    expect(source, `${file} no debe importar páginas`).not.toMatch(/@\/pages\//)
+    expect(source, `${file} no debe importar componentes`).not.toMatch(
+      /@\/(components|modules\/[a-z-]+\/presentation\/components)\//
+    )
+    expect(source, `${file} no debe importar páginas`).not.toMatch(
+      /@\/(pages|modules\/[a-z-]+\/presentation\/pages)\//
+    )
     expect(source, `${file} no debe importar otro dominio`).not.toMatch(
-      /@\/domains\/(?!access-control)/
+      /@\/(domains|modules)\/(?!access-control)/
     )
   }
 
@@ -1135,10 +1139,10 @@ test("el dominio de control de acceso no depende de la presentación ni de otros
 
   // La infraestructura es el ÚNICO punto que habla con Supabase.
   const infrastructure = [
-    "src/domains/access-control/infrastructure/entity-access.repository.ts",
-    "src/domains/access-control/infrastructure/roles.repository.ts",
-    "src/domains/access-control/infrastructure/permissions.repository.ts",
-    "src/domains/access-control/infrastructure/platform-permissions.repository.ts",
+    "src/modules/access-control/infrastructure/entity-access.repository.ts",
+    "src/modules/access-control/infrastructure/roles.repository.ts",
+    "src/modules/access-control/infrastructure/permissions.repository.ts",
+    "src/modules/access-control/infrastructure/platform-permissions.repository.ts",
   ]
   for (const file of infrastructure) {
     expect(read(file), `${file} es la frontera de Supabase`).toMatch(/@\/lib\/supabase/)

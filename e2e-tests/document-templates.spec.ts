@@ -8,12 +8,12 @@ import {
   templateFileFormatLabel,
   templateVersionPeriodLabel,
   TEMPLATE_TYPE_USES_XLSX,
-} from "../src/domains/document-templates/domain/rules"
+} from "../src/modules/document-templates/domain/rules"
 import {
   MAX_TEMPLATE_FILE_BYTES,
   UNSUPPORTED_WORD_FILE_MESSAGE,
-} from "../src/domains/document-templates/domain/entities"
-import type { DocumentTemplateVersion } from "../src/domains/document-templates/domain/entities"
+} from "../src/modules/document-templates/domain/entities"
+import type { DocumentTemplateVersion } from "../src/modules/document-templates/domain/entities"
 
 /**
  * ADMINISTRACIÓN DE PLANTILLAS DOCUMENTALES — reglas puras y frontera del dominio.
@@ -137,7 +137,7 @@ test("las versiones conservan su estado y su vigencia legible", () => {
 
 test("el catálogo, las versiones y los archivos viven sólo en el dominio de plantillas", () => {
   const repository = read(
-    "src/domains/document-templates/infrastructure/document-templates.repository.ts"
+    "src/modules/document-templates/infrastructure/document-templates.repository.ts"
   )
   expect(repository).toMatch(/@\/lib\/supabase/)
   expect(repository).toMatch(/\.from\("document_templates"\)/)
@@ -157,7 +157,7 @@ test("el catálogo, las versiones y los archivos viven sólo en el dominio de pl
   expect(repository).toMatch(/\.eq\("organization_entity_id", entityId\)/)
 
   const files = read(
-    "src/domains/document-templates/infrastructure/document-template-files.repository.ts"
+    "src/modules/document-templates/infrastructure/document-template-files.repository.ts"
   )
   expect(files).toMatch(/@\/lib\/supabase/)
   expect(files).toMatch(/storage/)
@@ -170,7 +170,7 @@ test("el catálogo, las versiones y los archivos viven sólo en el dominio de pl
 
   // El análisis y la validación los decide el backend: el dominio sólo los registra.
   const commands = read(
-    "src/domains/document-templates/application/document-templates.commands.ts"
+    "src/modules/document-templates/application/document-templates.commands.ts"
   )
   expect(commands).not.toMatch(/@\/lib\/supabase/)
   expect(commands).toMatch(/registerTemplateFile/)
@@ -198,7 +198,7 @@ test("las pantallas y los componentes migrados ya no consultan Supabase", () => 
     expect(source, `${file} no debe usar la fachada legacy`).not.toMatch(/@\/lib\/document-templates/)
     expect(source, `${file} no debe resolver nomenclatura`).not.toMatch(/schema-target/)
     expect(source, `${file} debe consumir el dominio de plantillas`).toMatch(
-      /@\/domains\/document-templates/
+      /@\/(domains|modules)\/document-templates/
     )
   }
 
@@ -224,14 +224,14 @@ test("la fachada legacy se retiró: el dominio es el único punto de entrada", (
 
   // Y los consumidores reales piden aquí las plantillas, sus versiones y su vigencia.
   for (const file of [
-    "src/domains/document-generation/infrastructure/document-template-version.repository.ts",
-    "src/domains/document-generation/application/document-generation.commands.ts",
-    "src/domains/contracts/infrastructure/contract-documents.repository.ts",
-    "src/domains/resolutions/infrastructure/resolutions.repository.ts",
+    "src/modules/document-generation/infrastructure/document-template-version.repository.ts",
+    "src/modules/document-generation/application/document-generation.commands.ts",
+    "src/modules/contracts/infrastructure/contract-documents.repository.ts",
+    "src/modules/resolutions/infrastructure/resolutions.repository.ts",
     "src/modules/document-generation/presentation/components/ContractualDocumentSection.tsx",
   ]) {
-    expect(read(file), `${file} debe consumir el dominio de plantillas`).toMatch(
-      /from "@\/domains\/document-templates"/
+    expect(read(file), `${file} debe consumir el módulo de plantillas`).toMatch(
+      /from "@\/modules\/document-templates"/
     )
   }
 })
@@ -239,37 +239,37 @@ test("la fachada legacy se retiró: el dominio es el único punto de entrada", (
 test("el motor documental consume el dominio de plantillas, no la fachada", () => {
   // El motor vive en su propio dominio y pide ahí las plantillas y sus versiones.
   const adapter = read(
-    "src/domains/document-generation/infrastructure/document-template-version.repository.ts"
+    "src/modules/document-generation/infrastructure/document-template-version.repository.ts"
   )
-  expect(adapter).toMatch(/from "@\/domains\/document-templates"/)
+  expect(adapter).toMatch(/from "@\/modules\/document-templates"/)
   expect(adapter).not.toMatch(/@\/lib\/document-templates/)
 
   const commands = read(
-    "src/domains/document-generation/application/document-generation.commands.ts"
+    "src/modules/document-generation/application/document-generation.commands.ts"
   )
-  expect(commands).toMatch(/from "@\/domains\/document-templates"/)
+  expect(commands).toMatch(/from "@\/modules\/document-templates"/)
 
   // La sección contractual del expediente también consume el dominio directamente.
   expect(
     read("src/modules/document-generation/presentation/components/ContractualDocumentSection.tsx")
-  ).toMatch(/from "@\/domains\/document-templates"/)
+  ).toMatch(/from "@\/modules\/document-templates"/)
 })
 
 test("el dominio de plantillas no depende de otros dominios ni de la presentación", () => {
   const domainFiles = [
-    "src/domains/document-templates/index.ts",
-    "src/domains/document-templates/domain/entities.ts",
-    "src/domains/document-templates/domain/rules.ts",
-    "src/domains/document-templates/application/document-templates.queries.ts",
-    "src/domains/document-templates/application/document-templates.commands.ts",
-    "src/domains/document-templates/infrastructure/document-templates.repository.ts",
-    "src/domains/document-templates/infrastructure/document-template-files.repository.ts",
+    "src/modules/document-templates/index.ts",
+    "src/modules/document-templates/domain/entities.ts",
+    "src/modules/document-templates/domain/rules.ts",
+    "src/modules/document-templates/application/document-templates.queries.ts",
+    "src/modules/document-templates/application/document-templates.commands.ts",
+    "src/modules/document-templates/infrastructure/document-templates.repository.ts",
+    "src/modules/document-templates/infrastructure/document-template-files.repository.ts",
   ]
 
   for (const file of domainFiles) {
     const source = read(file)
     expect(source, `${file} no debe depender de otro dominio`).not.toMatch(
-      /from "@\/domains\/(?!document-templates)/
+      /from "@\/(domains|modules)\/(?!document-templates)/
     )
     expect(source, `${file} no debe depender de la presentación`).not.toMatch(
       /from "@\/(pages|components|contexts|hooks)\//

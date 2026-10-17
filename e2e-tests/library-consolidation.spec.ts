@@ -13,9 +13,9 @@ import {
   summarizeContractAlerts,
   type ContractAlertRow,
   type ContractAlertState,
-} from "../src/domains/contracts/domain/contract-alerts.rules"
-import { drivingLicenseLabels } from "../src/domains/people/domain/catalogs.rules"
-import type { CatalogOption } from "../src/domains/people/domain/entities"
+} from "../src/modules/contracts/domain/contract-alerts.rules"
+import { drivingLicenseLabels } from "../src/modules/people/domain/catalogs.rules"
+import type { CatalogOption } from "../src/modules/people/domain/entities"
 import {
   MOVEMENTS_WINDOW_DAYS,
   summarizeCandidates,
@@ -24,7 +24,7 @@ import {
   summarizeDocumentTemplatesStatus,
   summarizeMovements,
   summarizeRepresentativeStatus,
-} from "../src/domains/entity-summary/domain/summary.rules"
+} from "../src/modules/entity-summary/domain/summary.rules"
 import {
   DOCUMENT_VARIABLES,
   describeDocumentDuration,
@@ -39,12 +39,12 @@ import {
   formatDocumentDateTextual,
   formatDocumentHours,
   formatSc404Dias,
-} from "../src/domains/document-templates/domain/document-variables"
+} from "../src/modules/document-templates/domain/document-variables"
 import {
   resolveAllDocumentVariables,
   resolveDocumentVariable,
-} from "../src/domains/document-generation/domain/document-resolution.rules"
-import type { ContractDocumentData } from "../src/domains/document-generation/domain/document-data"
+} from "../src/modules/document-generation/domain/document-resolution.rules"
+import type { ContractDocumentData } from "../src/modules/document-generation/domain/document-data"
 
 /**
  * CIERRE DE `src/lib` — catálogos, alertas contractuales, resumen de entidades y contratos
@@ -252,7 +252,7 @@ test.describe("catálogos de persona", () => {
   })
 
   test("los catálogos globales se consultan en el repositorio del dominio", () => {
-    const repository = code("src/domains/people/infrastructure/catalogs.repository.ts")
+    const repository = code("src/modules/people/infrastructure/catalogs.repository.ts")
 
     // Mismas tablas, mismos filtros y mismos órdenes de siempre.
     expect(repository).toMatch(/\.from\("skin_colors"\)/)
@@ -271,9 +271,9 @@ test.describe("catálogos de persona", () => {
     expect(repository).toMatch(/p_worker_id: workerId/)
 
     // El tipo de catálogo es el MISMO del dominio: no se duplica la definición.
-    const entities = code("src/domains/people/domain/entities.ts")
+    const entities = code("src/modules/people/domain/entities.ts")
     expect(entities).toMatch(/export interface CatalogOption extends CatalogRow \{/)
-    expect(code("src/domains/people/domain/catalogs.rules.ts")).not.toMatch(
+    expect(code("src/modules/people/domain/catalogs.rules.ts")).not.toMatch(
       /export interface CatalogOption/
     )
   })
@@ -294,17 +294,17 @@ test.describe("catálogos de persona", () => {
       .sort()
 
     expect(readers).toEqual([
-      "src/domains/entity-summary/infrastructure/reports.repository.ts",
-      "src/domains/people/infrastructure/catalogs.repository.ts",
-      "src/domains/people/infrastructure/people.repository.ts",
-      "src/domains/people/infrastructure/worker-migration.repository.ts",
+      "src/modules/entity-summary/infrastructure/reports.repository.ts",
+      "src/modules/people/infrastructure/catalogs.repository.ts",
+      "src/modules/people/infrastructure/people.repository.ts",
+      "src/modules/people/infrastructure/worker-migration.repository.ts",
     ])
 
     // El reemplazo exacto de licencias, en un solo punto de acceso.
     const licenseWriters = sourceFiles("src").filter((file) =>
       /\.rpc\("save_(candidate|worker)_driving_licenses"/.test(code(file))
     )
-    expect(licenseWriters).toEqual(["src/domains/people/infrastructure/catalogs.repository.ts"])
+    expect(licenseWriters).toEqual(["src/modules/people/infrastructure/catalogs.repository.ts"])
   })
 })
 
@@ -392,7 +392,7 @@ test.describe("resumen de entidades", () => {
   })
 
   test("las consultas del Resumen están centralizadas en su dominio", () => {
-    const repository = code("src/domains/entity-summary/infrastructure/summary.repository.ts")
+    const repository = code("src/modules/entity-summary/infrastructure/summary.repository.ts")
 
     // Las mismas tablas, con el ámbito por entidad intacto.
     expect(repository).toMatch(/\.from\("candidates"\)/)
@@ -424,9 +424,9 @@ test.describe("resumen de entidades", () => {
       .sort()
 
     expect(callers).toEqual([
-      "src/domains/entity-summary/infrastructure/summary.repository.ts",
-      "src/domains/organization-structure/infrastructure/salary.repository.ts",
-      "src/domains/representatives/infrastructure/representatives.repository.ts",
+      "src/modules/entity-summary/infrastructure/summary.repository.ts",
+      "src/modules/organization-structure/infrastructure/salary.repository.ts",
+      "src/modules/representatives/infrastructure/representatives.repository.ts",
     ])
 
     // La validación de integridad contractual es EXCLUSIVA del Resumen.
@@ -434,15 +434,15 @@ test.describe("resumen de entidades", () => {
       /\.rpc\("validate_entity_contract_readiness"/.test(code(file))
     )
     expect(readinessCallers).toEqual([
-      "src/domains/entity-summary/infrastructure/summary.repository.ts",
+      "src/modules/entity-summary/infrastructure/summary.repository.ts",
     ])
   })
 
   test("los vencimientos del Resumen reutilizan el cálculo del dominio de contratos", () => {
-    const queries = code("src/domains/entity-summary/application/entity-summary.queries.ts")
+    const queries = code("src/modules/entity-summary/application/entity-summary.queries.ts")
 
     // Una sola clasificación: la del dominio de contratos.
-    expect(queries).toMatch(/from "@\/domains\/contracts"/)
+    expect(queries).toMatch(/from "@\/modules\/contracts"/)
     expect(queries).toMatch(/fetchContractAlerts\(/)
     expect(queries).toMatch(/summarizeContractAlerts\(/)
     expect(queries).toMatch(/CONTRACT_ALERT_HORIZON_DAYS/)
@@ -622,28 +622,32 @@ test.describe("variables documentales", () => {
 
   test("el catálogo vive en plantillas y los resolutores en generación, sin ciclos", () => {
     // El catálogo y sus formatos, en el dominio de plantillas.
-    expect(existsSync("src/domains/document-templates/domain/document-variables.ts")).toBe(true)
+    expect(existsSync("src/modules/document-templates/domain/document-variables.ts")).toBe(true)
     // Los resolutores y los contratos del snapshot, en el dominio de generación.
-    expect(existsSync("src/domains/document-generation/domain/document-resolution.rules.ts")).toBe(true)
-    expect(existsSync("src/domains/document-generation/domain/document-data.ts")).toBe(true)
+    expect(existsSync("src/modules/document-generation/domain/document-resolution.rules.ts")).toBe(true)
+    expect(existsSync("src/modules/document-generation/domain/document-data.ts")).toBe(true)
 
     // Las plantillas NO conocen el motor de generación.
-    const templateFiles = sourceFiles("src/domains/document-templates")
-    const cycle = templateFiles.filter((file) => /from "@\/domains\/document-generation/.test(code(file)))
+    const templateFiles = sourceFiles("src/modules/document-templates")
+    const cycle = templateFiles.filter((file) =>
+      /from "@\/(domains|modules)\/document-generation/.test(code(file))
+    )
     expect(cycle, "document-templates no puede depender de document-generation").toEqual([])
 
     // La generación SÍ consume el catálogo de plantillas, y lo hace por el módulo de DOMINIO
     // (nunca por el barrel): así el dominio no arrastra la infraestructura del otro contexto.
     for (const file of [
-      "src/domains/document-generation/domain/document-resolution.rules.ts",
-      "src/domains/document-generation/domain/rules.ts",
+      "src/modules/document-generation/domain/document-resolution.rules.ts",
+      "src/modules/document-generation/domain/rules.ts",
     ]) {
-      expect(code(file), file).toMatch(/from "@\/domains\/document-templates\/domain\/document-variables"/)
-      expect(code(file), file).not.toMatch(/from "@\/domains\/document-templates"/)
+      expect(code(file), file).toMatch(
+        /from "@\/(domains|modules)\/document-templates\/domain\/document-variables"/
+      )
+      expect(code(file), file).not.toMatch(/from "@\/(domains|modules)\/document-templates"/)
     }
 
     // Los contratos del snapshot son tipos puros: sin Supabase y sin dependencias.
-    const snapshotContracts = code("src/domains/document-generation/domain/document-data.ts")
+    const snapshotContracts = code("src/modules/document-generation/domain/document-data.ts")
     expect(snapshotContracts).toMatch(/export type DocumentData =/)
     expect(snapshotContracts).not.toMatch(/\bsupabase\b/)
     expect(snapshotContracts).not.toMatch(/^import /m)
@@ -652,7 +656,8 @@ test.describe("variables documentales", () => {
   test("los dominios del bloque sólo se conocen en una dirección", () => {
     /** ¿Algún módulo de `domain` importa del dominio `target` (barrel o módulo interno)? */
     const dependsOn = (domain: string, target: string) =>
-      sourceFiles(`src/domains/${domain}`).some((file) =>
+      sourceFiles(`src/modules/${domain}`).some((file) =>
+        new RegExp(`from "@/(domains|modules)/${target}(/|")`).test(code(file)) ||
         new RegExp(`from "@/domains/${target}(/|\")`).test(code(file))
       )
 
@@ -672,7 +677,7 @@ test.describe("variables documentales", () => {
   })
 
   test("el resolvedor no se apoya en el cliente de Supabase", () => {
-    const resolution = code("src/domains/document-generation/domain/document-resolution.rules.ts")
+    const resolution = code("src/modules/document-generation/domain/document-resolution.rules.ts")
     expect(resolution).not.toMatch(/\bsupabase\b/)
     expect(resolution).toMatch(/export const resolveAllDocumentVariables/)
     expect(resolution).toMatch(/export const resolveDocumentVariable/)
@@ -684,14 +689,14 @@ test.describe("variables documentales", () => {
 /* ------------------------------------------------------------------ */
 
 test("los vencimientos se consultan sólo desde el repositorio de contratos", () => {
-  const repository = code("src/domains/contracts/infrastructure/contract-alerts.repository.ts")
+  const repository = code("src/modules/contracts/infrastructure/contract-alerts.repository.ts")
   expect(repository).toMatch(/\.rpc\("contract_expiry_alerts", \{/)
   expect(repository).toMatch(/target_entity_id: entityId/)
   expect(repository).toMatch(/horizon_days: options.horizonDays \?\? CONTRACT_ALERT_HORIZON_DAYS/)
   expect(repository).toMatch(/target_worker_id: options.workerId \?\? null/)
 
   const offenders = sourceFiles("src").filter((file) => {
-    if (file === "src/domains/contracts/infrastructure/contract-alerts.repository.ts") return false
+    if (file === "src/modules/contracts/infrastructure/contract-alerts.repository.ts") return false
     const text = code(file)
     return (
       /\.rpc\("contract_expiry_alerts"/.test(text) || /\.from\("contract_expiry_alerts"\)/.test(text)

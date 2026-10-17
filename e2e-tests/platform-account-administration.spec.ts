@@ -4,8 +4,8 @@ import {
   isPlatformUserFlag,
   passwordChangeError,
   profileIsActive,
-} from "../src/domains/access-control/domain/authentication.rules"
-import { invitationExpiresAt } from "../src/domains/access-control/domain/access.rules"
+} from "../src/modules/access-control/domain/authentication.rules"
+import { invitationExpiresAt } from "../src/modules/access-control/domain/access.rules"
 import {
   SITECORP_MODULES_DISABLED_MESSAGE,
   SITECORP_MODULES_DISABLED_TITLE,
@@ -13,13 +13,13 @@ import {
   canUseInternalModules,
   hasSiteCorpAccount,
   organizationFallbackPath,
-} from "../src/domains/organization-structure/domain/account.rules"
+} from "../src/modules/organization-structure/domain/account.rules"
 import {
   ENTITY_INTERNAL_MODULES,
   ENTITY_NAV,
   contractAlertsPath,
-} from "../src/domains/organization-structure/domain/entity-modules.catalog"
-import { companyClientMetrics } from "../src/domains/company-client/domain/rules"
+} from "../src/modules/organization-structure/domain/entity-modules.catalog"
+import { companyClientMetrics } from "../src/modules/company-client/domain/rules"
 
 /**
  * ADMINISTRACIÓN GLOBAL, CUENTAS Y CIERRE DE LA CAPA DE PRESENTACIÓN — reglas, contratos y
@@ -196,7 +196,7 @@ test("las métricas de la administración global cuentan como antes", () => {
 /* --------------------------------------------------------------------------- */
 
 test("la cuenta y la sesión se resuelven con los mismos contratos de Auth y RPC", () => {
-  const repository = code("src/domains/access-control/infrastructure/authentication.repository.ts")
+  const repository = code("src/modules/access-control/infrastructure/authentication.repository.ts")
 
   expect(repository).toMatch(/supabase\.auth\.getSession\(\)/)
   expect(repository).toMatch(/supabase\.auth\.onAuthStateChange\(/)
@@ -222,7 +222,7 @@ test("la cuenta y la sesión se resuelven con los mismos contratos de Auth y RPC
   // La consulta de identidad NO decide autorización por su cuenta.
   expect(repository).not.toMatch(/is_superadmin/i)
 
-  const queries = code("src/domains/access-control/application/authentication.queries.ts")
+  const queries = code("src/modules/access-control/application/authentication.queries.ts")
   // Una única secuencia de identidad para la carga inicial y los eventos de Auth.
   expect(queries).toMatch(/selectUserProfileById\(userId\)/)
   expect(queries).toMatch(/if \(!isProfileActive\)/)
@@ -233,7 +233,7 @@ test("la cuenta y la sesión se resuelven con los mismos contratos de Auth y RPC
   expect(queries).toMatch(/catch \{\n    return false\n  \}/)
 
   // El perfil lo escribe un único repositorio, con las mismas columnas.
-  const profiles = code("src/domains/access-control/infrastructure/user-profiles.repository.ts")
+  const profiles = code("src/modules/access-control/infrastructure/user-profiles.repository.ts")
   expect(profiles).toMatch(/\.from\("profiles"\)/)
   expect(profiles).toMatch(/full_name: input\.fullName/)
   expect(profiles).toMatch(/username: input\.username/)
@@ -247,7 +247,7 @@ test("la cuenta y la sesión se resuelven con los mismos contratos de Auth y RPC
 })
 
 test("la administración de plataforma conserva sus tablas, su Edge Function y sus privilegios", () => {
-  const repository = code("src/domains/access-control/infrastructure/platform-users.repository.ts")
+  const repository = code("src/modules/access-control/infrastructure/platform-users.repository.ts")
 
   expect(repository).toMatch(/\.from\("platform_user_roles"\)/)
   expect(repository).toMatch(/\.select\("platform_role_id, platform_roles\(name, is_system_role\)"\)/)
@@ -265,12 +265,12 @@ test("la administración de plataforma conserva sus tablas, su Edge Function y s
   // RLS sigue siendo la autoridad: aquí no se comprueban privilegios.
   expect(repository).not.toMatch(/is_superadmin/i)
 
-  const queries = code("src/domains/access-control/application/platform-users.queries.ts")
+  const queries = code("src/modules/access-control/application/platform-users.queries.ts")
   expect(queries).toMatch(/selectAllUserProfiles\(\)/)
   expect(queries).toMatch(/selectPlatformUserRoles\(profile\.id\)/)
   expect(queries).toMatch(/\.map\(\(row\) => row\.platform_roles\)\.flat\(\)/)
 
-  const commands = code("src/domains/access-control/application/platform-users.commands.ts")
+  const commands = code("src/modules/access-control/application/platform-users.commands.ts")
   expect(commands).toMatch(/createPlatformUser/)
   expect(commands).toMatch(/updatePlatformUser/)
   expect(commands).toMatch(/setPlatformUserActive/)
@@ -279,7 +279,7 @@ test("la administración de plataforma conserva sus tablas, su Edge Function y s
 })
 
 test("los usuarios y las invitaciones de un cliente conservan su aislamiento y sus contratos", () => {
-  const repository = code("src/domains/access-control/infrastructure/client-access.repository.ts")
+  const repository = code("src/modules/access-control/infrastructure/client-access.repository.ts")
 
   // El listado ADMINISTRATIVO de membresías no filtra por estado y se acota al cliente.
   const membershipsBlock = repository.slice(
@@ -314,10 +314,10 @@ test("los usuarios y las invitaciones de un cliente conservan su aislamiento y s
   expect(repository).not.toMatch(/is_superadmin/i)
 
   // La vigencia la fija la regla única del dominio, no la pantalla.
-  const commands = code("src/domains/access-control/application/client-access.commands.ts")
+  const commands = code("src/modules/access-control/application/client-access.commands.ts")
   expect(commands).toMatch(/insertClientInvitation\(input, invitationExpiresAt\(\)\)/)
 
-  const queries = code("src/domains/access-control/application/client-access.queries.ts")
+  const queries = code("src/modules/access-control/application/client-access.queries.ts")
   expect(queries).toMatch(/selectUserProfiles\(memberships\.map\(\(member\) => member\.user_id\)\)/)
   expect(queries).toMatch(/selectClientUserRoles\(memberships\.map\(\(member\) => member\.id\)\)/)
   expect(queries).toMatch(/profile\?\.full_name \|\| "Usuario"/)
@@ -329,7 +329,7 @@ test("los usuarios y las invitaciones de un cliente conservan su aislamiento y s
 
 test("los documentos rectores conservan bucket, ruta, metadatos y ciclo de vida", () => {
   const repository = code(
-    "src/domains/organization-structure/infrastructure/governing-documents.repository.ts"
+    "src/modules/organization-structure/infrastructure/governing-documents.repository.ts"
   )
 
   expect(repository).toMatch(/GOVERNING_DOCUMENTS_BUCKET = "documents"/)
@@ -355,7 +355,7 @@ test("los documentos rectores conservan bucket, ruta, metadatos y ciclo de vida"
   expect(repository).toMatch(/\.delete\(\)\.eq\("id", documentId\)/)
 
   const commands = code(
-    "src/domains/organization-structure/application/governing-documents.commands.ts"
+    "src/modules/organization-structure/application/governing-documents.commands.ts"
   )
   // Identificador y ruta se generan igual, y no quedan archivos huérfanos.
   expect(commands).toMatch(/crypto\.randomUUID\(\)/)
@@ -366,7 +366,7 @@ test("los documentos rectores conservan bucket, ruta, metadatos y ciclo de vida"
   )
 
   const queries = code(
-    "src/domains/organization-structure/application/governing-documents.queries.ts"
+    "src/modules/organization-structure/application/governing-documents.queries.ts"
   )
   expect(queries).toMatch(/selectGoverningDocumentEntity\(entityId\)/)
   expect(queries).toMatch(/selectGoverningDocuments\(entityId\)/)
@@ -380,10 +380,10 @@ test("los documentos rectores conservan bucket, ruta, metadatos y ciclo de vida"
 
 test("las pantallas de cuenta, administración y cliente no consultan Supabase directamente", () => {
   const presentation = [
-    "src/pages/Login.tsx",
-    "src/pages/Account.tsx",
-    "src/pages/Admin.tsx",
-    "src/pages/PlatformUsers.tsx",
+    "src/modules/access-control/presentation/pages/Login.tsx",
+    "src/modules/access-control/presentation/pages/Account.tsx",
+    "src/modules/access-control/presentation/pages/Admin.tsx",
+    "src/modules/access-control/presentation/pages/PlatformUsers.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientUsers.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx",
@@ -403,21 +403,41 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
     expect(source, `${file} no debe resolver nomenclatura`).not.toMatch(/schema-target/)
     // Consumen casos de uso del dominio.
     expect(source, `${file} debe consumir el dominio`).toMatch(
-      /@\/domains\/(access-control|organization-structure|company-client)/
+      /@\/(domains|modules)\/(access-control|organization-structure|company-client)/
     )
   }
 
   // Cada pantalla consume SU caso de uso, no una consulta propia.
-  expect(code("src/pages/Login.tsx")).toMatch(/signIn\(email, password\)/)
-  expect(code("src/pages/Account.tsx")).toMatch(/updateOwnProfile\(/)
-  expect(code("src/pages/Account.tsx")).toMatch(/updateOwnAvatar\(/)
-  expect(code("src/pages/Account.tsx")).toMatch(/passwordChangeError\(/)
-  expect(code("src/pages/Account.tsx")).toMatch(/changePassword\(/)
-  expect(code("src/pages/Admin.tsx")).toMatch(/loadCompanyClients\(\)/)
-  expect(code("src/pages/Admin.tsx")).toMatch(/companyClientMetrics\(companyClients\)/)
-  expect(code("src/pages/PlatformUsers.tsx")).toMatch(/loadPlatformUsers\(\)/)
-  expect(code("src/pages/PlatformUsers.tsx")).toMatch(/loadActivePlatformRoles\(\)/)
-  expect(code("src/pages/PlatformUsers.tsx")).toMatch(/createPlatformUser\(/)
+  expect(code("src/modules/access-control/presentation/pages/Login.tsx")).toMatch(
+    /signIn\(email, password\)/
+  )
+  expect(code("src/modules/access-control/presentation/pages/Account.tsx")).toMatch(
+    /updateOwnProfile\(/
+  )
+  expect(code("src/modules/access-control/presentation/pages/Account.tsx")).toMatch(
+    /updateOwnAvatar\(/
+  )
+  expect(code("src/modules/access-control/presentation/pages/Account.tsx")).toMatch(
+    /passwordChangeError\(/
+  )
+  expect(code("src/modules/access-control/presentation/pages/Account.tsx")).toMatch(
+    /changePassword\(/
+  )
+  expect(code("src/modules/access-control/presentation/pages/Admin.tsx")).toMatch(
+    /loadCompanyClients\(\)/
+  )
+  expect(code("src/modules/access-control/presentation/pages/Admin.tsx")).toMatch(
+    /companyClientMetrics\(companyClients\)/
+  )
+  expect(code("src/modules/access-control/presentation/pages/PlatformUsers.tsx")).toMatch(
+    /loadPlatformUsers\(\)/
+  )
+  expect(code("src/modules/access-control/presentation/pages/PlatformUsers.tsx")).toMatch(
+    /loadActivePlatformRoles\(\)/
+  )
+  expect(code("src/modules/access-control/presentation/pages/PlatformUsers.tsx")).toMatch(
+    /createPlatformUser\(/
+  )
   expect(code("src/modules/company-client/presentation/pages/CompanyClientUsers.tsx")).toMatch(/loadClientUsers\(/)
   expect(code("src/modules/company-client/presentation/pages/CompanyClientUsers.tsx")).toMatch(/setClientMembershipActive\(/)
   expect(code("src/modules/company-client/presentation/pages/CompanyClientInvitations.tsx")).toMatch(/loadClientInvitations\(/)
@@ -437,9 +457,11 @@ test("las pantallas de cuenta, administración y cliente no consultan Supabase d
   expect(read("src/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments.tsx")).toMatch(
     /Usuario no autenticado/
   )
-  expect(read("src/pages/PlatformUsers.tsx")).toMatch(/No se pudo cargar la lista de usuarios\./)
+  expect(read("src/modules/access-control/presentation/pages/PlatformUsers.tsx")).toMatch(
+    /No se pudo cargar la lista de usuarios\./
+  )
   // El mensaje de la contraseña nueva vive en la regla pura del dominio y la pantalla la usa.
-  expect(code("src/domains/access-control/domain/authentication.rules.ts")).toMatch(
+  expect(code("src/modules/access-control/domain/authentication.rules.ts")).toMatch(
     /"Las contraseñas nuevas no coinciden\."/
   )
 })
@@ -472,23 +494,27 @@ test("el proveedor de autenticación delega la sesión y conserva el contrato de
 })
 
 test("ninguna pantalla, componente ni hook conserva accesos directos a Supabase", () => {
-  const directories = ["src/pages", "src/components", "src/hooks", "src/contexts"]
+  // La presentación vive ahora dentro de cada módulo (`presentation/`); además siguen
+  // existiendo las capas compartidas: componentes y contextos.
+  const presentationFiles = [
+    ...sourceFiles("src/components"),
+    ...sourceFiles("src/contexts"),
+    ...sourceFiles("src/modules").filter((file) => file.includes("/presentation/")),
+  ]
   const offenders: string[] = []
 
-  for (const directory of directories) {
-    for (const file of sourceFiles(directory)) {
-      const source = code(file)
-      if (
-        /@\/lib\/supabase/.test(source) ||
-        /supabase\.from\(/.test(source) ||
-        /supabase\.storage/.test(source) ||
-        /supabase\.auth/.test(source) ||
-        /supabase\.functions/.test(source) ||
-        /\.rpc\(/.test(source) ||
-        /schema-target/.test(source)
-      ) {
-        offenders.push(file)
-      }
+  for (const file of presentationFiles) {
+    const source = code(file)
+    if (
+      /@\/lib\/supabase/.test(source) ||
+      /supabase\.from\(/.test(source) ||
+      /supabase\.storage/.test(source) ||
+      /supabase\.auth/.test(source) ||
+      /supabase\.functions/.test(source) ||
+      /\.rpc\(/.test(source) ||
+      /schema-target/.test(source)
+    ) {
+      offenders.push(file)
     }
   }
 
@@ -511,12 +537,12 @@ test("las fachadas sin consumidores se retiraron y las utilidades legítimas se 
 
   // Las reglas y el catálogo viven ahora en el dominio de estructura organizativa.
   expect(code("src/modules/organization-structure/presentation/components/entity-layout.tsx")).toMatch(
-    /from "@\/domains\/organization-structure"/
+    /from "@\/(domains|modules)\/organization-structure"/
   )
   expect(code("src/modules/access-control/presentation/components/entity-route-wrapper.tsx")).toMatch(
-    /from "@\/domains\/organization-structure"/
+    /from "@\/(domains|modules)\/organization-structure"/
   )
-  expect(code("src/domains/organization-structure/domain/organization-entities.rules.ts")).toMatch(
+  expect(code("src/modules/organization-structure/domain/organization-entities.rules.ts")).toMatch(
     /from "\.\/account\.rules"/
   )
 
@@ -533,7 +559,7 @@ test("la administración global no forma ciclos ni depende de la presentación",
   // Se excluyen las PRUEBAS de contrato del propio dominio (`__tests__`): son artefactos de
   // verificación, no módulos del dominio, y algunas comprueban justamente que el tipo de la
   // presentación coincide con el del dominio.
-  const domainFiles = sourceFiles("src/domains").filter((file) => !file.includes("/__tests__/"))
+  const domainFiles = sourceFiles("src/modules").filter((file) => !file.includes("/__tests__/"))
 
   for (const file of domainFiles) {
     const source = code(file)
@@ -544,14 +570,16 @@ test("la administración global no forma ciclos ni depende de la presentación",
 
   // El dominio de control de acceso no depende de ningún otro dominio: la dependencia va en
   // un solo sentido (estructura organizativa → control de acceso cuando lo necesita).
-  const accessControl = domainFiles.filter((file) => file.includes("domains/access-control"))
+  const accessControl = domainFiles.filter((file) => file.includes("modules/access-control"))
   for (const file of accessControl) {
-    expect(code(file), `${file} no debe depender de otro dominio`).not.toMatch(/@\/domains\//)
+    expect(code(file), `${file} no debe depender de otro módulo`).not.toMatch(
+      /@\/(domains|modules)\//
+    )
   }
 
   // Las reglas de la estructura organizativa no dependen de utilidades sueltas de `src/lib`.
   const organizationDomain = domainFiles.filter((file) =>
-    file.includes("domains/organization-structure/domain/")
+    file.includes("modules/organization-structure/domain/")
   )
   for (const file of organizationDomain) {
     expect(code(file), `${file} no debe depender de src/lib`).not.toMatch(/@\/lib\//)

@@ -9,7 +9,7 @@ import {
   summarizeContractAlerts,
   type ContractAlertRow,
   type ContractAlertState,
-} from "../src/domains/contracts/domain/contract-alerts.rules"
+} from "../src/modules/contracts/domain/contract-alerts.rules"
 
 /**
  * FILTRO DE VENCIMIENTOS CONTRACTUALES — regresión del listado vacío con «Requieren atención».
@@ -165,7 +165,7 @@ test.describe("filtro de vencimientos: frontera de la presentación", () => {
 
     expect(page).toContain("matchesContractAlertFilter(row, stateFilter)")
     // La regla se consume por la API PÚBLICA del dominio, no desde el módulo interno.
-    expect(page).toContain('from "@/domains/contracts"')
+    expect(page).toContain('from "@/modules/contracts"')
     expect(page).not.toContain("contract-alerts.rules")
     // La presentación no duplica la pertenencia al grupo ni interpreta el vocabulario.
     expect(page).not.toContain("ATTENTION_STATES")
@@ -182,7 +182,7 @@ test.describe("filtro de vencimientos: frontera de la presentación", () => {
   })
 
   test("el dominio publica la regla, el tipo y el validador en su API pública", () => {
-    const api = code("src/domains/contracts/index.ts")
+    const api = code("src/modules/contracts/index.ts")
 
     expect(api).toContain("matchesContractAlertFilter")
     expect(api).toContain("isContractAlertFilter")
@@ -190,7 +190,7 @@ test.describe("filtro de vencimientos: frontera de la presentación", () => {
   })
 
   test("la pertenencia al grupo vive sólo en el dominio", () => {
-    const rules = code("src/domains/contracts/domain/contract-alerts.rules.ts")
+    const rules = code("src/modules/contracts/domain/contract-alerts.rules.ts")
 
     expect(rules).toContain("export function matchesContractAlertFilter(")
     expect(rules).toContain("export function isContractAlertFilter(")

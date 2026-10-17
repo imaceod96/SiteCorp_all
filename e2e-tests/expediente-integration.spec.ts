@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { existsSync, readFileSync } from "node:fs"
-import { PENDING_ADDENDUM_STATUSES, isAddendumPending } from "../src/domains/contracts/domain/rules"
+import { PENDING_ADDENDUM_STATUSES, isAddendumPending } from "../src/modules/contracts/domain/rules"
 
 /**
  * INTEGRACIÓN DEL EXPEDIENTE — pestañas, contratos y documentos, diálogos laborales y alta de
@@ -39,9 +39,9 @@ test("los estados de un anexo pendiente se resuelven con la misma regla", () => 
 
 test("el contexto de contratos concentra las consultas del contrato, del anexo y del salario", () => {
   const repositories = [
-    "src/domains/contracts/infrastructure/addendums.repository.ts",
-    "src/domains/contracts/infrastructure/contract-conditions.repository.ts",
-    "src/domains/contracts/infrastructure/salary.repository.ts",
+    "src/modules/contracts/infrastructure/addendums.repository.ts",
+    "src/modules/contracts/infrastructure/contract-conditions.repository.ts",
+    "src/modules/contracts/infrastructure/salary.repository.ts",
   ]
 
   for (const repository of repositories) {
@@ -52,20 +52,20 @@ test("el contexto de contratos concentra las consultas del contrato, del anexo y
   // La automatización documental del contrato ya no es una frontera de Supabase: la vigencia de
   // la plantilla la resuelve el dominio de plantillas y la generación, el motor documental.
   const contractDocuments = read(
-    "src/domains/contracts/infrastructure/contract-documents.repository.ts"
+    "src/modules/contracts/infrastructure/contract-documents.repository.ts"
   )
   expect(contractDocuments).not.toMatch(/@\/lib\/supabase/)
-  expect(contractDocuments).toMatch(/from "@\/domains\/document-generation"/)
-  expect(contractDocuments).toMatch(/from "@\/domains\/document-templates"/)
+  expect(contractDocuments).toMatch(/from "@\/(domains|modules)\/document-generation"/)
+  expect(contractDocuments).toMatch(/from "@\/(domains|modules)\/document-templates"/)
   expect(contractDocuments).toMatch(/resolveDocumentTemplateVersion\(/)
 
   // Los casos de uso de la aplicación no hablan con Supabase ni con el motor documental.
   const useCases = [
-    "src/domains/contracts/application/addendums.queries.ts",
-    "src/domains/contracts/application/addendums.commands.ts",
-    "src/domains/contracts/application/contract-conditions.queries.ts",
-    "src/domains/contracts/application/salary.queries.ts",
-    "src/domains/contracts/application/salary.commands.ts",
+    "src/modules/contracts/application/addendums.queries.ts",
+    "src/modules/contracts/application/addendums.commands.ts",
+    "src/modules/contracts/application/contract-conditions.queries.ts",
+    "src/modules/contracts/application/salary.queries.ts",
+    "src/modules/contracts/application/salary.commands.ts",
   ]
 
   for (const useCase of useCases) {
@@ -76,7 +76,7 @@ test("el contexto de contratos concentra las consultas del contrato, del anexo y
   }
 
   // La interfaz pública del contexto expone lo que consumen las pantallas y los diálogos.
-  const index = read("src/domains/contracts/index.ts")
+  const index = read("src/modules/contracts/index.ts")
   for (const symbol of [
     "fetchWorkerAddendums",
     "fetchAddendumPending",
@@ -107,11 +107,11 @@ test("los servicios de contratos y de salario ya no consultan Supabase", () => {
   // historial salarial ya no son módulos de `src/lib`: son reglas puras del dominio de
   // contratos y siguen sin hablar con Supabase.
   const services = [
-    "src/domains/contracts/domain/addendum-labels.ts",
-    "src/domains/contracts/domain/compensation.rules.ts",
-    "src/domains/contracts/domain/automation.messages.ts",
-    "src/domains/contracts/domain/salary-labels.ts",
-    "src/domains/contracts/domain/formats.ts",
+    "src/modules/contracts/domain/addendum-labels.ts",
+    "src/modules/contracts/domain/compensation.rules.ts",
+    "src/modules/contracts/domain/automation.messages.ts",
+    "src/modules/contracts/domain/salary-labels.ts",
+    "src/modules/contracts/domain/formats.ts",
   ]
 
   for (const service of services) {
@@ -134,7 +134,7 @@ test("los servicios de contratos y de salario ya no consultan Supabase", () => {
 test("las pestañas del trabajador y los diálogos laborales consumen sus dominios", () => {
   const peopleScreens = [
     "src/modules/people/presentation/components/WorkerDocumentsTab.tsx",
-    "src/components/medical-certificates/MedicalCertificateFormDialog.tsx",
+    "src/modules/vacations-licenses/medical-certificates/presentation/components/MedicalCertificateFormDialog.tsx",
     "src/modules/people/presentation/components/MigratedWorkerDialog.tsx",
     "src/modules/people/presentation/components/SeparateWorkerDialog.tsx",
     "src/modules/people/presentation/components/ChangePositionDialog.tsx",
@@ -162,33 +162,39 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
     expect(source, `${screen} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
     expect(source, `${screen} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
     expect(source, `${screen} debe consumir el contexto de contratos`).toMatch(
-      /@\/domains\/contracts/
+      /@\/(domains|modules)\/contracts/
     )
   }
 
-  // Las dos pestañas ya migradas siguen consumiendo sus propios dominios.
-  expect(read("src/components/vacations/WorkerVacationsTab.tsx")).toMatch(
-    /@\/domains\/vacations-licenses/
+  // Las dos pestañas ya migradas siguen consumiendo sus propios módulos.
+  expect(
+    read("src/modules/vacations-licenses/vacations/presentation/components/WorkerVacationsTab.tsx")
+  ).toMatch(
+    /@\/(domains|modules)\/vacations-licenses/
   )
-  expect(read("src/components/worker/WorkerMedicalCertificatesTab.tsx")).toMatch(
-    /@\/domains\/vacations-licenses/
+  expect(
+    read(
+      "src/modules/vacations-licenses/medical-certificates/presentation/components/WorkerMedicalCertificatesTab.tsx"
+    )
+  ).toMatch(
+    /@\/(domains|modules)\/vacations-licenses/
   )
 })
 
 test("la pestaña de documentos resuelve su expediente con el dominio Personas", () => {
   const tab = read("src/modules/people/presentation/components/WorkerDocumentsTab.tsx")
-  expect(tab).toMatch(/@\/domains\/people/)
+  expect(tab).toMatch(/@\/(domains|modules)\/people/)
   expect(tab).toMatch(/loadWorkerDocumentsView/)
   expect(tab).toMatch(/uploadWorkerDocument/)
   expect(tab).toMatch(/deleteWorkerDocument/)
   expect(tab).not.toMatch(/worker_documents/)
   expect(tab).not.toMatch(/crypto\.randomUUID/)
 
-  const commands = read("src/domains/people/application/worker-documents.commands.ts")
+  const commands = read("src/modules/people/application/worker-documents.commands.ts")
   expect(commands).toMatch(/EXPEDIENTE_SIGNED_URL_TTL/)
   expect(commands).not.toMatch(/@\/lib\/supabase/)
 
-  const repository = read("src/domains/people/infrastructure/worker-expediente.repository.ts")
+  const repository = read("src/modules/people/infrastructure/worker-expediente.repository.ts")
   expect(repository, "worker_documents se consulta en un único repositorio").toMatch(
     /"worker_documents"/
   )

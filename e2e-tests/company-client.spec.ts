@@ -5,7 +5,7 @@ import {
   companyClientNameError,
   isCompanyClientId,
   sameCompanyClient,
-} from "../src/domains/company-client/domain/rules"
+} from "../src/modules/company-client/domain/rules"
 
 /**
  * COMPANY CLIENT (ESCRITURAS Y CICLO DE VIDA) — reglas puras y contratos del backend.
@@ -73,7 +73,7 @@ test("las reglas de identificador del cliente no conceden nada", () => {
 
 test("el ciclo de vida del cliente vive en un único repositorio del dominio", () => {
   const repository = read(
-    "src/domains/company-client/infrastructure/company-client.repository.ts"
+    "src/modules/company-client/infrastructure/company-client.repository.ts"
   )
 
   // La tabla física y los nombres de las RPC los resuelve la frontera de nomenclatura.
@@ -101,16 +101,16 @@ test("el ciclo de vida del cliente vive en un único repositorio del dominio", (
 
   // El dominio NO compone consultas fuera de su infraestructura ni conoce la presentación.
   for (const file of [
-    "src/domains/company-client/index.ts",
-    "src/domains/company-client/domain/entities.ts",
-    "src/domains/company-client/domain/rules.ts",
-    "src/domains/company-client/application/company-clients.queries.ts",
-    "src/domains/company-client/application/company-clients.commands.ts",
+    "src/modules/company-client/index.ts",
+    "src/modules/company-client/domain/entities.ts",
+    "src/modules/company-client/domain/rules.ts",
+    "src/modules/company-client/application/company-clients.queries.ts",
+    "src/modules/company-client/application/company-clients.commands.ts",
   ]) {
     const source = read(file)
     expect(source, `${file} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
     expect(source, `${file} no debe depender de otro dominio`).not.toMatch(
-      /from "@\/domains\/(?!company-client)/
+      /from "@\/(domains|modules)\/(?!company-client)/
     )
     expect(source, `${file} no debe depender de la presentación`).not.toMatch(
       /from "@\/(pages|components|contexts|hooks)\//
@@ -119,8 +119,8 @@ test("el ciclo de vida del cliente vive en un único repositorio del dominio", (
 })
 
 test("los casos de uso del cliente conservan el resumen previo y la confirmación por nombre", () => {
-  const queries = read("src/domains/company-client/application/company-clients.queries.ts")
-  const commands = read("src/domains/company-client/application/company-clients.commands.ts")
+  const queries = read("src/modules/company-client/application/company-clients.queries.ts")
+  const commands = read("src/modules/company-client/application/company-clients.commands.ts")
 
   // Resumen (solo lectura) antes de borrar: lo calcula el backend, no la interfaz.
   expect(queries).toMatch(/loadCompanyClientDeletionSummary/)
@@ -135,7 +135,7 @@ test("los casos de uso del cliente conservan el resumen previo y la confirmació
   expect(commands).toMatch(/export async function updateCompanyClient\(/)
 
   // El contrato legacy de las claves del resumen se conserva literal.
-  const entities = read("src/domains/company-client/domain/entities.ts")
+  const entities = read("src/modules/company-client/domain/entities.ts")
   for (const key of [
     "tenant_id",
     "tenant_name",
@@ -156,7 +156,7 @@ test("los casos de uso del cliente conservan el resumen previo y la confirmació
       new RegExp(`\\b${key}\\b`)
     )
   }
-  expect(read("src/domains/company-client/infrastructure/company-client.mapper.ts")).toMatch(
+  expect(read("src/modules/company-client/infrastructure/company-client.mapper.ts")).toMatch(
     /CompanyClientRecord/
   )
 })
@@ -166,7 +166,7 @@ test("los casos de uso del cliente conservan el resumen previo y la confirmació
 // ---------------------------------------------------------------------------
 
 test("la pantalla de clientes consume el dominio y no borra sin confirmar el nombre", () => {
-  const page = read("src/pages/Organizations.tsx")
+  const page = read("src/modules/access-control/presentation/pages/Organizations.tsx")
 
   expect(page).not.toMatch(/@\/lib\/supabase/)
   expect(page).not.toMatch(/\.rpc\(/)
@@ -174,7 +174,7 @@ test("la pantalla de clientes consume el dominio y no borra sin confirmar el nom
   expect(page).not.toMatch(/schema-target/)
   expect(page).not.toMatch(/@\/lib\/company-clients/)
 
-  expect(page).toMatch(/from "@\/domains\/company-client"/)
+  expect(page).toMatch(/from "@\/(domains|modules)\/company-client"/)
   expect(page).toMatch(/loadCompanyClients/)
   expect(page).toMatch(/loadCompanyClientDeletionSummary\(companyClient\.id\)/)
   expect(page).toMatch(/createCompanyClient\(/)

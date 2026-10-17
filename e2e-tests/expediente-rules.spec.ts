@@ -14,8 +14,8 @@ import {
   validateWorkerContractInput,
   validateWorkerPersonalData,
   validateWorkerRegistrationInput,
-} from "../src/domains/people/domain/rules"
-import type { CandidateRegistrationInput } from "../src/domains/people/domain/entities"
+} from "../src/modules/people/domain/rules"
+import type { CandidateRegistrationInput } from "../src/modules/people/domain/entities"
 
 /**
  * EXPEDIENTES DE CANDIDATOS Y TRABAJADORES — reglas compartidas.
@@ -417,6 +417,8 @@ test("ninguna de las cuatro pantallas del expediente consulta Supabase directame
     expect(source, `${screen} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
     expect(source, `${screen} no debe usar Storage`).not.toMatch(/supabase\.storage/)
     // El expediente se pide a los casos de uso del dominio Personas.
-    expect(source, `${screen} debe consumir el dominio Personas`).toMatch(/@\/domains\/people/)
+    expect(source, `${screen} debe consumir el módulo Personas`).toMatch(
+      /@\/(domains|modules)\/people/
+    )
   }
 })

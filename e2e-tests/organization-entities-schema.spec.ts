@@ -59,7 +59,7 @@ test("ninguna consulta captura la frontera de nomenclatura al importar el módul
 
 test("las lecturas de organization_entities construyen la proyección en cada consulta", () => {
   const repository = readSource(
-    "src/domains/organization-structure/infrastructure/organization-entities.repository.ts"
+    "src/modules/organization-structure/infrastructure/organization-entities.repository.ts"
   )
 
   // La proyección pasa SIEMPRE por la frontera de compatibilidad.

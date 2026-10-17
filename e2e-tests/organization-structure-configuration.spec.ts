@@ -6,12 +6,12 @@ import {
   areaSaveErrorMessage,
   buildAreaTree,
   validateAreaInput,
-} from "../src/domains/organization-structure/domain/areas.rules"
+} from "../src/modules/organization-structure/domain/areas.rules"
 import {
   jobSaveErrorMessage,
   parseJobCla,
   validateJobInput,
-} from "../src/domains/organization-structure/domain/jobs.rules"
+} from "../src/modules/organization-structure/domain/jobs.rules"
 import {
   MAX_AUTHORIZED_QUANTITY,
   addDraftScheduleSegments,
@@ -20,12 +20,12 @@ import {
   positionSchedulePayload,
   sortScheduleSegments,
   validatePositionInput,
-} from "../src/domains/organization-structure/domain/positions.rules"
+} from "../src/modules/organization-structure/domain/positions.rules"
 import type {
   JobClaDraft,
   OrganizationArea,
   PositionScheduleSegment,
-} from "../src/domains/organization-structure/domain/entities"
+} from "../src/modules/organization-structure/domain/entities"
 
 /**
  * CONFIGURACIÓN DE LA ESTRUCTURA ORGANIZATIVA — reglas y frontera de Supabase.
@@ -260,7 +260,7 @@ test("la CLA del cargo se guarda con sus dos tramos nocturnos o sin ninguno", ()
   ])
 
   // Los tramos nocturnos son una tabla hija del CARGO, no del trabajador.
-  const repository = read("src/domains/organization-structure/infrastructure/jobs.repository.ts")
+  const repository = read("src/modules/organization-structure/infrastructure/jobs.repository.ts")
   expect(repository).toMatch(/organization_job_cla_night_segments/)
   expect(repository).toMatch(/organization_job_id: jobId/)
 })
@@ -373,7 +373,9 @@ test("el horario habitual de un puesto normaliza, deduplica y acepta turnos que 
   expect(payload[0].start_time).toBe("06:00")
 
   // La escritura del puesto y su horario es UNA llamada atómica con sus parámetros reales.
-  const positions = read("src/domains/organization-structure/infrastructure/positions.repository.ts")
+  const positions = read(
+    "src/modules/organization-structure/infrastructure/positions.repository.ts"
+  )
   expect(positions).toMatch(/\.rpc\("save_position_with_schedule", \{/)
   expect(positions).toMatch(/p_authorized_quantity: input\.authorizedQuantity/)
   expect(positions).toMatch(/p_break_minutes: input\.breakMinutes/)
@@ -386,10 +388,12 @@ test("el horario habitual de un puesto normaliza, deduplica y acepta turnos que 
 
 test("la configuración de la estructura no repite el cálculo de plazas ocupadas y vacantes", () => {
   const useCase = read(
-    "src/domains/organization-structure/application/staffing-configuration.queries.ts"
+    "src/modules/organization-structure/application/staffing-configuration.queries.ts"
   )
   const page = read("src/modules/organization-structure/presentation/pages/EntitySettingsStaffing.tsx")
-  const positions = read("src/domains/organization-structure/infrastructure/positions.repository.ts")
+  const positions = read(
+    "src/modules/organization-structure/infrastructure/positions.repository.ts"
+  )
 
   for (const source of [useCase, page, positions]) {
     // La ocupación es de las asignaciones (personas), no de la configuración de plantilla.
@@ -398,13 +402,13 @@ test("la configuración de la estructura no repite el cálculo de plazas ocupada
   }
 
   // La regla de plazas sigue siendo única y vive en el dominio, no en la interfaz.
-  const rules = read("src/domains/organization-structure/domain/staffing.rules.ts")
+  const rules = read("src/modules/organization-structure/domain/staffing.rules.ts")
   expect(rules).toMatch(/export const vacantPlazas/)
   expect(rules).toMatch(/export const sumAuthorizedPlazas/)
   expect(page).toMatch(/authorized_quantity/)
 
   // La escala aplicable la resuelve el backend (una sola vez para todo el dominio).
-  const repository = read("src/domains/organization-structure/infrastructure/salary.repository.ts")
+  const repository = read("src/modules/organization-structure/infrastructure/salary.repository.ts")
   expect(repository).toMatch(/\.rpc\("resolve_salary_scale_for_entity"/)
   expect(repository).toMatch(/\.rpc\("resolve_salary_group_values"/)
 })
@@ -449,11 +453,11 @@ test("la configuración de la estructura no consulta Supabase desde la presentac
 
 test("las consultas y escrituras del bloque viven en sus repositorios, aisladas por entidad", () => {
   const repositories = [
-    "src/domains/organization-structure/infrastructure/areas.repository.ts",
-    "src/domains/organization-structure/infrastructure/jobs.repository.ts",
-    "src/domains/organization-structure/infrastructure/positions.repository.ts",
-    "src/domains/organization-structure/infrastructure/entity-configuration.repository.ts",
-    "src/domains/organization-structure/infrastructure/salary-administration.repository.ts",
+    "src/modules/organization-structure/infrastructure/areas.repository.ts",
+    "src/modules/organization-structure/infrastructure/jobs.repository.ts",
+    "src/modules/organization-structure/infrastructure/positions.repository.ts",
+    "src/modules/organization-structure/infrastructure/entity-configuration.repository.ts",
+    "src/modules/organization-structure/infrastructure/salary-administration.repository.ts",
   ]
 
   for (const repository of repositories) {
@@ -476,7 +480,7 @@ test("las consultas y escrituras del bloque viven en sus repositorios, aisladas 
   expect(configuration).not.toMatch(/\.rpc\(/)
 
   const accessRepository = read(
-    "src/domains/access-control/infrastructure/entity-access.repository.ts"
+    "src/modules/access-control/infrastructure/entity-access.repository.ts"
   )
   expect(accessRepository).toMatch(/\.rpc\("can_access_entity", \{/)
   expect(accessRepository).toMatch(/permission_code: permissionCode/)
@@ -484,8 +488,8 @@ test("las consultas y escrituras del bloque viven en sus repositorios, aisladas 
   // Un único envoltorio en toda la aplicación: ningún otro dominio invoca esa RPC.
   for (const source of [
     ...repositories.map(read),
-    read("src/domains/people/infrastructure/people.repository.ts"),
-    read("src/domains/people/infrastructure/staffing.repository.ts"),
+    read("src/modules/people/infrastructure/people.repository.ts"),
+    read("src/modules/people/infrastructure/staffing.repository.ts"),
   ]) {
     expect(source).not.toMatch(/\.rpc\("can_access_entity"/)
   }
@@ -493,17 +497,17 @@ test("las consultas y escrituras del bloque viven en sus repositorios, aisladas 
   // Quien puede ver o gestionar la configuración lo decide `staffing.view` / `staffing.manage`,
   // con los mismos códigos y el mismo comportamiento ante errores (el error se propaga).
   const useCase = read(
-    "src/domains/organization-structure/application/staffing-configuration.queries.ts"
+    "src/modules/organization-structure/application/staffing-configuration.queries.ts"
   )
   expect(useCase).toMatch(/loadEntityPermission\(entityId, "staffing\.view"\)/)
   expect(useCase).toMatch(/loadEntityPermission\(entityId, "staffing\.manage"\)/)
-  expect(useCase).toMatch(/@\/domains\/access-control/)
+  expect(useCase).toMatch(/@\/(domains|modules)\/access-control/)
   expect(useCase).not.toMatch(/@\/lib\/supabase/)
   expect(useCase).not.toMatch(/companyClientId/)
 
   // Los casos de uso de escritura tampoco hablan con Supabase.
   const commands = read(
-    "src/domains/organization-structure/application/staffing-configuration.commands.ts"
+    "src/modules/organization-structure/application/staffing-configuration.commands.ts"
   )
   expect(commands).not.toMatch(/@\/lib\/supabase/)
   expect(commands).not.toMatch(/companyClientId/)
@@ -518,7 +522,7 @@ test("los grupos y escalas salariales se administran sin duplicar la RPC del cam
   const context = read("src/contexts/SalaryContext.ts")
 
   // El contexto ya no habla con Supabase: usa los casos de uso del dominio.
-  expect(provider).toMatch(/@\/domains\/organization-structure/)
+  expect(provider).toMatch(/@\/(domains|modules)\/organization-structure/)
   expect(provider).not.toMatch(/@\/lib\/supabase/)
   expect(provider).toMatch(/loadSalaryScaleWithGroups/)
   expect(provider).toMatch(/createGlobalPresupuestadaScale/)
@@ -529,7 +533,7 @@ test("los grupos y escalas salariales se administran sin duplicar la RPC del cam
 
   // Un importe nunca se sobrescribe: la vigencia la aplica la RPC atómica ya migrada.
   const commands = read(
-    "src/domains/organization-structure/application/salary-administration.commands.ts"
+    "src/modules/organization-structure/application/salary-administration.commands.ts"
   )
   expect(commands).toMatch(/applySalaryChange/)
   expect(commands).not.toMatch(/apply_salary_group_value_change/)
@@ -538,14 +542,14 @@ test("los grupos y escalas salariales se administran sin duplicar la RPC del cam
 
   // El importe vigente se resuelve por vigencia temporal, nunca por un flag del cliente.
   const repository = read(
-    "src/domains/organization-structure/infrastructure/salary-administration.repository.ts"
+    "src/modules/organization-structure/infrastructure/salary-administration.repository.ts"
   )
   expect(repository).toMatch(/\.rpc\("resolve_salary_group_values", \{/)
   expect(repository).toMatch(/\.rpc\("resolve_salary_value", \{/)
 
   // La escala aplicable se resuelve por régimen: presupuestada global o empresarial propia.
   const queries = read(
-    "src/domains/organization-structure/application/salary-administration.queries.ts"
+    "src/modules/organization-structure/application/salary-administration.queries.ts"
   )
   expect(queries).toMatch(/resolveApplicableScaleId/)
   expect(queries).not.toMatch(/@\/lib\/supabase/)

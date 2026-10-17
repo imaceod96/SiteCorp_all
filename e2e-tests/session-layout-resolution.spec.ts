@@ -246,7 +246,7 @@ test("el proveedor no publica la sesión como resuelta y coordina las resolucion
 
 test("un error de las RPC de identidad no se interpreta como «no tiene privilegios»", () => {
   const repository = code(
-    "src/domains/access-control/infrastructure/authentication.repository.ts"
+    "src/modules/access-control/infrastructure/authentication.repository.ts"
   )
 
   // Las tres lecturas que determinan el nivel de acceso propagan el fallo.
@@ -267,7 +267,7 @@ test("un error de las RPC de identidad no se interpreta como «no tiene privileg
   // La capa de aplicación documenta y conserva esa política: los fallos llegan a la
   // presentación, que decide (estado neutral + reintento) sin conceder nada.
   expect(
-    code("src/domains/access-control/application/authentication.queries.ts")
+    code("src/modules/access-control/application/authentication.queries.ts")
   ).toMatch(/loadClientPermissionSafe/)
 })
 
@@ -324,12 +324,12 @@ test("la corrección respeta la arquitectura DDD, la frontera de Supabase y evit
 
   // El proveedor de autenticación sigue consumiendo el dominio (no crea otro sistema de
   // autenticación) y la resolución de identidad vive en aplicación.
-  expect(code("src/contexts/AuthProvider.tsx")).toMatch(/from "@\/domains\/access-control"/)
+  expect(code("src/contexts/AuthProvider.tsx")).toMatch(/from "@\/(domains|modules)\/access-control"/)
   expect(code("src/contexts/AuthProvider.tsx")).toMatch(/loadSessionUser\(\)/)
   expect(code("src/contexts/AuthProvider.tsx")).toMatch(/subscribeAuthChanges\(/)
 
   // Sin ciclos nuevos: el dominio nunca importa la presentación…
-  const domainFiles = sourceFiles("src/domains/access-control").filter(
+  const domainFiles = sourceFiles("src/modules/access-control").filter(
     (file) => !file.includes("__tests__")
   )
   for (const file of domainFiles) {
@@ -344,9 +344,9 @@ test("la corrección respeta la arquitectura DDD, la frontera de Supabase y evit
   expect(context).toMatch(/throw new Error\("useAuth must be used within an AuthProvider"\)/)
 
   // Capas del dominio intactas (la corrección no traslada responsabilidades).
-  expect(existsSync("src/domains/access-control/domain/authentication.rules.ts")).toBe(true)
-  expect(existsSync("src/domains/access-control/application/authentication.queries.ts")).toBe(true)
+  expect(existsSync("src/modules/access-control/domain/authentication.rules.ts")).toBe(true)
+  expect(existsSync("src/modules/access-control/application/authentication.queries.ts")).toBe(true)
   expect(
-    existsSync("src/domains/access-control/infrastructure/authentication.repository.ts")
+    existsSync("src/modules/access-control/infrastructure/authentication.repository.ts")
   ).toBe(true)
 })

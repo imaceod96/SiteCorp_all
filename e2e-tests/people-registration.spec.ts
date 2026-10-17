@@ -6,17 +6,17 @@ import {
   personFullName,
   personRegistrationConflict,
   validateCandidateRegistration,
-} from "../src/domains/people/domain/rules"
+} from "../src/modules/people/domain/rules"
 import type {
   CandidateRegistrationInput,
   PersonDirectoryWorker,
-} from "../src/domains/people/domain/entities"
+} from "../src/modules/people/domain/entities"
 
 /**
  * ALTA DE PERSONAS — precondiciones y unicidad de identidad.
  *
  * El formulario de candidatos ya no valida por su cuenta: las reglas viven en el
- * dominio (`src/domains/people/domain/rules.ts`, sin dependencias) y la unicidad la
+ * dominio (`src/modules/people/domain/rules.ts`, sin dependencias) y la unicidad la
  * resuelve el backend (`person_identification_status`). Aquí se comprueba que el
  * criterio y los mensajes son los de siempre, para que la vista siga mostrando lo mismo.
  */

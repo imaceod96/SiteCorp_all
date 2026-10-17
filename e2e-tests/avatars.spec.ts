@@ -8,7 +8,7 @@ import {
   avatarObjectPath,
   avatarPathFromStored,
   avatarSignedUrlNeedsRenewal,
-} from "../src/domains/access-control/domain/account.rules"
+} from "../src/modules/access-control/domain/account.rules"
 
 /**
  * AVATAR PROPIO COMO OBJETO PRIVADO — reglas, contratos y frontera de Storage.
@@ -39,10 +39,10 @@ const code = (path: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/^[ \t]*\/\/.*$/gm, "")
 
-const REPOSITORY = "src/domains/access-control/infrastructure/authentication.repository.ts"
-const PROFILES = "src/domains/access-control/infrastructure/user-profiles.repository.ts"
-const QUERIES = "src/domains/access-control/application/account.queries.ts"
-const COMMANDS = "src/domains/access-control/application/authentication.commands.ts"
+const REPOSITORY = "src/modules/access-control/infrastructure/authentication.repository.ts"
+const PROFILES = "src/modules/access-control/infrastructure/user-profiles.repository.ts"
+const QUERIES = "src/modules/access-control/application/account.queries.ts"
+const COMMANDS = "src/modules/access-control/application/authentication.commands.ts"
 
 /* --------------------------------------------------------------------------- */
 /* 1. La ruta vive dentro de la carpeta del propio usuario                     */
@@ -187,7 +187,7 @@ test("la cuenta propia sube, reemplaza y borra su avatar sin escribir URLs en el
   expect(commands).toMatch(/await updateUserProfileAvatar\(userId, null\)/)
 
   // La presentación pinta la URL firmada y no escribe `avatar_url` en el formulario.
-  const account = code("src/pages/Account.tsx")
+  const account = code("src/modules/access-control/presentation/pages/Account.tsx")
   expect(account).toMatch(/avatarUrl/)
   expect(account).toMatch(/avatarFileError\(/)
   expect(account).toMatch(/updateOwnAvatar\(/)
@@ -211,7 +211,7 @@ test("la cuenta propia sube, reemplaza y borra su avatar sin escribir URLs en el
 
   // Frontera: la presentación no habla con Storage ni con Supabase.
   for (const file of [
-    "src/pages/Account.tsx",
+    "src/modules/access-control/presentation/pages/Account.tsx",
     "src/modules/access-control/presentation/components/sidebar-user-menu.tsx",
     "src/contexts/AuthProvider.tsx",
   ]) {

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import type {
   AddendumReasonCode,
   AddendumStatus,
-} from "../src/domains/contracts/domain/entities"
+} from "../src/modules/contracts/domain/entities"
 import {
   ADDENDUM_FIELD_LABELS,
   ADDENDUM_REASON_LABELS,
@@ -12,8 +12,8 @@ import {
   MANUAL_ADDENDUM_REASON_CODES,
   addendumFieldLabel,
   addendumReasonLabel,
-} from "../src/domains/contracts/domain/addendum-labels"
-import { SALARY_CHANGE_TYPE_LABELS } from "../src/domains/contracts/domain/salary-labels"
+} from "../src/modules/contracts/domain/addendum-labels"
+import { SALARY_CHANGE_TYPE_LABELS } from "../src/modules/contracts/domain/salary-labels"
 import {
   COMPENSATION_COMPONENT_TYPES,
   EMPTY_FORMALIZATION_PENDING,
@@ -25,18 +25,18 @@ import {
   newComponentDraft,
   toComponentDrafts,
   type CompensationComponentDraft,
-} from "../src/domains/contracts/domain/compensation.rules"
+} from "../src/modules/contracts/domain/compensation.rules"
 import {
   formatConditionDate,
   formatContractDate,
   formatContractMoney,
-} from "../src/domains/contracts/domain/formats"
-import { formatContractDate as alertsFormatContractDate } from "../src/domains/contracts/domain/contract-alerts.rules"
+} from "../src/modules/contracts/domain/formats"
+import { formatContractDate as alertsFormatContractDate } from "../src/modules/contracts/domain/contract-alerts.rules"
 import {
   MISSING_ADDENDUM_TEMPLATE_MESSAGE,
   missingContractTemplateMessage,
-} from "../src/domains/contracts/domain/automation.messages"
-import { PENDING_ADDENDUM_STATUSES, isAddendumPending } from "../src/domains/contracts/domain/rules"
+} from "../src/modules/contracts/domain/automation.messages"
+import { PENDING_ADDENDUM_STATUSES, isAddendumPending } from "../src/modules/contracts/domain/rules"
 
 /**
  * NÚCLEO CONTRACTUAL (BLOQUE 9) — anexos, condiciones, automatización e historial salarial.
@@ -401,7 +401,7 @@ test("las reglas puras del contrato no conocen Supabase ni la presentación", ()
     "rules.ts",
     "entities.ts",
     "contract-alerts.rules.ts",
-  ].map((name) => `src/domains/contracts/domain/${name}`)
+  ].map((name) => `src/modules/contracts/domain/${name}`)
 
   for (const module of domainModules) {
     const source = read(module)
@@ -414,7 +414,7 @@ test("las reglas puras del contrato no conocen Supabase ni la presentación", ()
 })
 
 test("la automatización del contrato tiene un solo camino y no se duplica en la interfaz", () => {
-  const automation = read("src/domains/contracts/infrastructure/contract-documents.repository.ts")
+  const automation = read("src/modules/contracts/infrastructure/contract-documents.repository.ts")
 
   // Validar la plantilla ANTES de aplicar el cambio sigue siendo responsabilidad del dominio.
   expect(automation).toMatch(/export const resolveContractTemplateAvailability/)
@@ -425,8 +425,8 @@ test("la automatización del contrato tiene un solo camino y no se duplica en la
   // Y la prevención de duplicados vive aquí: si ya hay documento, no se genera otro.
   expect(automation).toMatch(/fetchGeneratedDocuments\(/)
   expect(automation).toMatch(/skipped: true/)
-  expect(automation).toMatch(/from "@\/domains\/document-generation"/)
-  expect(automation).toMatch(/from "@\/domains\/document-templates"/)
+  expect(automation).toMatch(/from "@\/(domains|modules)\/document-generation"/)
+  expect(automation).toMatch(/from "@\/(domains|modules)\/document-templates"/)
 
   // Ningún componente de este bloque genera documentos ni resuelve plantillas por su cuenta.
   for (const consumer of CONTRACT_CONSUMERS) {
@@ -442,10 +442,10 @@ test("la automatización del contrato tiene un solo camino y no se duplica en la
 
 test("las consultas del contrato acotan siempre por trabajador, contrato o entidad", () => {
   const repositories = [
-    "src/domains/contracts/infrastructure/addendums.repository.ts",
-    "src/domains/contracts/infrastructure/contract-conditions.repository.ts",
-    "src/domains/contracts/infrastructure/salary.repository.ts",
-    "src/domains/contracts/infrastructure/contract-alerts.repository.ts",
+    "src/modules/contracts/infrastructure/addendums.repository.ts",
+    "src/modules/contracts/infrastructure/contract-conditions.repository.ts",
+    "src/modules/contracts/infrastructure/salary.repository.ts",
+    "src/modules/contracts/infrastructure/contract-alerts.repository.ts",
   ]
 
   for (const repository of repositories) {

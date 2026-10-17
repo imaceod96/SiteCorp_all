@@ -14,13 +14,13 @@ import {
   validatePositionChangeInput,
   validateReincorporationInput,
   validateSeparationInput,
-} from "../src/domains/people/domain/rules"
+} from "../src/modules/people/domain/rules"
 import type {
   ContractFormalizationInput,
   PeopleView,
   ReadinessResult,
   WorkerTransitionKind,
-} from "../src/domains/people/domain/entities"
+} from "../src/modules/people/domain/entities"
 
 /**
  * CONTRATACIÓN Y TRANSICIONES LABORALES — cinco flujos.

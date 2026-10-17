@@ -5,9 +5,9 @@ import {
   isParentTypeAllowed,
   resolveEntityAncestors,
   resolveParentCandidates,
-} from "../src/domains/organization-structure/domain/organization-entities.rules"
-import { ENTITY_PERMISSION_LABELS } from "../src/domains/access-control/domain/permissions.catalog"
-import type { OrganizationEntity } from "../src/domains/organization-structure/domain/entities"
+} from "../src/modules/organization-structure/domain/organization-entities.rules"
+import { ENTITY_PERMISSION_LABELS } from "../src/modules/access-control/domain/permissions.catalog"
+import type { OrganizationEntity } from "../src/modules/organization-structure/domain/entities"
 
 /**
  * PANTALLAS DE ORGANIZACIÓN Y CONSOLIDACIÓN DE PERMISOS — reglas y frontera de Supabase.
@@ -140,7 +140,7 @@ test("la jerarquía admite Grupo → Empresa → UEB y no cambia de cliente", ()
 
 test("las pantallas de organización y de roles no consultan Supabase", () => {
   const presentation = [
-    "src/pages/Organizations.tsx",
+    "src/modules/access-control/presentation/pages/Organizations.tsx",
     "src/modules/organization-structure/presentation/pages/Organization.tsx",
     "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
     "src/modules/company-client/presentation/pages/CompanyClientRoles.tsx",
@@ -159,7 +159,7 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
   }
 
   // Las pantallas consumen CASOS DE USO de los dominios.
-  const organizations = read("src/pages/Organizations.tsx")
+  const organizations = read("src/modules/access-control/presentation/pages/Organizations.tsx")
   expect(organizations).toMatch(/loadVisibleEntities/)
   expect(organizations).toMatch(/loadCompanyClients/)
   expect(organizations).toMatch(/buildOrganizationTree/)
@@ -192,7 +192,7 @@ test("las pantallas de organización y de roles no consultan Supabase", () => {
 
 test("las comprobaciones de permiso viven sólo en el dominio de control de acceso", () => {
   const accessRepository = read(
-    "src/domains/access-control/infrastructure/entity-access.repository.ts"
+    "src/modules/access-control/infrastructure/entity-access.repository.ts"
   )
   expect(accessRepository).toMatch(/\.rpc\("can_access_entity", \{/)
   expect(accessRepository).toMatch(/permission_code: permissionCode/)
@@ -202,12 +202,12 @@ test("las comprobaciones de permiso viven sólo en el dominio de control de acce
   // Ningún dominio mantiene ya su propio envoltorio de `can_access_entity`, ni la
   // presentación la invoca directamente.
   const sinEnvoltorioPropio = [
-    "src/domains/organization-structure/infrastructure/entity-configuration.repository.ts",
-    "src/domains/people/infrastructure/staffing.repository.ts",
-    "src/domains/people/infrastructure/people.repository.ts",
+    "src/modules/organization-structure/infrastructure/entity-configuration.repository.ts",
+    "src/modules/people/infrastructure/staffing.repository.ts",
+    "src/modules/people/infrastructure/people.repository.ts",
     "src/modules/organization-structure/presentation/pages/Organization.tsx",
     "src/modules/organization-structure/presentation/pages/OrganizationDetail.tsx",
-    "src/pages/Organizations.tsx",
+    "src/modules/access-control/presentation/pages/Organizations.tsx",
     "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates.tsx",
     "src/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail.tsx",
   ]
@@ -220,42 +220,42 @@ test("las comprobaciones de permiso viven sólo en el dominio de control de acce
 
   // Las dos políticas de error se conservan y sólo viven aquí: la que PROPAGA el fallo y la
   // que lo traduce a «sin permiso» (nunca a «permitido»).
-  const queries = read("src/domains/access-control/application/entity-access.queries.ts")
+  const queries = read("src/modules/access-control/application/entity-access.queries.ts")
   expect(queries).toMatch(/export async function loadEntityPermission\(/)
   expect(queries).toMatch(/export async function loadEntityPermissionSafe\(/)
   expect(queries).toMatch(/return await rpcCanAccessEntity\(entityId, permissionCode\)/)
   expect(queries).toMatch(/catch \{\s*return false/)
 
   // Los dominios consumen los casos de uso públicos de access-control.
-  expect(read("src/domains/organization-structure/application/salary-administration.queries.ts")).toMatch(
+  expect(read("src/modules/organization-structure/application/salary-administration.queries.ts")).toMatch(
     /loadEntityPermission\(entityId, "salary\.(view|manage)"\)/
   )
-  expect(read("src/domains/people/application/people.queries.ts")).toMatch(/loadEntityPermission/)
-  expect(read("src/domains/people/application/candidate-expediente.queries.ts")).toMatch(
+  expect(read("src/modules/people/application/people.queries.ts")).toMatch(/loadEntityPermission/)
+  expect(read("src/modules/people/application/candidate-expediente.queries.ts")).toMatch(
     /loadEntityPermissionSafe/
   )
 
   // Sin dependencias circulares: access-control no depende de ningún otro dominio.
   const accessControlFiles = [
-    "src/domains/access-control/index.ts",
-    "src/domains/access-control/domain/entities.ts",
-    "src/domains/access-control/domain/permissions.catalog.ts",
-    "src/domains/access-control/domain/roles.rules.ts",
-    "src/domains/access-control/domain/access.rules.ts",
-    "src/domains/access-control/application/entity-access.queries.ts",
-    "src/domains/access-control/application/entity-access.commands.ts",
-    "src/domains/access-control/application/roles.queries.ts",
-    "src/domains/access-control/application/roles.commands.ts",
-    "src/domains/access-control/application/platform-permissions.queries.ts",
-    "src/domains/access-control/infrastructure/entity-access.repository.ts",
-    "src/domains/access-control/infrastructure/permissions.repository.ts",
-    "src/domains/access-control/infrastructure/platform-permissions.repository.ts",
-    "src/domains/access-control/infrastructure/roles.repository.ts",
+    "src/modules/access-control/index.ts",
+    "src/modules/access-control/domain/entities.ts",
+    "src/modules/access-control/domain/permissions.catalog.ts",
+    "src/modules/access-control/domain/roles.rules.ts",
+    "src/modules/access-control/domain/access.rules.ts",
+    "src/modules/access-control/application/entity-access.queries.ts",
+    "src/modules/access-control/application/entity-access.commands.ts",
+    "src/modules/access-control/application/roles.queries.ts",
+    "src/modules/access-control/application/roles.commands.ts",
+    "src/modules/access-control/application/platform-permissions.queries.ts",
+    "src/modules/access-control/infrastructure/entity-access.repository.ts",
+    "src/modules/access-control/infrastructure/permissions.repository.ts",
+    "src/modules/access-control/infrastructure/platform-permissions.repository.ts",
+    "src/modules/access-control/infrastructure/roles.repository.ts",
   ]
 
   for (const file of accessControlFiles) {
     expect(read(file), `${file} no debe depender de otro dominio`).not.toMatch(
-      /from "@\/domains\/(organization-structure|people|company-client|contracts|representations|representatives|resolutions|entity-summary|vacations-licenses)/
+      /from "@\/(domains|modules)\/(organization-structure|people|company-client|contracts|representations|representatives|resolutions|entity-summary|vacations-licenses)/
     )
   }
 })
@@ -292,7 +292,7 @@ test("los códigos de permiso legacy de las pantallas migradas se conservan", ()
 
 test("las consultas de organization_entities y de clientes viven en sus repositorios", () => {
   const entitiesRepository = read(
-    "src/domains/organization-structure/infrastructure/organization-entities.repository.ts"
+    "src/modules/organization-structure/infrastructure/organization-entities.repository.ts"
   )
 
   expect(entitiesRepository).toMatch(/@\/lib\/supabase/)
@@ -307,20 +307,20 @@ test("las consultas de organization_entities y de clientes viven en sus reposito
 
   // El dominio no compone consultas: sólo la infraestructura conoce la tabla.
   const queries = read(
-    "src/domains/organization-structure/application/organization-entities.queries.ts"
+    "src/modules/organization-structure/application/organization-entities.queries.ts"
   )
   expect(queries).not.toMatch(/@\/lib\/supabase/)
   expect(queries).toMatch(/resolveEntityAncestors/)
 
   // La lista de clientes la sirve su propio dominio.
   const clientsRepository = read(
-    "src/domains/company-client/infrastructure/company-client.repository.ts"
+    "src/modules/company-client/infrastructure/company-client.repository.ts"
   )
   expect(clientsRepository).toMatch(/\.from\(tableName\("clients"\)\)/)
   expect(clientsRepository).toMatch(/\.order\("name"\)/)
 
   const clientsQueries = read(
-    "src/domains/company-client/application/company-clients.queries.ts"
+    "src/modules/company-client/application/company-clients.queries.ts"
   )
   expect(clientsQueries).toMatch(/loadCompanyClients/)
   expect(clientsQueries).not.toMatch(/@\/lib\/supabase/)
@@ -332,7 +332,7 @@ test("las consultas de organization_entities y de clientes viven en sus reposito
 
 test("la consulta de permisos de plataforma también vive sólo en control de acceso", () => {
   const platformRepository = read(
-    "src/domains/access-control/infrastructure/platform-permissions.repository.ts"
+    "src/modules/access-control/infrastructure/platform-permissions.repository.ts"
   )
   expect(platformRepository).toMatch(/@\/lib\/supabase/)
   expect(platformRepository).toMatch(/\.rpc\("has_platform_permission", \{/)
@@ -341,7 +341,7 @@ test("la consulta de permisos de plataforma también vive sólo en control de ac
 
   // Las dos políticas de error de los consumidores se conservan, y sólo aquí.
   const platformQueries = read(
-    "src/domains/access-control/application/platform-permissions.queries.ts"
+    "src/modules/access-control/application/platform-permissions.queries.ts"
   )
   expect(platformQueries).toMatch(/export async function loadPlatformPermission\(/)
   expect(platformQueries).toMatch(/export async function loadPlatformPermissionSafe\(/)
@@ -350,9 +350,9 @@ test("la consulta de permisos de plataforma también vive sólo en control de ac
   // Ningún dominio ni la presentación mantienen ya su propia invocación de la RPC.
   const sinEnvoltorioPropio = [
     "src/contexts/AuthProvider.tsx",
-    "src/pages/PlatformUsers.tsx",
-    "src/domains/organization-structure/application/salary-administration.queries.ts",
-    "src/domains/organization-structure/infrastructure/salary-administration.repository.ts",
+    "src/modules/access-control/presentation/pages/PlatformUsers.tsx",
+    "src/modules/organization-structure/application/salary-administration.queries.ts",
+    "src/modules/organization-structure/infrastructure/salary-administration.repository.ts",
   ]
 
   for (const file of sinEnvoltorioPropio) {
@@ -372,14 +372,16 @@ test("la consulta de permisos de plataforma también vive sólo en control de ac
 
   // El consumidor que trata el fallo como error real sigue propagándolo.
   expect(
-    read("src/domains/organization-structure/application/salary-administration.queries.ts")
+    read("src/modules/organization-structure/application/salary-administration.queries.ts")
   ).toMatch(/loadPlatformPermission\("salary\.(view|manage)"\)/)
-  expect(read("src/pages/PlatformUsers.tsx")).toMatch(/loadPlatformPermission\("users\.view_all"\)/)
+  expect(read("src/modules/access-control/presentation/pages/PlatformUsers.tsx")).toMatch(
+    /loadPlatformPermission\("users\.view_all"\)/
+  )
 
   // Sin ciclos: el proveedor de autenticación depende del dominio, nunca al revés.
   expect(platformRepository).not.toMatch(/@\/contexts\//)
   expect(platformQueries).not.toMatch(/@\/contexts\//)
-  expect(read("src/domains/access-control/index.ts")).toMatch(/loadPlatformPermissionSafe/)
+  expect(read("src/modules/access-control/index.ts")).toMatch(/loadPlatformPermissionSafe/)
 })
 
 // ---------------------------------------------------------------------------

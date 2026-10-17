@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test"
 import { existsSync, readFileSync, readdirSync } from "node:fs"
-import { movementAlreadyDocumented } from "../src/domains/payroll-movements/domain/rules"
-import type { GeneratedDocumentRow } from "../src/domains/document-generation/domain/entities"
-import { ENTITY_PERMISSION_LABELS } from "../src/domains/access-control/domain/permissions.catalog"
+import { movementAlreadyDocumented } from "../src/modules/payroll-movements/domain/rules"
+import type { GeneratedDocumentRow } from "../src/modules/document-generation/domain/entities"
+import { ENTITY_PERMISSION_LABELS } from "../src/modules/access-control/domain/permissions.catalog"
 
 /**
  * MOVIMIENTOS DE NÓMINA Y EVENTOS MASIVOS — reglas, contratos y frontera del dominio.
@@ -85,7 +85,7 @@ test("un evento laboral se documenta una sola vez y por eso la idempotencia es u
 
 test("la consulta del movimiento conserva la RPC y sus parámetros", () => {
   const repository = code(
-    "src/domains/payroll-movements/infrastructure/payroll-movements.repository.ts"
+    "src/modules/payroll-movements/infrastructure/payroll-movements.repository.ts"
   )
 
   // Mismo nombre de RPC y mismos parámetros que antes de la migración.
@@ -103,7 +103,7 @@ test("la consulta del movimiento conserva la RPC y sus parámetros", () => {
 
 test("el movimiento se localiza por trabajador, evento y fecha efectiva, nunca por estado vivo", () => {
   const queries = code(
-    "src/domains/payroll-movements/application/payroll-movements.queries.ts"
+    "src/modules/payroll-movements/application/payroll-movements.queries.ts"
   )
   expect(queries).toMatch(
     /export async function findPayrollMovement\(\s*workerId: string,\s*eventType: PayrollMovementEventType,\s*effectiveDate: string\s*\)/
@@ -120,7 +120,7 @@ test("el movimiento se localiza por trabajador, evento y fecha efectiva, nunca p
 
 test("sin movimiento no se genera nada y el movimiento ya documentado no se duplica", () => {
   const commands = code(
-    "src/domains/payroll-movements/application/payroll-movements.commands.ts"
+    "src/modules/payroll-movements/application/payroll-movements.commands.ts"
   )
 
   // Evento sin movimiento registrado (p. ej. reincorporación sin Alta): no se hace nada.
@@ -150,9 +150,9 @@ test("sin movimiento no se genera nada y el movimiento ya documentado no se dupl
 })
 
 test("la transición laboral consume el dominio de movimientos y no un módulo puente", () => {
-  const transitions = code("src/domains/people/infrastructure/transition-documents.ts")
+  const transitions = code("src/modules/people/infrastructure/transition-documents.ts")
 
-  expect(transitions).toMatch(/from "@\/domains\/payroll-movements"/)
+  expect(transitions).toMatch(/from "@\/(domains|modules)\/payroll-movements"/)
   expect(transitions).not.toMatch(/@\/lib\/payroll-movements/)
   // El documento del movimiento sigue siendo SILENCIOSO: su fallo nunca interrumpe la operación.
   expect(transitions).toMatch(/await ensurePayrollMovementDocumentGenerated\(workerId, movementType, effectiveDate\)/)
@@ -166,7 +166,7 @@ test("la transición laboral consume el dominio de movimientos y no un módulo p
 /* --------------------------------------------------------------------------- */
 
 test("la selección de trabajadores del evento masivo no cambia", () => {
-  const salary = code("src/domains/contracts/infrastructure/salary.repository.ts")
+  const salary = code("src/modules/contracts/infrastructure/salary.repository.ts")
 
   // Impacto previsto (qué trabajadores y con qué salario anterior) y previsualización.
   expect(salary).toMatch(/\.rpc\("salary_change_impact", \{/)
@@ -182,7 +182,7 @@ test("la selección de trabajadores del evento masivo no cambia", () => {
 })
 
 test("el cierre del evento conserva sus parámetros y devuelve resultado por trabajador", () => {
-  const salary = code("src/domains/contracts/infrastructure/salary.repository.ts")
+  const salary = code("src/modules/contracts/infrastructure/salary.repository.ts")
 
   expect(salary).toMatch(/\.rpc\("finalize_salary_change_event", \{/)
   expect(salary).toMatch(/p_salary_group_id: groupId/)
@@ -205,7 +205,7 @@ test("el cierre del evento conserva sus parámetros y devuelve resultado por tra
 
 test("la generación por lotes del evento tolera errores parciales y no regenera lo correcto", () => {
   const batches = code(
-    "src/domains/document-generation/application/document-batches.commands.ts"
+    "src/modules/document-generation/application/document-batches.commands.ts"
   )
 
   // Un documento por movimiento pendiente; el fallo de uno no detiene el resto.
@@ -221,7 +221,7 @@ test("la generación por lotes del evento tolera errores parciales y no regenera
 
   // Prevención de duplicados: sólo se reintentan los movimientos SIN documento generado.
   const repository = code(
-    "src/domains/document-generation/infrastructure/document-batches.repository.ts"
+    "src/modules/document-generation/infrastructure/document-batches.repository.ts"
   )
   expect(repository).toMatch(/\.from\("worker_payroll_movements"\)/)
   expect(repository).toMatch(/\.eq\("event_id", eventId\)/)
@@ -240,13 +240,13 @@ test("la versión de plantilla se resuelve en un único punto de todo el código
   )
   // Una sola implementación: el dominio de plantillas. Ni contratos ni resoluciones duplican la RPC.
   expect(resolvers).toEqual([
-    "src/domains/document-templates/infrastructure/document-templates.repository.ts",
+    "src/modules/document-templates/infrastructure/document-templates.repository.ts",
   ])
 
   // Los repositorios que la necesitaban la consumen ahora desde el dominio.
   for (const file of [
-    "src/domains/contracts/infrastructure/contract-documents.repository.ts",
-    "src/domains/resolutions/infrastructure/resolutions.repository.ts",
+    "src/modules/contracts/infrastructure/contract-documents.repository.ts",
+    "src/modules/resolutions/infrastructure/resolutions.repository.ts",
   ]) {
     expect(read(file), `${file} debe resolver la vigencia en el dominio`).toMatch(
       /resolveDocumentTemplateVersion\(/
@@ -257,18 +257,18 @@ test("la versión de plantilla se resuelve en un único punto de todo el código
   }
 
   // Los contratos ya no consultan Supabase para la vigencia: sólo consumen dominios.
-  expect(code("src/domains/contracts/infrastructure/contract-documents.repository.ts")).not.toMatch(
+  expect(code("src/modules/contracts/infrastructure/contract-documents.repository.ts")).not.toMatch(
     /@\/lib\/supabase/
   )
 
   // La resolución tampoco consulta ya la tabla de versiones en su cuenta.
-  const resolutions = code("src/domains/resolutions/infrastructure/resolutions.repository.ts")
+  const resolutions = code("src/modules/resolutions/infrastructure/resolutions.repository.ts")
   expect(resolutions).not.toMatch(/document_template_versions/)
   expect(resolutions).toMatch(/requiredVariableKeys\(version\?\.analysis \?\? null\)/)
 })
 
 test("el movimiento consume el motor documental en una sola dirección, sin ciclos", () => {
-  const domain = sourceFiles("src/domains/payroll-movements")
+  const domain = sourceFiles("src/modules/payroll-movements")
 
   for (const file of domain) {
     const source = code(file)
@@ -278,7 +278,7 @@ test("el movimiento consume el motor documental en una sola dirección, sin cicl
     )
     // Único dominio permitido como dependencia: la generación documental.
     expect(source, `${file} no debe depender de otro dominio`).not.toMatch(
-      /from "@\/domains\/(?!document-generation)/
+      /from "@\/(domains|modules)\/(?!document-generation)/
     )
     // No reimplementa renderizado, Storage ni selección de versión de plantilla.
     expect(source, `${file} no debe reimplementar el motor`).not.toMatch(
@@ -287,13 +287,13 @@ test("el movimiento consume el motor documental en una sola dirección, sin cicl
   }
 
   // Y la dependencia inversa NO existe: el motor no conoce a los movimientos.
-  const engine = sourceFiles("src/domains/document-generation").filter((file) =>
-    /@\/domains\/payroll-movements/.test(read(file))
+  const engine = sourceFiles("src/modules/document-generation").filter((file) =>
+    /@\/(domains|modules)\/payroll-movements/.test(read(file))
   )
   expect(engine, "la generación documental no debe depender de los movimientos").toEqual([])
 
   // El punto de entrada del dominio expone exactamente lo que ya se consumía.
-  const entry = read("src/domains/payroll-movements/index.ts")
+  const entry = read("src/modules/payroll-movements/index.ts")
   for (const name of [
     "findPayrollMovement",
     "ensurePayrollMovementDocumentGenerated",
@@ -326,12 +326,12 @@ test("las pantallas y componentes migrados ya no consultan Supabase", () => {
       /@\/lib\/(payroll-movements|document-generation)/
     )
     // Consumen los dominios de personas/contratos y, para la documentación, el motor.
-    expect(source, `${file} debe consumir los dominios`).toMatch(/from "@\/domains\//)
+    expect(source, `${file} debe consumir los módulos`).toMatch(/from "@\/(domains|modules)\//)
   }
 
   // El cierre documental del evento se pide al motor, no se reimplementa en la pantalla.
   expect(read("src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx")).toMatch(
-    /import \{ ensureEventDocumentation \} from "@\/domains\/document-generation"/
+    /import \{ ensureEventDocumentation \} from "@\/(domains|modules)\/document-generation"/
   )
 })
 
@@ -346,7 +346,7 @@ test("los códigos de permiso legacy del ámbito no cambian con la migración", 
 
   // El dominio de movimientos no decide permisos ni filtra por cliente: eso es del backend (RLS)
   // y de las pantallas, que preguntan al dominio de control de acceso.
-  for (const file of sourceFiles("src/domains/payroll-movements")) {
+  for (const file of sourceFiles("src/modules/payroll-movements")) {
     const source = code(file)
     expect(source, `${file} no debe decidir permisos`).not.toMatch(
       /permission|company_client_id|organization_entity_id/

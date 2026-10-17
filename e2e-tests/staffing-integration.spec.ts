@@ -5,21 +5,21 @@ import {
   capacityFromRows,
   sumAuthorizedPlazas,
   vacantPlazas,
-} from "../src/domains/organization-structure/domain/staffing.rules"
+} from "../src/modules/organization-structure/domain/staffing.rules"
 import {
   activeStaffingWorkers,
   countAssignmentsByPosition,
   currentStaffingAssignment,
   occupiedStaffingWorkers,
   pendingStaffingWorkers,
-} from "../src/domains/people/domain/staffing.rules"
+} from "../src/modules/people/domain/staffing.rules"
 import {
   buildMigrationBatchHistory,
   mapMigrationRowValues,
   migrationCatalogIndexes,
   migrationCatalogMaps,
   validateMigrationRow,
-} from "../src/domains/people/domain/worker-migration.rules"
+} from "../src/modules/people/domain/worker-migration.rules"
 import type {
   MigrationBatchRow,
   MigrationPreviewRow,
@@ -27,9 +27,9 @@ import type {
   StaffingWorkerAssignment,
   StaffingWorkerRow,
   WorkerMigrationCatalogs,
-} from "../src/domains/people/domain/entities"
-import type { StaffingExportRow } from "../src/domains/organization-structure/domain/entities"
-import type { StaffingPosition } from "../src/domains/people/domain/entities"
+} from "../src/modules/people/domain/entities"
+import type { StaffingExportRow } from "../src/modules/organization-structure/domain/entities"
+import type { StaffingPosition } from "../src/modules/people/domain/entities"
 
 /**
  * PLANTILLA OPERATIVA Y CARGA INICIAL — reglas y frontera de Supabase.
@@ -401,10 +401,10 @@ test("las identificaciones repetidas no bloquean la carga", () => {
   expect(preview.messages).toContain(duplicateMessage)
 
   // La importación devuelve la lista de identificaciones repetidas para corregirlas.
-  const commands = read("src/domains/people/application/worker-migration.commands.ts")
+  const commands = read("src/modules/people/application/worker-migration.commands.ts")
   expect(commands).toMatch(/duplicate_identifications: result\.duplicate_identifications \|\| \[\]/)
 
-  const repository = read("src/domains/people/infrastructure/worker-migration.repository.ts")
+  const repository = read("src/modules/people/infrastructure/worker-migration.repository.ts")
   expect(repository).toMatch(/\.rpc\("migration_import_rows"/)
 
   // La pantalla sigue avisando de las identificaciones repetidas del lote importado.
@@ -504,7 +504,7 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci�
 
   // La Carga inicial reparte el trabajo: formato del archivo y casos de uso del dominio.
   const initialImport = read("src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx")
-  expect(initialImport).toMatch(/@\/domains\/people/)
+  expect(initialImport).toMatch(/@\/(domains|modules)\/people/)
   expect(initialImport).toMatch(/loadEntityMigrationHistory/)
   expect(initialImport).toMatch(/validateWorkerMigration/)
   expect(initialImport).toMatch(/importWorkerMigration/)
@@ -513,14 +513,14 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci�
 
   // El adaptador del formato del Excel vive en el dominio Personas: no resuelve catálogos
   // ni llama a las RPC (las filas que produce son las que consumen sus casos de uso).
-  const excel = read("src/domains/people/infrastructure/worker-migration.workbook.ts")
+  const excel = read("src/modules/people/infrastructure/worker-migration.workbook.ts")
   expect(excel).toMatch(/from "\.\.\/domain\/entities"/)
   expect(excel).toMatch(/readWorkerMigrationExcel/)
   expect(excel).not.toMatch(/migration_validate_rows/)
   expect(excel).not.toMatch(/migration_import_rows/)
 
   // Las cuatro RPC de la migración viven en un único repositorio, con sus parámetros.
-  const repository = read("src/domains/people/infrastructure/worker-migration.repository.ts")
+  const repository = read("src/modules/people/infrastructure/worker-migration.repository.ts")
   expect(repository).toMatch(/@\/lib\/supabase/)
   expect(repository).toMatch(/\.rpc\("get_migration_template_data"/)
   expect(repository).toMatch(/\.rpc\("migration_validate_rows", \{\s*p_entity_id: entityId,\s*p_rows: rows,/)
@@ -535,9 +535,9 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci�
   for (const file of [
     "src/modules/organization-structure/presentation/pages/EntityStaffing.tsx",
     "src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx",
-    "src/domains/people/infrastructure/worker-migration.workbook.ts",
-    "src/domains/people/application/worker-migration.queries.ts",
-    "src/domains/people/application/worker-migration.commands.ts",
+    "src/modules/people/infrastructure/worker-migration.workbook.ts",
+    "src/modules/people/application/worker-migration.queries.ts",
+    "src/modules/people/application/worker-migration.commands.ts",
   ]) {
     const source = read(file)
     for (const rpc of [
@@ -557,9 +557,9 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci�
 
 test("las consultas de plantilla y de migración quedan aisladas por entidad", () => {
   const repositories = [
-    "src/domains/organization-structure/infrastructure/entity-staffing.repository.ts",
-    "src/domains/people/infrastructure/staffing.repository.ts",
-    "src/domains/people/infrastructure/worker-migration.repository.ts",
+    "src/modules/organization-structure/infrastructure/entity-staffing.repository.ts",
+    "src/modules/people/infrastructure/staffing.repository.ts",
+    "src/modules/people/infrastructure/worker-migration.repository.ts",
   ]
 
   for (const repository of repositories) {
@@ -574,24 +574,24 @@ test("las consultas de plantilla y de migración quedan aisladas por entidad", (
   }
 
   // Los casos de uso reciben la entidad, no el cliente.
-  const staffingUseCase = read("src/domains/people/application/staffing.queries.ts")
+  const staffingUseCase = read("src/modules/people/application/staffing.queries.ts")
   expect(staffingUseCase).toMatch(/loadEntityStaffingWorkspace\(/)
   expect(staffingUseCase).not.toMatch(/companyClientId/)
   expect(staffingUseCase).not.toMatch(/@\/lib\/supabase/)
   expect(staffingUseCase).not.toMatch(/\.rpc\(/)
 
-  const migrationCommands = read("src/domains/people/application/worker-migration.commands.ts")
+  const migrationCommands = read("src/modules/people/application/worker-migration.commands.ts")
   expect(migrationCommands).toMatch(/entityId: string/)
   expect(migrationCommands).not.toMatch(/companyClientId/)
   expect(migrationCommands).not.toMatch(/@\/lib\/supabase/)
 
-  const migrationQueries = read("src/domains/people/application/worker-migration.queries.ts")
+  const migrationQueries = read("src/modules/people/application/worker-migration.queries.ts")
   expect(migrationQueries).not.toMatch(/companyClientId/)
   expect(migrationQueries).not.toMatch(/@\/lib\/supabase/)
 
   // La estructura organizativa sigue siendo la dueña de áreas, cargos y grupos salariales.
   const structureRepository = read(
-    "src/domains/organization-structure/infrastructure/entity-staffing.repository.ts"
+    "src/modules/organization-structure/infrastructure/entity-staffing.repository.ts"
   )
   expect(structureRepository).toMatch(/organization_jobs/)
   expect(structureRepository).toMatch(/organization_areas/)
@@ -599,7 +599,7 @@ test("las consultas de plantilla y de migración quedan aisladas por entidad", (
 
   // El dominio de personas no consulta esas tablas por su cuenta: solo las recibe
   // incrustadas en el puesto del trabajador y pide los cargos a su dueño.
-  const peopleStaffingRepository = read("src/domains/people/infrastructure/staffing.repository.ts")
+  const peopleStaffingRepository = read("src/modules/people/infrastructure/staffing.repository.ts")
   expect(peopleStaffingRepository).toMatch(/\.from\("organization_positions"\)/)
   expect(peopleStaffingRepository).not.toMatch(/\.from\("organization_jobs"\)/)
   expect(peopleStaffingRepository).not.toMatch(/\.from\("organization_areas"\)/)

@@ -16,16 +16,16 @@ import {
   SC404_ALREADY_EXISTS_PREFIX,
   selectMissingVariableKeys,
   resolveBlockedReason,
-} from "../src/domains/document-generation/domain/rules"
-import { WORKER_DOCUMENTS_BUCKET } from "../src/domains/document-generation/domain/entities"
+} from "../src/modules/document-generation/domain/rules"
+import { WORKER_DOCUMENTS_BUCKET } from "../src/modules/document-generation/domain/entities"
 import type {
   DocumentGenerationPrecheck,
   GenerationDocumentKind,
   TemplateResolution,
-} from "../src/domains/document-generation/domain/entities"
-import { DOCUMENT_VARIABLES } from "../src/domains/document-templates/domain/document-variables"
-import { renderDocx } from "../src/domains/document-generation/infrastructure/renderers/docx-render"
-import { renderXlsxTemplate } from "../src/domains/document-generation/infrastructure/renderers/xlsx-render"
+} from "../src/modules/document-generation/domain/entities"
+import { DOCUMENT_VARIABLES } from "../src/modules/document-templates/domain/document-variables"
+import { renderDocx } from "../src/modules/document-generation/infrastructure/renderers/docx-render"
+import { renderXlsxTemplate } from "../src/modules/document-generation/infrastructure/renderers/xlsx-render"
 
 /**
  * MOTOR DE GENERACIÓN DOCUMENTAL — reglas, renderizadores y frontera del dominio.
@@ -400,7 +400,7 @@ test("el motor vive en un solo dominio y la presentación ya no consulta Supabas
     expect(source, `${file} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
     expect(source, `${file} no debe usar Storage`).not.toMatch(/supabase\.storage/)
     expect(source, `${file} debe consumir el dominio de generación`).toMatch(
-      /@\/domains\/document-generation/
+      /@\/(domains|modules)\/document-generation/
     )
     // La fachada legacy ya no la usa la presentación.
     expect(source, `${file} no debe usar la fachada legacy`).not.toMatch(
@@ -410,11 +410,11 @@ test("el motor vive en un solo dominio y la presentación ya no consulta Supabas
 
   // El acceso a datos del motor vive en su infraestructura, y sólo ahí.
   const infrastructure = [
-    "src/domains/document-generation/infrastructure/document-source.repository.ts",
-    "src/domains/document-generation/infrastructure/document-data.repository.ts",
-    "src/domains/document-generation/infrastructure/document-generation.repository.ts",
-    "src/domains/document-generation/infrastructure/document-storage.repository.ts",
-    "src/domains/document-generation/infrastructure/document-batches.repository.ts",
+    "src/modules/document-generation/infrastructure/document-source.repository.ts",
+    "src/modules/document-generation/infrastructure/document-data.repository.ts",
+    "src/modules/document-generation/infrastructure/document-generation.repository.ts",
+    "src/modules/document-generation/infrastructure/document-storage.repository.ts",
+    "src/modules/document-generation/infrastructure/document-batches.repository.ts",
   ]
   for (const file of infrastructure) {
     expect(code(file), `${file} debe concentrar el acceso a Supabase`).toMatch(/@\/lib\/supabase/)
@@ -422,12 +422,12 @@ test("el motor vive en un solo dominio y la presentación ya no consulta Supabas
 
   // La aplicación y el dominio son puros: no hablan con Supabase.
   const pure = [
-    "src/domains/document-generation/domain/entities.ts",
-    "src/domains/document-generation/domain/rules.ts",
-    "src/domains/document-generation/application/document-generation.queries.ts",
-    "src/domains/document-generation/application/document-generation.commands.ts",
-    "src/domains/document-generation/application/document-batches.queries.ts",
-    "src/domains/document-generation/application/document-batches.commands.ts",
+    "src/modules/document-generation/domain/entities.ts",
+    "src/modules/document-generation/domain/rules.ts",
+    "src/modules/document-generation/application/document-generation.queries.ts",
+    "src/modules/document-generation/application/document-generation.commands.ts",
+    "src/modules/document-generation/application/document-batches.queries.ts",
+    "src/modules/document-generation/application/document-batches.commands.ts",
   ]
   for (const file of pure) {
     expect(code(file), `${file} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
@@ -436,19 +436,19 @@ test("el motor vive en un solo dominio y la presentación ya no consulta Supabas
 
 test("el motor no depende de la presentación ni repite el catálogo de plantillas", () => {
   const files = [
-    "src/domains/document-generation/index.ts",
-    "src/domains/document-generation/domain/entities.ts",
-    "src/domains/document-generation/domain/rules.ts",
-    "src/domains/document-generation/application/document-generation.queries.ts",
-    "src/domains/document-generation/application/document-generation.commands.ts",
-    "src/domains/document-generation/application/document-batches.queries.ts",
-    "src/domains/document-generation/application/document-batches.commands.ts",
-    "src/domains/document-generation/infrastructure/document-source.repository.ts",
-    "src/domains/document-generation/infrastructure/document-data.repository.ts",
-    "src/domains/document-generation/infrastructure/document-template-version.repository.ts",
-    "src/domains/document-generation/infrastructure/document-generation.repository.ts",
-    "src/domains/document-generation/infrastructure/document-storage.repository.ts",
-    "src/domains/document-generation/infrastructure/document-batches.repository.ts",
+    "src/modules/document-generation/index.ts",
+    "src/modules/document-generation/domain/entities.ts",
+    "src/modules/document-generation/domain/rules.ts",
+    "src/modules/document-generation/application/document-generation.queries.ts",
+    "src/modules/document-generation/application/document-generation.commands.ts",
+    "src/modules/document-generation/application/document-batches.queries.ts",
+    "src/modules/document-generation/application/document-batches.commands.ts",
+    "src/modules/document-generation/infrastructure/document-source.repository.ts",
+    "src/modules/document-generation/infrastructure/document-data.repository.ts",
+    "src/modules/document-generation/infrastructure/document-template-version.repository.ts",
+    "src/modules/document-generation/infrastructure/document-generation.repository.ts",
+    "src/modules/document-generation/infrastructure/document-storage.repository.ts",
+    "src/modules/document-generation/infrastructure/document-batches.repository.ts",
   ]
 
   for (const file of files) {
@@ -456,36 +456,36 @@ test("el motor no depende de la presentación ni repite el catálogo de plantill
     expect(source, `${file} no debe depender de la presentación`).not.toMatch(
       /from "@\/(pages|components|contexts|hooks)\//
     )
-    // Sólo se admiten los dominios de los que depende de verdad: plantillas y estructura.
-    expect(source, `${file} no debe depender de otro dominio`).not.toMatch(
-      /from "@\/domains\/(?!document-templates|organization-structure)/
+    // Sólo se admiten los módulos de los que depende de verdad: el suyo, plantillas y estructura.
+    expect(source, `${file} no debe depender de otro módulo`).not.toMatch(
+      /from "@\/(domains|modules)\/(?!document-generation|document-templates|organization-structure)/
     )
   }
 
   // Las plantillas y sus versiones se piden al dominio que las administra: no se consultan aquí.
   const templateAdapter = code(
-    "src/domains/document-generation/infrastructure/document-template-version.repository.ts"
+    "src/modules/document-generation/infrastructure/document-template-version.repository.ts"
   )
-  expect(templateAdapter).toMatch(/@\/domains\/document-templates/)
+  expect(templateAdapter).toMatch(/@\/modules\/document-templates/)
   expect(templateAdapter).not.toMatch(/document_template_versions/)
 
   // Y el dominio de plantillas NO depende del motor: la dependencia va en un solo sentido.
   const templatesDomain = [
-    "src/domains/document-templates/index.ts",
-    "src/domains/document-templates/application/document-templates.queries.ts",
-    "src/domains/document-templates/infrastructure/document-templates.repository.ts",
-    "src/domains/document-templates/infrastructure/document-template-files.repository.ts",
+    "src/modules/document-templates/index.ts",
+    "src/modules/document-templates/application/document-templates.queries.ts",
+    "src/modules/document-templates/infrastructure/document-templates.repository.ts",
+    "src/modules/document-templates/infrastructure/document-template-files.repository.ts",
   ]
   for (const file of templatesDomain) {
     expect(code(file), `${file} no debe depender del motor`).not.toMatch(
-      /from "@\/domains\/document-generation/
+      /from "@\/(domains|modules)\/document-generation/
     )
   }
 })
 
 test("las RPC, sus parámetros y el Storage del expediente no cambian", () => {
   const generation = code(
-    "src/domains/document-generation/infrastructure/document-generation.repository.ts"
+    "src/modules/document-generation/infrastructure/document-generation.repository.ts"
   )
   // Fijar la versión en la fuente: contrato y anexo, con sus parámetros exactos.
   expect(generation).toMatch(/set_contract_document_template_version/)
@@ -516,7 +516,7 @@ test("las RPC, sus parámetros y el Storage del expediente no cambian", () => {
   expect(generation).toMatch(/\.eq\("generation_status", "COMPLETED"\)/)
   expect(generation).toMatch(/\{ ascending: true \}/)
 
-  const data = code("src/domains/document-generation/infrastructure/document-data.repository.ts")
+  const data = code("src/modules/document-generation/infrastructure/document-data.repository.ts")
   expect(data).toMatch(/\.rpc\("get_contract_document_data", \{/)
   expect(data).toMatch(/p_contract_id: contractId/)
   expect(data).toMatch(/\.rpc\("get_addendum_document_data", \{/)
@@ -533,7 +533,7 @@ test("las RPC, sus parámetros y el Storage del expediente no cambian", () => {
   expect(data).toMatch(/fetchPositionScheduleSegments/)
 
   const batches = code(
-    "src/domains/document-generation/infrastructure/document-batches.repository.ts"
+    "src/modules/document-generation/infrastructure/document-batches.repository.ts"
   )
   expect(batches).toMatch(/\.from\("document_batches"\)/)
   expect(batches).toMatch(/\.from\("document_batch_items"\)/)
@@ -545,7 +545,7 @@ test("las RPC, sus parámetros y el Storage del expediente no cambian", () => {
   // Buckets, rutas y enlaces temporales: los mismos de siempre.
   expect(WORKER_DOCUMENTS_BUCKET).toBe("documents")
   const storage = code(
-    "src/domains/document-generation/infrastructure/document-storage.repository.ts"
+    "src/modules/document-generation/infrastructure/document-storage.repository.ts"
   )
   expect(storage).toMatch(/\.from\(WORKER_DOCUMENTS_BUCKET\)/)
   expect(storage).toMatch(/upsert: false/)
@@ -555,7 +555,7 @@ test("las RPC, sus parámetros y el Storage del expediente no cambian", () => {
 
   // El documento configurado se lee del bucket de plantillas a través de su dominio.
   const templatesFiles = code(
-    "src/domains/document-templates/infrastructure/document-template-files.repository.ts"
+    "src/modules/document-templates/infrastructure/document-template-files.repository.ts"
   )
   expect(templatesFiles).toMatch(/\.from\(DOCUMENT_TEMPLATES_BUCKET\)/)
   expect(templatesFiles).toMatch(/\.download\(path\)/)
@@ -581,9 +581,9 @@ test("la limpieza controlada retiró las fachadas sin consumidores", () => {
   // El contrato público que SÍ se sigue usando se conserva intacto, ya en su dominio:
   // los snapshots documentales en generación y el catálogo de variables en plantillas.
   for (const kept of [
-    "src/domains/document-generation/domain/document-data.ts",
-    "src/domains/document-generation/domain/document-resolution.rules.ts",
-    "src/domains/document-templates/domain/document-variables.ts",
+    "src/modules/document-generation/domain/document-data.ts",
+    "src/modules/document-generation/domain/document-resolution.rules.ts",
+    "src/modules/document-templates/domain/document-variables.ts",
     "src/lib/supabase.ts",
   ]) {
     expect(existsSync(kept), `${kept} se conserva`).toBe(true)

@@ -19,7 +19,7 @@ import {
   validateClaMinutes,
   validateNightInput,
   validateWorkedDays,
-} from "../src/domains/payroll-preparation/domain/rules"
+} from "../src/modules/payroll-preparation/domain/rules"
 import {
   formatDateDMY,
   formatDecimalInput,
@@ -31,21 +31,21 @@ import {
   formatTenureLabel,
   parseDecimalInput,
   parseIntegerInput,
-} from "../src/domains/payroll-preparation/domain/formatters"
+} from "../src/modules/payroll-preparation/domain/formatters"
 import {
   normalizeClaConfig,
   normalizeNightEntry,
   normalizeWorkerEntry,
-} from "../src/domains/payroll-preparation/domain/normalization"
+} from "../src/modules/payroll-preparation/domain/normalization"
 import {
   PRENOMINA_EXPORT_HEADERS,
   buildPrenominaFileName,
   buildPrenominaWorkbookBlob,
-} from "../src/domains/payroll-preparation/infrastructure/payroll-preparation.workbook"
+} from "../src/modules/payroll-preparation/infrastructure/payroll-preparation.workbook"
 import type {
   PrenominaNightEntry,
   PrenominaWorkerEntry,
-} from "../src/domains/payroll-preparation/domain/entities"
+} from "../src/modules/payroll-preparation/domain/entities"
 
 /**
  * PRENÓMINA — reglas, cálculos, validaciones, exportación y frontera del dominio.
@@ -619,7 +619,7 @@ test("el nombre del archivo exportado se conserva", () => {
 
 test("las consultas de períodos, registros y nocturnidad conservan tablas, filtros y órdenes", () => {
   const repository = code(
-    "src/domains/payroll-preparation/infrastructure/payroll-preparation.repository.ts"
+    "src/modules/payroll-preparation/infrastructure/payroll-preparation.repository.ts"
   )
 
   // Períodos de la entidad, del más reciente al más antiguo.
@@ -653,7 +653,7 @@ test("las consultas de períodos, registros y nocturnidad conservan tablas, filt
 
 test("las RPC de prenómina conservan sus nombres y sus parámetros", () => {
   const repository = code(
-    "src/domains/payroll-preparation/infrastructure/payroll-preparation.repository.ts"
+    "src/modules/payroll-preparation/infrastructure/payroll-preparation.repository.ts"
   )
 
   expect(repository).toMatch(/\.rpc\("prenomina_cla_config", \{ p_entry_id: entryId \}\)/)
@@ -686,14 +686,14 @@ test("las RPC de prenómina conservan sus nombres y sus parámetros", () => {
 
   // Ningún comando calcula importes: el backend recalcula antes de persistir.
   const commands = code(
-    "src/domains/payroll-preparation/application/payroll-preparation.commands.ts"
+    "src/modules/payroll-preparation/application/payroll-preparation.commands.ts"
   )
   expect(commands).not.toMatch(/@\/lib\/supabase/)
   expect(commands).not.toMatch(/Math\./)
 })
 
 test("los permisos prenomina.view y prenomina.manage se conservan sin cambios", () => {
-  const catalog = read("src/domains/access-control/domain/permissions.catalog.ts")
+  const catalog = read("src/modules/access-control/domain/permissions.catalog.ts")
   expect(catalog).toMatch(/"prenomina\.view": "Ver prenómina"/)
   expect(catalog).toMatch(/"prenomina\.manage": "Gestionar prenómina"/)
 
@@ -723,7 +723,9 @@ test("las pantallas de prenómina consumen el dominio y no consultan Supabase", 
     expect(source, `${file} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
     expect(source, `${file} no debe componer consultas`).not.toMatch(/supabase\.from\(/)
     expect(source, `${file} no debe usar la fachada retirada`).not.toMatch(/@\/lib\/prenomina/)
-    expect(source, `${file} debe consumir el dominio`).toMatch(/@\/domains\/payroll-preparation/)
+    expect(source, `${file} debe consumir el módulo`).toMatch(
+      /@\/(domains|modules)\/payroll-preparation/
+    )
   }
 
   // El diálogo usa las reglas y validaciones del dominio, no copias locales.
@@ -765,7 +767,7 @@ test("la fachada src/lib/prenomina.ts se retiró y ningún módulo la importa", 
 })
 
 test("el dominio de prenómina no depende de la presentación ni forma ciclos", () => {
-  const domain = sourceFiles("src/domains/payroll-preparation")
+  const domain = sourceFiles("src/modules/payroll-preparation")
 
   for (const file of domain) {
     const source = code(file)
@@ -774,19 +776,19 @@ test("el dominio de prenómina no depende de la presentación ni forma ciclos", 
     )
     // Único dominio permitido como dependencia: la categoría académica (estructura organizativa).
     expect(source, `${file} no debe depender de otro dominio`).not.toMatch(
-      /from "@\/domains\/(?!organization-structure)/
+      /from "@\/(domains|modules)\/(?!organization-structure)/
     )
   }
 
   // Y ningún OTRO dominio depende de prenómina: la dependencia va en un solo sentido.
-  const consumers = sourceFiles("src/domains")
-    .filter((file) => !file.startsWith("src/domains/payroll-preparation/"))
-    .filter((file) => /@\/domains\/payroll-preparation/.test(read(file)))
+  const consumers = sourceFiles("src/modules")
+    .filter((file) => !file.startsWith("src/modules/payroll-preparation/"))
+    .filter((file) => /@\/(domains|modules)\/payroll-preparation/.test(read(file)))
   expect(consumers, "ningún otro dominio debe depender de prenómina").toEqual([])
 
   // Los movimientos de nómina son otro módulo: no se mezclan.
   const movements = code(
-    "src/domains/payroll-movements/application/payroll-movements.commands.ts"
+    "src/modules/payroll-movements/application/payroll-movements.commands.ts"
   )
   expect(movements).not.toMatch(/payroll-preparation/)
 
