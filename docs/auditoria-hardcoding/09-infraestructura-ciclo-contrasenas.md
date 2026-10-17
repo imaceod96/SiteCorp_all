@@ -81,25 +81,31 @@ confiar en el navegador ni únicamente en `auth.uid()`.
 |-------------|-----------|
 | RPC del titular `confirm_change()` | **Descartada**: permitiría omitir el cambio obligatorio. |
 | Trigger sobre `auth.users` (detectar cambio de `encrypted_password`) | **No fiable**: GoTrue actualiza la contraseña como servicio de Auth; dentro del trigger **no se distingue** de forma segura un cambio propio de un cambio administrativo/recuperación. Riesgo de marcar `false` indebidamente. |
-| Comparar solo `auth.users.updated_at` desde una RPC del titular | **Insuficiente**: `updated_at` cambia por otras razones; el titular podría dispararlo sin cambiar la contraseña. |
-| **Operación privilegiada del servidor + corroboración en BD** | **Elegida**. |
+| Comparar `auth.users.updated_at` (antes o después, desde el titular) | **DESCARTADA (corrección 35.2A.1)**: NO es específica de un cambio de contraseña. |
+| Trigger sobre `auth.users.updated_at` | **Descartada**: mismo motivo de especificidad. |
+| **Confirmación por operación privilegiada del servidor (solo `service_role`)** | **ELEGIDA**. |
 
-**Diseño elegido**: el cambio de contraseña será **mediado por el servidor** (Edge Function) en un
-subbloque posterior (35.2B). Tras confirmar GoTrue la actualización, el servidor invoca
-`mark_password_changed(user_id)` con `service_role`. Como refuerzo **verificable en base de datos**,
-la función **rechaza** confirmar si `auth.users.updated_at` **no es posterior** a
-`initial_password_generated_at` (es decir, exige que el registro de Auth se haya actualizado tras la
-generación inicial). No se confía en ninguna afirmación del navegador.
+**Diseño elegido (corregido)**: el cambio de contraseña es **mediado por el servidor** (Edge Function,
+subbloque 35.2B). Tras completar con **éxito** la actualización en Supabase Auth, el servidor invoca
+`mark_password_changed(user_id)` con `service_role`. La función:
 
-> **BLOQUEO documentado**: con la infraestructura actual **no existe** un camino *exclusivamente de
-> base de datos* que pruebe, sin intervención del servidor, que el titular cambió su contraseña
-> (limitación del patrón GoTrue). Por eso **no se implementa ninguna RPC de confirmación accesible al
-> cliente**; la confirmación queda ligada al servidor. Este es el motivo por el que el cambio
-> obligatorio **no** puede completarse solo con frontend.
+- **No** inspecciona `auth.users.updated_at` ni ninguna otra columna de Auth.
+- Exige `auth.role() = 'service_role'` → es **inalcanzable desde el navegador**.
+- Exige que exista fila y que tenga `initial_password_generated_at` (hubo generación inicial).
+- Es **idempotente** (si `must_change_password = false`, no hace nada).
+- Fija `must_change_password = false` y `password_changed_at = now()`.
 
-**Riesgo residual**: `auth.users.updated_at` también cambia por otras operaciones de Auth. Al estar
-la función restringida a `service_role` (que solo la invoca tras el cambio real), el riesgo es
-acotado; se documenta para el subbloque de endurecimiento.
+> **BLOQUEO documentado**: no existe un camino *exclusivamente de base de datos* que pruebe, sin el
+> servidor, que el titular cambió su contraseña (limitación del patrón GoTrue). Por eso la
+> confirmación **depende de la operación real y exitosa del servidor en Auth** y **no** se expone
+> ninguna RPC de confirmación al cliente. El cambio obligatorio **no** puede completarse solo con
+> frontend.
+
+**Por qué es seguro aunque la función no "verifique" Auth por sí misma**: la especificidad que antes
+se intentaba obtener de `updated_at` se sustituye por **la frontera de privilegio**. Solo un llamante
+`service_role` puede ejecutar la función, y el único código que la invoca es la Edge Function, **en la
+misma secuencia** en que ella misma acaba de actualizar la contraseña (paso D→E→F). Un navegador no
+puede imitar esa operación ni alcanzar la función.
 
 ---
 
@@ -112,8 +118,48 @@ eliminados al final):
 - `SELECT` **no** autorizado denegado.
 - INSERT/UPDATE/DELETE directos por `authenticated` **bloqueados**.
 - `initialize_password_lifecycle` privilegiada e **idempotente** (segunda ejecución no cambia nada).
-- `mark_password_changed` rechaza si `auth.users.updated_at <= initial_password_generated_at`.
+- `mark_password_changed` **rechaza** si la ejecuta cualquier rol distinto de `service_role`
+  (incluido `authenticated` con JWT del propio usuario).
+- `mark_password_changed` **rechaza** si no existe fila o si `initial_password_generated_at` es NULL.
+- `mark_password_changed` es **idempotente** (segunda ejecución no altera `password_changed_at`).
+- `mark_password_changed` **no** consulta `auth.users` (sin dependencia de `updated_at`).
 - Compatibilidad: los usuarios existentes (sin fila) no ven cambio obligatorio.
+
+**Privilegios de ejecución (revisión, punto 9)**: ambas funciones son `SECURITY DEFINER` con
+`search_path = ''`; se revoca `EXECUTE` de `PUBLIC`, `anon` y `authenticated` y se concede **solo** a
+`service_role`. La tabla concede a `authenticated` **únicamente `SELECT`**. Verificado que los
+helpers de autorización (`can_view_platform_user`) siguen siendo compatibles con las políticas.
+
+---
+
+## 6.bis Secuencia obligatoria de la futura Edge Function (Bloque 35.2B)
+
+La Edge Function `create-sitecorp-user` (y cualquier flujo de cambio/reset) deberá ejecutar en este
+orden exacto:
+
+| Paso | Acción | Regla de seguridad |
+|------|--------|--------------------|
+| A | **Validar la sesión** del usuario (token del llamante). | `auth.getUser(token)`; sin token válido, 401. |
+| B | **Obtener el `user_id`** desde la **identidad autenticada y verificada** (no desde el cuerpo). | El `user_id` confiable es el del token verificado. |
+| C | **Validar la nueva contraseña** (reglas de fortaleza/longitud). | Del servidor, no solo del móvil. |
+| D | **Actualizar la contraseña** en Supabase Auth (`auth.updateUser`/Admin API según el flujo). | Único paso que toca credenciales. |
+| E | **Confirmar que Auth completó** la operación. | Se continúa **solo** si Auth responde sin error. |
+| F | **Actualizar `user_password_lifecycle`** invocando `mark_password_changed(user_id)` con `service_role`. | Idempotente. |
+| G | **Devolver el resultado** al cliente. | Nunca devolver secretos ni la contraseña. |
+
+En el **alta** de usuario, el equivalente es: generar la contraseña aleatoria, crear el usuario en
+Auth, y llamar `initialize_password_lifecycle(user_id)` (`must_change_password = true`).
+
+## 6.ter Fallos parciales entre D y F
+
+- **Auth falla (D/E)**: **no** se llama a `mark_password_changed`; la contraseña no cambió y el
+  estado permanece `true`. Se informa el error al usuario (comportamiento de `Account.tsx`).
+- **Auth tiene éxito pero F falla** (red/servidor): la contraseña **ya cambió**, pero la tabla aún
+  dice `true`. La función es **idempotente** ⇒ el servidor **reintenta** `mark_password_changed`
+  (mismo `user_id`) y, si persiste el fallo, se **reconcilia en el siguiente acceso** reintentando la
+  confirmación. Nunca se marca `false` sin el éxito de Auth; nunca se deja en `false` por una
+  operación arbitraria del navegador (el navegador no puede invocar la función).
+- **Nunca** se ejecuta F antes de E: la confirmación sigue siempre a la operación real de Auth.
 
 ---
 

@@ -11,9 +11,14 @@
 -- DECISIÓN DE SEGURIDAD (ver docs/auditoria-hardcoding/09-*.md):
 --   NO existe ninguna RPC ejecutable por `authenticated` que permita poner
 --   `must_change_password = false`. La confirmación del cambio de contraseña es
---   SIEMPRE una operación del SERVIDOR (service_role), que además corrobora a
---   nivel de base de datos que el registro de `auth.users` fue actualizado
---   efectivamente después de la generación inicial.
+--   SIEMPRE una operación del SERVIDOR (service_role), ejecutada por la Edge
+--   Function inmediatamente después de que Supabase Auth complete con ÉXITO la
+--   actualización de la contraseña.
+--
+--   IMPORTANTE (corrección 35.2A.1): NO se usa `auth.users.updated_at` como
+--   evidencia, porque NO es específico de un cambio de contraseña (la fila se
+--   actualiza por otras operaciones de Auth). La frontera de seguridad es que
+--   la función es INALCANZABLE desde el navegador (solo `service_role`).
 --
 -- Idempotente: puede re-ejecutarse sin efectos secundarios indeseados.
 -- ============================================================================
@@ -118,9 +123,12 @@ $function$;
 
 -- ----------------------------------------------------------------------------
 -- 5. Confirmación del cambio (SOLO service_role)
---    No confía en el navegador ni únicamente en auth.uid(): sólo el servidor la
---    invoca, y además CORROBORA, a nivel de base de datos, que auth.users fue
---    actualizado DESPUÉS de la generación inicial de la contraseña.
+--    CORRECCIÓN 35.2A.1: se ELIMINA la dependencia de `auth.users.updated_at`
+--    como evidencia (no es específica de un cambio de contraseña).
+--    La prueba del cambio real la aporta el SERVIDOR que acaba de completar con
+--    ÉXITO la actualización en Supabase Auth (secuencia D→E→F). Esta función NO
+--    puede verificarlo por sí misma y, por eso, NO se expone al cliente: es
+--    INALCANZABLE desde el navegador (EXECUTE solo a `service_role`).
 --    Idempotente: si ya estaba confirmado, no hace nada.
 -- ----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.mark_password_changed(p_user_id uuid)
@@ -131,9 +139,8 @@ SET search_path TO ''
 AS $function$
 DECLARE
   v_row public.user_password_lifecycle%ROWTYPE;
-  v_auth_updated timestamptz;
 BEGIN
-  -- Contexto privilegiado autorizado: sólo el servidor (service_role).
+  -- Frontera de seguridad: SOLO el servidor (service_role) puede ejecutarla.
   IF auth.role() IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'mark_password_changed: operación reservada al servidor';
   END IF;
@@ -150,27 +157,19 @@ BEGIN
     RAISE EXCEPTION 'mark_password_changed: no existe ciclo de vida para el usuario';
   END IF;
 
-  -- Nada que hacer si ya está confirmado (idempotente).
+  -- Debe existir una generación inicial previa: sin ella no hay nada que confirmar.
+  IF v_row.initial_password_generated_at IS NULL THEN
+    RAISE EXCEPTION 'mark_password_changed: el ciclo de vida no tiene generación inicial';
+  END IF;
+
+  -- Idempotente: si ya estaba confirmado, no hace nada.
   IF v_row.must_change_password = false THEN
     RETURN;
   END IF;
 
-  -- Corroboración en base de datos: el registro de Auth debe haberse actualizado
-  -- DESPUÉS de generar la contraseña inicial. Si no, NO se confirma.
-  SELECT u.updated_at INTO v_auth_updated
-  FROM auth.users u
-  WHERE u.id = p_user_id;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'mark_password_changed: usuario inexistente en auth.users';
-  END IF;
-
-  IF v_row.initial_password_generated_at IS NOT NULL
-     AND v_auth_updated IS NOT NULL
-     AND v_auth_updated <= v_row.initial_password_generated_at THEN
-    RAISE EXCEPTION 'mark_password_changed: Auth no registra un cambio de contraseña posterior a la generación inicial';
-  END IF;
-
+  -- Confirmación del servidor. No se inspecciona `auth.users` ni se confía en
+  -- ninguna afirmación del navegador: la garantía es que el llamante es el
+  -- servidor privilegiado que acaba de actualizar la contraseña en Auth.
   UPDATE public.user_password_lifecycle
   SET must_change_password = false,
       password_changed_at = now()
