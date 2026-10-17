@@ -381,9 +381,9 @@ test("el motor de filtros es presentación: lo consumen las pantallas y no conoc
 
   // El constructor de filtros compartido ya no depende de la presentación de un módulo
   // de negocio: consume el contrato compartido del sistema de filtros.
-  const filterBuilder = read("src/components/filters/filter-builder.tsx")
+  const filterBuilder = read("src/shared/components/filter-builder.tsx")
   expect(filterBuilder, "filter-builder debe consumir el contrato compartido").toMatch(
-    /from "@\/components\/filters\/entity-filter-types"/
+    /from "@\/shared\/components\/entity-filter-types"/
   )
   expect(filterBuilder, "filter-builder no debe importar módulos de negocio").not.toMatch(
     /from "@\/modules\//

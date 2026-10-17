@@ -2,7 +2,7 @@ import * as React from "react"
 import type {
   ActiveEntityFilter,
   EntityFilterDefinition,
-} from "@/components/filters/entity-filter-types"
+} from "@/shared/components/entity-filter-types"
 
 /**
  * Sistema de filtros acumulativos de SiteCorp (lógica de presentación).
@@ -25,7 +25,7 @@ import type {
  *
  * Los TIPOS del sistema (EntityFilterType, EntityFilterOption, EntityFilterDefinition,
  * ActiveEntityFilter) viven en la capa compartida
- * `src/components/filters/entity-filter-types` para que el constructor de filtros
+ * `src/shared/components/entity-filter-types` para que el constructor de filtros
  * compartido no dependa de la presentación de un módulo de negocio; aquí se reexportan
  * para conservar la interfaz pública de este hook.
  */
@@ -35,7 +35,7 @@ export type {
   EntityFilterDefinition,
   EntityFilterOption,
   EntityFilterType,
-} from "@/components/filters/entity-filter-types"
+} from "@/shared/components/entity-filter-types"
 
 const toText = (value: unknown): string =>
   value === null || value === undefined ? "" : String(value)

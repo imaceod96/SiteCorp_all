@@ -26,7 +26,7 @@ import {
 } from "../hooks/use-medical-certificates"
 import { getCertificateSignedUrl, type EntityMedicalCertificateRow } from "@/modules/vacations-licenses/medical-certificates"
 import MedicalCertificateFormDialog from "../components/MedicalCertificateFormDialog"
-import { FilterBuilder } from "@/components/filters/filter-builder"
+import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import { useToast } from "@/shared/hooks/use-toast"
 import { useSc404Generation } from "@/modules/access-control/presentation/hooks/use-sc404"

@@ -9,11 +9,12 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import ChangeContractDialog, {
-  type CurrentContractInfo,
-} from "@/components/workers/ChangeContractDialog"
-import SeparateWorkerDialog from "@/components/workers/SeparateWorkerDialog"
-import type { WorkerCurrentSituation } from "@/components/workers/ChangePositionDialog"
+import type {
+  ChangeContractDialogProps,
+  CurrentContractInfo,
+  SeparateWorkerDialogProps,
+  WorkerCurrentSituation,
+} from "@/shared/components/worker-action-contracts"
 import {
   CONTRACT_ALERT_FILTER_OPTIONS,
   CONTRACT_ALERT_FULL_HORIZON_DAYS,
@@ -58,7 +59,19 @@ interface AlertTarget {
   contract: CurrentContractInfo | null
 }
 
-const EntityContractAlerts = () => {
+interface EntityContractAlertsProps {
+  /**
+   * Diálogos de acciones laborales (módulo Personas) inyectados por el punto de
+   * composición (`src/App.tsx`): Contratos no importa presentación de Personas.
+   */
+  ChangeContractDialog: React.ComponentType<ChangeContractDialogProps>
+  SeparateWorkerDialog: React.ComponentType<SeparateWorkerDialogProps>
+}
+
+const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
+  ChangeContractDialog,
+  SeparateWorkerDialog,
+}) => {
   const { entityId } = useParams<{ entityId: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()

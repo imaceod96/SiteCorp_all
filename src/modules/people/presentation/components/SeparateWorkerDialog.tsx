@@ -22,16 +22,12 @@ import {
   type SeparationReason,
 } from "@/modules/people"
 import { formatSalary } from "@/modules/organization-structure"
-import type { WorkerCurrentSituation } from "@/components/workers/ChangePositionDialog"
+import type { SeparateWorkerDialogProps } from "@/shared/components/worker-action-contracts"
 import { AlertTriangle, UserMinus } from "lucide-react"
 
-interface SeparateWorkerDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  workerId: string
-  current: WorkerCurrentSituation
-  onSuccess: () => void
-}
+// Las props del flujo son un contrato compartido con la página de vencimientos
+// contractuales (módulo Contratos): viven en la capa compartida para que Contratos no
+// dependa de la presentación de Personas.
 
 const groupLabel = (sequence: number | null | undefined) =>
   sequence == null ? "—" : `Grupo ${toRomanNumeral(sequence)}`

@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Badge } from "@/components/ui/badge"
 import { MigratedWorkerDialog } from "@/modules/people/presentation/components/MigratedWorkerDialog"
 import { LinkWorkerToPositionDialog } from "@/modules/people/presentation/components/LinkWorkerToPositionDialog"
-import { FilterBuilder } from "@/components/filters/filter-builder"
+import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import {
   ArrowLeft,

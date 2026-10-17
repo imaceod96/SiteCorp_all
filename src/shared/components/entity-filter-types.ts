@@ -4,7 +4,7 @@
  * `EntityFilterDefinition` describe un CRITERIO declarado por una pantalla y
  * `ActiveEntityFilter` el estado de un filtro aplicado. Son datos de presentación que
  * consumen pantallas de cuatro módulos y el constructor de filtros compartido
- * (`src/components/filters/filter-builder`).
+ * (`src/shared/components/filter-builder`).
  *
  * Antes vivían en la presentación de Estructura organizativa, lo que obligaba a la
  * capa compartida a depender de la presentación de un módulo de negocio. Aquí se

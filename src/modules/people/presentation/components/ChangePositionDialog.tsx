@@ -48,17 +48,11 @@ import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
+import type { WorkerCurrentSituation } from "@/shared/components/worker-action-contracts"
 
-export interface WorkerCurrentSituation {
-  positionId: string | null
-  positionName: string | null
-  positionCode: string | null
-  jobName: string | null
-  areaName: string | null
-  groupSequence: number | null
-  salary: SalaryValue | null
-  startDate: string | null
-}
+// El modelo de vista y las props del flujo son un contrato compartido con la página de
+// vencimientos contractuales (módulo Contratos): viven en la capa compartida para que
+// Contratos no dependa de la presentación de Personas.
 
 interface ChangePositionDialogProps {
   open: boolean

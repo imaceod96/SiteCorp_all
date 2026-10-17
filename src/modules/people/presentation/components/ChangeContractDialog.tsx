@@ -41,34 +41,11 @@ import {
   type PaymentMethodOption,
 } from "@/modules/contracts"
 import { FileSignature } from "lucide-react"
+import type { ChangeContractDialogProps } from "@/shared/components/worker-action-contracts"
 
-export interface CurrentContractInfo {
-  id: string
-  typeName: string | null
-  typeCode: string | null
-  startDate: string
-  endDate: string | null
-}
-
-interface ChangeContractDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  workerId: string
-  entityId: string
-  current: CurrentContractInfo
-  /** Contexto derivado del puesto vigente (para el resumen contractual) */
-  workerName?: string
-  workerIdentification?: string | null
-  /** Puesto vigente (no cambia en este flujo) usado para validar la escala aplicable */
-  positionId?: string | null
-  positionName?: string | null
-  jobName?: string | null
-  areaName?: string | null
-  salaryGroupSequence?: number | null
-  baseSalaryAmount?: number | null
-  baseSalaryCurrency?: string | null
-  onSuccess: () => void
-}
+// Las props del flujo son un contrato compartido con la página de vencimientos
+// contractuales (módulo Contratos): viven en la capa compartida para que Contratos no
+// dependa de la presentación de Personas.
 
 const addDays = (isoDate: string, days: number): string => {
   const d = new Date(`${isoDate}T00:00:00Z`)

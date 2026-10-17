@@ -311,8 +311,8 @@ test("el movimiento consume el motor documental en una sola dirección, sin cicl
 
 test("las pantallas y componentes migrados ya no consultan Supabase", () => {
   const presentation = [
-    "src/components/workers/ChangePositionDialog.tsx",
-    "src/components/workers/SeparateWorkerDialog.tsx",
+    "src/modules/people/presentation/components/ChangePositionDialog.tsx",
+    "src/modules/people/presentation/components/SeparateWorkerDialog.tsx",
     "src/modules/people/presentation/components/HireCandidateDialog.tsx",
     "src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx",
   ]

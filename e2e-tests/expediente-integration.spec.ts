@@ -136,9 +136,9 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
     "src/modules/people/presentation/components/WorkerDocumentsTab.tsx",
     "src/components/medical-certificates/MedicalCertificateFormDialog.tsx",
     "src/modules/people/presentation/components/MigratedWorkerDialog.tsx",
-    "src/components/workers/SeparateWorkerDialog.tsx",
-    "src/components/workers/ChangePositionDialog.tsx",
-    "src/components/workers/ChangeContractDialog.tsx",
+    "src/modules/people/presentation/components/SeparateWorkerDialog.tsx",
+    "src/modules/people/presentation/components/ChangePositionDialog.tsx",
+    "src/modules/people/presentation/components/ChangeContractDialog.tsx",
     "src/modules/people/presentation/components/ReincorporateWorkerDialog.tsx",
   ]
 

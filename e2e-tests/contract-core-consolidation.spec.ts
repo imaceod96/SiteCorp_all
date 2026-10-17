@@ -365,8 +365,8 @@ const CONTRACT_CONSUMERS = [
   "src/modules/contracts/presentation/components/ContractFormalizationSummary.tsx",
   "src/modules/contracts/presentation/components/ContractRetributionSummary.tsx",
   "src/modules/people/presentation/components/HireCandidateDialog.tsx",
-  "src/components/workers/ChangeContractDialog.tsx",
-  "src/components/workers/ChangePositionDialog.tsx",
+  "src/modules/people/presentation/components/ChangeContractDialog.tsx",
+  "src/modules/people/presentation/components/ChangePositionDialog.tsx",
   "src/modules/people/presentation/components/ReincorporateWorkerDialog.tsx",
   "src/modules/people/presentation/components/WorkerForm.tsx",
   "src/modules/people/presentation/pages/WorkerDetail.tsx",
@@ -456,4 +456,81 @@ test("las consultas del contrato acotan siempre por trabajador, contrato o entid
       `${repository} acota por trabajador, contrato o entidad (aislamiento por cliente y entidad)`
     ).toMatch(/worker_id|employment_contract_id|entity_id/)
   }
+})
+
+/* ------------------------------------------------------------------ */
+/* 8. Composición modular: las acciones laborales viven en Personas     */
+/* ------------------------------------------------------------------ */
+
+const LABOR_DIALOGS = [
+  "src/modules/people/presentation/components/ChangeContractDialog.tsx",
+  "src/modules/people/presentation/components/ChangePositionDialog.tsx",
+  "src/modules/people/presentation/components/SeparateWorkerDialog.tsx",
+]
+
+test("las acciones laborales viven en Personas y Contratos no las importa", () => {
+  for (const dialog of LABOR_DIALOGS) {
+    expect(existsSync(dialog), `${dialog} pertenece a Personas`).toBe(true)
+  }
+
+  // La página de vencimientos no importa presentación de Personas: recibe los diálogos
+  // inyectados por el punto de composición.
+  const page = read("src/modules/contracts/presentation/pages/EntityContractAlerts.tsx")
+  expect(page, "Contratos no debe importar presentación de Personas").not.toMatch(
+    /from "@\/modules\/people/
+  )
+  expect(page).toMatch(/ChangeContractDialog: React\.ComponentType<ChangeContractDialogProps>/)
+  expect(page).toMatch(/SeparateWorkerDialog: React\.ComponentType<SeparateWorkerDialogProps>/)
+
+  // La ficha del trabajador (Personas) sigue abriendo los mismos diálogos.
+  const workerDetail = read("src/modules/people/presentation/pages/WorkerDetail.tsx")
+  expect(workerDetail).toContain(
+    'from "@/modules/people/presentation/components/ChangePositionDialog"'
+  )
+  expect(workerDetail).toContain(
+    'from "@/modules/people/presentation/components/SeparateWorkerDialog"'
+  )
+  expect(workerDetail).toContain(
+    'from "@/modules/people/presentation/components/ChangeContractDialog"'
+  )
+
+  // El contrato compartido es neutral: no conoce módulos de negocio.
+  const shared = read("src/shared/components/worker-action-contracts.ts")
+  expect(shared, "el contrato compartido no debe importar módulos").not.toMatch(
+    /from "@\/modules\//
+  )
+})
+
+test("la ruta de vencimientos conserva su camino e inyecta los diálogos de Personas", () => {
+  const app = read("src/App.tsx")
+
+  expect(app).toContain('path="/entity/:entityId/contracts/alerts"')
+  expect(app).toContain("ChangeContractDialog={ChangeContractDialog}")
+  expect(app).toContain("SeparateWorkerDialog={SeparateWorkerDialog}")
+  expect(app).toContain(
+    'import ChangeContractDialog from "@/modules/people/presentation/components/ChangeContractDialog"'
+  )
+  expect(app).toContain(
+    'import SeparateWorkerDialog from "@/modules/people/presentation/components/SeparateWorkerDialog"'
+  )
+})
+
+test("la página abre el diálogo correcto con el trabajador y refresca al guardar", () => {
+  const page = read("src/modules/contracts/presentation/pages/EntityContractAlerts.tsx")
+
+  // Permisos: las acciones sólo se ofrecen con `contracts.manage`.
+  expect(page).toContain('canManage && row.alert_state !== "NO_END_DATE"')
+  // Apertura: cada acción abre su diálogo con el objetivo seleccionado.
+  expect(page).toContain("{changeTarget?.contract && (")
+  expect(page).toContain("{separationTarget && (")
+  // Datos enviados: identificación del trabajador, contrato y situación vigentes.
+  expect(page).toContain("workerId={changeTarget.workerId}")
+  expect(page).toContain("workerIdentification={changeTarget.identification}")
+  expect(page).toContain("current={changeTarget.contract}")
+  expect(page).toContain("current={separationTarget.situation}")
+  // Cierre: se limpia el objetivo al cerrar el diálogo.
+  expect(page).toContain("if (!open) setChangeTarget(null)")
+  expect(page).toContain("if (!open) setSeparationTarget(null)")
+  // Actualización posterior: ambas acciones invalidan las alertas contractuales.
+  expect(page.match(/invalidateContractAlertData\(queryClient\)/g)?.length).toBe(2)
 })

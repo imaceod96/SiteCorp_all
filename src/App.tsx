@@ -38,6 +38,8 @@ import EntityWorkers from "@/modules/people/presentation/pages/EntityWorkers"
 import EntityReentries from "@/modules/people/presentation/pages/EntityReentries"
 import EntityHiring from "@/modules/people/presentation/pages/EntityHiring"
 import EntityContractAlerts from "@/modules/contracts/presentation/pages/EntityContractAlerts"
+import ChangeContractDialog from "@/modules/people/presentation/components/ChangeContractDialog"
+import SeparateWorkerDialog from "@/modules/people/presentation/components/SeparateWorkerDialog"
 import EntityVacations from "@/modules/vacations-licenses/vacations/presentation/pages/EntityVacations"
 import EntityMedicalCertificates from "@/modules/vacations-licenses/medical-certificates/presentation/pages/EntityMedicalCertificates"
 import EntityPendingDocuments from "@/modules/document-generation/presentation/pages/EntityPendingDocuments"
@@ -196,7 +198,17 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/staffing" element={<EntityStaffing />} />
           <Route path="/entity/:entityId/staffing/workers/:workerId" element={<WorkerDetail />} />
           <Route path="/entity/:entityId/hiring" element={<EntityHiring />} />
-          <Route path="/entity/:entityId/contracts/alerts" element={<EntityContractAlerts />} />
+          {/* Composición modular: la página de vencimientos (Contratos) recibe los
+              diálogos de acciones laborales que pertenecen a Personas. */}
+          <Route
+            path="/entity/:entityId/contracts/alerts"
+            element={
+              <EntityContractAlerts
+                ChangeContractDialog={ChangeContractDialog}
+                SeparateWorkerDialog={SeparateWorkerDialog}
+              />
+            }
+          />
           <Route path="/entity/:entityId/vacations" element={<EntityVacations />} />
           <Route path="/entity/:entityId/medical-certificates" element={<EntityMedicalCertificates />} />
           <Route path="/entity/:entityId/documents/pending" element={<EntityPendingDocuments />} />

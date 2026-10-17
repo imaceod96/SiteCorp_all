@@ -63,10 +63,8 @@ import {
   loadAcademicCategoryPayment,
   type AcademicCategoryPaymentResolution,
 } from "@/modules/organization-structure"
-import ChangePositionDialog, {
-  type WorkerCurrentSituation,
-} from "@/components/workers/ChangePositionDialog"
-import SeparateWorkerDialog from "@/components/workers/SeparateWorkerDialog"
+import ChangePositionDialog from "@/modules/people/presentation/components/ChangePositionDialog"
+import SeparateWorkerDialog from "@/modules/people/presentation/components/SeparateWorkerDialog"
 import ReincorporateWorkerDialog from "@/modules/people/presentation/components/ReincorporateWorkerDialog"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import {
@@ -78,9 +76,7 @@ import {
   formatScheduleSummary,
   type PositionScheduleSegment,
 } from "@/modules/organization-structure"
-import ChangeContractDialog, {
-  type CurrentContractInfo,
-} from "@/components/workers/ChangeContractDialog"
+import ChangeContractDialog from "@/modules/people/presentation/components/ChangeContractDialog"
 import { ContractFormalizationAlerts } from "@/modules/contracts/presentation/components/ContractFormalizationAlerts"
 import {
   ContractRetributionFields,
@@ -129,6 +125,10 @@ import {
   type WorkerSalaryHistoryEntry,
 } from "@/modules/contracts"
 import { ContractAddendumsSection } from "@/modules/contracts/presentation/components/ContractAddendumsSection"
+import type {
+  CurrentContractInfo,
+  WorkerCurrentSituation,
+} from "@/shared/components/worker-action-contracts"
 
 /**
  * La ficha laboral se describe con el modelo del dominio Personas (`WorkerExpediente`,

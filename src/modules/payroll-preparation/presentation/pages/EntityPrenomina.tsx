@@ -14,7 +14,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@
 import { Label } from "@/components/ui/label"
 import { FileSpreadsheet, RefreshCw, Lock, Unlock, Eye, ChevronDown, ChevronRight } from "lucide-react"
 import WorkerPrenominaDialog from "@/modules/payroll-preparation/presentation/components/WorkerPrenominaDialog"
-import { FilterBuilder } from "@/components/filters/filter-builder"
+import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import { academicCategoryLabel } from "@/modules/organization-structure"
 import {
