@@ -150,11 +150,18 @@ export async function loadHiringWorkspace(
   return { ...workspace, people }
 }
 
-/** Diferencias contractuales de un cambio de puesto (§21/§22), calculadas por el backend. */
+/**
+ * Diferencias contractuales de un cambio de puesto (§21/§22), calculadas por el backend.
+ *
+ * `targetAssignmentId` identifica la asignación afectada cuando el trabajador tiene DOS
+ * contratos vigentes (pluriempleo); con uno solo viaja `null`/ausente y la llamada es la
+ * misma de siempre.
+ */
 export async function previewPositionChange(input: {
   workerId: string
   newPositionId: string
   effectiveDate: string
+  targetAssignmentId?: string | null
 }): Promise<PositionChangePreview> {
   return previewPositionChangeRpc(input)
 }

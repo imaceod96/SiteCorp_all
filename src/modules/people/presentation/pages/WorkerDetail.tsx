@@ -444,12 +444,9 @@ const WorkerDetail = () => {
         console.error("Error loading contract addendums:", addendumErr)
         setAddendums([])
       }
-      try {
-        setContractualConditions(await fetchWorkerContractualConditions(workerId))
-      } catch (conditionsErr) {
-        console.error("Error loading contractual conditions:", conditionsErr)
-        setContractualConditions(null)
-      }
+      // Las condiciones FORMALIZADAS se leen por contrato seleccionado: en pluriempleo
+      // cada contrato tiene las suyas y se piden identificando el contrato (efecto
+      // dedicado, más abajo).
     } catch (err) {
       console.error("Error loading worker:", err)
       setError(err instanceof Error ? err.message : "Error al cargar el trabajador")
@@ -461,6 +458,27 @@ const WorkerDetail = () => {
   React.useEffect(() => {
     loadWorker()
   }, [loadWorker])
+
+  // Condiciones formalizadas del CONTRATO SELECCIONADO. Con un solo contrato el objetivo
+  // viaja `null` y la RPC se invoca EXACTAMENTE como antes (la resuelve por sí misma);
+  // con dos contratos vigentes se identifica el contrato para que las condiciones
+  // mostradas sean exclusivamente las suyas.
+  React.useEffect(() => {
+    let cancelled = false
+
+    fetchWorkerContractualConditions(workerId, contractTarget.targetContractId)
+      .then((data) => {
+        if (!cancelled) setContractualConditions(data)
+      })
+      .catch((conditionsErr) => {
+        console.error("Error loading contractual conditions:", conditionsErr)
+        if (!cancelled) setContractualConditions(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [workerId, contractTarget.targetContractId])
 
   const handleEditSave = async () => {
     if (!worker) return

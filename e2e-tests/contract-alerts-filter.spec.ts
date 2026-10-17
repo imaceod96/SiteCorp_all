@@ -58,6 +58,7 @@ const alertRow = (alert_state: ContractAlertState): ContractAlertRow => ({
   salary_group_sequence_number: 12,
   days_remaining: 10,
   alert_state,
+  assignment_id: null,
 })
 
 /* ------------------------------------------------------------------ */

@@ -104,6 +104,7 @@ const alertRow = (over: Partial<ContractAlertRow> = {}): ContractAlertRow => ({
   salary_group_sequence_number: 12,
   days_remaining: 10,
   alert_state: "DUE_IN_15",
+  assignment_id: null,
   ...over,
 })
 

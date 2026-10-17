@@ -349,6 +349,11 @@ const EntityVacations = () => {
                             {!row.has_schedule && (
                               <p className="mt-1 text-xs text-sitecorp-warning">Sin horario</p>
                             )}
+                            {row.reconciliation_required && (
+                              <p className="mt-1 text-xs text-sitecorp-warning">
+                                Conciliación pendiente
+                              </p>
+                            )}
                           </td>
                           <td className="px-3 py-3 text-ink">
                             {row.active_vacation ? (
@@ -433,6 +438,13 @@ const EntityVacations = () => {
                       {row.active_vacation && (
                         <p className="flex items-center gap-1.5 text-sm text-sitecorp-primary">
                           <Palmtree className="h-4 w-4" /> De vacaciones
+                        </p>
+                      )}
+
+                      {row.reconciliation_required && (
+                        <p className="text-xs text-sitecorp-warning">
+                          Conciliación pendiente: hay movimientos históricos sin contrato
+                          identificado que no se atribuyen a ninguno.
                         </p>
                       )}
 

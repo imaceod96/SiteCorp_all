@@ -32,6 +32,17 @@ export interface VacationSummary {
   next_vacation_end: string | null
   opening_cutoff: string | null
   has_schedule: boolean
+  /**
+   * Conciliación pendiente: el trabajador tiene VARIOS contratos vigentes y conserva
+   * movimientos históricos sin contrato identificado. No se atribuyen a ninguno (nunca se
+   * elige un contrato arbitrariamente), así que el saldo por contrato no los incluye y
+   * deben regularizarse. Con un solo contrato la asociación es inequívoca y es `false`.
+   */
+  reconciliation_required: boolean
+  /** Movimientos históricos sin contrato identificado (informativo). */
+  unassigned_movements: number
+  /** Días que esos movimientos representan (informativo). */
+  unassigned_days: number
 }
 
 export interface VacationOverviewRow {
@@ -55,6 +66,8 @@ export interface VacationOverviewRow {
   next_vacation_start: string | null
   has_schedule: boolean
   active_vacation: boolean
+  /** Conciliación pendiente del contrato de la fila (ver `VacationSummary`). */
+  reconciliation_required: boolean
 }
 
 export interface VacationPeriod {

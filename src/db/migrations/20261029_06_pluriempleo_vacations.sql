@@ -104,8 +104,17 @@ begin
   return v_target;
 end $$;
 
--- Predicado de pertenencia de una fila de vacaciones a un contrato (incluye, hacia el
--- contrato MÁS ANTIGUO del trabajador, las filas históricas sin asignación).
+-- Predicado de pertenencia de una fila de vacaciones a un contrato.
+--
+-- Reglas (Bloque 5.1):
+--   · Sin contrato identificado (`p_assignment_id is null`) la fila pertenece al saldo
+--     global del trabajador: es la lectura de siempre.
+--   · Con contrato identificado, la fila pertenece a ese contrato sólo si lo declara.
+--   · Una fila HISTÓRICA sin asignación se atribuye al contrato SÓLO cuando el
+--     trabajador tiene UNA ÚNICA asignación vigente (asociación inequívoca). Con varias
+--     asignaciones posibles la fila NO se atribuye a ninguna: nunca se elige un contrato
+--     arbitrariamente. La fila no se pierde ni se borra —sigue sumando al saldo global—
+--     y `worker_vacation_summary` la señala como pendiente de conciliación.
 create or replace function public.worker_vacation_row_in_contract(
   p_worker_id uuid,
   p_assignment_id uuid,
@@ -118,11 +127,13 @@ set search_path to 'public', 'auth'
 as $$
   select p_assignment_id is null
       or p_row_assignment_id = p_assignment_id
-      or (p_row_assignment_id is null and p_assignment_id = (
-          select a.id from public.worker_position_assignments a
-          where a.worker_id = p_worker_id and a.is_current = true and a.end_date is null
-          order by a.start_date asc, a.created_at asc
-          limit 1))
+      or (p_row_assignment_id is null
+          and (select count(*)
+               from public.worker_position_assignments a
+               where a.worker_id = p_worker_id and a.is_current = true and a.end_date is null) = 1
+          and p_assignment_id = (select a.id
+               from public.worker_position_assignments a
+               where a.worker_id = p_worker_id and a.is_current = true and a.end_date is null))
 $$;
 
 
@@ -494,6 +505,10 @@ declare
   v_weekdays integer[];
   v_cutoff date;
   v_assignment uuid;
+  v_current_assignments integer;
+  v_unassigned_movements integer;
+  v_unassigned_days numeric(10,4);
+  v_reconciliation boolean := false;
 begin
   if auth.uid() is null then raise exception 'Authentication required'; end if;
   select * into v_worker from public.workers where id = p_worker_id;
@@ -544,9 +559,27 @@ begin
     where m.worker_id = p_worker_id and m.movement_type = 'INITIAL_BALANCE'
       and public.worker_vacation_row_in_contract(p_worker_id, v_assignment, m.assignment_id);
 
+  -- CONCILIACIÓN PENDIENTE (Bloque 5.1): con VARIAS asignaciones vigentes, un movimiento
+  -- histórico sin contrato identificado no se atribuye a ninguna, pero tampoco se excluye
+  -- en silencio: el saldo por contrato no lo incluye y el resumen lo advierte. Con una sola
+  -- asignación la asociación es inequívoca y la advertencia no se activa.
+  select count(*) into v_current_assignments
+  from public.worker_position_assignments a
+  where a.worker_id = p_worker_id and a.is_current = true and a.end_date is null;
+
+  select count(*), coalesce(sum(m.amount), 0)
+  into v_unassigned_movements, v_unassigned_days
+  from public.worker_vacation_movements m
+  where m.worker_id = p_worker_id and m.assignment_id is null;
+
+  v_reconciliation := v_current_assignments > 1 and v_unassigned_movements > 0;
+
   return jsonb_build_object(
     'worker_id', p_worker_id,
     'assignment_id', v_assignment,
+    'reconciliation_required', v_reconciliation,
+    'unassigned_movements', v_unassigned_movements,
+    'unassigned_days', round(v_unassigned_days, 4),
     'balance', v_balance,
     'accrued_this_year', v_accrued_this,
     'consumed_this_year', v_consumed_this,
@@ -809,7 +842,7 @@ $$;
 -- ---------------------------------------------------------------------------
 drop function if exists public.entity_vacation_overview(uuid);
 create or replace function public.entity_vacation_overview(p_entity_id uuid)
-returns TABLE(worker_id uuid, assignment_id uuid, full_name text, area_name text, job_name text, position_name text, balance numeric, next_accrual numeric, projected_balance numeric, status text, scheduled_future_days numeric, current_vacation_end date, next_vacation_start date, has_schedule boolean, active_vacation boolean)
+returns TABLE(worker_id uuid, assignment_id uuid, full_name text, area_name text, job_name text, position_name text, balance numeric, next_accrual numeric, projected_balance numeric, status text, scheduled_future_days numeric, current_vacation_end date, next_vacation_start date, has_schedule boolean, active_vacation boolean, reconciliation_required boolean)
 language plpgsql
 security definer
 set search_path to 'public', 'auth'
@@ -820,6 +853,7 @@ declare
   s jsonb;
   v_weekdays integer[];
   v_has_assignment boolean;
+  v_reconciliation boolean;
 begin
   if auth.uid() is null then raise exception 'Authentication required'; end if;
   if not (public.can_access_entity(p_entity_id, 'vacations.view') or public.can_access_entity(p_entity_id, 'vacations.manage')) then
@@ -870,6 +904,8 @@ begin
       v_weekdays := public.worker_vacation_weekdays_on(w.id, current_date, a.assignment_id);
       has_schedule := v_weekdays is not null and coalesce(array_length(v_weekdays,1),0) > 0;
       active_vacation := current_vacation_end is not null;
+      v_reconciliation := coalesce((s->>'reconciliation_required')::boolean, false);
+      reconciliation_required := v_reconciliation;
 
       return next;
     end loop;
@@ -893,6 +929,8 @@ begin
       v_weekdays := public.worker_vacation_weekdays_on(w.id, current_date, null);
       has_schedule := v_weekdays is not null and coalesce(array_length(v_weekdays,1),0) > 0;
       active_vacation := current_vacation_end is not null;
+      v_reconciliation := coalesce((s->>'reconciliation_required')::boolean, false);
+      reconciliation_required := v_reconciliation;
 
       return next;
     end if;

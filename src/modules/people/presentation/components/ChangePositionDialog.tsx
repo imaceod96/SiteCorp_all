@@ -207,7 +207,13 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
     setPreviewLoading(true)
     setPreviewError(null)
 
-    previewPositionChange({ workerId, newPositionId: selectedPositionId, effectiveDate })
+    previewPositionChange({
+      workerId,
+      newPositionId: selectedPositionId,
+      effectiveDate,
+      // Pluriempleo: la vista previa es la del contrato (asignación) seleccionado.
+      targetAssignmentId: current.targetAssignmentId ?? null,
+    })
       .then((result) => {
         if (cancelled) return
         setPreview(result)

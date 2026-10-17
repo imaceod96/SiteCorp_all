@@ -254,7 +254,11 @@ begin
   where assignment_id = v_current.id and is_current = true
   order by start_date desc limit 1;
 
-  v_preview := public.position_change_preview(p_worker_id, p_new_position_id, p_effective_date);
+  -- La vista previa corresponde a la MISMA asignación objetivo (y por tanto al mismo
+  -- contrato) que se va a mover: nunca a una asignación arbitraria.
+  v_preview := public.position_change_preview(
+    p_worker_id, p_new_position_id, p_effective_date, v_current.id
+  );
   v_changes := coalesce(v_preview->'changes', '[]'::jsonb);
 
   update public.worker_position_assignments

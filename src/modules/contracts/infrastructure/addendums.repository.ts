@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { PLURIEMPLEO_ENABLED } from "@/shared/config/pluriempleo"
 import type {
   AddendumChange,
   AddendumChangeInput,
@@ -91,13 +92,31 @@ export async function rpcAddendumPendingChecklist(addendumId: string): Promise<A
   }
 }
 
+/**
+ * Añade `p_target_contract_id` SOLO cuando hay contrato identificado Y la función está
+ * habilitada.
+ *
+ * Con un solo contrato (o con las migraciones sin aplicar) el parámetro NO se envía: la
+ * llamada es EXACTAMENTE la actual y la RPC resuelve el contrato por sí misma. Con dos
+ * contratos vigentes las condiciones devueltas son SÓLO las del contrato seleccionado.
+ */
+const withTargetContract = (
+  params: Record<string, unknown>,
+  targetContractId: string | null | undefined
+): Record<string, unknown> => {
+  if (PLURIEMPLEO_ENABLED && targetContractId) params.p_target_contract_id = targetContractId
+  return params
+}
+
 /** Condiciones contractuales FORMALIZADAS vigentes + anexos pendientes del trabajador. */
 export async function rpcWorkerFormalizedConditions(
-  workerId: string
+  workerId: string,
+  targetContractId?: string | null
 ): Promise<WorkerContractualConditions> {
-  const { data, error } = await supabase.rpc("worker_formalized_conditions", {
-    p_worker_id: workerId,
-  })
+  const { data, error } = await supabase.rpc(
+    "worker_formalized_conditions",
+    withTargetContract({ p_worker_id: workerId }, targetContractId)
+  )
   if (error) throw error
 
   const result = (data as WorkerContractualConditions | null) || null

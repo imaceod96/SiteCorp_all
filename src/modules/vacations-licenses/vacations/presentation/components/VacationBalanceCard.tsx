@@ -94,6 +94,25 @@ const VacationBalanceCard = ({ summary }: { summary: VacationSummary }) => {
         </div>
       )}
 
+      {summary.reconciliation_required && (
+        <div className="mt-4">
+          <SiteCorpAlert type="warning" title="Histórico pendiente de conciliación">
+            <span className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                El trabajador tiene varios contratos vigentes y {summary.unassigned_movements}{" "}
+                movimiento(s) de vacaciones anteriores a la separación por contrato
+                {summary.unassigned_days !== 0
+                  ? ` (${formatVacationDays(summary.unassigned_days)} días)`
+                  : ""}
+                . No se han asignado a ningún contrato —por eso el saldo por contrato no los
+                incluye— y deben regularizarse desde el expediente.
+              </span>
+            </span>
+          </SiteCorpAlert>
+        </div>
+      )}
+
       {summary.status === "NEAR_LIMIT" && (
         <div className="mt-4">
           <SiteCorpAlert type="warning" title="Próximo al límite">

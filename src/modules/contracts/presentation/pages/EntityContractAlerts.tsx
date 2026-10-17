@@ -218,6 +218,9 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
       groupSequence: row.salary_group_sequence_number,
       salary: salaryOf(row),
       startDate: row.contract_start_date,
+      // La baja se identifica con la asignación DEL CONTRATO de la fila: cierra SÓLO esa
+      // asignación (y su contrato), nunca los dos por una baja individual.
+      targetAssignmentId: PLURIEMPLEO_ENABLED ? row.assignment_id : null,
     },
     contract: {
       id: row.contract_id,

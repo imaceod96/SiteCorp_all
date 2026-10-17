@@ -26,9 +26,16 @@ export async function fetchAddendumPending(addendumId: string): Promise<Addendum
   return rpcAddendumPendingChecklist(addendumId)
 }
 
-/** Condiciones contractuales formalizadas vigentes + anexos pendientes del trabajador. */
+/**
+ * Condiciones contractuales formalizadas vigentes + anexos pendientes del trabajador.
+ *
+ * `targetContractId` identifica el contrato seleccionado cuando el trabajador tiene DOS
+ * contratos vigentes (pluriempleo); con uno solo viaja `null`/ausente y la llamada es la
+ * misma de siempre.
+ */
 export async function fetchWorkerContractualConditions(
-  workerId: string
+  workerId: string,
+  targetContractId?: string | null
 ): Promise<WorkerContractualConditions> {
-  return rpcWorkerFormalizedConditions(workerId)
+  return rpcWorkerFormalizedConditions(workerId, targetContractId)
 }

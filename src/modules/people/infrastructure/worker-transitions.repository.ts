@@ -316,17 +316,33 @@ export async function createWorkerPluriemployRpc(
   }
 }
 
-/** Diferencias contractuales de un cambio de puesto, calculadas por el backend. */
+/**
+ * Diferencias contractuales de un cambio de puesto, calculadas por el backend.
+ *
+ * La vista previa corresponde a la ASIGNACIÓN OBJETIVO: con un solo contrato viaja `null`
+ * y la RPC la resuelve por sí misma (llamada actual); con dos contratos vigentes se
+ * identifica la asignación seleccionada, de modo que el cálculo salarial y los cambios
+ * propuestos sean los de ESE contrato.
+ */
 export async function previewPositionChangeRpc(input: {
   workerId: string
   newPositionId: string
   effectiveDate: string
+  /** Asignación afectada (pluriempleo). `null` = comportamiento actual. */
+  targetAssignmentId?: string | null
 }): Promise<PositionChangePreview> {
-  const { data, error } = await supabase.rpc("position_change_preview", {
-    p_worker_id: input.workerId,
-    p_new_position_id: input.newPositionId,
-    p_effective_date: input.effectiveDate,
-  })
+  const { data, error } = await supabase.rpc(
+    "position_change_preview",
+    withTarget(
+      {
+        p_worker_id: input.workerId,
+        p_new_position_id: input.newPositionId,
+        p_effective_date: input.effectiveDate,
+      },
+      "p_target_assignment_id",
+      input.targetAssignmentId
+    )
+  )
   if (error) throw error
 
   const result = data as PositionChangePreview

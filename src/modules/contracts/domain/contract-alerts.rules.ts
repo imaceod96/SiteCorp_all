@@ -47,6 +47,12 @@ export interface ContractAlertRow {
   salary_group_sequence_number: number | null
   days_remaining: number | null
   alert_state: ContractAlertState
+  /**
+   * Asignación (puesto vigente) DEL CONTRATO de la fila. En pluriempleo identifica la
+   * operación sobre el contrato correcto: una baja se registra sobre esta asignación y
+   * nunca finaliza los dos contratos. `null` en contratos sin asignación.
+   */
+  assignment_id: string | null
 }
 
 interface ContractAlertMeta {

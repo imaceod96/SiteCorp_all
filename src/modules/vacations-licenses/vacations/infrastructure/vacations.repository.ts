@@ -63,6 +63,7 @@ export async function fetchEntityVacationOverview(entityId: string): Promise<Vac
     next_accrual: Number(row.next_accrual) || 0,
     projected_balance: Number(row.projected_balance) || 0,
     scheduled_future_days: Number(row.scheduled_future_days) || 0,
+    reconciliation_required: !!row.reconciliation_required,
   }))
 }
 
@@ -99,6 +100,9 @@ export async function fetchWorkerVacationSummary(
     unaccredited_projection: Number(s.unaccredited_projection) || 0,
     scheduled_future_days: Number(s.scheduled_future_days) || 0,
     free_balance: Number(s.free_balance) || 0,
+    reconciliation_required: !!s.reconciliation_required,
+    unassigned_movements: Number(s.unassigned_movements) || 0,
+    unassigned_days: Number(s.unassigned_days) || 0,
   }
 }
 
