@@ -161,6 +161,27 @@ Auth, y llamar `initialize_password_lifecycle(user_id)` (`must_change_password =
   operación arbitraria del navegador (el navegador no puede invocar la función).
 - **Nunca** se ejecuta F antes de E: la confirmación sigue siempre a la operación real de Auth.
 
+## 6.quater Matriz de consistencia y fallos parciales (revisión 35.2A.2)
+
+**No existe** hoy ninguna reconciliación automática (ni job, ni trigger, ni barrido): el estado
+solo cambia por las dos operaciones privilegiadas. El mecanismo propuesto es **compensación en el
+servidor** (Edge Function), no reconciliación por barrido, y es verificable porque cada paso tiene
+una comprobación explícita de éxito.
+
+| Caso | Escenario | Estado de la tabla | Propuesta segura y verificable |
+|------|-----------|--------------------|--------------------------------|
+| **A** | Usuario creado en Auth, falla `initialize_password_lifecycle()` | **Sin fila** (≠ obligatorio) | El alta es **atómica con compensación**: si `initialize` falla, la Edge Function **elimina el usuario de Auth** (misma acción compensatoria que ya usan las ramas de `profiles`/rol en `create-sitecorp-user`) y devuelve error. Nunca se deja un usuario con contraseña temporal y `must_change` ausente. No se hace `upsert` de la fila para “arreglarlo” sin confirmar el alta. |
+| **B** | Contraseña cambiada en Auth, falla `mark_password_changed()` | Sigue `true` | `mark_password_changed` es **idempotente**: el servidor **reintenta** con el mismo `user_id`. Si el reintento falla, el usuario conserva `must_change_password = true` y **vuelve a ver la puerta de cambio**; al reintentar el cambio, la secuencia D→E→F se repite (idempotente). Nunca se marca `false` sin el éxito previo de Auth. |
+| **C** | Usuario eliminado con registro de ciclo de vida existente | — | `ON DELETE CASCADE` desde `auth.users(id)` elimina la fila automáticamente. No quedan huérfanos. |
+| **D** | Reintento de inicialización | `true` (ya inicializado) | `ON CONFLICT (user_id) DO NOTHING`: **no sobrescribe**; no reinicia ni cambia la contraseña del usuario. |
+| **E** | Reintento de confirmación | Ya `false` | Retorno temprano si `must_change_password = false`: no altera `password_changed_at`. |
+| **F** | Usuario existente sin registro (legacy) | **Sin fila** | Ausencia de fila = **no obligatorio**: no se fuerza el cambio y no hay que poblar nada. La lectura del estado (futura consulta) trata la ausencia de fila como “sin cambio obligatorio”. |
+
+> **Frontera invariante (A–F):** ninguna sesión ordinaria (`authenticated`/`anon`) puede poner
+> `must_change_password = false`: `EXECUTE` está revocado de `PUBLIC`/`anon`/`authenticated` **y**
+> la función exige `auth.role() = 'service_role'`. La única vía de cambio es una operación real y
+> **exitosa** del servidor sobre Supabase Auth.
+
 ---
 
 ## 7. Compatibilidad
