@@ -4,6 +4,7 @@ import type {
   AuthMembershipRecord,
   AuthProfileRecord,
   AuthTenantSummary as AuthTenantSummaryRecord,
+  PasswordRequirement,
 } from "@/modules/access-control"
 
 /**
@@ -55,6 +56,19 @@ interface AuthContextType {
    * neutral de error y NUNCA elige interfaz ni concede privilegios por defecto.
    */
   identityError: string | null
+  /**
+   * Requisito de cambio obligatorio de la contraseña inicial:
+   *   · `required`     → debe cambiarla (la aplicación no monta ningún layout).
+   *   · `not_required` → acceso normal (incluye usuarios legacy sin fila).
+   *   · `unverified`   → no se pudo comprobar: NUNCA se concede acceso normal.
+   * `null` mientras la identidad aún no está resuelta.
+   */
+  passwordChangeRequired: PasswordRequirement | null
+  /**
+   * Vuelve a resolver el requisito de cambio obligatorio (se usa tras completar el cambio y
+   * en el reintento del estado `unverified`). Nunca se ejecuta en bucle.
+   */
+  refreshPasswordRequirement: () => Promise<void>
   /** Reintento manual de la resolución de identidad. Nunca se ejecuta en bucle. */
   retryIdentity: () => void
   /**

@@ -3,6 +3,7 @@ import { avatarPathFromStored } from "../domain/account.rules"
 import type { AvatarPath, ProfileAccountInput } from "../domain/entities"
 import {
   deleteAvatarObject,
+  invokeChangeInitialPassword,
   signInWithPassword,
   signOut as signOutSession,
   subscribeAuthStateChanges,
@@ -40,6 +41,18 @@ export async function signOut(): Promise<void> {
  */
 export async function changePassword(newPassword: string): Promise<void> {
   await updateOwnPassword(newPassword)
+}
+
+/**
+ * Cambio OBLIGATORIO de la contraseña inicial.
+ *
+ * No usa `supabase.auth.updateUser` directamente: la contraseña la actualiza la Edge Function
+ * `change-initial-password` con privilegios de servidor, que además confirma el cambio con la
+ * RPC `mark_password_changed` (solo `service_role`). La confirmación NUNCA se hace desde el
+ * navegador. Propaga el error: la pantalla decide el mensaje.
+ */
+export async function changeInitialPassword(newPassword: string): Promise<void> {
+  await invokeChangeInitialPassword(newPassword)
 }
 
 /** Edición de los datos de la cuenta propia (nombre y usuario). El avatar no va por aquí. */

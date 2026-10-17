@@ -75,6 +75,17 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
+    // El llamante NO puede tener un cambio de contraseña pendiente (barrera de servidor).
+    const { data: callerLifecycle } = await adminClient
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", callerId)
+      .maybeSingle()
+    if (callerLifecycle?.must_change_password === true) {
+      console.error("[create-platform-admin] caller has a pending password change", { callerId })
+      return json({ error: "Forbidden: pending password change" }, 403)
+    }
+
     const { data: callerRoles, error: callerRolesError } = await adminClient
       .from("platform_user_roles")
       .select("platform_roles(name,is_system_role,is_active)")

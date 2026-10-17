@@ -81,6 +81,26 @@ export async function updateOwnPassword(password: string): Promise<void> {
 }
 
 /**
+ * Cambio de la contraseña INICIAL mediante la Edge Function `change-initial-password`.
+ *
+ * El cuerpo solo lleva la contraseña nueva: el `user_id` lo determina el servidor desde el
+ * token verificado y la confirmación del ciclo de vida (`mark_password_changed`) la ejecuta la
+ * propia función con `service_role`. El cliente nunca invoca la RPC de confirmación.
+ */
+export async function invokeChangeInitialPassword(newPassword: string): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("change-initial-password", {
+    body: { new_password: newPassword },
+  })
+
+  if (error) throw error
+
+  const result = data as { success?: boolean; error?: string } | null
+  if (!result || result.success !== true) {
+    throw new Error(result?.error ?? "No se pudo cambiar la contraseña.")
+  }
+}
+
+/**
  * Sube el avatar del PROPIO usuario al bucket privado y devuelve la RUTA del objeto.
  *
  * Nunca devuelve una URL: el bucket es privado y la única URL válida es la firmada y temporal

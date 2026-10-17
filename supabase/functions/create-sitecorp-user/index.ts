@@ -149,6 +149,18 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
+    // El llamante NO puede tener un cambio de contraseña pendiente (barrera de servidor, no
+    // solo de interfaz): un administrador con cambio obligatorio no puede crear usuarios.
+    const { data: callerLifecycle } = await adminClient
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", callerId)
+      .maybeSingle()
+    if (callerLifecycle?.must_change_password === true) {
+      console.error("[create-sitecorp-user] caller has a pending password change", { callerId })
+      return json({ error: "Forbidden: pending password change" }, 403)
+    }
+
     // 3. Verify caller authorization: SuperAdmin OR has users.manage_all permission
     const { data: callerRoles, error: callerRolesError } = await adminClient
       .from("platform_user_roles")

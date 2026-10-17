@@ -164,13 +164,23 @@ export {
   profileIsActive,
 } from "./domain/authentication.rules"
 
+/* Reglas puras del ciclo de vida de la contraseña inicial */
+export {
+  PASSWORD_MIN_LENGTH,
+  passwordStrengthError,
+  resolvePasswordRequirement,
+} from "./domain/password.rules"
+export type { PasswordLifecycleRead, PasswordRequirement } from "./domain/password.rules"
+
 /* Cuenta y sesión: casos de uso (los consume el proveedor de autenticación) */
 export {
   loadAuthenticatedIdentity,
   loadClientPermissionSafe,
+  loadPasswordChangeRequirement,
   loadSessionUser,
 } from "./application/authentication.queries"
 export {
+  changeInitialPassword,
   changePassword,
   removeOwnAvatar,
   signIn,

@@ -1,3 +1,5 @@
+import type { PasswordRequirement } from "./password.rules"
+
 /**
  * Control de acceso — Entidades del dominio.
  *
@@ -242,6 +244,11 @@ export interface AuthenticatedIdentity {
   isPlatformSuperAdmin: boolean
   isPlatformUser: boolean
   memberships: AuthMembershipRecord[]
+  /**
+   * Requisito de cambio obligatorio de contraseña (`required` / `not_required` /
+   * `unverified`). Un fallo de lectura es `unverified`, jamás `not_required`.
+   */
+  passwordChangeRequired: PasswordRequirement
   /** La sesión se cerró porque el perfil estaba inactivo (`is_active === false`). */
   signedOut: boolean
 }

@@ -1,4 +1,8 @@
 import { profileIsActive, isPlatformUserFlag } from "../domain/authentication.rules"
+import {
+  resolvePasswordRequirement,
+  type PasswordRequirement,
+} from "../domain/password.rules"
 import type { AuthenticatedIdentity } from "../domain/entities"
 import {
   rpcHasClientPermission,
@@ -7,6 +11,7 @@ import {
   selectActiveMemberships,
   selectSessionUser,
 } from "../infrastructure/authentication.repository"
+import { selectOwnPasswordLifecycle } from "../infrastructure/password-lifecycle.repository"
 import { selectUserProfileById } from "../infrastructure/user-profiles.repository"
 
 /**
@@ -60,9 +65,15 @@ export async function loadAuthenticatedIdentity(userId: string): Promise<Authent
       isPlatformSuperAdmin: false,
       isPlatformUser: false,
       memberships: [],
+      passwordChangeRequired: "not_required",
       signedOut: true,
     }
   }
+
+  // REQUISITO DE CAMBIO OBLIGATORIO: se resuelve en la MISMA secuencia de identidad. Un fallo
+  // de lectura devuelve `unverified` (nunca `not_required`), de modo que la interfaz exige
+  // reintentar en lugar de conceder acceso normal.
+  const passwordChangeRequired = await loadPasswordChangeRequirement(userId)
 
   const isPlatformSuperAdmin = await rpcIsPlatformSuperAdmin()
   const isPlatformUser = isPlatformUserFlag(await rpcIsPlatformUser(), isPlatformSuperAdmin)
@@ -74,8 +85,22 @@ export async function loadAuthenticatedIdentity(userId: string): Promise<Authent
     isPlatformSuperAdmin,
     isPlatformUser,
     memberships,
+    passwordChangeRequired,
     signedOut: false,
   }
+}
+
+/**
+ * Requisito de cambio obligatorio del usuario autenticado.
+ *
+ * Lee el ciclo de vida por la infraestructura y lo reduce al tri-estado del dominio. NUNCA
+ * convierte un error en `not_required`: un fallo es `unverified`.
+ */
+export async function loadPasswordChangeRequirement(
+  userId: string
+): Promise<PasswordRequirement> {
+  const read = await selectOwnPasswordLifecycle(userId)
+  return resolvePasswordRequirement(read)
 }
 
 /**

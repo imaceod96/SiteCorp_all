@@ -23,6 +23,7 @@ import Admin from "@/modules/access-control/presentation/pages/Admin"
 import Account from "@/modules/access-control/presentation/pages/Account"
 import Organizations from "@/modules/access-control/presentation/pages/Organizations"
 import PlatformUsers from "@/modules/access-control/presentation/pages/PlatformUsers"
+import MustChangePassword from "@/modules/access-control/presentation/pages/MustChangePassword"
 import RolesPermissions from "@/modules/access-control/presentation/pages/RolesPermissions"
 import CompanyClientUsers from "@/modules/company-client/presentation/pages/CompanyClientUsers"
 import CompanyClientInvitations from "@/modules/company-client/presentation/pages/CompanyClientInvitations"
@@ -144,6 +145,40 @@ const IdentityErrorScreen = ({ onRetry }: { onRetry: () => void }) => (
   </div>
 )
 
+/**
+ * No se pudo COMPROBAR el requisito de cambio de contraseña: NO se concede acceso normal.
+ * Se ofrece reintentar (manual) y cerrar sesión.
+ */
+const PasswordRequirementErrorScreen = ({
+  onRetry,
+  onLogout,
+}: {
+  onRetry: () => void
+  onLogout: () => void
+}) => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-white">
+    <div role="alert" className="w-full max-w-md px-6 text-center">
+      <SiteCorpBrand
+        variant="full"
+        size="md"
+        className="mx-auto w-full max-w-[240px]"
+        alt="SiteCorp"
+      />
+      <p className="mt-6 text-sm font-semibold text-ink">No se pudo verificar tu acceso</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        No pudimos comprobar el estado de tu contraseña. Por seguridad no se concede acceso
+        hasta verificarlo. Comprueba tu conexión e inténtalo de nuevo.
+      </p>
+      <div className="mt-6 flex items-center justify-center gap-3">
+        <SiteCorpButton onClick={onRetry}>Reintentar</SiteCorpButton>
+        <SiteCorpButton variant="outline" onClick={onLogout}>
+          Cerrar sesión
+        </SiteCorpButton>
+      </div>
+    </div>
+  </div>
+)
+
 const EntityPanelRedirect = () => {
   const { entityId } = useParams<{ entityId: string }>()
   return <Navigate to={`/entity/${entityId}/summary`} replace />
@@ -154,7 +189,10 @@ const AppRoutes = () => {
     authLoading,
     authReady,
     identityError,
+    passwordChangeRequired,
+    refreshPasswordRequirement,
     retryIdentity,
+    logout,
     user,
     isPlatformUser,
     isProfileActive,
@@ -179,6 +217,23 @@ const AppRoutes = () => {
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+    )
+  }
+
+  // BLOQUEO DE NAVEGACIÓN: con un cambio obligatorio pendiente NO se monta ningún layout ni
+  // página protegida. La barrera real está en el backend; esto impide el uso normal por la
+  // interfaz y garantiza que no se pueda «saltar» por navegación.
+  if (passwordChangeRequired === "required") {
+    return <MustChangePassword />
+  }
+
+  // No se pudo COMPROBAR el requisito: no se concede acceso normal hasta verificarlo.
+  if (passwordChangeRequired === "unverified") {
+    return (
+      <PasswordRequirementErrorScreen
+        onRetry={() => void refreshPasswordRequirement()}
+        onLogout={logout}
+      />
     )
   }
 

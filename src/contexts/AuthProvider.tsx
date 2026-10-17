@@ -5,11 +5,13 @@ import {
   loadAuthenticatedIdentity,
   loadAvatarSignedUrl,
   loadClientPermissionSafe,
+  loadPasswordChangeRequirement,
   loadPlatformPermissionSafe,
   loadSessionUser,
   signOut as signOutSession,
   subscribeAuthChanges,
   type AuthenticatedIdentity,
+  type PasswordRequirement,
 } from "@/modules/access-control"
 import {
   AuthContext,
@@ -64,6 +66,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authLoading, setAuthLoading] = React.useState(true)
   const [authReady, setAuthReady] = React.useState(false)
   const [identityError, setIdentityError] = React.useState<string | null>(null)
+  const [passwordChangeRequired, setPasswordChangeRequired] =
+    React.useState<PasswordRequirement | null>(null)
 
   // Coordinación de resoluciones (referencias: no provocan renders).
   const mountedRef = React.useRef(true)
@@ -170,6 +174,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsPlatformSuperAdmin(identity.isPlatformSuperAdmin)
         setIsPlatformUser(identity.isPlatformUser)
         setMemberships(identity.memberships)
+        // El requisito de cambio de contraseña se publica en el MISMO turno que el resto de la
+        // identidad, de modo que `AppRoutes` nunca elige layout antes de conocerlo.
+        setPasswordChangeRequired(identity.passwordChangeRequired)
 
         resolvedUserIdRef.current = sessionUser.id
         setAuthReady(true)
@@ -220,6 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsProfileActive(true)
       setMemberships([])
       setIdentityError(null)
+      setPasswordChangeRequired(null)
       setAuthLoading(false)
       setAuthReady(true)
     }
@@ -303,6 +311,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void resolveIdentity(sessionUser)
   }, [resolveIdentity])
 
+  /**
+   * Refresca el requisito de cambio de contraseña. Se usa tras completar el cambio (para
+   * levantar el bloqueo sin recargar) y en el reintento del estado `unverified`. Nunca se
+   * ejecuta en bucle.
+   */
+  const refreshPasswordRequirement = React.useCallback(async () => {
+    const sessionUser = sessionUserRef.current
+    if (!sessionUser) {
+      if (mountedRef.current) setPasswordChangeRequired(null)
+      return
+    }
+    const requirement = await loadPasswordChangeRequirement(sessionUser.id)
+    if (mountedRef.current) setPasswordChangeRequired(requirement)
+  }, [])
+
   const logout = async () => {
     await signOutSession()
   }
@@ -342,6 +365,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authLoading,
         authReady,
         identityError,
+        passwordChangeRequired,
+        refreshPasswordRequirement,
         retryIdentity,
         refreshAvatar,
         logout,
