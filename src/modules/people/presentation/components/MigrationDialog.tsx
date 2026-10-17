@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useState } from "react"
-import { loadMigrationTemplateData, type MigrationTemplateData } from "@/modules/people"
+import { loadMigrationTemplateData } from "@/modules/people/application/people.queries"
+import type { MigrationTemplateData } from "@/modules/people/domain/entities"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"

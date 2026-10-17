@@ -765,9 +765,10 @@ test("las utilidades técnicas legítimas se conservan intactas", () => {
   // Sigue siendo la utilidad de nombres de archivo (no se ha vaciado).
   expect(code("src/lib/documents.ts")).toMatch(/export function sanitizeFileName/)
 
-  // Y los diálogos ajenos a este bloque siguen en su sitio.
-  expect(existsSync("src/components/migration/MigrationDialog.tsx")).toBe(true)
-  expect(existsSync("src/components/migration/ExcelImportDialog.tsx")).toBe(true)
+  // Y los diálogos ajenos a este bloque siguen existiendo: se trasladaron al módulo
+  // Personas (Bloque 25), que es el propietario de la Carga inicial de trabajadores.
+  expect(existsSync("src/modules/people/presentation/components/MigrationDialog.tsx")).toBe(true)
+  expect(existsSync("src/modules/people/presentation/components/ExcelImportDialog.tsx")).toBe(true)
 })
 
 /* ------------------------------------------------------------------ */

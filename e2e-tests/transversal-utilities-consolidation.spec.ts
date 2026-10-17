@@ -698,10 +698,11 @@ test("ningún otro contexto cambió por el traslado de las utilidades", () => {
   expect(payrollFormatters).toMatch(/export const formatTenureLabel/)
   expect(payrollFormatters).not.toMatch(/calculateTenure|TenureResult/)
 
-  // Los diálogos ajenos a este bloque siguen intactos y sin la utilidad retirada.
+  // Los diálogos ajenos a este bloque siguen intactos (trasladados al módulo Personas en el
+  // Bloque 25) y sin la utilidad retirada.
   for (const dialog of [
-    "src/components/migration/MigrationDialog.tsx",
-    "src/components/migration/ExcelImportDialog.tsx",
+    "src/modules/people/presentation/components/MigrationDialog.tsx",
+    "src/modules/people/presentation/components/ExcelImportDialog.tsx",
   ]) {
     expect(existsSync(dialog), `${dialog} se conserva`).toBe(true)
     expect(read(dialog), `${dialog} no debe importar la utilidad retirada`).not.toMatch(

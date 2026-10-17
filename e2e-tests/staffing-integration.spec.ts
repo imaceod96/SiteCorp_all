@@ -478,8 +478,8 @@ test("la Plantilla y la Carga inicial no consultan Supabase desde la presentaci√
     "src/modules/organization-structure/presentation/pages/EntitySettingsInitialImport.tsx",
     "src/modules/people/presentation/components/MigratedWorkerDialog.tsx",
     "src/modules/people/presentation/components/LinkWorkerToPositionDialog.tsx",
-    "src/components/migration/MigrationDialog.tsx",
-    "src/components/migration/ExcelImportDialog.tsx",
+    "src/modules/people/presentation/components/MigrationDialog.tsx",
+    "src/modules/people/presentation/components/ExcelImportDialog.tsx",
   ]
 
   for (const file of presentation) {
