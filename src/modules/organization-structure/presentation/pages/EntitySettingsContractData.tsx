@@ -9,7 +9,7 @@ import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badg
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/shared/components/ui/dialog"
 import { Label } from "@/shared/components/ui/label"
 import { CUBA_PROVINCES, MUNICIPIOS_BY_PROVINCE } from "@/data/cuba-locations"
 import { showSuccess, showError } from "@/utils/toast"

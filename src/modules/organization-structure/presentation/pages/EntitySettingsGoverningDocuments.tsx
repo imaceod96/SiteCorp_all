@@ -23,7 +23,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import { Download, Eye, FileText, Paperclip, Plus, Trash2 } from "lucide-react"
 import { showError, showSuccess } from "@/utils/toast"
 import {

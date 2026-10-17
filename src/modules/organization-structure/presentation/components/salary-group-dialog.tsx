@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { X } from "lucide-react"

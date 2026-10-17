@@ -718,33 +718,48 @@ test("la presentación no consulta Supabase por su cuenta", () => {
 
 test("los componentes UI ya consolidados viven en shared y nadie usa la ruta antigua", () => {
   // Consolidación gradual de `src/components/ui` hacia `src/shared/components/ui`
-  // (Bloques 29 a 33): por cada componente ya migrado se comprueba que (a) ya no existe
+  // (Bloques 29 a 34): por cada componente ya migrado se comprueba que (a) ya no existe
   // en la ubicación antigua, (b) existe en la nueva y (c) ningún archivo del proyecto lo
-  // importa desde la ruta antigua. La lista crece con cada bloque de la consolidación.
+  // importa desde la ruta antigua. La lista crece con cada bloque de la consolidación y
+  // con la lista completa se puede verificar que `src/components/` quedó resuelto.
   const migrated = [
     "accordion",
     "alert",
+    "alert-dialog",
     "aspect-ratio",
     "avatar",
     "badge",
     "breadcrumb",
     "button-variants",
     "button",
+    "calendar",
     "card",
+    "carousel",
     "chart",
     "checkbox",
     "collapsible",
+    "command",
+    "context-menu",
+    "dialog",
+    "drawer",
+    "dropdown-menu",
+    "form",
     "hover-card",
     "input-otp",
     "input",
     "label",
+    "menubar",
     "navigation-menu",
+    "pagination",
+    "popover",
     "progress",
     "radio-group",
     "resizable",
     "scroll-area",
     "select",
     "separator",
+    "sheet",
+    "sidebar",
     "sitecorp-alert",
     "sitecorp-button",
     "sitecorp-card",
@@ -755,6 +770,7 @@ test("los componentes UI ya consolidados viven en shared y nadie usa la ruta ant
     "sitecorp-loading",
     "sitecorp-page-header",
     "sitecorp-select",
+    "sitecorp-sidebar-item",
     "sitecorp-status-badge",
     "sitecorp-table",
     "sitecorp-tabs",
@@ -765,11 +781,19 @@ test("los componentes UI ya consolidados viven en shared y nadie usa la ruta ant
     "table",
     "tabs",
     "textarea",
+    "toast",
+    "toaster",
     "toggle-group",
     "toggle-variants",
     "toggle",
     "tooltip",
   ]
+
+  // Archivos retirados por redundancia (no migrados físicamente): el shim `use-toast` de
+  // `src/components/ui` sólo reexportaba la implementación canónica de
+  // `src/shared/hooks/use-toast`, por lo que se eliminó en el Bloque 34 en lugar de
+  // duplicarse. Debe quedar demostrado que no existe y que nadie lo importa.
+  const shimmed = ["use-toast"]
 
   const remaining: string[] = []
   const missing: string[] = []
@@ -790,6 +814,27 @@ test("los componentes UI ya consolidados viven en shared y nadie usa la ruta ant
   expect(offenders, "nadie debe importar un componente consolidado desde la ruta antigua").toEqual(
     []
   )
+
+  // El shim retirado no existe, no se duplicó en shared/components/ui (la implementación
+  // canónica es el hook de src/shared/hooks) y nadie lo importa desde la ruta antigua.
+  for (const name of shimmed) {
+    expect(existsSync(`src/components/ui/${name}.ts`), `${name} no debe existir`).toBe(false)
+    expect(
+      existsSync(`src/shared/components/ui/${name}.ts`) ||
+        existsSync(`src/shared/components/ui/${name}.tsx`),
+      `${name} no debe duplicar la implementación canónica de src/shared/hooks`
+    ).toBe(false)
+  }
+  const shimmedOldPath = new RegExp(`@/components/ui/(${shimmed.join("|")})"`)
+  const shimmedOffenders = sourceFiles("src").filter((file) => shimmedOldPath.test(code(file)))
+  expect(shimmedOffenders, "nadie debe importar el shim retirado").toEqual([])
+
+  // El sistema de notificaciones conserva una única implementación y ya no depende de la
+  // ruta legacy: el hook compartido lee los primitivos consolidados en shared/components/ui.
+  const canonicalToastHook = code("src/shared/hooks/use-toast.ts")
+  expect(canonicalToastHook).toMatch(/export \{ useToast, toast \}/)
+  expect(canonicalToastHook).toMatch(/@\/shared\/components\/ui\/toast/)
+  expect(canonicalToastHook).not.toMatch(/@\/components\//)
 })
 
 /* ------------------------------------------------------------------ */

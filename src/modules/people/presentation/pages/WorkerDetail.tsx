@@ -10,7 +10,7 @@ import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { Label } from "@/shared/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/shared/components/ui/dialog"
 import {
   ArrowLeft,
   Pencil,

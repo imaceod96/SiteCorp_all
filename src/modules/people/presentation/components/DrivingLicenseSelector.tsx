@@ -3,7 +3,7 @@ import { X, ChevronDown } from "lucide-react"
 
 import { Label } from "@/shared/components/ui/label"
 import { Checkbox } from "@/shared/components/ui/checkbox"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Popover, PopoverContent, PopoverTrigger } from "@/shared/components/ui/popover"
 import { cn } from "@/lib/utils"
 import type { CatalogOption } from "@/modules/people/domain/entities"
 

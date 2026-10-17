@@ -16,10 +16,10 @@ import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog"
 import { Building2, ChevronDown, ChevronRight, Factory, Layers, Pencil, Plus, Search, Trash2, Users } from "lucide-react"
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/shared/components/ui/dropdown-menu"
 import { OrganizationEntityDialog } from "@/modules/organization-structure/presentation/components/organization-entity-dialog"
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {

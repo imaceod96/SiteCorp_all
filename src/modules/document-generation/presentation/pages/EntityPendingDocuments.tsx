@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import {
   createBatchZipUrl,
   fetchBatchItems,

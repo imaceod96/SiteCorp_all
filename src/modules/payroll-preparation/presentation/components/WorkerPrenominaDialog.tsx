@@ -6,7 +6,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import { Label } from "@/shared/components/ui/label"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"

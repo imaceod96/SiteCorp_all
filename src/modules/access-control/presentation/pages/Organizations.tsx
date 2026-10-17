@@ -20,7 +20,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import { SelectItem } from "@/shared/components/ui/select"
 import EntityUsersDialog from "@/modules/organization-structure/presentation/components/entity-users-dialog"
 import {

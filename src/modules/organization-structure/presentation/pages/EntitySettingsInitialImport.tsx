@@ -11,7 +11,7 @@ import { Badge } from "@/shared/components/ui/badge"
 import { Label } from "@/shared/components/ui/label"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/shared/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog"
 import { MigratedWorkerDialog } from "@/modules/people/presentation/components/MigratedWorkerDialog"
 // Todo lo aporta el dominio Personas: el formato del archivo (plantilla oficial y lectura del
 // Excel) junto a los casos de uso de la carga inicial (catálogos, validación por fila,

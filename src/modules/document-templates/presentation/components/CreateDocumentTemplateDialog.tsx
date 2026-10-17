@@ -13,7 +13,7 @@ import type {
   DocumentTemplateType,
   DocumentTemplateTypeCode,
 } from "@/modules/document-templates/domain/entities"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog"
 import { Label } from "@/shared/components/ui/label"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"

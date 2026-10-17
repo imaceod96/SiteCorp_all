@@ -17,12 +17,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
+} from "@/shared/components/ui/popover"
 import {
   ArrowLeft,
   FolderTree,

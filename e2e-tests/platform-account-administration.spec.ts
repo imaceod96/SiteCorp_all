@@ -497,9 +497,9 @@ test("ninguna pantalla, componente ni hook conserva accesos directos a Supabase"
   // La presentación vive ahora dentro de cada módulo (`presentation/`); además siguen
   // existiendo las capas compartidas: componentes y contextos.
   const presentationFiles = [
-    ...sourceFiles("src/components"),
-    // Los componentes UI compartidos se están consolidando en `src/shared/components/ui`
-    // (Bloque 29): se escanean las DOS ubicaciones durante la coexistencia.
+    // Los componentes UI compartidos quedaron consolidados en `src/shared/components/ui`
+    // (Bloques 29 a 34): `src/components/` ya no existe, así que la ubicación compartida
+    // es la única capa de componentes que se escanea.
     ...sourceFiles("src/shared/components"),
     ...sourceFiles("src/contexts"),
     ...sourceFiles("src/modules").filter((file) => file.includes("/presentation/")),

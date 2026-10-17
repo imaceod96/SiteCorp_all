@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/shared/components/ui/dropdown-menu"
 import { ChevronUp, KeyRound, LogOut, User as UserIcon } from "lucide-react"
 
 interface SidebarUserMenuProps {

@@ -21,7 +21,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import {
   Users,
   Edit3,

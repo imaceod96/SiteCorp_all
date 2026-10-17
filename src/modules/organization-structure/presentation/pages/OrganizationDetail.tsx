@@ -27,7 +27,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import {
   Building2,
   ChevronDown,
@@ -60,7 +60,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/shared/components/ui/dropdown-menu"
 import { EntityUsersDialog } from "@/modules/organization-structure/presentation/components/entity-users-dialog"
 import { OrganizationEntityDialog } from "@/modules/organization-structure/presentation/components/organization-entity-dialog"
 import RolesManager from "@/modules/access-control/presentation/components/roles-manager"

@@ -6,7 +6,7 @@ import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Label } from "@/shared/components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shared/components/ui/dialog"
 import { CheckCircle2, Eye, FilePlus2, Power, PowerOff } from "lucide-react"
 
 /**

@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import { FileText, Loader2, RefreshCw, Sparkles } from "lucide-react"
 import { formatTemplateFileSize } from "@/modules/document-templates"
 import {

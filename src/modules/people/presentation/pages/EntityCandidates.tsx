@@ -14,7 +14,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/shared/components/ui/table"
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis } from "@/components/ui/pagination"
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis } from "@/shared/components/ui/pagination"
 import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { Users, Edit3, Plus, Eye } from "lucide-react"
 import {
@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog"
+} from "@/shared/components/ui/dialog"
 import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import CandidateForm from "@/modules/people/presentation/components/CandidateForm"
