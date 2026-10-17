@@ -75,7 +75,13 @@ serve(async (req) => {
       console.error("[change-initial-password] lifecycle read failed", lifecycleError)
       return json({ error: "No se pudo verificar el estado de la contraseña." }, 500)
     }
-    if (!lifecycle || lifecycle.must_change_password !== true) {
+    // Reintento tras un cambio YA confirmado: idempotente. No se vuelve a tocar la contraseña
+    // (evita repetir el cambio innecesariamente) y se responde éxito.
+    if (lifecycle && lifecycle.must_change_password === false) {
+      return json({ success: true }, 200)
+    }
+    // Legacy sin fila: no hay un cambio pendiente por esta vía.
+    if (!lifecycle) {
       return json({ error: "No hay un cambio de contraseña pendiente." }, 409)
     }
 

@@ -291,6 +291,17 @@ serve(async (req) => {
       return jsonResponse({ error: "Sesión no válida." }, 401)
     }
 
+    // Barrera de servidor: el llamante no puede tener un cambio de contraseña pendiente.
+    // Se lee la propia fila (RLS permite al titular) sin usar claves privilegiadas.
+    const { data: callerLifecycle } = await client
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", userData.user.id)
+      .maybeSingle()
+    if (callerLifecycle?.must_change_password === true) {
+      return jsonResponse({ error: "Debes cambiar tu contraseña inicial antes de continuar." }, 403)
+    }
+
     console.log("[analyze-document-template] analizando", { filePath, userId: userData.user.id })
 
     const { data: fileBlob, error: downloadError } = await client.storage.from(BUCKET).download(filePath)

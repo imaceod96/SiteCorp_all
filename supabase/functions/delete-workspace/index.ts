@@ -148,6 +148,20 @@ serve(async (req) => {
       return json({ error: "Unauthorized" }, 401)
     }
 
+    // Barrera de servidor: un usuario con cambio de contraseña pendiente no puede ejecutar
+    // operaciones destructivas, aunque la RPC de borrado sea SECURITY DEFINER.
+    const { data: callerLifecycle } = await adminClient
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", callerData.user.id)
+      .maybeSingle()
+    if (callerLifecycle?.must_change_password === true) {
+      console.error("[delete-workspace] caller has a pending password change", {
+        callerId: callerData.user.id,
+      })
+      return json({ error: "Forbidden: pending password change" }, 403)
+    }
+
     const body = (await req.json()) as DeleteWorkspaceRequest
     const tenantId = (body.tenant_id ?? "").trim()
     const confirmationName = body.confirmation_name ?? ""
