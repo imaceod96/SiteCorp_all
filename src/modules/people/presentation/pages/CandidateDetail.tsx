@@ -12,7 +12,7 @@ import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/shared/components/ui/textarea"
 import { SelectItem } from "@/components/ui/select"
 import {
   Dialog,

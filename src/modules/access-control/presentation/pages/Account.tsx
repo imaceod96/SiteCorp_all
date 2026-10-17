@@ -14,7 +14,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/components/ui/sitecorp-input"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar"
 import { KeyRound, Upload, Check, Trash2 } from "lucide-react"
 
 const Account = () => {

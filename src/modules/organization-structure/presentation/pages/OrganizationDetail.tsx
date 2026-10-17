@@ -54,7 +54,7 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
+} from "@/shared/components/ui/breadcrumb"
 import {
   DropdownMenu,
   DropdownMenuContent,

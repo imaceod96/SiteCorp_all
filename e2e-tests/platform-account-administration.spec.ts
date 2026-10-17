@@ -498,6 +498,9 @@ test("ninguna pantalla, componente ni hook conserva accesos directos a Supabase"
   // existiendo las capas compartidas: componentes y contextos.
   const presentationFiles = [
     ...sourceFiles("src/components"),
+    // Los componentes UI compartidos se están consolidando en `src/shared/components/ui`
+    // (Bloque 29): se escanean las DOS ubicaciones durante la coexistencia.
+    ...sourceFiles("src/shared/components"),
     ...sourceFiles("src/contexts"),
     ...sourceFiles("src/modules").filter((file) => file.includes("/presentation/")),
   ]
@@ -560,7 +563,8 @@ test("la administración global no forma ciclos ni depende de la presentación",
   // verificación, no módulos del dominio, y algunas comprueban justamente que el tipo de la
   // presentación coincide con el del dominio.
   // Se excluyen también las capas de PRESENTACIÓN: cada módulo compone su interfaz con los
-  // componentes UI compartidos (`@/components/ui`) y con la presentación de otros módulos,
+  // componentes UI compartidos (`@/components/ui` y, desde el Bloque 29, `@/shared/components/ui`)
+  // y con la presentación de otros módulos,
   // por lo que estas reglas de dominio se aplican sólo a dominio/aplicación/infraestructura.
   const domainFiles = sourceFiles("src/modules")
     .filter((file) => !file.includes("/__tests__/"))

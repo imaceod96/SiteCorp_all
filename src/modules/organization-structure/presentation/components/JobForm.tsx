@@ -7,7 +7,7 @@ import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { SiteCorpCheckbox } from "@/components/ui/sitecorp-checkbox"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/shared/components/ui/textarea"
 import {
   NO_OCCUPATIONAL_CATEGORY_LABEL,
   jobSaveErrorMessage,

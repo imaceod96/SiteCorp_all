@@ -4,7 +4,7 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/shared/components/ui/textarea"
 import {
   areaParentOptions,
   areaSaveErrorMessage,

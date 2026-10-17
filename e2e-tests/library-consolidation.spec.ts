@@ -709,6 +709,7 @@ test("la presentación no consulta Supabase por su cuenta", () => {
   const offenders = sourceFiles("src").filter(
     (file) =>
       (/^src\/(pages|components|hooks|contexts)\//.test(file) ||
+        /^src\/shared\/components\//.test(file) ||
         file.includes("/presentation/")) &&
       /from "@\/lib\/supabase"/.test(code(file))
   )

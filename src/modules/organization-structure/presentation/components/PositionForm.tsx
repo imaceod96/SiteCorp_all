@@ -5,7 +5,7 @@ import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/components/ui/sitecorp-button"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { Textarea } from "@/shared/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import {

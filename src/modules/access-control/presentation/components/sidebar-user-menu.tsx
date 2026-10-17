@@ -2,7 +2,7 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { cn } from "@/lib/utils"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,

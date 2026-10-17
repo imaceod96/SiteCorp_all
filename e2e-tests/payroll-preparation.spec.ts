@@ -768,7 +768,8 @@ test("la fachada src/lib/prenomina.ts se retiró y ningún módulo la importa", 
 
 test("el dominio de prenómina no depende de la presentación ni forma ciclos", () => {
   // Sólo las capas de dominio/aplicación/infraestructura: la presentación del módulo es
-  // consumidora legítima de los componentes UI compartidos (`@/components/ui`).
+  // consumidora legítima de los componentes UI compartidos (`@/components/ui` y, desde el
+  // Bloque 29, `@/shared/components/ui`).
   const domain = sourceFiles("src/modules/payroll-preparation").filter(
     (file) => !file.includes("/presentation/")
   )
