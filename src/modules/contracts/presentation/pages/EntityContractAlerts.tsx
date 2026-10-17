@@ -15,6 +15,7 @@ import type {
   SeparateWorkerDialogProps,
   WorkerCurrentSituation,
 } from "@/shared/components/worker-action-contracts"
+import { PLURIEMPLEO_ENABLED } from "@/shared/config/pluriempleo"
 import {
   CONTRACT_ALERT_FILTER_OPTIONS,
   CONTRACT_ALERT_FULL_HORIZON_DAYS,
@@ -224,6 +225,10 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
       typeCode: row.contract_type_code,
       startDate: row.contract_start_date,
       endDate: row.contract_end_date,
+      // Pluriempleo: la fila ES un contrato concreto, así que la operación se envía
+      // identificada. Mientras las migraciones no estén aplicadas el parámetro no existe
+      // y NO se envía (la llamada es la actual).
+      targetContractId: PLURIEMPLEO_ENABLED ? row.contract_id : null,
     },
   })
 

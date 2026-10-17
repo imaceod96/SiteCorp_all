@@ -86,6 +86,8 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
         effectiveDate,
         separationReasonId: reasonId,
         notes,
+        // Pluriempleo: con dos contratos vigentes se identifica la asignación afectada.
+        targetAssignmentId: current.targetAssignmentId ?? null,
       })
 
       // La baja cierra el contrato vigente: recalcular alertas de vencimiento.

@@ -1,6 +1,7 @@
 import {
   changeWorkerContractRpc,
   changeWorkerPositionRpc,
+  createWorkerPluriemployRpc,
   registerWorkerSeparationRpc,
   reincorporateWorkerRpc,
 } from "../infrastructure/worker-transitions.repository"
@@ -12,6 +13,8 @@ import {
 } from "../infrastructure/transition-documents"
 import { TRANSITION_MOVEMENT_DOCUMENT } from "../domain/rules"
 import type {
+  PluriemployContractInput,
+  PluriemployResult,
   WorkerContractChangeInput,
   WorkerContractChangeResult,
   WorkerPositionChangeInput,
@@ -45,6 +48,7 @@ export async function registerWorkerSeparation(input: WorkerSeparationInput): Pr
     effectiveDate: input.effectiveDate,
     separationReasonId: input.separationReasonId,
     notes: input.notes,
+    targetAssignmentId: input.targetAssignmentId ?? null,
   })
 
   const movement = TRANSITION_MOVEMENT_DOCUMENT.separation
@@ -139,6 +143,9 @@ export async function changeWorkerPosition(
       : input.representativeAssignmentId ?? null,
     requireFormalized: formalizeNow,
     resolutionDate: input.resolutionDate ?? null,
+    // Pluriempleo: con dos contratos vigentes hay que identificar la asignación
+    // afectada. Con uno solo viaja `null` y la llamada es la de siempre.
+    targetAssignmentId: input.targetAssignmentId ?? null,
   })
 
   // §42/§65: el documento del anexo formalizado se genera automáticamente.
@@ -179,10 +186,36 @@ export async function changeWorkerContract(
     paymentMethodId: input.paymentMethodId,
     compensationComponents: input.compensationComponents,
     paymentScheduleText: input.paymentScheduleText,
+    // Pluriempleo: con dos contratos vigentes hay que identificar el contrato afectado.
+    targetContractId: input.targetContractId ?? null,
   })
 
   const documentWarning = result.newContractId
     ? await ensureContractDocument(result.newContractId)
+    : null
+
+  return { ...result, documentWarning }
+}
+
+export interface PluriemployOutcome extends PluriemployResult {
+  /** Aviso cuando el documento del contrato no se pudo generar. */
+  documentWarning: string | null
+}
+
+/**
+ * Alta del SEGUNDO contrato del trabajador (Pluriempleo).
+ *
+ * No crea candidato ni proceso de selección y no duplica la ficha: abre una segunda
+ * asignación y un segundo contrato independientes sobre la misma persona. El documento
+ * del contrato se genera después y nunca interrumpe la operación.
+ */
+export async function createWorkerPluriemploy(
+  input: PluriemployContractInput
+): Promise<PluriemployOutcome> {
+  const result = await createWorkerPluriemployRpc(input)
+
+  const documentWarning = result.contractId
+    ? await ensureContractDocument(result.contractId)
     : null
 
   return { ...result, documentWarning }

@@ -486,12 +486,48 @@ export interface WorkerReincorporationWithResolutionInput {
   resolution: ResolutionFormalizationInput
 }
 
+/**
+ * Alta de un SEGUNDO contrato de un trabajador activo en su misma entidad
+ * (`create_worker_pluriemploy`): nuevo puesto + nuevo contrato, sin duplicar la persona
+ * ni crear candidato ni proceso de selección.
+ */
+export interface PluriemployContractInput {
+  workerId: string
+  /** Segundo puesto, dentro de la MISMA entidad del trabajador. */
+  positionId: string
+  /** Fecha de incorporación al segundo puesto (inicio de la nueva asignación). */
+  hireDate: string
+  contractTypeId: string
+  contractStartDate: string
+  contractEndDate: string
+  isDetermined: boolean
+  notes: string
+  representativeAssignmentId: string | null
+  signatureDate: string
+  signaturePlace: string
+  paymentMethodId: string
+  paymentScheduleText: string
+  compensationComponents: CompensationComponentPayload[]
+}
+
+/** Resultado del alta por Pluriempleo (asignación y contrato creados). */
+export interface PluriemployResult {
+  assignmentId: string | null
+  contractId: string | null
+}
+
 /** Baja del trabajador: cierra puesto y contrato vigentes y lo deja inactivo. */
 export interface WorkerSeparationInput {
   workerId: string
   effectiveDate: string
   separationReasonId: string
   notes: string
+  /**
+   * Asignación afectada (`p_target_assignment_id`). Sólo se envía cuando el trabajador
+   * tiene DOS contratos vigentes: con uno solo la RPC resuelve el contrato por sí misma
+   * y la llamada es idéntica a la actual.
+   */
+  targetAssignmentId?: string | null
 }
 
 /** Cambio de tipo de contrato: cierra el vigente y crea uno nuevo con sus condiciones. */
@@ -508,6 +544,11 @@ export interface WorkerContractChangeInput {
   paymentMethodId: string
   paymentScheduleText: string
   compensationComponents: CompensationComponentPayload[]
+  /**
+   * Contrato afectado (`p_target_contract_id`). Sólo se envía cuando el trabajador tiene
+   * DOS contratos vigentes: con uno solo la RPC resuelve el contrato vigente por sí misma.
+   */
+  targetContractId?: string | null
 }
 
 /** Reubicación del trabajador: nueva asignación y, si procede, anexo al contrato vigente. */
@@ -534,6 +575,11 @@ export interface WorkerPositionChangeInput {
   representativeAssignmentId?: string | null
   /** Fecha de la Resolución cuando el Cargo destino es Especialista Principal (§45). */
   resolutionDate?: string | null
+  /**
+   * Asignación afectada (`p_target_assignment_id`). Sólo se envía cuando el trabajador
+   * tiene DOS contratos vigentes: con uno solo la RPC resuelve el contrato vigente.
+   */
+  targetAssignmentId?: string | null
 }
 
 /** Diferencia contractual detectada por el backend entre dos condiciones. */
@@ -1036,6 +1082,11 @@ export interface WorkerContractFormalizationInput {
   paymentMethodId: string
   compensationComponents: CompensationComponentPayload[]
   paymentScheduleText: string | null
+  /**
+   * Asignación a la que pertenece el contrato (`p_target_assignment_id`). Sólo se envía
+   * cuando el trabajador tiene DOS contratos vigentes.
+   */
+  targetAssignmentId?: string | null
 }
 
 /* ------------------------------------------------------------------------- */

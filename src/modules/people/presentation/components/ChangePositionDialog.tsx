@@ -332,6 +332,8 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
           notes,
           representativeAssignmentId: resolutionValues.representativeAssignmentId,
           resolutionDate: resolutionValues.resolutionDate,
+          // Pluriempleo: con dos contratos vigentes se identifica la asignación afectada.
+          targetAssignmentId: current.targetAssignmentId ?? null,
         })
 
         invalidateContractAlertData(queryClient)
@@ -382,6 +384,8 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
               representativeAssignmentId,
             }
           : undefined,
+        // Pluriempleo: con dos contratos vigentes se identifica la asignación afectada.
+        targetAssignmentId: current.targetAssignmentId ?? null,
       })
 
       const addendumStatus = result.addendum?.addendum_status

@@ -211,6 +211,8 @@ const ChangeContractDialog: React.FC<ChangeContractDialogProps> = ({
         paymentMethodId,
         paymentScheduleText: paymentSchedule,
         compensationComponents: buildComponentsPayload(components),
+        // Pluriempleo: con dos contratos vigentes se identifica el contrato afectado.
+        targetContractId: current.targetContractId ?? null,
       })
 
       // El contrato vigente cambió: recalcular alertas de vencimiento y resumen.

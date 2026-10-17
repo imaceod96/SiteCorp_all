@@ -121,8 +121,19 @@ const EntityVacations = () => {
         ? (overviewQuery.error as Error)?.message || "Error al cargar las vacaciones"
         : null
 
+  // Pluriempleo: la vista devuelve UNA FILA POR CONTRATO, así que la opción del diálogo
+  // se identifica por trabajador + contrato y muestra el puesto correspondiente.
+  const rowKey = (row: VacationOverviewRow) => `${row.worker_id}:${row.assignment_id ?? ""}`
+
   const dialogWorkers = React.useMemo(
-    () => rows.map((r) => ({ id: r.worker_id, full_name: r.full_name, balance: r.balance })),
+    () =>
+      rows.map((r) => ({
+        key: rowKey(r),
+        id: r.worker_id,
+        full_name: r.position_name ? `${r.full_name} · ${r.position_name}` : r.full_name,
+        balance: r.balance,
+        assignmentId: r.assignment_id,
+      })),
     [rows]
   )
 
@@ -310,7 +321,7 @@ const EntityVacations = () => {
                     </thead>
                     <tbody>
                       {visibleRows.map((row) => (
-                        <tr key={row.worker_id} className="border-b border-border/60 align-top">
+                        <tr key={rowKey(row)} className="border-b border-border/60 align-top">
                           <td className="px-3 py-3 font-medium text-ink">
                             {row.full_name}
                             {row.active_vacation && (
@@ -384,7 +395,7 @@ const EntityVacations = () => {
               {/* Tablet / móvil */}
               <div className="space-y-3 xl:hidden">
                 {visibleRows.map((row) => (
-                  <SiteCorpCard key={row.worker_id}>
+                  <SiteCorpCard key={rowKey(row)}>
                     <div className="space-y-3">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
@@ -476,9 +487,16 @@ const EntityVacations = () => {
         onOpenChange={setDialogOpen}
         entityId={entityId as string}
         workers={dialogWorkers}
-        preselectedWorkerId={dialogWorker?.worker_id ?? null}
-        preselectedWorkerName={dialogWorker?.full_name ?? null}
+        preselectedWorkerId={dialogWorker ? rowKey(dialogWorker) : null}
+        preselectedWorkerName={
+          dialogWorker
+            ? dialogWorker.position_name
+              ? `${dialogWorker.full_name} · ${dialogWorker.position_name}`
+              : dialogWorker.full_name
+            : null
+        }
         preselectedBalance={dialogWorker?.balance ?? null}
+        preselectedAssignmentId={dialogWorker?.assignment_id ?? null}
       />
     </div>
   )

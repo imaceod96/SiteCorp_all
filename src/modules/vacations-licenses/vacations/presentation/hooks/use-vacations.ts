@@ -38,10 +38,16 @@ export function useEntityVacationOverview(entityId: string | null | undefined, e
   })
 }
 
-export function useWorkerVacation(workerId: string | null | undefined, enabled = true) {
+export function useWorkerVacation(
+  workerId: string | null | undefined,
+  assignmentId?: string | null,
+  enabled = true
+) {
   return useQuery<WorkerVacationData>({
-    queryKey: workerVacationQueryKey(workerId),
-    queryFn: () => loadWorkerVacationData(workerId as string),
+    // La clave incluye el contrato: en pluriempleo el saldo, las solicitudes y los
+    // movimientos son independientes por contrato y no pueden compartir caché.
+    queryKey: workerVacationQueryKey(workerId, assignmentId),
+    queryFn: () => loadWorkerVacationData(workerId as string, assignmentId ?? null),
     enabled: !!workerId && enabled,
     staleTime: 0,
     refetchOnMount: "always",

@@ -28,6 +28,7 @@ import {
   FileSignature,
   AlertTriangle,
   Wallet,
+  Layers,
 } from "lucide-react"
 import { Tabs, TabsContent } from "@/shared/components/ui/tabs"
 import { SiteCorpTabsList, SiteCorpTabTrigger } from "@/shared/components/ui/sitecorp-tabs"
@@ -49,6 +50,12 @@ import {
   ageRange,
   calculateAge,
   calculateTenure,
+  activeContractsOf,
+  assignmentOfContract,
+  canOfferPluriempleo,
+  employmentMovementLabel,
+  resolveContractTarget,
+  selectedContractOf,
   type CatalogOption,
   type CatalogRow,
   type WorkerEmploymentMovement,
@@ -77,6 +84,7 @@ import {
   type PositionScheduleSegment,
 } from "@/modules/organization-structure"
 import ChangeContractDialog from "@/modules/people/presentation/components/ChangeContractDialog"
+import PluriemployContractDialog from "@/modules/people/presentation/components/PluriemployContractDialog"
 import { ContractFormalizationAlerts } from "@/modules/contracts/presentation/components/ContractFormalizationAlerts"
 import {
   ContractRetributionFields,
@@ -169,6 +177,9 @@ const WorkerDetail = () => {
   const [separateOpen, setSeparateOpen] = React.useState(false)
   const [reincorporateOpen, setReincorporateOpen] = React.useState(false)
   const [changeContractOpen, setChangeContractOpen] = React.useState(false)
+  // Pluriempleo: alta del segundo contrato y contrato seleccionado en la ficha.
+  const [pluriempleoOpen, setPluriempleoOpen] = React.useState(false)
+  const [selectedContractId, setSelectedContractId] = React.useState<string | null>(null)
   const [movements, setMovements] = React.useState<WorkerEmploymentMovement[]>([])
   const [salaryHistory, setSalaryHistory] = React.useState<WorkerSalaryHistoryEntry[]>([])
   // Fase 11A.6: anexos al contrato y condiciones contractuales formalizadas vigentes
@@ -227,11 +238,6 @@ const WorkerDetail = () => {
     return worker.assignments.find(a => a.is_current && !a.end_date) || null
   }, [worker])
 
-  const currentContract = React.useMemo(() => {
-    if (!worker?.contracts) return null
-    return worker.contracts.find(c => c.is_current) || null
-  }, [worker])
-
   const sortedAssignments = React.useMemo(() => {
     if (!worker?.assignments) return []
     return [...worker.assignments].sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
@@ -241,6 +247,32 @@ const WorkerDetail = () => {
     if (!worker?.contracts) return []
     return [...worker.contracts].sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
   }, [worker])
+
+  // Pluriempleo: la persona conserva UNA ficha con DOS contratos vigentes como máximo.
+  const activeContracts = React.useMemo(() => activeContractsOf(worker), [worker])
+  const isPluriempleo = activeContracts.length > 1
+  // La opción «Pluriempleo» sólo se ofrece con la interfaz habilitada, el trabajador
+  // activo y EXACTAMENTE un contrato vigente (ver `pluriempleo.rules.ts`).
+  const canOfferPluriempleoOption = React.useMemo(() => canOfferPluriempleo(worker), [worker])
+
+  // Contrato sobre el que opera la ficha: el seleccionado o, si no, el vigente.
+  const displayContract = React.useMemo(
+    () => selectedContractOf(worker, selectedContractId),
+    [worker, selectedContractId]
+  )
+
+  // Identificación del contrato afectado por las operaciones contractuales: sólo viaja
+  // con DOS contratos vigentes (con uno la RPC resuelve el contrato como siempre).
+  const contractTarget = React.useMemo(
+    () => resolveContractTarget(worker, displayContract?.id ?? null),
+    [worker, displayContract]
+  )
+
+  // Asignación del contrato mostrado (con un solo contrato, la situación vigente actual).
+  const displayAssignment = React.useMemo(
+    () => (isPluriempleo ? assignmentOfContract(worker, displayContract) : currentAssignment),
+    [isPluriempleo, worker, displayContract, currentAssignment]
+  )
 
   const lastAssignment = sortedAssignments[0] ?? null
   // Para un trabajador inactivo mostramos su ÚLTIMA situación laboral (assignment histórico más reciente).
@@ -368,13 +400,21 @@ const WorkerDetail = () => {
       const localLastAssignment = localAssignments
         .slice()
         .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0] || null
-      const localGroup =
-        localCurrentAssignment?.position?.job?.salary_group ||
-        localLastAssignment?.position?.job?.salary_group ||
-        null
+      // Pluriempleo: cada contrato vigente tiene su propio grupo salarial, así que se
+      // cargan los valores de escala de TODOS los puestos del trabajador (no sólo del
+      // vigente): la ficha muestra el salario del contrato seleccionado.
+      const localGroupIds = Array.from(
+        new Set(
+          [
+            ...localAssignments.map((a) => a.position?.job?.salary_group?.id),
+            localCurrentAssignment?.position?.job?.salary_group?.id,
+            localLastAssignment?.position?.job?.salary_group?.id,
+          ].filter((id): id is string => !!id)
+        )
+      )
 
-      if (localGroup?.id) {
-        setSalaryValuesByGroup(await fetchSalaryValuesForGroups([localGroup.id]))
+      if (localGroupIds.length > 0) {
+        setSalaryValuesByGroup(await fetchSalaryValuesForGroups(localGroupIds))
       } else {
         setSalaryValuesByGroup({})
       }
@@ -524,6 +564,8 @@ const WorkerDetail = () => {
         paymentMethodId: contractForm.paymentMethodId,
         compensationComponents: buildComponentsPayload(contractForm.components),
         paymentScheduleText: contractForm.paymentSchedule.trim() || null,
+        // Pluriempleo: con dos contratos vigentes hay que identificar la asignación.
+        targetAssignmentId: contractTarget.targetAssignmentId,
       })
 
       // El contrato vigente cambió: recalcular alertas de vencimiento.
@@ -569,8 +611,53 @@ const WorkerDetail = () => {
 
   const salary = salaryForGroup(applicableScaleId, group, salaryValuesByGroup)
 
+  // Puesto, cargo, grupo y salario del CONTRATO MOSTRADO: en pluriempleo cada contrato
+  // tiene su propio puesto y su propia retribución (la antigüedad es común).
+  const displayPosition = displayAssignment?.position ?? position
+  const displayJob = displayPosition?.job ?? job
+  const displayGroup = displayJob?.salary_group ?? group
+  const displaySalary = salaryForGroup(applicableScaleId, displayGroup, salaryValuesByGroup)
+
+  // El histórico salarial pertenece al contrato: en pluriempleo se muestra el del
+  // contrato seleccionado (cada contrato conserva su propia evolución económica).
+  const displaySalaryHistory = React.useMemo(
+    () =>
+      isPluriempleo && displayContract
+        ? salaryHistory.filter((entry) => entry.employment_contract_id === displayContract.id)
+        : salaryHistory,
+    [salaryHistory, isPluriempleo, displayContract]
+  )
+
+  // Contratos vigentes para el selector de vacaciones (una entrada por contrato). Con un
+  // solo contrato la pestaña de vacaciones no muestra selector.
+  const vacationContracts = React.useMemo(
+    () =>
+      isPluriempleo
+        ? activeContracts.map((contract) => {
+            const contractPosition = assignmentOfContract(worker, contract)?.position
+            return {
+              assignmentId: contract.assignment_id,
+              label: `${contractPosition?.name || "Puesto"} · ${
+                contract.contract_type?.name || "Contrato"
+              }`,
+            }
+          })
+        : [],
+    [isPluriempleo, activeContracts, worker]
+  )
+
   // Condiciones FORMALIZADAS vigentes (contrato original + anexos formalizados en orden)
   const formalizedConditions = contractualConditions?.formalized ?? null
+
+  // En pluriempleo las condiciones formalizadas sólo se muestran en el contrato al que
+  // pertenecen: nunca se atribuyen al otro contrato.
+  const formalizedForDisplay = React.useMemo(() => {
+    if (!formalizedConditions) return null
+    if (!isPluriempleo) return formalizedConditions
+    return formalizedConditions.employment_contract_id === displayContract?.id
+      ? formalizedConditions
+      : null
+  }, [formalizedConditions, isPluriempleo, displayContract])
 
   // Anexos pendientes de formalizar (todavía NO forman parte de las condiciones formalizadas)
   const pendingContractAddendums = React.useMemo(
@@ -580,10 +667,10 @@ const WorkerDetail = () => {
 
   // El snapshot contractual es histórico: puede diferir del salario operativo actual.
   const contractSalaryDiffers =
-    currentContract?.salary_snapshot_status === "CAPTURED" &&
-    currentContract.salary_amount !== null &&
-    salary !== null &&
-    Number(currentContract.salary_amount) !== salary.amount
+    displayContract?.salary_snapshot_status === "CAPTURED" &&
+    displayContract.salary_amount !== null &&
+    displaySalary !== null &&
+    Number(displayContract.salary_amount) !== displaySalary.amount
 
   // Fase 12: alerta de vencimiento del contrato vigente (categorías derivadas).
   const contractAlertTone =
@@ -619,28 +706,39 @@ const WorkerDetail = () => {
   )
 
   const currentContractInfo: CurrentContractInfo | null = React.useMemo(() => {
-    if (!currentContract) return null
+    if (!displayContract) return null
     return {
-      id: currentContract.id,
-      typeName: currentContract.contract_type?.name ?? null,
-      typeCode: currentContract.contract_type?.code ?? null,
-      startDate: currentContract.start_date,
-      endDate: currentContract.end_date,
+      id: displayContract.id,
+      typeName: displayContract.contract_type?.name ?? null,
+      typeCode: displayContract.contract_type?.code ?? null,
+      startDate: displayContract.start_date,
+      endDate: displayContract.end_date,
+      // Pluriempleo: identifica el contrato afectado (null con un solo contrato).
+      targetContractId: contractTarget.targetContractId,
     }
-  }, [currentContract])
+  }, [displayContract, contractTarget])
 
   const currentSituation: WorkerCurrentSituation = React.useMemo(
     () => ({
-      positionId: position?.id ?? currentAssignment?.position_id ?? null,
-      positionName: position?.name ?? null,
-      positionCode: position?.code ?? null,
-      jobName: job?.name ?? null,
-      areaName: job?.area?.name ?? null,
-      groupSequence: group?.sequence_number ?? null,
-      salary: salary ?? null,
-      startDate: currentAssignment?.start_date ?? null,
+      positionId: displayPosition?.id ?? displayAssignment?.position_id ?? null,
+      positionName: displayPosition?.name ?? null,
+      positionCode: displayPosition?.code ?? null,
+      jobName: displayJob?.name ?? null,
+      areaName: displayJob?.area?.name ?? null,
+      groupSequence: displayGroup?.sequence_number ?? null,
+      salary: displaySalary ?? null,
+      startDate: displayAssignment?.start_date ?? null,
+      // Pluriempleo: identifica la asignación afectada (null con un solo contrato).
+      targetAssignmentId: contractTarget.targetAssignmentId,
     }),
-    [position, currentAssignment, job, group, salary]
+    [
+      displayPosition,
+      displayAssignment,
+      displayJob,
+      displayGroup,
+      displaySalary,
+      contractTarget,
+    ]
   )
 
   const incompleteFields = React.useMemo(() => {
@@ -1242,19 +1340,90 @@ const WorkerDetail = () => {
             </div>
           )}
 
+          {/* Pluriempleo: selección del contrato y alta del segundo contrato */}
+          {isPluriempleo && (
+            <SiteCorpCard>
+              <div className="space-y-3 p-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Layers className="h-5 w-5 text-sitecorp-primary" />
+                  <h3 className="text-lg font-semibold text-ink">Pluriempleo</h3>
+                  <SiteCorpStatusBadge status="info">
+                    {activeContracts.length} contratos vigentes
+                  </SiteCorpStatusBadge>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  La persona conserva una única ficha con un contrato por puesto. Selecciona el
+                  contrato para consultar sus condiciones, su salario, su jornada, sus documentos
+                  y sus movimientos.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {activeContracts.map((contract) => {
+                    const contractPosition = assignmentOfContract(worker, contract)?.position
+                    const isSelected = displayContract?.id === contract.id
+                    return (
+                      <button
+                        key={contract.id}
+                        type="button"
+                        onClick={() => setSelectedContractId(contract.id)}
+                        className={`rounded-xl border px-3 py-2 text-left transition-colors ${
+                          isSelected
+                            ? "border-sitecorp-primary bg-sitecorp-primary/5"
+                            : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <span className="block text-sm font-medium text-ink">
+                          {contractPosition?.name || "Puesto"}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {contract.contract_type?.name || "Contrato"} · desde{" "}
+                          {formatContractDate(contract.start_date)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </SiteCorpCard>
+          )}
+
+          {/* Alta del SEGUNDO contrato: sólo con exactamente un contrato vigente */}
+          {canOfferPluriempleoOption && canManage && currentAssignment && (
+            <SiteCorpCard>
+              <div className="flex flex-wrap items-center justify-between gap-3 p-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-ink">Pluriempleo</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Formaliza un segundo contrato para otro puesto de esta misma entidad. El
+                    trabajador no se duplica: se añaden una asignación y un contrato
+                    independientes.
+                  </p>
+                </div>
+                <SiteCorpButton
+                  type="button"
+                  onClick={() => {
+                    setActionError(null)
+                    setPluriempleoOpen(true)
+                  }}
+                >
+                  <Layers className="mr-2 h-4 w-4" /> Pluriempleo
+                </SiteCorpButton>
+              </div>
+            </SiteCorpCard>
+          )}
+
           {/* Contrato vigente con condiciones formalizadas (§8) */}
           <CurrentContractSummary
-            hasContract={!!currentContract}
+            hasContract={!!displayContract}
             isInactive={isInactive}
-            contractTypeName={currentContract?.contract_type?.name ?? null}
-            contractStartDate={currentContract?.start_date ?? null}
-            contractEndDate={currentContract?.end_date ?? null}
-            representativeName={currentContract?.representative_name_snapshot ?? null}
-            representativePosition={currentContract?.representative_position_snapshot ?? null}
-            formalized={formalizedConditions}
-            currentSalaryAmount={salary?.amount ?? null}
-            currentSalaryCurrency={salary?.currency_code ?? null}
-            alert={contractAlert}
+            contractTypeName={displayContract?.contract_type?.name ?? null}
+            contractStartDate={displayContract?.start_date ?? null}
+            contractEndDate={displayContract?.end_date ?? null}
+            representativeName={displayContract?.representative_name_snapshot ?? null}
+            representativePosition={displayContract?.representative_position_snapshot ?? null}
+            formalized={formalizedForDisplay}
+            currentSalaryAmount={displaySalary?.amount ?? null}
+            currentSalaryCurrency={displaySalary?.currency_code ?? null}
+            alert={isPluriempleo ? null : contractAlert}
             canManage={canManage}
             onRegisterContract={() => {
               setActionError(null)
@@ -1291,11 +1460,11 @@ const WorkerDetail = () => {
             }))}
             conditions={contractualConditions}
             operational={{
-              jobName: job?.name ?? null,
-              positionName: position?.name ?? null,
-              groupSequence: group?.sequence_number ?? null,
-              salaryAmount: salary?.amount ?? null,
-              salaryCurrency: salary?.currency_code ?? null,
+              jobName: displayJob?.name ?? null,
+              positionName: displayPosition?.name ?? null,
+              groupSequence: displayGroup?.sequence_number ?? null,
+              salaryAmount: displaySalary?.amount ?? null,
+              salaryCurrency: displaySalary?.currency_code ?? null,
             }}
             paymentMethods={paymentMethods}
             onChanged={loadWorker}
@@ -1327,7 +1496,7 @@ const WorkerDetail = () => {
                 <div>
                   <dt className="text-xs text-muted-foreground">Grupo salarial</dt>
                   <dd className="text-sm text-ink">
-                    {group ? `Grupo ${toRomanNumeral(group.sequence_number)}` : "—"}
+                    {displayGroup ? `Grupo ${toRomanNumeral(displayGroup.sequence_number)}` : "—"}
                   </dd>
                 </div>
                 <div>
@@ -1335,23 +1504,23 @@ const WorkerDetail = () => {
                     <Wallet className="h-3 w-3" /> Importe vigente
                   </dt>
                   <dd className="text-sm font-medium text-ink">
-                    {salary ? formatSalary(salary) : "Sin salario configurado"}
+                    {displaySalary ? formatSalary(displaySalary) : "Sin salario configurado"}
                   </dd>
-                  {salary?.effective_from && (
+                  {displaySalary?.effective_from && (
                     <p className="text-xs text-muted-foreground">
-                      Vigente desde {formatContractDate(salary.effective_from)}
+                      Vigente desde {formatContractDate(displaySalary.effective_from)}
                     </p>
                   )}
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Cargo</dt>
-                  <dd className="text-sm text-ink">{job?.name || "—"}</dd>
+                  <dd className="text-sm text-ink">{displayJob?.name || "—"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Puesto</dt>
                   <dd className="text-sm text-ink">
                     {isInactive ? "Último puesto: " : ""}
-                    {position?.name || "—"}
+                    {displayPosition?.name || "—"}
                   </dd>
                 </div>
               </dl>
@@ -1366,39 +1535,39 @@ const WorkerDetail = () => {
               title="Salario del contrato"
               description="Snapshot histórico registrado al crear el contrato vigente"
             >
-              {!currentContract ? (
+              {!displayContract ? (
                 <p className="text-sm text-muted-foreground">
                   Sin contrato vigente registrado para este trabajador.
                 </p>
-              ) : currentContract.salary_snapshot_status === "CAPTURED" &&
-                currentContract.salary_amount !== null ? (
+              ) : displayContract.salary_snapshot_status === "CAPTURED" &&
+                displayContract.salary_amount !== null ? (
                 <>
                   <dl className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <dt className="text-xs text-muted-foreground">Importe del contrato</dt>
                       <dd className="text-sm font-medium text-ink">
                         {formatSalary({
-                          amount: Number(currentContract.salary_amount),
-                          currency_code: currentContract.salary_currency_code || "",
+                          amount: Number(displayContract.salary_amount),
+                          currency_code: displayContract.salary_currency_code || "",
                         })}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Fecha de vigencia</dt>
                       <dd className="text-sm text-ink">
-                        {formatContractDate(currentContract.salary_effective_date)}
+                        {formatContractDate(displayContract.salary_effective_date)}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Tipo de contrato</dt>
                       <dd className="text-sm text-ink">
-                        {currentContract.contract_type?.name || "—"}
+                        {displayContract.contract_type?.name || "—"}
                       </dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Inicio del contrato</dt>
                       <dd className="text-sm text-ink">
-                        {formatContractDate(currentContract.start_date)}
+                        {formatContractDate(displayContract.start_date)}
                       </dd>
                     </div>
                   </dl>
@@ -1412,14 +1581,14 @@ const WorkerDetail = () => {
                   <ContractRetributionSummary
                     className="mt-3 bg-background"
                     title="Retribución formalizada en este contrato"
-                    salaryAmount={currentContract.salary_amount}
-                    salaryCurrencyCode={currentContract.salary_currency_code}
-                    salarySnapshotStatus={currentContract.salary_snapshot_status}
-                    salaryEffectiveDate={currentContract.salary_effective_date}
-                    totalCompensationSnapshot={currentContract.total_compensation_snapshot}
-                    components={componentsByContract[currentContract.id] || []}
-                    capturedAt={currentContract.conditions_captured_at}
-                    salaryGroupSequence={currentContract.salary_group?.sequence_number ?? null}
+                    salaryAmount={displayContract.salary_amount}
+                    salaryCurrencyCode={displayContract.salary_currency_code}
+                    salarySnapshotStatus={displayContract.salary_snapshot_status}
+                    salaryEffectiveDate={displayContract.salary_effective_date}
+                    totalCompensationSnapshot={displayContract.total_compensation_snapshot}
+                    components={componentsByContract[displayContract.id] || []}
+                    capturedAt={displayContract.conditions_captured_at}
+                    salaryGroupSequence={displayContract.salary_group?.sequence_number ?? null}
                   />
                 </>
               ) : (
@@ -1436,13 +1605,13 @@ const WorkerDetail = () => {
             title="Historial salarial"
             description="Evolución registrada del salario del trabajador (histórico: no se recalcula)"
           >
-            {salaryHistory.length === 0 ? (
+            {displaySalaryHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Sin histórico salarial registrado para este trabajador.
+                Sin histórico salarial registrado para este contrato.
               </p>
             ) : (
               <ol className="relative space-y-4 border-l border-border pl-5">
-                {salaryHistory.map((entry) => (
+                {displaySalaryHistory.map((entry) => (
                   <li key={entry.id} className="relative">
                     <span
                       className={`absolute -left-[26px] top-1.5 h-3 w-3 rounded-full border-2 border-background ${
@@ -1516,6 +1685,51 @@ const WorkerDetail = () => {
             )}
           </SiteCorpCard>
 
+          {/* Bitácora laboral: movimientos del vínculo (baja, reincorporación, cambio de
+              puesto, cambio de contrato y el alta del segundo contrato por Pluriempleo). */}
+          <SiteCorpCard
+            title="Bitácora laboral"
+            description="Movimientos registrados del vínculo laboral (histórico: no se recalcula)"
+          >
+            {movements.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Sin movimientos registrados para este trabajador.
+              </p>
+            ) : (
+              <ol className="relative space-y-4 border-l border-border pl-5">
+                {movements.map((movement) => (
+                  <li key={movement.id} className="relative">
+                    <span className="absolute -left-[26px] top-1.5 h-3 w-3 rounded-full border-2 border-background bg-sitecorp-primary" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-ink">
+                        {formatContractDate(movement.effective_date)}
+                      </span>
+                      <SiteCorpStatusBadge
+                        status={movement.movement_type === "PLURIEMPLEO" ? "info" : "neutral"}
+                      >
+                        {employmentMovementLabel(movement.movement_type)}
+                      </SiteCorpStatusBadge>
+                      {movement.separation_reason?.name && (
+                        <span className="text-xs text-muted-foreground">
+                          {movement.separation_reason.name}
+                        </span>
+                      )}
+                    </div>
+                    {movement.reason && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{movement.reason}</p>
+                    )}
+                    {movement.notes && (
+                      <p className="text-xs text-muted-foreground">{movement.notes}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {movement.authorName ? `Registrado por ${movement.authorName}` : "Registrado"}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </SiteCorpCard>
+
         </TabsContent>
 
         <TabsContent value="documentos" className="space-y-6">
@@ -1531,6 +1745,7 @@ const WorkerDetail = () => {
               entityId={entityId as string}
               workerName={fullName(worker)}
               canManage={canManageVacations}
+              contracts={vacationContracts}
             />
           </TabsContent>
         )}
@@ -1987,16 +2202,28 @@ const WorkerDetail = () => {
           current={currentContractInfo}
           workerName={fullName(worker)}
           workerIdentification={worker.identification}
-          positionId={position?.id ?? null}
-          positionName={position?.name ?? null}
-          jobName={job?.name ?? null}
-          areaName={job?.area?.name ?? null}
-          salaryGroupSequence={group?.sequence_number ?? null}
-          baseSalaryAmount={salary?.amount ?? null}
-          baseSalaryCurrency={salary?.currency_code ?? null}
+          positionId={displayPosition?.id ?? null}
+          positionName={displayPosition?.name ?? null}
+          jobName={displayJob?.name ?? null}
+          areaName={displayJob?.area?.name ?? null}
+          salaryGroupSequence={displayGroup?.sequence_number ?? null}
+          baseSalaryAmount={displaySalary?.amount ?? null}
+          baseSalaryCurrency={displaySalary?.currency_code ?? null}
           onSuccess={loadWorker}
         />
       )}
+
+      {/* Diálogo de alta del segundo contrato (Pluriempleo) */}
+      <PluriemployContractDialog
+        open={pluriempleoOpen}
+        onOpenChange={setPluriempleoOpen}
+        workerId={worker.id}
+        entityId={entityId as string}
+        workerName={fullName(worker)}
+        workerIdentification={worker.identification}
+        currentPositionId={currentAssignment?.position_id ?? null}
+        onSuccess={loadWorker}
+      />
 
       {/* Detalle del anexo abierto desde el histórico contractual */}
       <AddendumDetailDialog

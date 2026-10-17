@@ -67,6 +67,8 @@ export type {
   WorkerSeparationInput,
   WorkerContractChangeInput,
   WorkerPositionChangeInput,
+  PluriemployContractInput,
+  PluriemployResult,
   ContractualChange,
   PositionChangePreview,
   PositionChangeAddendum,
@@ -178,6 +180,7 @@ export type {
   ReincorporationOutcome,
   PositionChangeOutcome,
   ContractChangeOutcome,
+  PluriemployOutcome,
 } from "./application/worker-transitions.commands"
 
 export {
@@ -186,7 +189,30 @@ export {
   reincorporateWorkerWithResolution,
   changeWorkerPosition,
   changeWorkerContract,
+  createWorkerPluriemploy,
 } from "./application/worker-transitions.commands"
+
+/* Pluriempleo: vocabulario, lectura de contratos vigentes e identificación del contrato */
+export {
+  PLURIEMPLEO_ENABLED,
+  PLURIEMPLEO_LABEL,
+  PLURIEMPLEO_MAX_ACTIVE_CONTRACTS,
+  PLURIEMPLEO_MOVEMENT_TYPE,
+  PLURIEMPLEO_DISABLED_MESSAGE,
+  PLURIEMPLEO_TARGET_REQUIRED_MESSAGE,
+  EMPLOYMENT_MOVEMENT_LABELS,
+  employmentMovementLabel,
+  activeContractsOf,
+  activeAssignmentsOf,
+  hasPluriempleo,
+  canOfferPluriempleo,
+  resolveContractTarget,
+  selectedContractOf,
+  assignmentOfContract,
+  validatePluriemployInput,
+} from "./domain/pluriempleo.rules"
+
+export type { ContractTarget, PluriemployValidationInput } from "./domain/pluriempleo.rules"
 
 /* Casos de uso (escritura) */
 export type { RegisterCandidateCommand } from "./application/people.commands"

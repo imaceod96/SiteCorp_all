@@ -26,9 +26,16 @@ import { invalidateVacationData } from "../hooks/use-vacations"
 import { CalendarCheck2 } from "lucide-react"
 
 interface VacationWorkerOption {
+  /**
+   * Clave única de la opción. En pluriempleo un mismo trabajador aparece una vez por
+   * CONTRATO, así que la opción se identifica por contrato y no sólo por trabajador.
+   */
+  key?: string
   id: string
   full_name: string
   balance: number
+  /** Contrato (asignación) de la opción: las vacaciones son independientes por contrato. */
+  assignmentId?: string | null
 }
 
 interface RegisterVacationDialogProps {
@@ -40,6 +47,8 @@ interface RegisterVacationDialogProps {
   preselectedWorkerId?: string | null
   preselectedWorkerName?: string | null
   preselectedBalance?: number | null
+  /** Contrato (asignación) preseleccionado cuando el trabajador tiene uno solo. */
+  preselectedAssignmentId?: string | null
   onSuccess?: () => void
 }
 
@@ -69,6 +78,7 @@ export const RegisterVacationDialog = ({
   preselectedWorkerId,
   preselectedWorkerName,
   preselectedBalance,
+  preselectedAssignmentId,
   onSuccess,
 }: RegisterVacationDialogProps) => {
   const { toast } = useToast()
@@ -122,7 +132,8 @@ export const RegisterVacationDialog = ({
     }
   }, [startDate, endDate])
 
-  const selectedWorker = workers.find((w) => w.id === workerId)
+  // La opción se resuelve por su clave (trabajador + contrato en pluriempleo).
+  const selectedWorker = workers.find((w) => (w.key ?? w.id) === workerId)
   const workerBalance = selectedWorker?.balance ?? preselectedBalance ?? 0
   const chargedDays = preview?.chargedDays ?? 0
   const balanceOk = chargedDays <= workerBalance
@@ -134,12 +145,16 @@ export const RegisterVacationDialog = ({
     setSubmitting(true)
 
     try {
+      // El contrato de la solicitud: el de la opción elegida o el preseleccionado. Con un
+      // solo contrato el parámetro no se envía (la RPC resuelve la asignación).
+      const chosen = workers.find((w) => (w.key ?? w.id) === data.workerId)
       const result = await registerWorkerVacation({
-        workerId: data.workerId,
+        workerId: chosen?.id ?? data.workerId,
         startDate: data.startDate,
         endDate: data.endDate,
         notes: data.notes ?? null,
         requestId,
+        assignmentId: chosen?.assignmentId ?? preselectedAssignmentId ?? null,
       })
 
       // Invalida TODAS las queries de vacaciones (saldo, histórico, overview, KPIs).
@@ -194,7 +209,7 @@ export const RegisterVacationDialog = ({
               >
                 <option value="">Seleccionar trabajador</option>
                 {workers.map((w) => (
-                  <option key={w.id} value={w.id}>
+                  <option key={w.key ?? w.id} value={w.key ?? w.id}>
                     {w.full_name}
                   </option>
                 ))}

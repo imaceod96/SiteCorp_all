@@ -13,22 +13,73 @@ import { useSc404Generation } from "@/modules/access-control/presentation/hooks/
 import { cancelWorkerVacation, type VacationPeriod } from "@/modules/vacations-licenses/vacations"
 import { CalendarPlus } from "lucide-react"
 
+/** Contrato (asignación) con su etiqueta visible, para seleccionar el contrato. */
+export interface VacationContractOption {
+  assignmentId: string
+  label: string
+}
+
 interface WorkerVacationsTabProps {
   workerId: string
   entityId: string
   workerName: string
   canManage: boolean
+  /**
+   * Contratos VIGENTES del trabajador. Con dos contratos (pluriempleo) el saldo, las
+   * solicitudes y los movimientos son independientes y hay que seleccionar el contrato.
+   */
+  contracts?: VacationContractOption[]
 }
 
 /** Pestaña «Vacaciones» dentro de la ficha del trabajador (Fase 18). */
-const WorkerVacationsTab = ({ workerId, entityId, workerName, canManage }: WorkerVacationsTabProps) => {
+const WorkerVacationsTab = ({
+  workerId,
+  entityId,
+  workerName,
+  canManage,
+  contracts,
+}: WorkerVacationsTabProps) => {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const { generate: generateSc404, generatingId: generatingSc404Id } = useSc404Generation()
 
-  const query = useWorkerVacation(workerId, true)
+  // Pluriempleo: cada contrato tiene sus propias vacaciones. Con uno solo no se muestra
+  // ningún selector y el comportamiento es el de siempre.
+  const contractOptions = contracts ?? []
+  const isPluriempleo = contractOptions.length > 1
+  const [assignmentId, setAssignmentId] = React.useState<string | null>(
+    contractOptions[0]?.assignmentId ?? null
+  )
+
+  React.useEffect(() => {
+    setAssignmentId((current) => {
+      if (current && contractOptions.some((option) => option.assignmentId === current)) {
+        return current
+      }
+      return contractOptions[0]?.assignmentId ?? null
+    })
+  }, [contractOptions])
+
+  const query = useWorkerVacation(workerId, assignmentId, true)
   const data = query.data
+  const activeContractLabel =
+    contractOptions.find((option) => option.assignmentId === assignmentId)?.label ?? null
+
+  // El diálogo de registro es el MISMO: se le entrega el trabajador con su contrato ya
+  // resuelto, de modo que la solicitud queda identificada con el contrato seleccionado.
+  const workerOptions = React.useMemo(
+    () => [
+      {
+        key: `${workerId}:${assignmentId ?? ""}`,
+        id: workerId,
+        full_name: activeContractLabel ? `${workerName} · ${activeContractLabel}` : workerName,
+        balance: data?.summary.balance ?? 0,
+        assignmentId,
+      },
+    ],
+    [workerId, assignmentId, workerName, activeContractLabel, data]
+  )
 
   const handleCancel = async (period: VacationPeriod) => {
     if (!confirm("¿Cancelar este período de vacaciones? El consumo se revertirá al saldo.")) return
@@ -66,6 +117,38 @@ const WorkerVacationsTab = ({ workerId, entityId, workerName, canManage }: Worke
         </SiteCorpAlert>
       )}
 
+      {/* Pluriempleo: selección del contrato cuyas vacaciones se consultan */}
+      {isPluriempleo && (
+        <SiteCorpCard>
+          <div className="space-y-3 p-6">
+            <h3 className="text-base font-semibold text-ink">Contrato</h3>
+            <p className="text-sm text-muted-foreground">
+              Las vacaciones son independientes por contrato: selecciona el contrato cuyo saldo,
+              solicitudes y movimientos quieres consultar.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {contractOptions.map((option) => {
+                const isSelected = option.assignmentId === assignmentId
+                return (
+                  <button
+                    key={option.assignmentId}
+                    type="button"
+                    onClick={() => setAssignmentId(option.assignmentId)}
+                    className={`rounded-xl border px-3 py-2 text-left text-sm transition-colors ${
+                      isSelected
+                        ? "border-sitecorp-primary bg-sitecorp-primary/5 font-medium text-ink"
+                        : "border-border text-ink hover:bg-muted/40"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </SiteCorpCard>
+      )}
+
       <VacationBalanceCard summary={data.summary} />
 
       {canManage && (
@@ -90,10 +173,11 @@ const WorkerVacationsTab = ({ workerId, entityId, workerName, canManage }: Worke
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         entityId={entityId}
-        workers={[{ id: workerId, full_name: workerName, balance: data.summary.balance }]}
-        preselectedWorkerId={workerId}
-        preselectedWorkerName={workerName}
+        workers={workerOptions}
+        preselectedWorkerId={workerOptions[0]?.key ?? workerId}
+        preselectedWorkerName={workerOptions[0]?.full_name ?? workerName}
         preselectedBalance={data.summary.balance}
+        preselectedAssignmentId={assignmentId}
         onSuccess={() => query.refetch()}
       />
     </div>

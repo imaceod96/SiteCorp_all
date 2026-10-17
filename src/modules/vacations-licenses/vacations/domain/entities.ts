@@ -36,6 +36,12 @@ export interface VacationSummary {
 
 export interface VacationOverviewRow {
   worker_id: string
+  /**
+   * Asignación (contrato) a la que pertenece la fila. En pluriempleo la vista devuelve
+   * UNA FILA POR CONTRATO VIGENTE; `null` cuando el trabajador no tiene contrato
+   * identificado (fila legacy).
+   */
+  assignment_id: string | null
   full_name: string
   area_name: string | null
   job_name: string | null
@@ -54,6 +60,8 @@ export interface VacationOverviewRow {
 export interface VacationPeriod {
   id: string
   worker_id: string
+  /** Contrato (asignación) de la solicitud. `null` = fila histórica sin contrato. */
+  assignment_id: string | null
   start_date: string
   end_date: string
   natural_days: number
@@ -68,6 +76,8 @@ export interface VacationPeriod {
 
 export interface VacationMovement {
   id: string
+  /** Contrato (asignación) del movimiento. `null` = movimiento histórico sin contrato. */
+  assignment_id: string | null
   movement_type: VacationMovementType
   amount: number
   calculated_amount: number | null

@@ -31,6 +31,12 @@ export interface WorkerCurrentSituation {
   groupSequence: number | null
   salary: WorkerSituationSalary | null
   startDate: string | null
+  /**
+   * Asignación afectada (`p_target_assignment_id`) cuando el trabajador tiene DOS
+   * contratos vigentes (pluriempleo). Con un solo contrato viaja `null`/ausente y la
+   * llamada a la RPC es EXACTAMENTE la actual.
+   */
+  targetAssignmentId?: string | null
 }
 
 /** Contrato vigente del trabajador (resumen usado por el flujo de cambio de contrato). */
@@ -40,6 +46,11 @@ export interface CurrentContractInfo {
   typeCode: string | null
   startDate: string
   endDate: string | null
+  /**
+   * Contrato afectado (`p_target_contract_id`) cuando el trabajador tiene DOS contratos
+   * vigentes (pluriempleo). Con un solo contrato viaja `null`/ausente.
+   */
+  targetContractId?: string | null
 }
 
 /** Props del diálogo de cambio de contrato (inyectado desde el punto de composición). */

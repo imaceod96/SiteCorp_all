@@ -343,7 +343,7 @@ export async function saveWorkerLicenseIds(
 export async function registerWorkerContract(
   input: WorkerContractFormalizationInput
 ): Promise<string | null> {
-  const { data, error } = await supabase.rpc("complete_worker_contract", {
+  const params: Record<string, unknown> = {
     p_worker_id: input.workerId,
     p_contract_type_id: input.contractTypeId,
     p_contract_start_date: input.startDate,
@@ -354,7 +354,12 @@ export async function registerWorkerContract(
     p_payment_method_id: input.paymentMethodId,
     p_compensation_components: input.compensationComponents,
     p_payment_schedule_text: input.paymentScheduleText,
-  })
+  }
+  // Pluriempleo: con dos contratos vigentes hay que identificar la asignación. Con uno
+  // solo el parámetro NO se envía (la RPC resuelve el contrato como siempre).
+  if (input.targetAssignmentId) params.p_target_assignment_id = input.targetAssignmentId
+
+  const { data, error } = await supabase.rpc("complete_worker_contract", params)
   if (error) throw error
   return (data as { contract_id?: string } | null)?.contract_id ?? null
 }

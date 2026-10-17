@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase"
 import type {
   ContractualChange,
+  PluriemployContractInput,
+  PluriemployResult,
   PositionChangePreview,
   WorkerContractChangeResult,
   WorkerEngagementResult,
@@ -73,6 +75,8 @@ export interface RegisterSeparationRpcPayload {
   effectiveDate: string
   separationReasonId: string
   notes: string | null
+  /** Asignación afectada (pluriempleo). `null` = comportamiento actual. */
+  targetAssignmentId?: string | null
 }
 
 export interface ChangeWorkerContractRpcPayload {
@@ -87,6 +91,8 @@ export interface ChangeWorkerContractRpcPayload {
   paymentMethodId: string
   compensationComponents: CompensationComponentPayload[] | null
   paymentScheduleText: string | null
+  /** Contrato afectado (pluriempleo). `null` = comportamiento actual. */
+  targetContractId?: string | null
 }
 
 export interface ChangeWorkerPositionRpcPayload {
@@ -103,11 +109,29 @@ export interface ChangeWorkerPositionRpcPayload {
   requireFormalized: boolean
   /** Fecha de la Resolución cuando el Cargo destino es Especialista Principal. */
   resolutionDate: string | null
+  /** Asignación afectada (pluriempleo). `null` = comportamiento actual. */
+  targetAssignmentId?: string | null
 }
 
 const toNullableText = (value: string | null | undefined): string | null => {
   const trimmed = (value ?? "").trim()
   return trimmed ? trimmed : null
+}
+
+/**
+ * Añade el parámetro de identificación del contrato SOLO cuando existe.
+ *
+ * Mientras las migraciones del pluriempleo no estén aplicadas, las RPC no admiten
+ * `p_target_assignment_id` / `p_target_contract_id`: omitir el parámetro cuando es
+ * `null` mantiene EXACTAMENTE la llamada actual para trabajadores con un solo contrato.
+ */
+const withTarget = (
+  params: Record<string, unknown>,
+  key: "p_target_assignment_id" | "p_target_contract_id",
+  value: string | null | undefined
+): Record<string, unknown> => {
+  if (value) params[key] = value
+  return params
 }
 
 /** Alta de una persona (o reincorporación de una persona con expediente laboral). */
@@ -186,12 +210,18 @@ export async function reincorporateWorkerRpc(
 export async function registerWorkerSeparationRpc(
   payload: RegisterSeparationRpcPayload
 ): Promise<void> {
-  const { error } = await supabase.rpc("register_worker_separation", {
-    p_worker_id: payload.workerId,
-    p_effective_date: payload.effectiveDate,
-    p_separation_reason_id: payload.separationReasonId,
-    p_notes: toNullableText(payload.notes),
-  })
+  const params = withTarget(
+    {
+      p_worker_id: payload.workerId,
+      p_effective_date: payload.effectiveDate,
+      p_separation_reason_id: payload.separationReasonId,
+      p_notes: toNullableText(payload.notes),
+    },
+    "p_target_assignment_id",
+    payload.targetAssignmentId
+  )
+
+  const { error } = await supabase.rpc("register_worker_separation", params)
   if (error) throw error
 }
 
@@ -199,19 +229,25 @@ export async function registerWorkerSeparationRpc(
 export async function changeWorkerContractRpc(
   payload: ChangeWorkerContractRpcPayload
 ): Promise<WorkerContractChangeResult> {
-  const { data, error } = await supabase.rpc("change_worker_contract", {
-    p_worker_id: payload.workerId,
-    p_new_contract_type_id: payload.newContractTypeId,
-    p_effective_date: payload.effectiveDate,
-    p_new_end_date: payload.newEndDate,
-    p_notes: toNullableText(payload.notes),
-    p_representative_assignment_id: payload.representativeAssignmentId,
-    p_signature_date: payload.signatureDate,
-    p_signature_place: toNullableText(payload.signaturePlace),
-    p_payment_method_id: payload.paymentMethodId,
-    p_compensation_components: payload.compensationComponents,
-    p_payment_schedule_text: toNullableText(payload.paymentScheduleText),
-  })
+  const params = withTarget(
+    {
+      p_worker_id: payload.workerId,
+      p_new_contract_type_id: payload.newContractTypeId,
+      p_effective_date: payload.effectiveDate,
+      p_new_end_date: payload.newEndDate,
+      p_notes: toNullableText(payload.notes),
+      p_representative_assignment_id: payload.representativeAssignmentId,
+      p_signature_date: payload.signatureDate,
+      p_signature_place: toNullableText(payload.signaturePlace),
+      p_payment_method_id: payload.paymentMethodId,
+      p_compensation_components: payload.compensationComponents,
+      p_payment_schedule_text: toNullableText(payload.paymentScheduleText),
+    },
+    "p_target_contract_id",
+    payload.targetContractId
+  )
+
+  const { data, error } = await supabase.rpc("change_worker_contract", params)
   if (error) throw error
 
   const result = (data || {}) as { new_contract_id?: string | null }
@@ -222,22 +258,62 @@ export async function changeWorkerContractRpc(
 export async function changeWorkerPositionRpc(
   payload: ChangeWorkerPositionRpcPayload
 ): Promise<WorkerPositionChangeResult> {
-  const { data, error } = await supabase.rpc("change_worker_position", {
-    p_worker_id: payload.workerId,
-    p_new_position_id: payload.newPositionId,
-    p_effective_date: payload.effectiveDate,
-    p_reason: toNullableText(payload.reason),
-    p_notes: toNullableText(payload.notes),
-    p_create_addendum: payload.createAddendum,
-    p_reason_code: payload.reasonCode,
-    p_signature_date: payload.signatureDate,
-    p_signature_place: toNullableText(payload.signaturePlace),
-    p_representative_assignment_id: payload.representativeAssignmentId,
-    p_require_formalized: payload.requireFormalized,
-    p_resolution_date: payload.resolutionDate,
-  })
+  const params = withTarget(
+    {
+      p_worker_id: payload.workerId,
+      p_new_position_id: payload.newPositionId,
+      p_effective_date: payload.effectiveDate,
+      p_reason: toNullableText(payload.reason),
+      p_notes: toNullableText(payload.notes),
+      p_create_addendum: payload.createAddendum,
+      p_reason_code: payload.reasonCode,
+      p_signature_date: payload.signatureDate,
+      p_signature_place: toNullableText(payload.signaturePlace),
+      p_representative_assignment_id: payload.representativeAssignmentId,
+      p_require_formalized: payload.requireFormalized,
+      p_resolution_date: payload.resolutionDate,
+    },
+    "p_target_assignment_id",
+    payload.targetAssignmentId
+  )
+
+  const { data, error } = await supabase.rpc("change_worker_position", params)
   if (error) throw error
   return data as WorkerPositionChangeResult
+}
+
+/**
+ * Alta del SEGUNDO contrato del trabajador (`create_worker_pluriemploy`): nueva
+ * asignación y contrato independientes, sin duplicar la persona.
+ *
+ * La RPC reutiliza las mismas primitivas de la contratación normal (snapshots,
+ * condiciones, bitácora y movimiento de nómina) y valida la preparación contractual.
+ */
+export async function createWorkerPluriemployRpc(
+  payload: PluriemployContractInput
+): Promise<PluriemployResult> {
+  const { data, error } = await supabase.rpc("create_worker_pluriemploy", {
+    p_worker_id: payload.workerId,
+    p_position_id: payload.positionId,
+    p_hire_date: payload.hireDate,
+    p_contract_type_id: payload.contractTypeId,
+    p_contract_start_date: payload.contractStartDate || payload.hireDate,
+    p_contract_end_date: payload.isDetermined ? payload.contractEndDate || null : null,
+    p_notes: toNullableText(payload.notes),
+    p_representative_assignment_id: payload.representativeAssignmentId,
+    p_signature_date: payload.signatureDate,
+    p_signature_place: toNullableText(payload.signaturePlace),
+    p_payment_method_id: payload.paymentMethodId,
+    p_compensation_components: payload.compensationComponents,
+    p_payment_schedule_text: toNullableText(payload.paymentScheduleText),
+  })
+  if (error) throw error
+
+  const result = (data || {}) as { assignment_id?: string | null; contract_id?: string | null }
+  return {
+    assignmentId: result.assignment_id ?? null,
+    contractId: result.contract_id ?? null,
+  }
 }
 
 /** Diferencias contractuales de un cambio de puesto, calculadas por el backend. */

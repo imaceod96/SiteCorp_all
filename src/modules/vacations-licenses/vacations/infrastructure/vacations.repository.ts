@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { PLURIEMPLEO_ENABLED } from "@/shared/config/pluriempleo"
 import type {
   VacationMovement,
   VacationOverviewRow,
@@ -22,6 +23,36 @@ const rpcError = (error: { message?: string } | null): never => {
   throw new Error(error?.message || "No se pudo completar la operación de vacaciones.")
 }
 
+/**
+ * Añade `p_assignment_id` SOLO cuando hay contrato identificado Y la función está
+ * habilitada.
+ *
+ * Con un solo contrato (o con las migraciones sin aplicar) el parámetro NO se envía: la
+ * llamada es EXACTAMENTE la actual y la RPC resuelve la asignación por sí misma. Con dos
+ * contratos vigentes las vacaciones son independientes por contrato.
+ */
+const withAssignment = (
+  params: Record<string, unknown>,
+  assignmentId: string | null | undefined
+): Record<string, unknown> => {
+  if (PLURIEMPLEO_ENABLED && assignmentId) params.p_assignment_id = assignmentId
+  return params
+}
+
+/**
+ * Filtra filas por contrato SIN atribuir nunca una fila histórica sin contrato: si las
+ * filas del trabajador todavía no identifican su contrato (datos anteriores a la
+ * migración), se devuelven completas en lugar de asignarlas al contrato más antiguo.
+ */
+const filterByAssignment = <T extends { assignment_id: string | null }>(
+  rows: T[],
+  assignmentId: string | null | undefined
+): T[] => {
+  if (!assignmentId) return rows
+  if (!rows.some((row) => row.assignment_id)) return rows
+  return rows.filter((row) => row.assignment_id === assignmentId)
+}
+
 /** Lista + KPIs de vacaciones de la entidad (el backend ejecuta catch-up idempotente). */
 export async function fetchEntityVacationOverview(entityId: string): Promise<VacationOverviewRow[]> {
   const { data, error } = await supabase.rpc("entity_vacation_overview", { p_entity_id: entityId })
@@ -36,13 +67,25 @@ export async function fetchEntityVacationOverview(entityId: string): Promise<Vac
 }
 
 /** Contabiliza de forma idempotente los meses cerrados pendientes del trabajador. */
-export async function ensureWorkerVacationAccruals(workerId: string): Promise<void> {
-  const { error } = await supabase.rpc("run_worker_vacation_catchup", { p_worker_id: workerId })
+export async function ensureWorkerVacationAccruals(
+  workerId: string,
+  assignmentId?: string | null
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "run_worker_vacation_catchup",
+    withAssignment({ p_worker_id: workerId }, assignmentId)
+  )
   if (error) rpcError(error)
 }
 
-export async function fetchWorkerVacationSummary(workerId: string): Promise<VacationSummary> {
-  const { data, error } = await supabase.rpc("worker_vacation_summary", { p_worker_id: workerId })
+export async function fetchWorkerVacationSummary(
+  workerId: string,
+  assignmentId?: string | null
+): Promise<VacationSummary> {
+  const { data, error } = await supabase.rpc(
+    "worker_vacation_summary",
+    withAssignment({ p_worker_id: workerId }, assignmentId)
+  )
   if (error) rpcError(error)
   const s = (data as VacationSummary | null) || null
   if (!s) throw new Error("No se pudo obtener el saldo de vacaciones del trabajador.")
@@ -59,33 +102,41 @@ export async function fetchWorkerVacationSummary(workerId: string): Promise<Vaca
   }
 }
 
-export async function fetchWorkerVacationPeriods(workerId: string): Promise<VacationPeriod[]> {
+export async function fetchWorkerVacationPeriods(
+  workerId: string,
+  assignmentId?: string | null
+): Promise<VacationPeriod[]> {
   const { data, error } = await supabase
     .from("worker_vacations")
-    .select("id, worker_id, start_date, end_date, natural_days, sundays_count, charged_days, status, notes, cancelled_at, cancel_reason, created_at")
+    .select("id, worker_id, assignment_id, start_date, end_date, natural_days, sundays_count, charged_days, status, notes, cancelled_at, cancel_reason, created_at")
     .eq("worker_id", workerId)
     .order("start_date", { ascending: false })
   if (error) throw new Error(error.message)
-  return ((data as VacationPeriod[]) || []).map((p) => ({
+  const rows = ((data as VacationPeriod[]) || []).map((p) => ({
     ...p,
     charged_days: Number(p.charged_days) || 0,
   }))
+  return filterByAssignment(rows, assignmentId)
 }
 
-export async function fetchWorkerVacationMovements(workerId: string): Promise<VacationMovement[]> {
+export async function fetchWorkerVacationMovements(
+  workerId: string,
+  assignmentId?: string | null
+): Promise<VacationMovement[]> {
   const { data, error } = await supabase
     .from("worker_vacation_movements")
-    .select("id, movement_type, amount, calculated_amount, effective_date, accrual_year, accrual_month, working_days_month, working_days_year, description, reason, vacation_id, created_at")
+    .select("id, worker_id, assignment_id, movement_type, amount, calculated_amount, effective_date, accrual_year, accrual_month, working_days_month, working_days_year, description, reason, vacation_id, created_at")
     .eq("worker_id", workerId)
     .order("effective_date", { ascending: true })
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
   if (error) throw new Error(error.message)
-  return ((data as VacationMovement[]) || []).map((m) => ({
+  const rows = ((data as VacationMovement[]) || []).map((m) => ({
     ...m,
     amount: Number(m.amount) || 0,
     calculated_amount: m.calculated_amount === null ? null : Number(m.calculated_amount),
   }))
+  return filterByAssignment(rows, assignmentId)
 }
 
 /** Registra un período de vacaciones (crea período + movimiento negativo en una transacción). */
@@ -95,14 +146,22 @@ export async function registerWorkerVacation(params: {
   endDate: string
   notes?: string | null
   requestId?: string | null
+  /** Contrato (asignación) de la solicitud: obligatorio en pluriempleo. */
+  assignmentId?: string | null
 }): Promise<{ charged_days: number; balance: number; vacation_id: string }> {
-  const { data, error } = await supabase.rpc("register_worker_vacation", {
-    p_worker_id: params.workerId,
-    p_start_date: params.startDate,
-    p_end_date: params.endDate,
-    p_notes: params.notes ?? null,
-    p_request_id: params.requestId ?? null,
-  })
+  const { data, error } = await supabase.rpc(
+    "register_worker_vacation",
+    withAssignment(
+      {
+        p_worker_id: params.workerId,
+        p_start_date: params.startDate,
+        p_end_date: params.endDate,
+        p_notes: params.notes ?? null,
+        p_request_id: params.requestId ?? null,
+      },
+      params.assignmentId
+    )
+  )
   if (error) rpcError(error)
   return data as { charged_days: number; balance: number; vacation_id: string }
 }
@@ -123,13 +182,21 @@ export async function adjustWorkerVacationBalance(params: {
   amount: number
   reason: string
   effectiveDate?: string | null
+  /** Contrato (asignación) del ajuste: obligatorio en pluriempleo. */
+  assignmentId?: string | null
 }): Promise<{ balance: number }> {
-  const { data, error } = await supabase.rpc("adjust_worker_vacation_balance", {
-    p_worker_id: params.workerId,
-    p_amount: params.amount,
-    p_reason: params.reason,
-    p_effective_date: params.effectiveDate ?? null,
-  })
+  const { data, error } = await supabase.rpc(
+    "adjust_worker_vacation_balance",
+    withAssignment(
+      {
+        p_worker_id: params.workerId,
+        p_amount: params.amount,
+        p_reason: params.reason,
+        p_effective_date: params.effectiveDate ?? null,
+      },
+      params.assignmentId
+    )
+  )
   if (error) rpcError(error)
   return data as { balance: number }
 }
@@ -139,12 +206,20 @@ export async function setWorkerVacationOpeningBalance(params: {
   workerId: string
   amount: number
   cutoffDate: string
+  /** Contrato (asignación) del saldo inicial: obligatorio en pluriempleo. */
+  assignmentId?: string | null
 }): Promise<{ balance: number }> {
-  const { data, error } = await supabase.rpc("set_worker_vacation_opening_balance", {
-    p_worker_id: params.workerId,
-    p_amount: params.amount,
-    p_cutoff_date: params.cutoffDate,
-  })
+  const { data, error } = await supabase.rpc(
+    "set_worker_vacation_opening_balance",
+    withAssignment(
+      {
+        p_worker_id: params.workerId,
+        p_amount: params.amount,
+        p_cutoff_date: params.cutoffDate,
+      },
+      params.assignmentId
+    )
+  )
   if (error) rpcError(error)
   return data as { balance: number }
 }

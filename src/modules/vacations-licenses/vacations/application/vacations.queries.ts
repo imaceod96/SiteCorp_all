@@ -19,8 +19,10 @@ import type { VacationMovement, VacationPeriod, VacationSummary } from "../domai
 export const vacationOverviewQueryKey = (entityId: string | null | undefined) =>
   ["vacations", "overview", entityId ?? "none"] as const
 
-export const workerVacationQueryKey = (workerId: string | null | undefined) =>
-  ["vacations", "worker", workerId ?? "none"] as const
+export const workerVacationQueryKey = (
+  workerId: string | null | undefined,
+  assignmentId?: string | null
+) => ["vacations", "worker", workerId ?? "none", assignmentId ?? "all"] as const
 
 export interface WorkerVacationData {
   summary: VacationSummary
@@ -35,13 +37,16 @@ export interface WorkerVacationData {
  * ejecuta y se ESPERA antes de leer: el saldo consolidado debe reflejar siempre los
  * meses cerrados. Solo después se leen en paralelo resumen, períodos y movimientos.
  */
-export async function loadWorkerVacationData(workerId: string): Promise<WorkerVacationData> {
+export async function loadWorkerVacationData(
+  workerId: string,
+  assignmentId?: string | null
+): Promise<WorkerVacationData> {
   // Mantenimiento idempotente del devengo antes de leer el saldo consolidado.
-  await ensureWorkerVacationAccruals(workerId)
+  await ensureWorkerVacationAccruals(workerId, assignmentId)
   const [summary, periods, movements] = await Promise.all([
-    fetchWorkerVacationSummary(workerId),
-    fetchWorkerVacationPeriods(workerId),
-    fetchWorkerVacationMovements(workerId),
+    fetchWorkerVacationSummary(workerId, assignmentId),
+    fetchWorkerVacationPeriods(workerId, assignmentId),
+    fetchWorkerVacationMovements(workerId, assignmentId),
   ])
   return { summary, periods, movements }
 }
