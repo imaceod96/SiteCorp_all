@@ -7,15 +7,15 @@ import {
   type PersonCandidate,
 } from "@/modules/people"
 import { useNavigate } from "react-router-dom"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/shared/components/ui/table"
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationPrevious, PaginationNext, PaginationEllipsis } from "@/components/ui/pagination"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { Users, Edit3, Plus, Eye } from "lucide-react"
 import {
   Dialog,

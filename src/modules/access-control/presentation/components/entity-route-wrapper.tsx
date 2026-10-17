@@ -11,9 +11,9 @@ import {
   loadOrganizationEntity,
   organizationFallbackPath,
 } from "@/modules/organization-structure"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { EntityLayout } from "@/modules/organization-structure/presentation/components/entity-layout"

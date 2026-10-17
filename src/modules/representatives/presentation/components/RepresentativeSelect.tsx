@@ -1,8 +1,8 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
 import { cn } from "@/lib/utils"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { Label } from "@/components/ui/label"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
+import { Label } from "@/shared/components/ui/label"
 // `fetchValidRepresentatives` sólo existe en la capa de infraestructura del módulo: se consume
 // por la interfaz pública (el barrel) para no invertir el sentido presentación → dominio →
 // infraestructura. El resto son archivos concretos de dominio.

@@ -7,9 +7,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { Label } from "@/shared/components/ui/label"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Plus, Trash2 } from "lucide-react"
 import { academicCategoryLabel } from "@/modules/organization-structure"
 import {

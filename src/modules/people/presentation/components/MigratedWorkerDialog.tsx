@@ -7,12 +7,12 @@ import {
   loadPersonIdentificationStatus,
 } from "@/modules/people/application/people.queries"
 import type { CatalogOption, MigrationRow } from "@/modules/people/domain/entities"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Button } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { Label } from "@/components/ui/label"
-import { SelectItem } from "@/components/ui/select"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { Label } from "@/shared/components/ui/label"
+import { SelectItem } from "@/shared/components/ui/select"
 import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
 
 interface Props {

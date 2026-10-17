@@ -11,10 +11,10 @@
 
 import * as React from "react"
 import { useParams } from "react-router-dom"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"

@@ -2,14 +2,14 @@ import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { Label } from "@/components/ui/label"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { Label } from "@/shared/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import {
   ArrowLeft,
@@ -88,7 +88,7 @@ import { CurrentContractSummary } from "@/modules/contracts/presentation/compone
 import { ContractualTimeline } from "@/modules/contracts/presentation/components/ContractualTimeline"
 import { AddendumDetailDialog } from "@/modules/contracts/presentation/components/AddendumDetailDialog"
 import type { RepresentativePositionRow } from "@/modules/representatives"
-import { SelectItem } from "@/components/ui/select"
+import { SelectItem } from "@/shared/components/ui/select"
 import {
   fetchSalaryValuesForGroups,
   salaryForGroup,

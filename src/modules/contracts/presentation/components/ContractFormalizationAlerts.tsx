@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { AlertTriangle, Settings2, Info } from "lucide-react"
 import { fetchContractFormalizationPending } from "@/modules/contracts/application/contract-conditions.queries"
 import type { ContractFormalizationPending } from "@/modules/contracts/domain/entities"

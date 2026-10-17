@@ -5,15 +5,15 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
-import { Checkbox } from "@/components/ui/checkbox"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
+import { Checkbox } from "@/shared/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { SelectItem } from "@/components/ui/select"
+import { SelectItem } from "@/shared/components/ui/select"
 import EntityUsersDialog from "@/modules/organization-structure/presentation/components/entity-users-dialog"
 import {
   companyClientNameError,

@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Alert, AlertDescription, AlertTitle } from "@/shared/components/ui/alert"
 import { cn } from "@/lib/utils"
 
 type AlertType = "success" | "warning" | "danger" | "info"

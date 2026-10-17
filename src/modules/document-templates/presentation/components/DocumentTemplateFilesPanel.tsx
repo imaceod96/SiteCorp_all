@@ -9,7 +9,7 @@ import {
 import { getTemplateFileUrl } from "@/modules/document-templates/application/document-templates.queries"
 import type { DocumentTemplateVersion } from "@/modules/document-templates/domain/entities"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { showError } from "@/utils/toast"

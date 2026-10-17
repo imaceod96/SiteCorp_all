@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Skeleton } from "@/shared/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 interface SiteCorpLoadingProps {

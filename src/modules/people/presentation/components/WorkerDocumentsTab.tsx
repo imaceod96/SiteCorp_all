@@ -12,12 +12,12 @@ import type {
   WorkerDocumentRow,
 } from "@/modules/people/domain/entities"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { Label } from "@/components/ui/label"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { Label } from "@/shared/components/ui/label"
 import {
   Dialog,
   DialogContent,

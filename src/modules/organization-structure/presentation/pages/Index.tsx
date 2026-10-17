@@ -1,8 +1,8 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { ArrowRight, Building2, Users, Briefcase } from "lucide-react"
 
 const Index = () => {

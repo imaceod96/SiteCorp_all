@@ -1,9 +1,9 @@
 import * as React from "react"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { RolesManager } from "@/modules/access-control/presentation/components/roles-manager"
 import { loadEntityPermission } from "@/modules/access-control"
 

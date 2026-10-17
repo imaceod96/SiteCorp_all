@@ -1,7 +1,7 @@
 import * as React from "react"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { Label } from "@/components/ui/label"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { Label } from "@/shared/components/ui/label"
 import { cn } from "@/lib/utils"
 import { Plus, Trash2 } from "lucide-react"
 import {

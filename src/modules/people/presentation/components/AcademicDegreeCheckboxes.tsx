@@ -1,5 +1,5 @@
 import * as React from "react"
-import { SiteCorpCheckbox } from "@/components/ui/sitecorp-checkbox"
+import { SiteCorpCheckbox } from "@/shared/components/ui/sitecorp-checkbox"
 
 interface AcademicDegreeCheckboxesProps {
   hasMastersDegree: boolean

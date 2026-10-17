@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/dialog"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
-import { Label } from "@/components/ui/label"
+import { Label } from "@/shared/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { showSuccess, showError } from "@/utils/toast"
 import {

@@ -10,13 +10,13 @@ import {
   type GoverningDocument,
 } from "@/modules/organization-structure"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
-import { Label } from "@/components/ui/label"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
+import { Label } from "@/shared/components/ui/label"
 import {
   Dialog,
   DialogContent,

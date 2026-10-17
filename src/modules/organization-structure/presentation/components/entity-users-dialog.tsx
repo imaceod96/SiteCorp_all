@@ -1,12 +1,12 @@
 import * as React from "react"
 import { useAuth } from "@/contexts/AuthContext"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { SelectItem } from "@/components/ui/select"
+import { SelectItem } from "@/shared/components/ui/select"
 import {
   ACCESS_SCOPE_LABELS,
   accessDisplayName,

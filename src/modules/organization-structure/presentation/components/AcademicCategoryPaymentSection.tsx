@@ -1,9 +1,9 @@
 import * as React from "react"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
-import { Label } from "@/components/ui/label"
+import { Label } from "@/shared/components/ui/label"
 import { Loader2, Save, GraduationCap } from "lucide-react"
 import type { AcademicCategoryPaymentConfig } from "@/modules/organization-structure/domain/entities"
 import {

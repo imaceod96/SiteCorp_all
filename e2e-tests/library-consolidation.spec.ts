@@ -718,10 +718,12 @@ test("la presentación no consulta Supabase por su cuenta", () => {
 
 test("los componentes UI ya consolidados viven en shared y nadie usa la ruta antigua", () => {
   // Consolidación gradual de `src/components/ui` hacia `src/shared/components/ui`
-  // (Bloques 29 a 31): por cada componente ya migrado se comprueba que (a) ya no existe
+  // (Bloques 29 a 33): por cada componente ya migrado se comprueba que (a) ya no existe
   // en la ubicación antigua, (b) existe en la nueva y (c) ningún archivo del proyecto lo
   // importa desde la ruta antigua. La lista crece con cada bloque de la consolidación.
   const migrated = [
+    "accordion",
+    "alert",
     "aspect-ratio",
     "avatar",
     "badge",
@@ -729,26 +731,44 @@ test("los componentes UI ya consolidados viven en shared y nadie usa la ruta ant
     "button-variants",
     "button",
     "card",
+    "chart",
+    "checkbox",
     "collapsible",
     "hover-card",
     "input-otp",
     "input",
+    "label",
+    "navigation-menu",
     "progress",
+    "radio-group",
     "resizable",
+    "scroll-area",
+    "select",
+    "separator",
+    "sitecorp-alert",
     "sitecorp-button",
     "sitecorp-card",
+    "sitecorp-checkbox",
+    "sitecorp-error",
     "sitecorp-form-section",
     "sitecorp-input",
+    "sitecorp-loading",
+    "sitecorp-page-header",
+    "sitecorp-select",
     "sitecorp-status-badge",
     "sitecorp-table",
     "sitecorp-tabs",
+    "skeleton",
     "slider",
+    "sonner",
+    "switch",
     "table",
     "tabs",
     "textarea",
     "toggle-group",
     "toggle-variants",
     "toggle",
+    "tooltip",
   ]
 
   const remaining: string[] = []

@@ -1,6 +1,6 @@
 import * as React from "react"
-import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import RolesManager from "@/modules/access-control/presentation/components/roles-manager"
 import { Building2, Shield } from "lucide-react"
 

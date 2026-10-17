@@ -3,11 +3,11 @@ import { useParams } from "react-router-dom"
 import { linkMigratedWorker } from "@/modules/people/application/worker-migration.commands"
 import { fetchEntityPositionHierarchy } from "@/modules/organization-structure"
 import type { WorkerPositionOption } from "@/modules/people/presentation/components/WorkerForm"
-import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
+import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Button } from "@/shared/components/ui/sitecorp-button"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
-import { SelectItem } from "@/components/ui/select"
-import { Label } from "@/components/ui/label"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
+import { SelectItem } from "@/shared/components/ui/select"
+import { Label } from "@/shared/components/ui/label"
 
 interface Props { workerId: string; positions: WorkerPositionOption[]; onSuccess: () => void; onCancel: () => void }
 

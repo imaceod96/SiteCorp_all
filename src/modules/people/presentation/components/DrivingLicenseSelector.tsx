@@ -1,8 +1,8 @@
 import * as React from "react"
 import { X, ChevronDown } from "lucide-react"
 
-import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/shared/components/ui/label"
+import { Checkbox } from "@/shared/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import type { CatalogOption } from "@/modules/people/domain/entities"

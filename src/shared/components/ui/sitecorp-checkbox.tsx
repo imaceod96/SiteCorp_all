@@ -1,6 +1,6 @@
 import * as React from "react"
 
-import { Checkbox } from "@/components/ui/checkbox"
+import { Checkbox } from "@/shared/components/ui/checkbox"
 
 interface SiteCorpCheckboxProps extends React.ComponentPropsWithoutRef<typeof Checkbox> {
   label?: string

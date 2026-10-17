@@ -7,7 +7,7 @@ import { documentTypeCodeForTemplateType } from "@/modules/document-templates/do
 import type { TemplateOccurrence } from "@/modules/document-templates/domain/entities"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
-import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
+import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { showSuccess, showError } from "@/utils/toast"
