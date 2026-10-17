@@ -329,9 +329,12 @@ test("la corrección respeta la arquitectura DDD, la frontera de Supabase y evit
   expect(code("src/contexts/AuthProvider.tsx")).toMatch(/subscribeAuthChanges\(/)
 
   // Sin ciclos nuevos: el dominio nunca importa la presentación…
-  const domainFiles = sourceFiles("src/modules/access-control").filter(
-    (file) => !file.includes("__tests__")
-  )
+  // Sólo las capas de dominio/aplicación/infraestructura: la PRESENTACIÓN del módulo sí puede
+  // consumir los contexts de la aplicación (`@/contexts`, p. ej. `useAuth`), no es una
+  // dependencia indebida y se verifica por separado en este mismo archivo.
+  const domainFiles = sourceFiles("src/modules/access-control")
+    .filter((file) => !file.includes("__tests__"))
+    .filter((file) => !file.includes("/presentation/"))
   for (const file of domainFiles) {
     expect(code(file), `${file} no debe depender de la presentación`).not.toMatch(/@\/contexts\//)
   }

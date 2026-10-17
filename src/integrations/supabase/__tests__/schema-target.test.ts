@@ -100,7 +100,11 @@ describe("schema-target · estado definitivo (company_client)", () => {
     __setSchemaTargetForTests("company_client")
     expect(selectEmbed("roles", "tenant_roles")).toBe("tenant_roles:company_client_roles")
     expect(selectEmbed("clients", "tenant")).toBe("tenant:company_clients")
-    expect(selectEmbed("clients")).toBe("company_clients:tenants")
+    // PostgREST usa `<clave que consume la interfaz>:<objeto físico>`, igual que
+    // `selectColumn` (`tenant_id:company_client_id`): la clave JS del estado legacy se
+    // conserva DELANTE y la tabla física definitiva va DETRÁS. Con el alias por defecto
+    // (`LEGACY_NAMES.tables.clients` = `tenants`) el embed es `tenants:company_clients`.
+    expect(selectEmbed("clients")).toBe("tenants:company_clients")
   })
 })
 
