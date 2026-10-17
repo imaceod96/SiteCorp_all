@@ -6,10 +6,9 @@ import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
   addendumReasonLabel,
-  formatConditionDate,
-  formatContractMoney,
-  type ContractAddendum,
-} from "@/modules/contracts"
+} from "@/modules/contracts/domain/addendum-labels"
+import { formatConditionDate, formatContractMoney } from "@/modules/contracts/domain/formats"
+import type { ContractAddendum } from "@/modules/contracts/domain/entities"
 
 export interface TimelineContractRow {
   id: string

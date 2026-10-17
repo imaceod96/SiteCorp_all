@@ -153,7 +153,7 @@ test("las pestañas del trabajador y los diálogos laborales consumen sus domini
     "src/modules/contracts/presentation/components/ContractAddendumsSection.tsx",
     "src/components/addendums/AddendumDetailDialog.tsx",
     "src/components/addendums/CreateManualAddendumDialog.tsx",
-    "src/components/contracts/ContractFormalizationAlerts.tsx",
+    "src/modules/contracts/presentation/components/ContractFormalizationAlerts.tsx",
     "src/components/salary/ReviewSalaryChangeDialog.tsx",
   ]
 

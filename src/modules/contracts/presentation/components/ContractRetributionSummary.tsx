@@ -1,12 +1,9 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { toRomanNumeral } from "@/utils/roman-numerals"
-import {
-  COMPENSATION_COMPONENT_TYPES,
-  formatConditionDate,
-  formatContractMoney,
-  type ContractCompensationComponent,
-} from "@/modules/contracts"
+import { COMPENSATION_COMPONENT_TYPES } from "@/modules/contracts/domain/compensation.rules"
+import { formatConditionDate, formatContractMoney } from "@/modules/contracts/domain/formats"
+import type { ContractCompensationComponent } from "@/modules/contracts/domain/entities"
 
 interface ContractRetributionSummaryProps {
   /** Snapshot contractual (histórico, nunca recalculado) */

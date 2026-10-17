@@ -9,13 +9,13 @@ import {
   componentAmountValue,
   componentTypeLabel,
   componentsTotal,
-  formatContractMoney,
   hasInvalidComponent,
   newComponentDraft,
   type CompensationComponentDraft,
   type CompensationComponentType,
-  type PaymentMethodOption,
-} from "@/modules/contracts"
+} from "@/modules/contracts/domain/compensation.rules"
+import { formatContractMoney } from "@/modules/contracts/domain/formats"
+import type { PaymentMethodOption } from "@/modules/contracts/domain/entities"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 
 /* ------------------------------------------------------------------ *

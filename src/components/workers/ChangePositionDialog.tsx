@@ -28,7 +28,7 @@ import {
   fetchEntityScheduleSegments,
   type PositionScheduleSegment,
 } from "@/modules/organization-structure"
-import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
+import { AddendumChangesList } from "@/modules/contracts/presentation/components/AddendumChangesList"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import {
   changeWorkerPosition,

@@ -25,12 +25,12 @@ import {
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
-import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
+import { ContractFormalizationAlerts } from "@/modules/contracts/presentation/components/ContractFormalizationAlerts"
 import {
   ContractRetributionFields,
   ContractSignatureFields,
-} from "@/components/contracts/ContractConditionsFields"
-import { ContractFormalizationSummary } from "@/components/contracts/ContractFormalizationSummary"
+} from "@/modules/contracts/presentation/components/ContractConditionsFields"
+import { ContractFormalizationSummary } from "@/modules/contracts/presentation/components/ContractFormalizationSummary"
 import {
   EMPTY_FORMALIZATION_PENDING,
   buildComponentsPayload,

@@ -30,7 +30,7 @@ import {
   formatSalary,
   type SalaryValue,
 } from "@/modules/organization-structure"
-import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
+import HireCandidateDialog from "@/modules/people/presentation/components/HireCandidateDialog"
 import { FilterBuilder } from "@/components/filters/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import {

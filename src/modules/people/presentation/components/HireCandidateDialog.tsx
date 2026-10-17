@@ -29,20 +29,24 @@ import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
+import { checkHiringReadiness } from "@/modules/people/application/contract-readiness.queries"
 import {
-  checkHiringReadiness,
   hireCandidateWithContract,
   hireCandidateWithResolution,
+} from "@/modules/people/application/hiring.commands"
+import { loadHiringWorkspace } from "@/modules/people/application/staffing.queries"
+import {
   isSpecialDocumentRole,
-  loadHiringWorkspace,
   requiresResolution,
   validateHireInput,
-  type ContractTypeOption,
-  type EmploymentLink,
-  type HireablePerson,
-  type ReadinessResult,
-  type StaffingPosition,
-} from "@/modules/people"
+} from "@/modules/people/domain/rules"
+import type {
+  ContractTypeOption,
+  EmploymentLink,
+  HireablePerson,
+  ReadinessResult,
+  StaffingPosition,
+} from "@/modules/people/domain/entities"
 import { AlertTriangle, UserPlus, RefreshCw, Search } from "lucide-react"
 import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
 import { ContractReadinessChecklist } from "@/components/contracts/ContractReadinessChecklist"
@@ -58,9 +62,9 @@ import {
 import {
   ContractRetributionFields,
   ContractSignatureFields,
-} from "@/components/contracts/ContractConditionsFields"
-import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
-import { ContractFormalizationSummary } from "@/components/contracts/ContractFormalizationSummary"
+} from "@/modules/contracts/presentation/components/ContractConditionsFields"
+import { ContractFormalizationAlerts } from "@/modules/contracts/presentation/components/ContractFormalizationAlerts"
+import { ContractFormalizationSummary } from "@/modules/contracts/presentation/components/ContractFormalizationSummary"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import {
   EMPTY_FORMALIZATION_PENDING,

@@ -15,8 +15,8 @@ import { SiteCorpSelect } from "@/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Label } from "@/components/ui/label"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
-import { AddendumChangesList } from "@/components/addendums/AddendumChangesList"
-import { ContractRetributionFields } from "@/components/contracts/ContractConditionsFields"
+import { AddendumChangesList } from "@/modules/contracts/presentation/components/AddendumChangesList"
+import { ContractRetributionFields } from "@/modules/contracts/presentation/components/ContractConditionsFields"
 import {
   MANUAL_ADDENDUM_REASON_CODES,
   addendumReasonLabel,

@@ -3,10 +3,9 @@ import { cn } from "@/lib/utils"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import {
   componentsTotal,
-  formatConditionDate,
-  formatContractMoney,
   type CompensationComponentDraft,
-} from "@/modules/contracts"
+} from "@/modules/contracts/domain/compensation.rules"
+import { formatConditionDate, formatContractMoney } from "@/modules/contracts/domain/formats"
 
 interface ContractFormalizationSummaryProps {
   /** Persona que suscribe el contrato */

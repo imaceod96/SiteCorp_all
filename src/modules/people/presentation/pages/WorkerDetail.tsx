@@ -81,15 +81,15 @@ import {
 import ChangeContractDialog, {
   type CurrentContractInfo,
 } from "@/components/workers/ChangeContractDialog"
-import { ContractFormalizationAlerts } from "@/components/contracts/ContractFormalizationAlerts"
+import { ContractFormalizationAlerts } from "@/modules/contracts/presentation/components/ContractFormalizationAlerts"
 import {
   ContractRetributionFields,
   ContractSignatureFields,
-} from "@/components/contracts/ContractConditionsFields"
-import { ContractFormalizationSummary } from "@/components/contracts/ContractFormalizationSummary"
-import { ContractRetributionSummary } from "@/components/contracts/ContractRetributionSummary"
+} from "@/modules/contracts/presentation/components/ContractConditionsFields"
+import { ContractFormalizationSummary } from "@/modules/contracts/presentation/components/ContractFormalizationSummary"
+import { ContractRetributionSummary } from "@/modules/contracts/presentation/components/ContractRetributionSummary"
 import { CurrentContractSummary } from "@/modules/contracts/presentation/components/CurrentContractSummary"
-import { ContractualTimeline } from "@/components/contracts/ContractualTimeline"
+import { ContractualTimeline } from "@/modules/contracts/presentation/components/ContractualTimeline"
 import { AddendumDetailDialog } from "@/components/addendums/AddendumDetailDialog"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import { SelectItem } from "@/components/ui/select"

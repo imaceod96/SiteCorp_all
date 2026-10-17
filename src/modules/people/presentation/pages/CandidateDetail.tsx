@@ -42,7 +42,7 @@ import {
   Building2,
   UserPlus,
 } from "lucide-react"
-import HireCandidateDialog from "@/components/candidates/HireCandidateDialog"
+import HireCandidateDialog from "@/modules/people/presentation/components/HireCandidateDialog"
 import { AcademicBadges } from "@/modules/people/presentation/components/AcademicBadges"
 import {
   addCandidateAcademicFormation,

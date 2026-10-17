@@ -1,7 +1,8 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 import { ArrowRight } from "lucide-react"
-import { addendumFieldLabel, type AddendumChange } from "@/modules/contracts"
+import { addendumFieldLabel } from "@/modules/contracts/domain/addendum-labels"
+import type { AddendumChange } from "@/modules/contracts/domain/entities"
 
 interface AddendumChangesListProps {
   changes: AddendumChange[]

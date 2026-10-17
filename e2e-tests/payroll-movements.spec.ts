@@ -313,7 +313,7 @@ test("las pantallas y componentes migrados ya no consultan Supabase", () => {
   const presentation = [
     "src/components/workers/ChangePositionDialog.tsx",
     "src/components/workers/SeparateWorkerDialog.tsx",
-    "src/components/candidates/HireCandidateDialog.tsx",
+    "src/modules/people/presentation/components/HireCandidateDialog.tsx",
     "src/components/salary/ReviewSalaryChangeDialog.tsx",
   ]
 
