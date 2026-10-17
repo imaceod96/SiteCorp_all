@@ -1,8 +1,8 @@
 import * as React from "react"
 import type { TemplateValidation } from "@/modules/document-templates/domain/entities"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { AlertTriangle, CheckCircle2, CircleSlash, Info } from "lucide-react"
 

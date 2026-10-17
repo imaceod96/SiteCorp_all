@@ -1,7 +1,7 @@
 import * as React from "react"
 import { Link, useParams, useNavigate } from "react-router-dom"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"

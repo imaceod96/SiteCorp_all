@@ -9,9 +9,9 @@ import {
   updateOwnProfile,
 } from "@/modules/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/shared/components/ui/avatar"

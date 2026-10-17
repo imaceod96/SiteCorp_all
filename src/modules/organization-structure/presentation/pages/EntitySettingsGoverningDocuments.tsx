@@ -11,7 +11,7 @@ import {
 } from "@/modules/organization-structure"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"

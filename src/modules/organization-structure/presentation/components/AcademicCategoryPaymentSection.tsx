@@ -1,5 +1,5 @@
 import * as React from "react"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"

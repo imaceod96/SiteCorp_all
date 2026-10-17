@@ -1,6 +1,6 @@
 import * as React from "react"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import {
   VACATION_STATUS_LABELS,

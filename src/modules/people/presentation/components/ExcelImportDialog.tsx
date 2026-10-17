@@ -6,7 +6,7 @@ import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/shared/components/ui/badge"
 import { Progress } from "@/shared/components/ui/progress"
 import { AlertCircle, CheckCircle, Upload, FileText, Users, XCircle, Download, Eye, Trash2 } from "lucide-react"
 

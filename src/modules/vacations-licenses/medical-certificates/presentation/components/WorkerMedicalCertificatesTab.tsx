@@ -14,7 +14,7 @@
  */
 
 import * as React from "react"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { useToast } from "@/shared/hooks/use-toast"

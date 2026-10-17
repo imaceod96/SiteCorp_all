@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useQueryClient } from "@tanstack/react-query"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"

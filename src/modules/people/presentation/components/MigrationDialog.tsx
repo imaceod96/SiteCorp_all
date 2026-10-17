@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/shared/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/shared/components/ui/badge"
 import { AlertCircle, CheckCircle, Upload, FileText, Users, Building2, Calendar, DollarSign, FileSpreadsheet, XCircle } from "lucide-react"
 
 interface MigrationDialogProps {

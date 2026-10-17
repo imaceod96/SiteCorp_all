@@ -7,7 +7,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table"
+} from "@/shared/components/ui/table"
 import { cn } from "@/lib/utils"
 
 interface SiteCorpTableProps extends React.ComponentPropsWithoutRef<typeof Table> {

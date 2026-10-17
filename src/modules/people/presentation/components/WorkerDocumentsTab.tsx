@@ -11,9 +11,9 @@ import type {
   WorkerDocumentContractRef,
   WorkerDocumentRow,
 } from "@/modules/people/domain/entities"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/components/ui/sitecorp-select"

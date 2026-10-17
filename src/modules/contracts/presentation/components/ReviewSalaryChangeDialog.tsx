@@ -9,7 +9,7 @@ import {
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { showSuccess } from "@/utils/toast"

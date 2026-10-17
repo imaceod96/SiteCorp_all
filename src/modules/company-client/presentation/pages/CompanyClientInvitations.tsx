@@ -9,10 +9,10 @@ import {
   type ClientInvitation,
 } from "@/modules/access-control"
 import { SiteCorpPageHeader } from "@/components/ui/sitecorp-page-header"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/components/ui/sitecorp-alert"
-import { SiteCorpTable } from "@/components/ui/sitecorp-table"
-import { SiteCorpStatusBadge } from "@/components/ui/sitecorp-status-badge"
+import { SiteCorpTable } from "@/shared/components/ui/sitecorp-table"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpLoading } from "@/components/ui/sitecorp-loading"
 import { SiteCorpError } from "@/components/ui/sitecorp-error"

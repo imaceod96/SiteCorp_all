@@ -1,5 +1,5 @@
 import * as React from "react"
-import { SiteCorpCard } from "@/components/ui/sitecorp-card"
+import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import {
   VACATION_MOVEMENT_LABELS,
   formatVacationDays,
