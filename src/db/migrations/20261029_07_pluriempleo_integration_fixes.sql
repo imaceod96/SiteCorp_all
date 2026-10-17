@@ -2,11 +2,14 @@
 -- PLURIEMPLEO — BLOQUE 5.1: CORRECCIONES DE INTEGRACIÓN
 -- Estado: PREPARADA · NO EJECUTADA (pendiente de autorización explícita).
 -- Requiere: 20261029_03 (resolvers de objetivo) y 20261029_04 (alertas).
+-- Orden: 03 → 04 → … → 07. La dependencia es de UN SOLO SENTIDO (este archivo
+-- consume los resolutores publicados por 03), por lo que el orden numérico es un
+-- orden topológico válido y ningún archivo necesita al siguiente.
 --
--- Motivo: estas tres funciones identifican el contrato/asignación afectados por su
+-- Motivo: estas funciones identifican el contrato/asignación afectados por su
 -- cuenta. Sus cuerpos vivos resuelven el objetivo con `ORDER BY ... LIMIT 1`, de modo
--- que con DOS contratos vigentes devolvían la vista previa, las condiciones
--- formalizadas o el vencimiento de un contrato distinto al seleccionado.
+-- que con DOS contratos vigentes devolvían las condiciones formalizadas o el
+-- vencimiento de un contrato distinto al seleccionado.
 --
 -- Aquí se les añade un ÚLTIMO parámetro opcional (`p_target_*`) que identifica el
 -- objetivo. Al ser opcional y estar al final de la firma, la llamada anterior de un
@@ -17,9 +20,19 @@
 -- restauran explícitamente sus privilegios EXECUTE (patrón de la base de datos:
 -- `authenticated` y `service_role` sí, PUBLIC y `anon` no).
 --
--- Ninguna de las tres duplica lógica: la resolución del objetivo se delega en
+-- Ninguna de las funciones duplica lógica: la resolución del objetivo se delega en
 -- `resolve_worker_target_contract` / `resolve_worker_target_assignment` (Bloque 3) y
 -- las fórmulas (salario, componentes, totales, clasificación temporal) no se tocan.
+--
+-- CORRECCIÓN DE DEPENDENCIA (Bloque 6)
+--   `position_change_preview` YA NO SE DEFINE AQUÍ: se trasladó a `20261029_03`,
+--   justo antes de su único consumidor interno (`change_worker_position`), porque su
+--   firma de 4 argumentos sólo la invoca ese procedimiento. Definirla aquí mientras
+--   03 la invocaba creaba una dependencia CIRCULAR (03 → 07 para la vista previa y
+--   07 → 03 para los resolutores) que rompía el cambio de puesto en el intervalo
+--   entre ambos archivos, y también para trabajadores con un solo contrato.
+--   Este archivo queda así con DOS correcciones: `worker_formalized_conditions`
+--   (§1) y `contract_expiry_alerts` (§2). No se utiliza DROP CASCADE.
 -- ============================================================================
 
 
@@ -126,173 +139,7 @@ revoke execute on function public.worker_formalized_conditions(uuid, uuid) from 
 
 
 -- ---------------------------------------------------------------------------
--- 2. VISTA PREVIA DEL CAMBIO DE PUESTO (`position_change_preview`)
---    La vista previa corresponde al contrato de la ASIGNACIÓN OBJETIVO, y por tanto
---    también su cálculo salarial y los componentes/totales del anexo.
--- ---------------------------------------------------------------------------
-drop function if exists public.position_change_preview(uuid, uuid, date);
-
-create or replace function public.position_change_preview(
-  p_worker_id uuid,
-  p_new_position_id uuid,
-  p_effective_date date,
-  p_target_assignment_id uuid default null
-)
-returns jsonb
-language plpgsql
-stable security definer
-set search_path to 'public', 'auth'
-as $$
-DECLARE
-  v_worker public.workers%ROWTYPE;
-  v_current public.worker_position_assignments%ROWTYPE;
-  v_contract public.employment_contracts%ROWTYPE;
-  v_new_position public.organization_positions%ROWTYPE;
-  v_before jsonb;
-  v_after jsonb;
-  v_components jsonb;
-  v_components_total numeric := 0;
-  v_additional numeric := 0;
-  v_abnormal numeric := 0;
-  v_other numeric := 0;
-  v_payment_id uuid;
-  v_payment_name text;
-  v_currency text := 'CUP';
-  v_salary_before numeric;
-  v_salary_after numeric;
-  v_total_before numeric := 0;
-  v_total_after numeric := 0;
-  v_raw jsonb;
-  v_out jsonb := '[]'::jsonb;
-  v_change jsonb;
-  v_code text;
-BEGIN
-  IF auth.uid() IS NULL THEN
-    RAISE EXCEPTION 'No autenticado';
-  END IF;
-
-  SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Trabajador no encontrado';
-  END IF;
-
-  IF NOT (public.can_access_entity(v_worker.organization_entity_id, 'workers.view')
-          OR public.can_access_entity(v_worker.organization_entity_id, 'workers.manage')) THEN
-    RAISE EXCEPTION 'No tiene permiso para consultar trabajadores de esta entidad';
-  END IF;
-
-  SELECT * INTO v_new_position FROM public.organization_positions WHERE id = p_new_position_id;
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'El puesto seleccionado no existe';
-  END IF;
-
-  -- Asignación OBJETIVO: explícita o única vigente (nunca una elección arbitraria).
-  SELECT * INTO v_current FROM public.worker_position_assignments
-  WHERE id = public.resolve_worker_target_assignment(p_worker_id, p_target_assignment_id);
-
-  -- Contrato VIGENTE de ESA asignación: es el contrato cuyo anexo se va a preparar.
-  SELECT * INTO v_contract FROM public.employment_contracts
-  WHERE assignment_id = v_current.id AND is_current = true
-  ORDER BY start_date DESC
-  LIMIT 1;
-
-  -- Condiciones antes (posición actual, valor vigente el día anterior) y después (posición destino)
-  v_before := public.contract_condition_set(v_current.position_id, p_effective_date - 1);
-  v_after := public.contract_condition_set(p_new_position_id, p_effective_date);
-
-  v_salary_before := nullif(v_before->>'salary_amount', '')::numeric;
-  v_salary_after := nullif(v_after->>'salary_amount', '')::numeric;
-
-  v_currency := COALESCE(
-    nullif(v_after->>'currency_code', ''),
-    nullif(v_before->>'currency_code', ''),
-    v_contract.salary_currency_code,
-    'CUP'
-  );
-
-  -- Componentes retributivos y forma de pago vigentes (formalizados), que no cambian con el puesto
-  IF v_contract.id IS NOT NULL THEN
-    v_components := public.contract_retribution_components(v_contract.id);
-    SELECT COALESCE(SUM(CASE WHEN value->>'component_type' = 'ADDITIONAL_PAYMENT' THEN (value->>'amount')::numeric ELSE 0 END), 0),
-           COALESCE(SUM(CASE WHEN value->>'component_type' = 'ABNORMAL_CONDITIONS' THEN (value->>'amount')::numeric ELSE 0 END), 0),
-           COALESCE(SUM(CASE WHEN value->>'component_type' = 'OTHER' THEN (value->>'amount')::numeric ELSE 0 END), 0)
-    INTO v_additional, v_abnormal, v_other
-    FROM jsonb_array_elements(v_components);
-
-    v_components_total := v_additional + v_abnormal + v_other;
-
-    v_payment_id := public.contract_current_payment_method(v_contract.id);
-    IF v_payment_id IS NOT NULL THEN
-      SELECT name INTO v_payment_name FROM public.payment_methods WHERE id = v_payment_id;
-    END IF;
-  END IF;
-
-  v_total_before := COALESCE(v_salary_before, 0) + v_components_total;
-  v_total_after := COALESCE(v_salary_after, 0) + v_components_total;
-
-  -- Diferencias contractuales representables
-  v_raw := public.contract_condition_changes(
-    v_before || jsonb_build_object(
-      'additional_payment', v_additional,
-      'abnormal_conditions', v_abnormal,
-      'other_payment', v_other,
-      'payment_method_id', v_payment_id,
-      'total_compensation', v_total_before
-    ),
-    v_after || jsonb_build_object(
-      'additional_payment', v_additional,
-      'abnormal_conditions', v_abnormal,
-      'other_payment', v_other,
-      'payment_method_id', v_payment_id,
-      'total_compensation', v_total_after
-    )
-  );
-
-  FOR v_change IN SELECT value FROM jsonb_array_elements(v_raw)
-  LOOP
-    v_code := v_change->>'field_code';
-    v_out := v_out || jsonb_build_array(jsonb_build_object(
-      'field_code', v_code,
-      'field_label', v_change->>'field_label',
-      'display_order', COALESCE((v_change->>'display_order')::integer, 99),
-      'old_value', v_change->>'old_value',
-      'new_value', v_change->>'new_value',
-      'old_display_value', public.addendum_change_display(v_code, v_change->>'old_value', v_currency),
-      'new_display_value', public.addendum_change_display(v_code, v_change->>'new_value', v_currency),
-      'old_reference_id', v_change->>'old_reference_id',
-      'new_reference_id', v_change->>'new_reference_id'
-    ));
-  END LOOP;
-
-  RETURN jsonb_build_object(
-    'worker_id', p_worker_id,
-    'employment_contract_id', v_contract.id,
-    'current_assignment_id', v_current.id,
-    'current_position_id', v_current.position_id,
-    'new_position_id', p_new_position_id,
-    'effective_date', p_effective_date,
-    'currency_code', v_currency,
-    'salary_before', v_salary_before,
-    'salary_after', v_salary_after,
-    'total_before', v_total_before,
-    'total_after', v_total_after,
-    'components_total', v_components_total,
-    'payment_method_id', v_payment_id,
-    'payment_method_name', v_payment_name,
-    'before', v_before,
-    'after', v_after,
-    'changes', v_out,
-    'has_contractual_changes', jsonb_array_length(v_out) > 0
-  );
-END;
-$$;
-
-grant execute on function public.position_change_preview(uuid, uuid, date, uuid) to authenticated, service_role;
-revoke execute on function public.position_change_preview(uuid, uuid, date, uuid) from public, anon;
-
-
--- ---------------------------------------------------------------------------
--- 3. ALERTAS DE VENCIMIENTO (`contract_expiry_alerts`)
+-- 2. ALERTAS DE VENCIMIENTO (`contract_expiry_alerts`)
 --    Se amplía la respuesta con la ASIGNACIÓN del propio contrato para que una baja
 --    desde los vencimientos identifique inequívocamente contrato y asignación (y no
 --    finalice nunca los dos contratos por una baja individual).

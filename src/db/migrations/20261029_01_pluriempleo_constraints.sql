@@ -194,11 +194,19 @@ alter table public.prenomina_worker_entries
 alter table public.prenomina_worker_entries
   drop constraint if exists prenomina_worker_entries_period_worker_unique;
 
-create unique index if not exists prenomina_worker_entries_period_worker_unique
+-- Además de la restricción se elimina el índice homónimo, por si existiera SIN ella
+-- (re-ejecución del archivo o deriva del esquema). Con `create index if not exists` una
+-- definición obsoleta sobreviviría en silencio y seguiría prohibiendo dos entradas por
+-- trabajador y período, es decir, la prenómina por contrato fallaría sin dar error.
+drop index if exists public.prenomina_worker_entries_period_worker_unique;
+
+create unique index prenomina_worker_entries_period_worker_unique
   on public.prenomina_worker_entries (period_id, worker_id)
   where assignment_id is null;
 
-create unique index if not exists prenomina_worker_entries_period_assignment_unique
+drop index if exists public.prenomina_worker_entries_period_assignment_unique;
+
+create unique index prenomina_worker_entries_period_assignment_unique
   on public.prenomina_worker_entries (period_id, assignment_id)
   where assignment_id is not null;
 

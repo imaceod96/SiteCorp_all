@@ -42,6 +42,161 @@ create unique index worker_payroll_movements_dedup_idx
 
 
 -- ---------------------------------------------------------------------------
+-- 1.b MOVIMIENTO DE NÓMINA (`create_payroll_movement`) — destino ON CONFLICT actualizado
+--     `create_payroll_movement` es el ÚNICO escritor de `worker_payroll_movements` y su
+--     `ON CONFLICT (...)` referencia el índice por EXPRESIONES, cuya lista de columnas
+--     acaba de cambiar. PostgreSQL infiere el índice a partir del destino declarado: si
+--     el destino no coincide con ningún índice único, TODA inserción falla con «there is
+--     no unique or exclusion constraint matching the ON CONFLICT specification», es
+--     decir, se romperían las altas, reubicaciones y bajas de TODOS los trabajadores
+--     (no sólo los de dos contratos). Por eso el cuerpo se redefine en el MISMO archivo
+--     que el índice: la firma, el tipo de retorno y la lógica no cambian (sólo se añade
+--     `assignment_id` al destino de conflicto).
+-- ---------------------------------------------------------------------------
+create or replace function public.create_payroll_movement(
+  p_worker_id uuid,
+  p_event_type text,
+  p_effective_date date,
+  p_old_position_id uuid,
+  p_new_position_id uuid default null,
+  p_assignment_id uuid default null,
+  p_event_id uuid default null,
+  p_old_salary numeric default null,
+  p_old_group_seq integer default null,
+  p_new_salary numeric default null,
+  p_new_group_seq integer default null,
+  p_description text default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path to 'public', 'auth'
+as $function$
+declare
+  v_worker public.workers%rowtype;
+  v_entity public.organization_entities%rowtype;
+  v_parent public.organization_entities%rowtype;
+  v_company_name text;
+  v_unit_name text;
+  v_organism text;
+  v_gender_code text;
+  v_name text;
+  v_old_area text; v_old_job text; v_old_seq integer; v_old_sal numeric;
+  v_new_area text; v_new_job text; v_new_seq integer; v_new_sal numeric;
+  v_currency text;
+  v_group uuid;
+  v_id uuid;
+begin
+  if auth.uid() is null then raise exception 'No autenticado'; end if;
+
+  if p_event_type not in ('ALTA','REUBICACION','BAJA') then
+    raise exception 'Tipo de movimiento no válido';
+  end if;
+  if p_effective_date is null then
+    raise exception 'La fecha efectiva del movimiento es obligatoria';
+  end if;
+
+  select * into v_worker from public.workers where id = p_worker_id;
+  if not found then raise exception 'Trabajador no encontrado'; end if;
+
+  if not public.can_access_entity(v_worker.organization_entity_id, 'workers.manage') then
+    raise exception 'No tiene permiso para registrar movimientos de esta entidad';
+  end if;
+
+  select * into v_entity from public.organization_entities where id = v_worker.organization_entity_id;
+  if v_entity.parent_id is not null then
+    select * into v_parent from public.organization_entities where id = v_entity.parent_id;
+  end if;
+
+  if v_entity.entity_type = 'ueb' then
+    v_unit_name := v_entity.name;
+    v_company_name := v_parent.name;
+    v_organism := coalesce(nullif(btrim(v_parent.organism), ''), nullif(btrim(v_entity.organism), ''));
+  elsif v_entity.entity_type = 'business_group' then
+    v_company_name := v_entity.name;
+    v_unit_name := null;
+    v_organism := nullif(btrim(v_entity.organism), '');
+  else
+    v_company_name := v_entity.name;
+    v_unit_name := null;
+    v_organism := nullif(btrim(v_entity.organism), '');
+  end if;
+
+  select case when g.code = 'male' then 'M' when g.code = 'female' then 'F' else g.code end
+  into v_gender_code
+  from public.genders g where g.id = v_worker.gender_id;
+
+  v_name := nullif(btrim(concat_ws(' ', v_worker.first_name, v_worker.first_surname, v_worker.second_surname)), '');
+
+  if p_old_position_id is not null then
+    select a.name, j.name into v_old_area, v_old_job
+    from public.organization_positions p
+    join public.organization_jobs j on j.id = p.job_id
+    left join public.organization_areas a on a.id = j.area_id
+    where p.id = p_old_position_id;
+
+    select ctx.salary_group_id, ctx.amount, ctx.currency_code into v_group, v_old_sal, v_currency
+    from public.position_salary_context(p_old_position_id, p_effective_date) ctx;
+    if v_old_sal is not null then
+      select sg.sequence_number into v_old_seq from public.salary_groups sg where sg.id = v_group;
+    end if;
+  end if;
+
+  if p_new_position_id is not null then
+    select a.name, j.name into v_new_area, v_new_job
+    from public.organization_positions p
+    join public.organization_jobs j on j.id = p.job_id
+    left join public.organization_areas a on a.id = j.area_id
+    where p.id = p_new_position_id;
+
+    select ctx.salary_group_id, ctx.amount, ctx.currency_code into v_group, v_new_sal, v_currency
+    from public.position_salary_context(p_new_position_id, p_effective_date) ctx;
+    if v_new_sal is not null then
+      select sg.sequence_number into v_new_seq from public.salary_groups sg where sg.id = v_group;
+    end if;
+  end if;
+
+  if p_old_salary is not null then v_old_sal := p_old_salary; end if;
+  if p_old_group_seq is not null then v_old_seq := p_old_group_seq; end if;
+  if p_new_salary is not null then v_new_sal := p_new_salary; end if;
+  if p_new_group_seq is not null then v_new_seq := p_new_group_seq; end if;
+
+  insert into public.worker_payroll_movements (
+    company_client_id, organization_entity_id, worker_id, assignment_id, position_id, job_id,
+    event_type, effective_date,
+    organism_snapshot, company_snapshot, unit_snapshot,
+    identification_snapshot, worker_name_snapshot, first_name_snapshot, first_surname_snapshot,
+    second_surname_snapshot, gender_code_snapshot,
+    area_act_snapshot, cargo_act_snapshot, area_nva_snapshot, cargo_nva_snapshot,
+    ge_act_sequence, sal_act_snapshot, ge_nva_sequence, sal_nva_snapshot, currency_snapshot,
+    description, event_id, created_by
+  ) values (
+    v_worker.company_client_id, v_worker.organization_entity_id, v_worker.id, p_assignment_id,
+    coalesce(p_new_position_id, p_old_position_id), null,
+    p_event_type, p_effective_date,
+    v_organism, v_company_name, v_unit_name,
+    v_worker.identification, v_name, v_worker.first_name, v_worker.first_surname,
+    v_worker.second_surname, v_gender_code,
+    v_old_area, v_old_job, v_new_area, v_new_job,
+    v_old_seq, v_old_sal, v_new_seq, v_new_sal, v_currency,
+    nullif(btrim(coalesce(p_description, '')), ''), p_event_id, auth.uid()
+  )
+  on conflict (
+    worker_id,
+    event_type,
+    effective_date,
+    coalesce(event_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    coalesce(assignment_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  )
+  do update set updated_at = now()
+  returning id into v_id;
+
+  return v_id;
+end;
+$function$;
+
+
+-- ---------------------------------------------------------------------------
 -- 2. IMPACTO DEL CAMBIO SALARIAL (`salary_change_impact`)
 --    Fija el contrato a SU asignación (`c.assignment_id = a.id`). Sin este ajuste, con
 --    2 contratos activos el JOIN original (asignaciones × contratos) producía un

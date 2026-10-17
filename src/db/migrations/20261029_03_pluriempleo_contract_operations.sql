@@ -23,6 +23,18 @@
 --   Como la firma cambia, se elimina la versión anterior para no dejar ambigüedad en PostgREST.
 --   Verificado: ninguna otra función referencia estas RPC (no hay dependencias internas).
 --
+-- ORDEN Y DEPENDENCIAS (corregido)
+--   Este archivo define TAMBIÉN `position_change_preview` con su firma de 4 argumentos,
+--   porque es el único consumidor interno que usa esa firma (`change_worker_position`).
+--   Antes esa función vivía en `20261029_07`, lo que creaba una dependencia circular
+--   (03 → 07 para la vista previa; 07 → 03 para los resolutores) e impedía aplicar
+--   cualquiera de los dos archivos por separado: en el hueco entre ambos, el cambio de
+--   puesto fallaba con «function position_change_preview(uuid,uuid,date,uuid) does not
+--   exist» y afectaba incluso a los trabajadores con UN solo contrato.
+--   Con la definición aquí, cada archivo es autoconsistente, no se reescribe lógica
+--   (la vista previa existe una sola vez) y el orden numérico 01→02→03→04→05→06→07 es
+--   un orden topológico válido. No se usa DROP CASCADE en ningún punto.
+--
 -- ANTIGÜEDAD COMPARTIDA
 --   No se toca ningún cálculo de antigüedad: sigue residiendo en el TRABAJADOR
 --   (`workers.employment_start_date` / `hire_date`) y se paga en cada contrato según su
@@ -130,7 +142,178 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
--- 2. CAMBIO DE PUESTO (`change_worker_position`) — actúa sólo sobre la asignación objetivo
+-- 2. VISTA PREVIA DEL CAMBIO DE PUESTO (`position_change_preview`) — por asignación objetivo
+--    Se define AQUÍ, inmediatamente ANTES de su único consumidor interno
+--    (`change_worker_position`): así la dependencia entre los dos archivos es de un
+--    SOLO SENTIDO (07 consume los resolutores publicados por 03) y deja de ser
+--    circular. `change_worker_position` invoca la firma de 4 argumentos, que por tanto
+--    existe ya cuando se aplica este archivo (ni antes ni después).
+--
+--    La vista previa corresponde al contrato de la ASIGNACIÓN OBJETIVO, y por tanto
+--    también su cálculo salarial y los componentes/totales del anexo. La resolución
+--    del objetivo se delega en `resolve_worker_target_assignment` (arriba): sin
+--    duplicar la regla de selección.
+-- ---------------------------------------------------------------------------
+drop function if exists public.position_change_preview(uuid, uuid, date);
+
+create or replace function public.position_change_preview(
+  p_worker_id uuid,
+  p_new_position_id uuid,
+  p_effective_date date,
+  p_target_assignment_id uuid default null
+)
+returns jsonb
+language plpgsql
+stable security definer
+set search_path to 'public', 'auth'
+as $$
+DECLARE
+  v_worker public.workers%ROWTYPE;
+  v_current public.worker_position_assignments%ROWTYPE;
+  v_contract public.employment_contracts%ROWTYPE;
+  v_new_position public.organization_positions%ROWTYPE;
+  v_before jsonb;
+  v_after jsonb;
+  v_components jsonb;
+  v_components_total numeric := 0;
+  v_additional numeric := 0;
+  v_abnormal numeric := 0;
+  v_other numeric := 0;
+  v_payment_id uuid;
+  v_payment_name text;
+  v_currency text := 'CUP';
+  v_salary_before numeric;
+  v_salary_after numeric;
+  v_total_before numeric := 0;
+  v_total_after numeric := 0;
+  v_raw jsonb;
+  v_out jsonb := '[]'::jsonb;
+  v_change jsonb;
+  v_code text;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'No autenticado';
+  END IF;
+
+  SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trabajador no encontrado';
+  END IF;
+
+  IF NOT (public.can_access_entity(v_worker.organization_entity_id, 'workers.view')
+          OR public.can_access_entity(v_worker.organization_entity_id, 'workers.manage')) THEN
+    RAISE EXCEPTION 'No tiene permiso para consultar trabajadores de esta entidad';
+  END IF;
+
+  SELECT * INTO v_new_position FROM public.organization_positions WHERE id = p_new_position_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'El puesto seleccionado no existe';
+  END IF;
+
+  -- Asignación OBJETIVO: explícita o única vigente (nunca una elección arbitraria).
+  SELECT * INTO v_current FROM public.worker_position_assignments
+  WHERE id = public.resolve_worker_target_assignment(p_worker_id, p_target_assignment_id);
+
+  -- Contrato VIGENTE de ESA asignación: es el contrato cuyo anexo se va a preparar.
+  SELECT * INTO v_contract FROM public.employment_contracts
+  WHERE assignment_id = v_current.id AND is_current = true
+  ORDER BY start_date DESC
+  LIMIT 1;
+
+  -- Condiciones antes (posición actual, valor vigente el día anterior) y después (posición destino)
+  v_before := public.contract_condition_set(v_current.position_id, p_effective_date - 1);
+  v_after := public.contract_condition_set(p_new_position_id, p_effective_date);
+
+  v_salary_before := nullif(v_before->>'salary_amount', '')::numeric;
+  v_salary_after := nullif(v_after->>'salary_amount', '')::numeric;
+
+  v_currency := COALESCE(
+    nullif(v_after->>'currency_code', ''),
+    nullif(v_before->>'currency_code', ''),
+    v_contract.salary_currency_code,
+    'CUP'
+  );
+
+  -- Componentes retributivos y forma de pago vigentes (formalizados), que no cambian con el puesto
+  IF v_contract.id IS NOT NULL THEN
+    v_components := public.contract_retribution_components(v_contract.id);
+    SELECT COALESCE(SUM(CASE WHEN value->>'component_type' = 'ADDITIONAL_PAYMENT' THEN (value->>'amount')::numeric ELSE 0 END), 0),
+           COALESCE(SUM(CASE WHEN value->>'component_type' = 'ABNORMAL_CONDITIONS' THEN (value->>'amount')::numeric ELSE 0 END), 0),
+           COALESCE(SUM(CASE WHEN value->>'component_type' = 'OTHER' THEN (value->>'amount')::numeric ELSE 0 END), 0)
+    INTO v_additional, v_abnormal, v_other
+    FROM jsonb_array_elements(v_components);
+
+    v_components_total := v_additional + v_abnormal + v_other;
+
+    v_payment_id := public.contract_current_payment_method(v_contract.id);
+    IF v_payment_id IS NOT NULL THEN
+      SELECT name INTO v_payment_name FROM public.payment_methods WHERE id = v_payment_id;
+    END IF;
+  END IF;
+
+  v_total_before := COALESCE(v_salary_before, 0) + v_components_total;
+  v_total_after := COALESCE(v_salary_after, 0) + v_components_total;
+
+  -- Diferencias contractuales representables
+  v_raw := public.contract_condition_changes(
+    v_before || jsonb_build_object(
+      'additional_payment', v_additional,
+      'abnormal_conditions', v_abnormal,
+      'other_payment', v_other,
+      'payment_method_id', v_payment_id,
+      'total_compensation', v_total_before
+    ),
+    v_after || jsonb_build_object(
+      'additional_payment', v_additional,
+      'abnormal_conditions', v_abnormal,
+      'other_payment', v_other,
+      'payment_method_id', v_payment_id,
+      'total_compensation', v_total_after
+    )
+  );
+
+  FOR v_change IN SELECT value FROM jsonb_array_elements(v_raw)
+  LOOP
+    v_code := v_change->>'field_code';
+    v_out := v_out || jsonb_build_array(jsonb_build_object(
+      'field_code', v_code,
+      'field_label', v_change->>'field_label',
+      'display_order', COALESCE((v_change->>'display_order')::integer, 99),
+      'old_value', v_change->>'old_value',
+      'new_value', v_change->>'new_value',
+      'old_display_value', public.addendum_change_display(v_code, v_change->>'old_value', v_currency),
+      'new_display_value', public.addendum_change_display(v_code, v_change->>'new_value', v_currency),
+      'old_reference_id', v_change->>'old_reference_id',
+      'new_reference_id', v_change->>'new_reference_id'
+    ));
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'worker_id', p_worker_id,
+    'employment_contract_id', v_contract.id,
+    'current_assignment_id', v_current.id,
+    'current_position_id', v_current.position_id,
+    'new_position_id', p_new_position_id,
+    'effective_date', p_effective_date,
+    'currency_code', v_currency,
+    'salary_before', v_salary_before,
+    'salary_after', v_salary_after,
+    'total_before', v_total_before,
+    'total_after', v_total_after,
+    'components_total', v_components_total,
+    'payment_method_id', v_payment_id,
+    'payment_method_name', v_payment_name,
+    'before', v_before,
+    'after', v_after,
+    'changes', v_out,
+    'has_contractual_changes', jsonb_array_length(v_out) > 0
+  );
+END;
+$$;
+
+
+-- ---------------------------------------------------------------------------
+-- 3. CAMBIO DE PUESTO (`change_worker_position`) — actúa sólo sobre la asignación objetivo
 -- ---------------------------------------------------------------------------
 drop function if exists public.change_worker_position(
   uuid, uuid, date, text, text, boolean, date, text, uuid, text, boolean, date
@@ -344,7 +527,7 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
--- 3. REGISTRAR CONTRATO (`complete_worker_contract`) — sólo la asignación objetivo
+-- 4. REGISTRAR CONTRATO (`complete_worker_contract`) — sólo la asignación objetivo
 -- ---------------------------------------------------------------------------
 drop function if exists public.complete_worker_contract(
   uuid, uuid, date, date, uuid, date, text, uuid, jsonb, text
@@ -466,7 +649,7 @@ $function$;
 
 
 -- ---------------------------------------------------------------------------
--- 4. CAMBIO DE CONTRATO (`change_worker_contract`) — sólo el contrato objetivo
+-- 5. CAMBIO DE CONTRATO (`change_worker_contract`) — sólo el contrato objetivo
 -- ---------------------------------------------------------------------------
 drop function if exists public.change_worker_contract(
   uuid, uuid, date, date, text, uuid, date, text, uuid, jsonb, text
@@ -601,7 +784,7 @@ $function$;
 
 
 -- ---------------------------------------------------------------------------
--- 5. FINALIZACIÓN POR CONTRATO (`register_worker_separation`) — sólo la asignación objetivo
+-- 6. FINALIZACIÓN POR CONTRATO (`register_worker_separation`) — sólo la asignación objetivo
 --    Cierra únicamente esa asignación y su contrato; el trabajador permanece activo si
 --    conserva otro contrato vigente y sólo pasa a inactivo cuando no queda ninguno.
 -- ---------------------------------------------------------------------------
@@ -719,12 +902,15 @@ end $$;
 
 
 -- ---------------------------------------------------------------------------
--- 6. PERMISOS
+-- 7. PERMISOS
 -- ---------------------------------------------------------------------------
 grant execute on function public.resolve_worker_target_assignment(uuid, uuid) to authenticated;
 grant execute on function public.resolve_worker_target_contract(uuid, uuid) to authenticated;
 revoke execute on function public.resolve_worker_target_assignment(uuid, uuid) from public, anon;
 revoke execute on function public.resolve_worker_target_contract(uuid, uuid) from public, anon;
+
+grant execute on function public.position_change_preview(uuid, uuid, date, uuid) to authenticated, service_role;
+revoke execute on function public.position_change_preview(uuid, uuid, date, uuid) from public, anon;
 
 grant execute on function public.change_worker_position(
   uuid, uuid, date, text, text, boolean, date, text, uuid, text, boolean, date, uuid
