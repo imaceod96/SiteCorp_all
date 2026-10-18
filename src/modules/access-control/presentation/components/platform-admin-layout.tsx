@@ -17,12 +17,14 @@ import {
   Settings,
   ChevronDown,
   ChevronRight,
+  FolderOpen,
 } from "lucide-react"
 
 const PlatformAdminLayout = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => {
+  const { isPlatformSuperAdmin } = useAuth()
   const { currentCompanyClient, clearCurrentCompanyClient } = useCurrentCompanyClient()
   const { clearCurrentEntity } = useCurrentEntity()
   const navigate = useNavigate()
@@ -105,6 +107,10 @@ const PlatformAdminLayout = React.forwardRef<
               <Building2 className="h-5 w-5" />,
               "Clientes"
             )}
+
+            {/* Documentos globales: exclusivo del Super Admin (la RLS aplica la misma regla). */}
+            {isPlatformSuperAdmin &&
+              navItem("/admin/documents", <FolderOpen className="h-5 w-5" />, "Documentos")}
 
             {/* Sección Ajustes: desplegable que se oculta cuando no se usa. */}
             <div className="space-y-1 pt-3">

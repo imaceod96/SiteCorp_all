@@ -23,6 +23,7 @@ import Admin from "@/modules/access-control/presentation/pages/Admin"
 import Account from "@/modules/access-control/presentation/pages/Account"
 import Organizations from "@/modules/access-control/presentation/pages/Organizations"
 import PlatformUsers from "@/modules/access-control/presentation/pages/PlatformUsers"
+import AdminDocuments from "@/modules/platform-documents/presentation/pages/AdminDocuments"
 import MustChangePassword from "@/modules/access-control/presentation/pages/MustChangePassword"
 import RolesPermissions from "@/modules/access-control/presentation/pages/RolesPermissions"
 import CompanyClientUsers from "@/modules/company-client/presentation/pages/CompanyClientUsers"
@@ -290,6 +291,7 @@ const AppRoutes = () => {
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/companies" element={<Organizations />} />
           <Route path="/admin/users" element={<PlatformUsers />} />
+          <Route path="/admin/documents" element={<AdminDocuments />} />
           <Route path="/admin/roles" element={<RolesPermissions />} />
           <Route path="/admin/account" element={<Account />} />
           <Route path="/admin/settings/salary-scale" element={<AdminSettingsSalaryScale />} />
