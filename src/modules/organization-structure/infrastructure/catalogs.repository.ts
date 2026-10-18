@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import {
+  type EntityRegime,
   type OccupationalCategory,
   type PreparationLevel,
 } from "../domain/entities"
@@ -26,6 +27,22 @@ export async function fetchOccupationalCategories(options?: {
   const { data, error } = await query
   if (error) throw error
   return (data as OccupationalCategory[]) || []
+}
+
+/**
+ * Catálogo GLOBAL de regímenes de entidad (`entity_regimes`).
+ *
+ * Es la fuente de verdad de las opciones del selector de régimen: `code` es el valor
+ * canónico que se guarda y que comparan las RPC, `name` la etiqueta visible. Común a
+ * todos los tenants y entidades: nunca se filtra por cliente.
+ */
+export async function fetchEntityRegimes(): Promise<EntityRegime[]> {
+  const { data, error } = await supabase
+    .from("entity_regimes")
+    .select("code, name")
+    .order("name")
+  if (error) throw error
+  return (data as EntityRegime[]) || []
 }
 
 /** Texto único usado por la UI cuando un cargo histórico no tiene categoría. */

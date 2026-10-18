@@ -2,7 +2,6 @@ import { buildAccountCode } from "./account.rules"
 import type {
   OrganizationEntity,
   OrganizationEntityFormData,
-  OrganizationEntityRegime,
   OrganizationEntityType,
 } from "./entities"
 
@@ -93,11 +92,9 @@ export function resolveEntityAncestors(
   return ancestorIds.map((id) => entityById[id]).filter(Boolean)
 }
 
-/** Códigos canónicos del catálogo `entity_regimes`. */
-export const REGIME_OPTIONS: ReadonlyArray<{ value: OrganizationEntityRegime; label: string }> = [
-  { value: "PRESUPUESTADA", label: "Presupuestada" },
-  { value: "EMPRESARIAL", label: "Empresarial" },
-]
+// Las opciones de régimen NO se declaran aquí: son el catálogo global `entity_regimes`
+// (ver `fetchEntityRegimes`). El tipo `OrganizationEntityRegime` se conserva porque es la
+// regla de negocio que fija los códigos canónicos que guardan y comparan las RPC.
 
 export const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "active", label: "Activo" },

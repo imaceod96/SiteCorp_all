@@ -13,10 +13,11 @@ import { Building2, Factory, Layers, Plus, ShieldOff } from "lucide-react"
 import { useToast } from "@/shared/hooks/use-toast"
 import {
   ENTITY_TYPE_OPTIONS,
-  REGIME_OPTIONS,
   describeEntityError,
+  loadEntityRegimes,
   resolveParentCandidates,
   saveOrganizationEntity,
+  type EntityRegime,
   type OrganizationEntity,
 } from "@/modules/organization-structure"
 
@@ -102,6 +103,11 @@ export const OrganizationEntityDialog = ({
   const [saveError, setSaveError] = React.useState<string | null>(null)
   const [deactivateConfirmOpen, setDeactivateConfirmOpen] = React.useState(false)
   const pendingSubmit = React.useRef<OrganizationEntityFormDataZod | null>(null)
+  // Catálogo global `entity_regimes`: las opciones del selector de régimen no se
+  // incrustan en el código, se leen de su tabla.
+  const [regimeOptions, setRegimeOptions] = React.useState<EntityRegime[]>([])
+  const [loadingRegimes, setLoadingRegimes] = React.useState(false)
+  const [regimeLoadError, setRegimeLoadError] = React.useState<string | null>(null)
 
   // El cliente activo solo se usa como respaldo; nunca se toma «el primer cliente».
   const effectiveCompanyClientId = companyClientId || currentCompanyClient?.id || ""
@@ -159,6 +165,34 @@ export const OrganizationEntityDialog = ({
             }
     }
   }, [open, editingEntity, reset, defaultEntityType, defaultParentId, defaultRegime])
+
+  // El catálogo de regímenes se lee al abrir el diálogo (catálogo GLOBAL: nunca se filtra
+  // por cliente). Si la lectura falla se avisa y el selector queda vacío: jamás se
+  // inventa una lista de opciones en el componente.
+  React.useEffect(() => {
+    if (!open) return
+    let cancelled = false
+
+    setLoadingRegimes(true)
+    setRegimeLoadError(null)
+
+    loadEntityRegimes()
+      .then((regimes) => {
+        if (!cancelled) setRegimeOptions(regimes)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setRegimeOptions([])
+        setRegimeLoadError("No se pudieron cargar los regímenes.")
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRegimes(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   const onSubmit = async (data: OrganizationEntityFormDataZod) => {
     setSaveError(null)
@@ -322,13 +356,18 @@ export const OrganizationEntityDialog = ({
                     value as OrganizationEntityFormDataZod["regime_id"]
                   )
                 }
+                disabled={loadingRegimes || regimeOptions.length === 0}
               >
-                {REGIME_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                {loadingRegimes && <option value="">Cargando regímenes…</option>}
+                {regimeOptions.map((regime) => (
+                  <option key={regime.code} value={regime.code}>
+                    {regime.name}
                   </option>
                 ))}
               </SiteCorpSelect>
+              {regimeLoadError && (
+                <p className="text-xs text-sitecorp-warning">{regimeLoadError}</p>
+              )}
             </div>
 
             {/* Jerarquía: Grupo sin entidad superior; Empresa en un grupo; UEB en una empresa */}

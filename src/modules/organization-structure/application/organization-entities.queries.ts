@@ -6,7 +6,8 @@ import {
   selectVisibleEntities,
 } from "../infrastructure/organization-entities.repository"
 import { resolveEntityAncestors } from "../domain/organization-entities.rules"
-import type { OrganizationEntity, OrganizationEntityRow } from "../domain/entities"
+import { fetchEntityRegimes } from "../infrastructure/catalogs.repository"
+import type { EntityRegime, OrganizationEntity, OrganizationEntityRow } from "../domain/entities"
 
 /**
  * Entidades organizativas — Casos de uso de lectura (aplicación).
@@ -27,6 +28,16 @@ import type { OrganizationEntity, OrganizationEntityRow } from "../domain/entiti
 /** Todas las entidades visibles para la sesión, ordenadas por nombre. */
 export async function loadVisibleEntities(): Promise<OrganizationEntity[]> {
   return selectVisibleEntities()
+}
+
+/**
+ * Opciones del selector de régimen del alta/edición de entidades.
+ *
+ * Salen del catálogo global `entity_regimes` (no de una lista incrustada): si el catálogo
+ * cambia, el formulario cambia con él sin tocar código.
+ */
+export async function loadEntityRegimes(): Promise<EntityRegime[]> {
+  return fetchEntityRegimes()
 }
 
 /** Entidades de un cliente concreto, ordenadas por nombre. */

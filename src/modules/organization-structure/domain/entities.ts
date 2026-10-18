@@ -23,6 +23,18 @@ export interface PreparationLevel {
   sort_order: number
 }
 
+/**
+ * Régimen de entidad global (Presupuestada / Empresarial).
+ *
+ * `code` es el identificador canónico y estable: es el que se guarda en
+ * `organization_entities.regime_id` y el que comparan las RPC. `name` es la etiqueta
+ * visible. El catálogo vive en la tabla `entity_regimes`: la UI nunca incrusta la lista.
+ */
+export interface EntityRegime {
+  code: string
+  name: string
+}
+
 /** Día de la semana ISO-8601 (1 = Lunes … 7 = Domingo). */
 export interface WeekDay {
   value: number

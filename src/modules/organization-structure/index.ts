@@ -237,6 +237,7 @@ export {
 /* ================================================================== */
 
 // --- Entidades organizativas: tipos ---
+export type { EntityRegime } from "./domain/entities"
 export type { OrganizationEntity } from "./domain/entities"
 export type { OrganizationEntityRow } from "./domain/entities"
 export type { OrganizationEntityType } from "./domain/entities"
@@ -248,7 +249,6 @@ export type { SaveOrganizationEntityInput } from "./domain/entities"
 export type { OrganizationTree } from "./domain/organization-entities.rules"
 export {
   ENTITY_TYPE_OPTIONS,
-  REGIME_OPTIONS,
   STATUS_OPTIONS,
   buildOrganizationEntityPayload,
   buildOrganizationTree,
@@ -266,6 +266,7 @@ export type {
 } from "./application/organization-entities.queries"
 export {
   loadClientEntities,
+  loadEntityRegimes,
   loadEntitySiteCorpFlag,
   loadOrganizationEntity,
   loadOrganizationEntityDetail,

@@ -29,7 +29,6 @@ import {
 } from "../src/modules/access-control/domain/permissions.catalog"
 import {
   ENTITY_TYPE_OPTIONS,
-  REGIME_OPTIONS,
   buildOrganizationEntityPayload,
   describeEntityError,
   generateEntityCode,
@@ -665,9 +664,9 @@ test("el alta y la edición de entidades conservan código, jerarquía y Cuenta 
   expect(created).not.toHaveProperty("company_client_id")
   expect(created).not.toHaveProperty("tenant_id")
 
-  // Las opciones de tipo y régimen no cambian.
+  // Las opciones de tipo no cambian. Las de RÉGIMEN salen del catálogo `entity_regimes`
+  // (HC-001): ya no hay una lista incrustada que comprobar aquí.
   expect(ENTITY_TYPE_OPTIONS.map((o) => o.value)).toEqual(["business_group", "company", "ueb"])
-  expect(REGIME_OPTIONS.map((o) => o.value)).toEqual(["PRESUPUESTADA", "EMPRESARIAL"])
 
   // Los errores del backend se siguen explicando sin exponer detalles internos.
   expect(describeEntityError({ code: "23503" })).toBe(
