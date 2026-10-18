@@ -14,11 +14,22 @@
 --   `public.platform_founder` es una tabla de UNA SOLA FILA. La identidad es el UUID de
 --   Supabase Auth (`user_id`), nunca el correo ni el username.
 --
---   ⚠️  PLANTILLA SIN CONFIRMAR: el bloque final aborta a propósito mientras
---       `v_founder` siga siendo el UUID nulo. NO se puede aplicar por accidente ni fijar una
---       cuenta equivocada.
+--   Cuenta fundadora CONFIRMADA: `admin` · e7062a40-bc05-4ffb-a5a5-ba73d1ab116f
 --
--- ESTADO: NO EJECUTADO. Requiere confirmación de la cuenta fundadora y autorización expresa.
+-- LO QUE ESTA MIGRACIÓN **NO** HACE
+--   · No inserta, modifica ni elimina NINGUNA fila de `platform_user_roles`: las
+--     asignaciones de rol actuales (incluida la de la cuenta `pedro`) quedan intactas.
+--     La tabla de roles se LEE para validar, nunca se escribe.
+--   · No altera permisos ni políticas de las tablas existentes.
+--   · No crea ningún rol nuevo.
+--
+-- SEGURIDAD ANTE ERRORES
+--   Todo el bloque de designación valida ANTES de escribir y aborta con un mensaje explícito
+--   si algo no cuadra (cuenta inexistente, perfil inactivo, sin rol SuperAdmin, otra cuenta
+--   ya designada). Un `raise` revierte la migración completa en la transacción de aplicación:
+--   nunca puede quedar aplicada a medias ni con una cuenta equivocada.
+--
+-- ESTADO: NO EJECUTADO. Requiere autorización expresa antes de aplicarse.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -26,25 +37,35 @@
 -- ----------------------------------------------------------------------------
 create table if not exists public.platform_founder (
   user_id       uuid primary key references auth.users(id) on delete restrict,
+  -- Columna de relleno que garantiza UNA SOLA FILA (patrón estándar de tabla unitaria):
+  -- vale siempre `true`, así que la restricción única no admite una segunda fila. Lleva valor
+  -- por defecto: quien designa la cuenta fundadora no tiene que indicarla.
+  single_row    boolean not null default true,
   designated_at timestamptz not null default now(),
   designated_by uuid,
-  note          text
+  note          text,
+  constraint platform_founder_single_row_unique unique (single_row),
+  constraint platform_founder_single_row_true check (single_row)
 );
 
 comment on table public.platform_founder is
-  'Cuenta fundadora de SiteCorp (una sola fila). Su user_id es el UUID de Supabase Auth. No se puede eliminar ni desactivar.';
+  'Cuenta fundadora de SiteCorp (una sola fila, garantizada por `single_row`). Su user_id es el UUID de Supabase Auth. No se puede eliminar ni desactivar, y sólo la designa una migración explícita.';
 
--- Una única fila: el índice único sobre una expresión constante impide insertar una segunda.
-create unique index if not exists platform_founder_single_row
-  on public.platform_founder ((true));
+comment on column public.platform_founder.single_row is
+  'Siempre `true`: junto con la restricción única, impide que exista más de una cuenta fundadora.';
 
 -- ----------------------------------------------------------------------------
--- 2. Grants y RLS: legible por SuperAdmin, escritura sólo de servidor
+-- 2. Grants y RLS: legible por SuperAdmin, escritura sólo del propietario
 -- ----------------------------------------------------------------------------
-revoke insert, update, delete, truncate on table public.platform_founder from authenticated;
-revoke all on table public.platform_founder from anon;
+-- La designación del fundador NO se puede hacer desde la aplicación ni con la service role:
+-- sólo la realiza una migración explícita (propietario de la tabla). Así ninguna operación
+-- ordinaria ni ninguna Edge Function puede sustituir la cuenta fundadora.
 grant select on table public.platform_founder to authenticated;
-grant select, insert, update, delete on table public.platform_founder to service_role;
+grant select on table public.platform_founder to service_role;
+
+revoke insert, update, delete, truncate on table public.platform_founder from authenticated;
+revoke insert, update, delete, truncate on table public.platform_founder from service_role;
+revoke all on table public.platform_founder from anon;
 
 alter table public.platform_founder enable row level security;
 
@@ -90,17 +111,20 @@ grant execute on function public.is_platform_founder() to authenticated, service
 grant execute on function public.is_founder_user(uuid) to authenticated, service_role;
 
 -- ----------------------------------------------------------------------------
--- 4. Guarda del rol SuperAdmin en `platform_user_roles`
+-- 4. Guarda del rol SuperAdmin en `platform_user_roles` (INSERT, UPDATE y DELETE)
 -- ----------------------------------------------------------------------------
 -- Reglas (se aplican en la BASE, no en React):
 --   · asignar el rol SuperAdmin  → sólo la cuenta fundadora;
 --   · retirar el rol SuperAdmin  → sólo la cuenta fundadora;
 --   · el rol SuperAdmin de la PROPIA cuenta fundadora no se puede retirar nunca;
---   · `service_role` NO puede hacerlo (las Edge Functions no son una vía alternativa);
---   · el mantenimiento de base (`postgres` / `supabase_admin`) sí puede, como propietario.
+--   · `service_role` NO puede asignarlo ni retirarlo (las Edge Functions no son una vía
+--     alternativa: la asignación legítima del fundador viaja con SU token, no con la
+--     service role);
+--   · el mantenimiento de base (`postgres` / `supabase_admin`) sí puede, como propietario;
+--   · los roles ordinarios NO pasan por ninguna de estas reglas.
 --
 -- La función es SECURITY INVOKER a propósito: así `current_user` refleja el rol REAL de la
--- conexión y no el propietario de la función.
+-- conexión (y no el propietario de la función), lo que permite distinguir `service_role`.
 create or replace function public.enforce_founder_only_superadmin_role()
 returns trigger
 language plpgsql
@@ -108,12 +132,25 @@ set search_path = public, auth
 as $$
 declare
   v_role_id uuid;
-  v_target uuid;
 begin
   v_role_id := case when tg_op = 'DELETE' then old.platform_role_id else new.platform_role_id end;
-  v_target  := case when tg_op = 'DELETE' then old.user_id else new.user_id end;
 
-  -- ¿El rol afectado es el SuperAdmin del sistema?
+  -- (1) Borrado SIN sesión de aplicación: no es una "retirada de rol".
+  --     Cuando `auth.uid()` es nulo, un DELETE de esta tabla es el borrado de la propia
+  --     CUENTA arrastrando sus asignaciones (integridad referencial / GoTrue) o una
+  --     intervención directa en la base; nunca una retirada de rol hecha desde la aplicación
+  --     o desde una Edge Function. Se comprueba ANTES de leer el catálogo de roles para no
+  --     depender de los privilegios de lectura del rol de infraestructura que ejecuta la
+  --     cascada.
+  --     `service_role` queda FUERA de esta excepción: es la vía de las Edge Functions y no
+  --     puede eludir la regla. Sólo afecta a DELETE; en INSERT/UPDATE la única vía de
+  --     mantenimiento es `postgres`/`supabase_admin` (punto 3).
+  if tg_op = 'DELETE' and auth.uid() is null and current_user <> 'service_role' then
+    return old;
+  end if;
+
+  -- (2) ¿El rol afectado es el SuperAdmin del sistema?
+  --     Los roles ordinarios salen por aquí: la administración normal no se ve afectada.
   if not exists (
     select 1 from public.platform_roles pr
     where pr.id = v_role_id
@@ -123,18 +160,18 @@ begin
     return case when tg_op = 'DELETE' then old else new end;
   end if;
 
-  -- Mantenimiento de base de datos (propietario): permitido y documentado.
+  -- (3) Mantenimiento de base de datos (propietario): permitido y documentado.
   if current_user in ('postgres', 'supabase_admin') then
     return case when tg_op = 'DELETE' then old else new end;
   end if;
 
-  -- El rol SuperAdmin de la propia cuenta fundadora no se retira nunca.
+  -- (4) El rol SuperAdmin de la propia cuenta fundadora no se retira nunca.
   if tg_op = 'DELETE' and public.is_founder_user(old.user_id) then
     raise exception 'No se puede retirar el rol SuperAdmin a la cuenta fundadora de SiteCorp.'
       using errcode = '42501';
   end if;
 
-  -- Cualquier otra asignación o retirada exige ser la cuenta fundadora.
+  -- (5) Cualquier otra asignación o retirada del rol SuperAdmin exige ser la fundadora.
   if not public.is_platform_founder() then
     raise exception 'Solo la cuenta fundadora puede asignar o retirar el rol SuperAdmin.'
       using errcode = '42501';
@@ -154,13 +191,21 @@ create trigger platform_user_roles_founder_only
 -- ----------------------------------------------------------------------------
 -- 5. La cuenta fundadora no se puede desactivar
 -- ----------------------------------------------------------------------------
+-- Se suma (no sustituye) a la protección ya existente `profiles_protect_is_active`: aquélla
+-- decide QUIÉN puede cambiar `is_active`, ésta impide que el fundador quede inactivo por
+-- cualquiera, incluida la service role. Al llamarse `profiles_protect_founder`, se dispara
+-- antes (orden alfabético) y su mensaje es el que ve el usuario.
 create or replace function public.protect_founder_profile()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 begin
-  if new.is_active = false and old.is_active = true and public.is_founder_user(old.id) then
+  -- `is distinct from false` cubre también el caso de un `is_active` nulo heredado: cualquier
+  -- transición hacia inactivo de la cuenta fundadora se rechaza.
+  if new.is_active is false
+     and old.is_active is distinct from false
+     and public.is_founder_user(old.id) then
     raise exception 'La cuenta fundadora de SiteCorp no se puede desactivar.'
       using errcode = '42501';
   end if;
@@ -176,27 +221,37 @@ create trigger profiles_protect_founder
   for each row execute function public.protect_founder_profile();
 
 -- La eliminación de la cuenta fundadora ya queda bloqueada por la FK
--- `platform_founder.user_id → auth.users(id) ON DELETE RESTRICT`.
+-- `platform_founder.user_id → auth.users(id) ON DELETE RESTRICT` (segunda barrera: la Edge
+-- Function `delete-platform-user` la rechaza antes, con un mensaje claro).
 
 -- ----------------------------------------------------------------------------
--- 6. Fijación de la cuenta fundadora — PLANTILLA
+-- 6. Designación de la cuenta fundadora
 -- ----------------------------------------------------------------------------
--- ⚠️  SUSTITUIR ÚNICAMENTE el UUID de `v_founder` por el que se confirme como cuenta
---     fundadora. Mientras siga siendo el UUID nulo, este bloque ABORTA y la migración
---     completa se revierte: no hay forma de aplicarla con una cuenta equivocada.
+-- UUID de Supabase Auth confirmado como cuenta fundadora (`admin`).
+-- No se escribe ninguna otra tabla: las asignaciones de roles NO se tocan.
 do $$
 declare
-  -- UUID de Supabase Auth de la cuenta fundadora (pendiente de confirmación).
-  v_founder uuid := '00000000-0000-0000-0000-000000000000';
+  v_founder uuid := 'e7062a40-bc05-4ffb-a5a5-ba73d1ab116f';
+  v_username text;
+  v_is_active boolean;
 begin
-  if v_founder = '00000000-0000-0000-0000-000000000000'::uuid then
-    raise exception 'PLANTILLA SIN CONFIRMAR: sustituye v_founder por el UUID confirmado de la cuenta fundadora antes de aplicar esta migración.';
+  -- (a) La cuenta debe existir.
+  select p.username, p.is_active
+    into v_username, v_is_active
+  from public.profiles p
+  where p.id = v_founder;
+
+  if not found then
+    raise exception 'El UUID % no corresponde a ninguna cuenta de SiteCorp: no se puede designar como fundadora.', v_founder;
   end if;
 
-  if not exists (select 1 from public.profiles p where p.id = v_founder) then
-    raise exception 'El UUID indicado no corresponde a ningún perfil de SiteCorp.';
+  -- (b) Su perfil debe estar activo.
+  if v_is_active is not true then
+    raise exception 'La cuenta % (%) no está activa (is_active = %): no puede ser la fundadora.',
+      v_username, v_founder, coalesce(v_is_active::text, 'NULL');
   end if;
 
+  -- (c) Debe tener asignado el rol SuperAdmin.
   if not exists (
     select 1
     from public.platform_user_roles pur
@@ -205,10 +260,17 @@ begin
       and pr.name = 'SuperAdmin'
       and pr.is_system_role = true
   ) then
-    raise exception 'La cuenta indicada no tiene el rol SuperAdmin: no puede ser la fundadora.';
+    raise exception 'La cuenta % (%) no tiene el rol SuperAdmin: no puede ser la fundadora.',
+      v_username, v_founder;
   end if;
 
+  -- (d) No puede existir OTRA cuenta designada como fundadora.
+  if exists (select 1 from public.platform_founder f where f.user_id <> v_founder) then
+    raise exception 'Ya existe otra cuenta designada como fundadora en public.platform_founder: revísala antes de aplicar esta migración.';
+  end if;
+
+  -- (e) Designación (idempotente: reejecutarla no cambia nada).
   insert into public.platform_founder (user_id, note)
-  values (v_founder, 'Cuenta fundadora de SiteCorp')
+  values (v_founder, 'Cuenta fundadora de SiteCorp (admin)')
   on conflict (user_id) do nothing;
 end $$;
