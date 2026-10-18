@@ -36,7 +36,10 @@
 --   queda siempre sujeta a la regla: con `auth.uid()` nulo y `service_role` la operación se
 --   rechaza.
 --
--- ESTADO: NO EJECUTADO. Requiere autorización expresa antes de aplicarse.
+-- ESTADO: APLICADA el 2026-10-18 con autorización expresa del responsable del proyecto.
+--   Verificado en la base tras aplicarla: designación única de la cuenta fundadora, disparadores
+--   activos, permisos mínimos y pruebas de comportamiento (la fundadora puede otorgar y retirar
+--   el rol; ningún otro SuperAdmin puede; la cuenta fundadora no se puede desactivar ni eliminar).
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -67,12 +70,8 @@ comment on column public.platform_founder.single_row is
 -- La designación del fundador NO se puede hacer desde la aplicación ni con la service role:
 -- sólo la realiza una migración explícita (propietario de la tabla). Así ninguna operación
 -- ordinaria ni ninguna Edge Function puede sustituir la cuenta fundadora.
-grant select on table public.platform_founder to authenticated;
-grant select on table public.platform_founder to service_role;
-
-revoke insert, update, delete, truncate on table public.platform_founder from authenticated;
-revoke insert, update, delete, truncate on table public.platform_founder from service_role;
-revoke all on table public.platform_founder from anon;
+revoke all on table public.platform_founder from anon, authenticated, service_role;
+grant select on table public.platform_founder to authenticated, service_role;
 
 alter table public.platform_founder enable row level security;
 
@@ -196,7 +195,7 @@ begin
 end;
 $$;
 
-revoke all on function public.enforce_founder_only_superadmin_role() from public;
+revoke all on function public.enforce_founder_only_superadmin_role() from public, anon;
 
 drop trigger if exists platform_user_roles_founder_only on public.platform_user_roles;
 create trigger platform_user_roles_founder_only
@@ -228,7 +227,7 @@ begin
 end;
 $$;
 
-revoke all on function public.protect_founder_profile() from public;
+revoke all on function public.protect_founder_profile() from public, anon;
 
 drop trigger if exists profiles_protect_founder on public.profiles;
 create trigger profiles_protect_founder
