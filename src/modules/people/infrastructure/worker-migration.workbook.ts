@@ -15,10 +15,53 @@ import type { Workbook, Cell, Row } from "exceljs"
  * No consulta Supabase ni compone consultas: solo lee y escribe Excel en memoria.
  */
 
-/** Tipado mínimo del módulo ExcelJS usado por esta exportación (solo `Workbook`). */
+/** Tipado mínimo del bundle ExcelJS usado por esta exportación (solo `Workbook`). */
 type ExcelJSModule = {
   Workbook: typeof Workbook
   default?: { Workbook: typeof Workbook }
+}
+
+/**
+ * El bundle UMD oficial de ExcelJS (`exceljs/dist/exceljs.min.js`) se carga como script
+ * clásico desde `/vendor/`, en lugar de dejar que Vite vuelva a empaquetarlo: al
+ * reempaquetar ese bundle, `workbook.xlsx.load()` falla al leer cada entrada del zip
+ * (`parseWorkbook` devuelve `undefined` y ExcelJS lanza "Cannot read properties of
+ * undefined (reading 'sheets')"), de modo que la plantilla nunca llegaba a validarse.
+ *
+ * El archivo servido es la copia sin modificar del dist que publica la versión instalada
+ * de ExcelJS: al actualizar la dependencia hay que reemplazarlo por el nuevo dist.
+ */
+const EXCELJS_BUNDLE_URL = "/vendor/exceljs.min.js"
+const EXCELJS_LOAD_ERROR = "No se pudo cargar el lector de Excel de SiteCorp. Recargue la página e intente de nuevo."
+const UNREADABLE_XLSX_ERROR = "No se pudo leer el archivo. Verifique que sea un .xlsx generado con la plantilla oficial de SiteCorp."
+
+const globalScope = globalThis as typeof globalThis & { ExcelJS?: ExcelJSModule }
+
+let excelJsBundlePromise: Promise<ExcelJSModule> | null = null
+
+function loadExcelJS(): Promise<ExcelJSModule> {
+  if (globalScope.ExcelJS) return Promise.resolve(globalScope.ExcelJS)
+  if (!excelJsBundlePromise) {
+    excelJsBundlePromise = new Promise<ExcelJSModule>((resolve, reject) => {
+      const script = document.createElement("script")
+      script.src = EXCELJS_BUNDLE_URL
+      script.async = true
+      script.onload = () => {
+        if (globalScope.ExcelJS) {
+          resolve(globalScope.ExcelJS)
+          return
+        }
+        excelJsBundlePromise = null
+        reject(new Error(EXCELJS_LOAD_ERROR))
+      }
+      script.onerror = () => {
+        excelJsBundlePromise = null
+        reject(new Error(EXCELJS_LOAD_ERROR))
+      }
+      document.head.appendChild(script)
+    })
+  }
+  return excelJsBundlePromise
 }
 
 // Plantilla simplificada de Carga inicial. No incluye "Fecha nacimiento"
@@ -70,8 +113,8 @@ const decimalText = (value: unknown): string => {
 }
 
 export async function buildWorkerMigrationTemplate(): Promise<Blob> {
-  const mod: ExcelJSModule = await import("exceljs")
-  const ExcelJS = mod?.default ?? mod
+  const mod = await loadExcelJS()
+  const ExcelJS = mod.default ?? mod
   const workbook = new ExcelJS.Workbook()
   workbook.creator = "SiteCorp"
   const sheet = workbook.addWorksheet("Trabajadores", { views: [{ state: "frozen", ySplit: 1 }] })
@@ -135,10 +178,20 @@ export class WorkerMigrationTemplateError extends Error {
 export async function readWorkerMigrationExcel(file: File): Promise<MigrationRow[]> {
   if (file.size > 10 * 1024 * 1024) throw new WorkerMigrationTemplateError("INVALID_FILE", "El archivo supera el límite de 10 MB.")
   if (!file.name.toLowerCase().endsWith(".xlsx")) throw new WorkerMigrationTemplateError("INVALID_FILE", "Seleccione un archivo .xlsx válido.")
-  const mod: ExcelJSModule = await import("exceljs")
-  const ExcelJS = mod?.default ?? mod
+  const mod = await loadExcelJS()
+  const ExcelJS = mod.default ?? mod
   const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(await file.arrayBuffer())
+  try {
+    // ExcelJS espera bytes (Uint8Array) del .xlsx, no el File ni su ArrayBuffer.
+    await workbook.xlsx.load(new Uint8Array(await file.arrayBuffer()))
+  } catch (cause) {
+    // El detalle técnico completo queda en consola para diagnóstico.
+    console.error("[initial-import] ExcelJS no pudo leer el archivo", cause)
+    throw new WorkerMigrationTemplateError("INVALID_FILE", UNREADABLE_XLSX_ERROR)
+  }
+  if (!workbook.worksheets.length) {
+    throw new WorkerMigrationTemplateError("INVALID_FILE", UNREADABLE_XLSX_ERROR)
+  }
   const sheet = workbook.getWorksheet("Trabajadores") || workbook.worksheets[0]
   if (!sheet) throw new WorkerMigrationTemplateError("SHEET_MISSING", "El archivo no contiene ninguna hoja de trabajo.")
   const indexHeaders = (rowNumber: number) => {
