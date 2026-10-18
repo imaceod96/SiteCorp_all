@@ -4,6 +4,7 @@ import {
   fetchWorkerMigrationCatalogs,
   rpcMigrationValidateRows,
 } from "../infrastructure/worker-migration.repository"
+import { buildWorkerMigrationTemplate } from "../infrastructure/worker-migration.workbook"
 import {
   buildMigrationBatchHistory,
   mapMigrationRowValues,
@@ -65,4 +66,14 @@ export async function loadEntityMigrationHistory(
   entityId: string
 ): Promise<MigrationBatchHistory[]> {
   return buildMigrationBatchHistory(await fetchEntityMigrationBatchRows(entityId))
+}
+
+/**
+ * Plantilla oficial con los valores REALES de los catálogos globales: las columnas de
+ * catálogo llevan lista desplegable (hoja «Catálogos»), de modo que el archivo solo puede
+ * contener valores que la validación reconoce —por nombre de catálogo— y que la importación
+ * guarda como identificador. Los catálogos son GLOBALES (sin entidad ni cliente).
+ */
+export async function buildOfficialWorkerMigrationTemplate(): Promise<Blob> {
+  return buildWorkerMigrationTemplate(await fetchWorkerMigrationCatalogs())
 }

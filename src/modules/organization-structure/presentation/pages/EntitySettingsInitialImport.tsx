@@ -17,7 +17,7 @@ import { MigratedWorkerDialog } from "@/modules/people/presentation/components/M
 // Excel) junto a los casos de uso de la carga inicial (catálogos, validación por fila,
 // importación e historial).
 import {
-  buildWorkerMigrationTemplate,
+  buildOfficialWorkerMigrationTemplate,
   downloadWorkerMigrationTemplate,
   importWorkerMigration,
   loadEntityMigrationHistory,
@@ -129,7 +129,7 @@ const EntitySettingsInitialImport = () => {
     setBusy(true)
     setError("")
     try {
-      downloadWorkerMigrationTemplate(await buildWorkerMigrationTemplate())
+      downloadWorkerMigrationTemplate(await buildOfficialWorkerMigrationTemplate())
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "No se pudo generar la plantilla.")
     } finally {
@@ -266,7 +266,7 @@ const EntitySettingsInitialImport = () => {
           <div className="rounded-2xl bg-sitecorp-primary/5 p-5">
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white text-sitecorp-primary"><FileSpreadsheet className="h-5 w-5" /></div>
             <h2 className="text-lg font-semibold text-slate-900">1. Descarga la plantilla</h2>
-            <p className="mt-1 text-sm text-slate-700">Plantilla simplificada. La fecha de nacimiento no se solicita: se deriva de la identificación cuando es posible.</p>
+            <p className="mt-1 text-sm text-slate-700">Plantilla oficial con listas de los catálogos (sexo, estado civil, color de piel y nivel educacional). La fecha de nacimiento no se solicita: se deriva de la identificación cuando es posible.</p>
             {allowed && <Button className="mt-4" onClick={handleDownload} disabled={busy}><Download className="mr-2 h-4 w-4" />Descargar plantilla Excel</Button>}
           </div>
           <div className="rounded-2xl border border-dashed border-slate-300 p-5">

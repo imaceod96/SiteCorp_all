@@ -406,6 +406,7 @@ export {
   mapMigrationRows,
   validateWorkerMigration,
   loadEntityMigrationHistory,
+  buildOfficialWorkerMigrationTemplate,
 } from "./application/worker-migration.queries"
 
 export {

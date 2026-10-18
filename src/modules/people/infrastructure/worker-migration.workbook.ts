@@ -1,5 +1,6 @@
-import type { MigrationRow } from "../domain/entities"
-import type { Workbook, Cell, Row } from "exceljs"
+import type { CatalogRow, MigrationRow, WorkerMigrationCatalogs } from "../domain/entities"
+import { migrationCatalogNames } from "../domain/worker-migration.rules"
+import type { Workbook, Cell, Row, Worksheet } from "exceljs"
 
 /**
  * Personas — Adaptador del archivo Excel de la Carga inicial de trabajadores.
@@ -76,6 +77,48 @@ export const MIGRATION_HEADERS = [
   "Tiene licencia", "Categorías licencia",
 ] as const
 
+type MigrationHeader = (typeof MIGRATION_HEADERS)[number]
+
+/** Columnas cuyo valor proviene de un catálogo global (llevan lista desplegable). */
+const CATALOG_COLUMNS: { header: MigrationHeader; catalog: keyof WorkerMigrationCatalogs }[] = [
+  { header: "Sexo", catalog: "genders" },
+  { header: "Estado civil", catalog: "maritalStatuses" },
+  { header: "Color de piel", catalog: "skinColors" },
+  { header: "Nivel educacional", catalog: "educationLevels" },
+]
+
+/** Última fila de la plantilla que ofrece listas desplegables de catálogo. */
+const CATALOG_VALIDATION_ROWS = 5000
+
+/** A, B, … Z, AA, AB… para las referencias de rango de Excel. */
+const columnLetter = (column: number): string => {
+  let letter = ""
+  let remaining = column
+  while (remaining > 0) {
+    letter = String.fromCharCode(65 + ((remaining - 1) % 26)) + letter
+    remaining = Math.floor((remaining - 1) / 26)
+  }
+  return letter
+}
+
+/**
+ * ExcelJS 4.4 publica `worksheet.dataValidations` en ejecución —y la plantilla carga su
+ * mismo dist desde `/vendor/exceljs.min.js`—, pero sus tipos no la declaran.
+ */
+interface WorksheetWithDataValidations {
+  dataValidations: { add: (range: string, validation: Record<string, unknown>) => void }
+}
+
+/** Añade una lista desplegable a un rango de la hoja de trabajadores. */
+const addListValidation = (
+  sheet: Worksheet,
+  range: string,
+  validation: Record<string, unknown>
+): void => {
+  const withValidations = sheet as unknown as WorksheetWithDataValidations
+  withValidations.dataValidations.add(range, validation)
+}
+
 const excelDate = (value: unknown): string => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10)
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -112,7 +155,20 @@ const decimalText = (value: unknown): string => {
   return text.replace(",", ".")
 }
 
-export async function buildWorkerMigrationTemplate(): Promise<Blob> {
+/**
+ * Plantilla oficial de la Carga inicial.
+ *
+ * Cuando recibe los catálogos globales, las columnas de catálogo (Sexo, Estado civil, Color
+ * de piel y Nivel educacional) llevan LISTA DESPLEGABLE con los valores vigentes y una hoja
+ * «Catálogos» los publica: así el archivo solo puede contener valores que la validación
+ * reconoce y que la importación guarda como identificador. Sin catálogos, la plantilla es
+ * exactamente la anterior (mismas hojas y mismas columnas).
+ *
+ * Los catálogos llegan como parámetro: este adaptador no consulta Supabase.
+ */
+export async function buildWorkerMigrationTemplate(
+  catalogs?: WorkerMigrationCatalogs
+): Promise<Blob> {
   const mod = await loadExcelJS()
   const ExcelJS = mod.default ?? mod
   const workbook = new ExcelJS.Workbook()
@@ -124,6 +180,45 @@ export async function buildWorkerMigrationTemplate(): Promise<Blob> {
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } }
   sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174A67" } }
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: MIGRATION_HEADERS.length } }
+
+  // Listas desplegables de catálogo: una hoja con los valores vigentes y validación de datos
+  // en cada columna de catálogo. El nombre del catálogo es justo lo que resuelven los mapas
+  // de la Carga inicial (nombre o código → identificador).
+  const catalogLists = catalogs
+    ? CATALOG_COLUMNS.map((entry) => ({
+        ...entry,
+        values: migrationCatalogNames(catalogs[entry.catalog] as CatalogRow[]),
+      })).filter((entry) => entry.values.length > 0)
+    : []
+
+  if (catalogLists.length) {
+    const catalogSheet = workbook.addWorksheet("Catálogos")
+    catalogLists.forEach((entry, index) => {
+      catalogSheet.getColumn(index + 1).width = 26
+      catalogSheet.getCell(1, index + 1).value = entry.header
+      entry.values.forEach((value, rowIndex) => {
+        catalogSheet.getCell(rowIndex + 2, index + 1).value = value
+      })
+    })
+    catalogSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } }
+    catalogSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174A67" } }
+
+    catalogLists.forEach((entry, index) => {
+      const column = MIGRATION_HEADERS.indexOf(entry.header) + 1
+      if (column <= 0) return
+      const letter = columnLetter(column)
+      const sourceLetter = columnLetter(index + 1)
+      addListValidation(sheet, `${letter}2:${letter}${CATALOG_VALIDATION_ROWS}`, {
+        type: "list",
+        allowBlank: true,
+        formulae: [`'Catálogos'!$${sourceLetter}$2:$${sourceLetter}$${entry.values.length + 1}`],
+        showErrorMessage: true,
+        errorTitle: "Valor no válido",
+        error: `Seleccione uno de los valores del catálogo de ${entry.header}.`,
+      })
+    })
+  }
+
   const instructions = workbook.addWorksheet("Instrucciones")
   instructions.columns = [{ width: 34 }, { width: 110 }]
   instructions.addRows([
@@ -132,7 +227,12 @@ export async function buildWorkerMigrationTemplate(): Promise<Blob> {
     ["Fecha de nacimiento", "No se solicita: SiteCorp la deriva automáticamente de la identificación cuando es posible. Si no puede derivarse, el trabajador queda con información pendiente de completar."],
     ["Fecha de incorporación", "Obligatoria. Indique la fecha real en la que el trabajador comenzó a trabajar en la entidad. SiteCorp utilizará esta fecha para calcular su antigüedad. Use DD/MM/AAAA o una fecha real de Excel. No puede ser futura."],
     ["Fechas", "Use DD/MM/YYYY o una fecha real de Excel."],
-    ["Sexo / Estado civil / Color / Nivel", "Use el nombre del catálogo existente en la entidad/aplicación."],
+    [
+      "Sexo / Estado civil / Color / Nivel",
+      catalogLists.length
+        ? "Seleccione un valor de la lista desplegable (hoja «Catálogos»). SiteCorp guarda el identificador del catálogo: un valor fuera de la lista bloquea la fila."
+        : "Use el nombre del catálogo existente en la entidad/aplicación.",
+    ],
     ["Tiene licencia", "Sí/No. Indique además las categorías separadas por coma cuando corresponda."],
     ["Puesto", "La carga inicial no asigna puestos: los trabajadores quedan pendientes de vinculación y se asignan después desde Trabajadores."],
     ["Saldo y corte de vacaciones", "Ambos son opcionales. Un saldo vacío queda desconocido; no se asume cero."],

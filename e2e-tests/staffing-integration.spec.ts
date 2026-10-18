@@ -314,9 +314,22 @@ test("la validación de la carga inicial conserva los mensajes y el estado por f
     backendRow()
   )
   expect(unknownCatalog.status).toBe("ERROR")
-  expect(unknownCatalog.messages).toContain("Sexo no existe en el catálogo.")
+  // El error dice QUÉ se escribió y QUÉ valores admite el catálogo global de la aplicación.
+  expect(unknownCatalog.messages).toContain(
+    "Sexo «gender-x» no existe en el catálogo. Valores válidos: Masculino."
+  )
   expect(unknownCatalog.messages).toContain(
     "Una o más categorías de licencia no existen en el catálogo."
+  )
+
+  const unknownSkinColor = validateMigrationRow(
+    migrationRow({ skin_color_id: "Verde" }),
+    indexes,
+    backendRow()
+  )
+  expect(unknownSkinColor.status).toBe("ERROR")
+  expect(unknownSkinColor.messages).toContain(
+    "Color de piel «Verde» no existe en el catálogo. Valores válidos: Blanca."
   )
 
   // Las fechas deben llegar en formato ISO (las normaliza la lectura del Excel): un valor

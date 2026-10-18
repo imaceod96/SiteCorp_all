@@ -1,4 +1,5 @@
 import type {
+  CatalogRow,
   MigrationBatchHistory,
   MigrationBatchRow,
   MigrationPreviewRow,
@@ -45,6 +46,15 @@ export interface MigrationCatalogIndexes {
   skinColorId: Set<string>
   educationLevelId: Set<string>
   drivingLicenseCategoryId: Set<string>
+  /**
+   * Nombres vigentes de cada catálogo global (ordenados y sin repetir). No se usan para
+   * resolver valores —eso lo hacen los mapas por nombre o código— sino para que el error
+   * de una fila pueda decir exactamente qué valores admite el catálogo.
+   */
+  genderNames: string[]
+  maritalStatusNames: string[]
+  skinColorNames: string[]
+  educationLevelNames: string[]
 }
 
 /** Mapa de resolución del archivo: nombre o código en minúsculas → identificador. */
@@ -69,6 +79,12 @@ const catalogMap = (
   return map
 }
 
+/** Nombres vigentes de un catálogo, ordenados y sin repetir (lo que admite la columna). */
+export const migrationCatalogNames = (options: CatalogRow[]): string[] =>
+  Array.from(new Set(options.map((option) => option.name.trim()).filter(Boolean))).sort((a, b) =>
+    a.localeCompare(b)
+  )
+
 /** Índices de existencia de los catálogos globales. */
 export const migrationCatalogIndexes = (
   catalogs: WorkerMigrationCatalogs
@@ -78,6 +94,10 @@ export const migrationCatalogIndexes = (
   skinColorId: new Set(catalogs.skinColors.map((row) => row.id)),
   educationLevelId: new Set(catalogs.educationLevels.map((row) => row.id)),
   drivingLicenseCategoryId: new Set(catalogs.drivingLicenseCategories.map((row) => row.id)),
+  genderNames: migrationCatalogNames(catalogs.genders),
+  maritalStatusNames: migrationCatalogNames(catalogs.maritalStatuses),
+  skinColorNames: migrationCatalogNames(catalogs.skinColors),
+  educationLevelNames: migrationCatalogNames(catalogs.educationLevels),
 })
 
 /** Mapas de resolución (nombre o código → identificador) de los catálogos globales. */
@@ -125,19 +145,37 @@ export function validateMigrationRow(
   const errors: string[] = []
   const warnings: string[] = []
 
+  /**
+   * Un valor de catálogo no reconocido se queda tal cual en la fila (lo escribe el usuario)
+   * y bloquea la fila: `row[key]` todavía conserva el texto del archivo, de modo que el
+   * error puede decir QUÉ escribió y QUÉ valores admite el catálogo global.
+   */
   const addCatalogError = (
     key: "gender_id" | "marital_status_id" | "skin_color_id" | "education_level_id",
     label: string,
-    known: Set<string>
+    known: Set<string>,
+    validNames: string[]
   ) => {
     const value = row[key]
-    if (value && !known.has(value)) errors.push(`${label} no existe en el catálogo.`)
+    if (!value || known.has(value)) return
+    const options = validNames.length ? ` Valores válidos: ${validNames.join(", ")}.` : ""
+    errors.push(`${label} «${value}» no existe en el catálogo.${options}`)
   }
 
-  addCatalogError("gender_id", "Sexo", catalogs.genderId)
-  addCatalogError("marital_status_id", "Estado civil", catalogs.maritalStatusId)
-  addCatalogError("skin_color_id", "Color de piel", catalogs.skinColorId)
-  addCatalogError("education_level_id", "Nivel educacional", catalogs.educationLevelId)
+  addCatalogError("gender_id", "Sexo", catalogs.genderId, catalogs.genderNames)
+  addCatalogError(
+    "marital_status_id",
+    "Estado civil",
+    catalogs.maritalStatusId,
+    catalogs.maritalStatusNames
+  )
+  addCatalogError("skin_color_id", "Color de piel", catalogs.skinColorId, catalogs.skinColorNames)
+  addCatalogError(
+    "education_level_id",
+    "Nivel educacional",
+    catalogs.educationLevelId,
+    catalogs.educationLevelNames
+  )
 
   if (row.driving_license_category_ids.some((id) => !catalogs.drivingLicenseCategoryId.has(id))) {
     errors.push("Una o más categorías de licencia no existen en el catálogo.")

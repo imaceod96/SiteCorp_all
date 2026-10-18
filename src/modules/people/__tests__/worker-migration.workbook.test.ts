@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import ExcelJSNode from "exceljs"
+import type { WorkerMigrationCatalogs } from "../domain/entities"
 import {
   MIGRATION_HEADERS,
   WorkerMigrationTemplateError,
@@ -182,5 +183,80 @@ describe("worker-migration.workbook · lectura de archivos de trabajadores", () 
     } finally {
       globalThis.fetch = originalFetch
     }
+  })
+})
+
+describe("worker-migration.workbook · plantilla oficial con catálogos", () => {
+  const catalogs: WorkerMigrationCatalogs = {
+    genders: [
+      { id: "gender-2", name: "Masculino" },
+      { id: "gender-1", name: "Femenino" },
+    ],
+    maritalStatuses: [{ id: "marital-1", name: "Soltera" }],
+    skinColors: [
+      { id: "skin-2", name: "Negra" },
+      { id: "skin-1", name: "Blanca" },
+    ],
+    educationLevels: [
+      { id: "education-2", name: "Superior" },
+      { id: "education-1", name: "Secundaria" },
+    ],
+    drivingLicenseCategories: [{ id: "license-1", name: "A" }],
+  }
+
+  it("publica los valores vigentes del catálogo y los ofrece como lista desplegable", async () => {
+    const blob = await buildWorkerMigrationTemplate(catalogs)
+    const workbook = new ExcelJSNode.Workbook()
+    await workbook.xlsx.load(await blob.arrayBuffer())
+
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      "Trabajadores",
+      "Instrucciones",
+      "Catálogos",
+    ])
+
+    // Cada columna de la hoja «Catálogos» publica los valores vigentes, ordenados y sin repetir.
+    const catalogSheet = workbook.getWorksheet("Catálogos")
+    const columnValues = (column: number) =>
+      catalogSheet
+        .getColumn(column)
+        .values.slice(2)
+        .filter((value) => value !== undefined)
+    expect(columnValues(1)).toEqual(["Femenino", "Masculino"])
+    expect(columnValues(2)).toEqual(["Soltera"])
+    expect(columnValues(3)).toEqual(["Blanca", "Negra"])
+    expect(columnValues(4)).toEqual(["Secundaria", "Superior"])
+
+    // Sexo (E), Color de piel (F), Estado civil (G) y Nivel educacional (P) llevan lista
+    // desplegable apuntando a la hoja de catálogos: el archivo no admite otro valor.
+    // (Al releer el .xlsx, ExcelJS expande cada rango en sus celdas: se consultan por celda.)
+    const validations = (
+      workbook.getWorksheet("Trabajadores") as unknown as {
+        dataValidations: { model: Record<string, { type: string; formulae?: string[] }> }
+      }
+    ).dataValidations.model
+    for (const column of ["E", "F", "G", "P"]) {
+      expect(
+        validations[`${column}2`]?.type,
+        `la columna ${column} debe tener lista desplegable`,
+      ).toBe("list")
+      expect(validations[`${column}2`]?.formulae?.[0]).toMatch(/Catálogos/)
+      expect(validations[`${column}5000`]?.type).toBe("list")
+    }
+    // Ni una columna que no es de catálogo (Dirección, H) ni la fila siguiente al rango.
+    expect(validations["H2"]).toBeUndefined()
+    expect(validations["E5001"]).toBeUndefined()
+  })
+
+  it("sin catálogos conserva las hojas y las columnas de siempre", async () => {
+    const blob = await buildWorkerMigrationTemplate()
+    const workbook = new ExcelJSNode.Workbook()
+    await workbook.xlsx.load(await blob.arrayBuffer())
+
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(["Trabajadores", "Instrucciones"])
+    expect(workbook.getWorksheet("Trabajadores").getRow(1).values).toEqual([
+      undefined,
+      ...MIGRATION_HEADERS,
+    ])
   })
 })
