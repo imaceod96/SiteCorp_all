@@ -206,13 +206,20 @@ export {
 
 /* Reglas puras de la eliminación de usuarios de plataforma */
 export {
+  FOUNDER_ACCOUNT_PROTECTED_MESSAGE,
   LAST_SUPERADMIN_MESSAGE,
   SELF_DELETION_MESSAGE,
+  SUPERADMIN_FOUNDER_ONLY_MESSAGE,
+  assignablePlatformRoles,
   countActivePlatformSuperAdmins,
   deletionConfirmationMatches,
   isPlatformSuperAdminUser,
+  isSuperAdminPlatformRole,
   platformUserDeletionBlockReason,
 } from "./domain/platform-users.rules"
+
+/* Cuenta fundadora: quién es (lo resuelve el servidor) */
+export { loadIsPlatformFounder } from "./application/platform-founder.queries"
 
 /* Usuarios e invitaciones de un CLIENTE: casos de uso */
 export {

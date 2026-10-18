@@ -254,6 +254,35 @@ serve(async (req) => {
       return json({ error: "El rol de plataforma seleccionado está inactivo." }, 400)
     }
 
+    // 4.b El rol SuperAdmin queda RESERVADO a la cuenta fundadora.
+    //      Aquí se responde con un mensaje claro, pero la AUTORIDAD es la base: el disparador
+    //      `enforce_founder_only_superadmin_role` rechaza cualquier asignación del rol
+    //      SuperAdmin que no provenga de la cuenta fundadora, incluso desde service_role.
+    const isSuperAdminRole = roleData.name === "SuperAdmin" && roleData.is_system_role === true
+
+    if (isSuperAdminRole) {
+      const { data: founderRow, error: founderError } = await adminClient
+        .from("platform_founder")
+        .select("user_id")
+        .eq("user_id", callerId)
+        .maybeSingle()
+
+      if (founderError) {
+        console.error("[create-sitecorp-user] founder lookup failed", founderError)
+        return json({ error: "Forbidden: unable to verify founder status" }, 403)
+      }
+
+      if (!founderRow) {
+        console.error("[create-sitecorp-user] non-founder attempted to grant SuperAdmin", {
+          callerId,
+        })
+        return json(
+          { error: "Solo la cuenta fundadora puede asignar el rol SuperAdmin." },
+          403
+        )
+      }
+    }
+
     // Check if username already exists
     const { data: existingUsername, error: usernameError } = await adminClient
       .from("profiles")
@@ -319,7 +348,22 @@ serve(async (req) => {
     }
 
     // Assign platform role
-    const { error: roleAssignError } = await adminClient.from("platform_user_roles").insert({
+    //   · Rol SuperAdmin → se asigna con la IDENTIDAD DEL LLAMANTE (su propio token), para
+    //     que la base reconozca a la cuenta fundadora y el disparador autorice la operación.
+    //     La service role NO puede otorgar el SuperAdmin.
+    //   · Resto de roles → como hasta ahora, con el cliente de servicio.
+    const roleClient = isSuperAdminRole
+      ? createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+          {
+            auth: { persistSession: false },
+            global: { headers: { Authorization: authHeader } },
+          }
+        )
+      : adminClient
+
+    const { error: roleAssignError } = await roleClient.from("platform_user_roles").insert({
       user_id: userId,
       platform_role_id: platformRoleId,
       assigned_by: callerId,

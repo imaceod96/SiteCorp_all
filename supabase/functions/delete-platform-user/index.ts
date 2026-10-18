@@ -12,6 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
  *   · el llamante debe ser SuperAdmin ACTIVO, sin cambio de contraseña pendiente;
  *   · no puede eliminar su propia cuenta;
  *   · no puede eliminar la ÚLTIMA cuenta activa de SuperAdmin;
+ *   · no puede eliminar la cuenta FUNDADORA (protegida también en la base);
  *   · debe confirmar el `username` exacto del usuario objetivo;
  *   · NO se escribe nada antes del borrado: si el borrado falla, la base queda intacta;
  *   · si el usuario participa en registros históricos (documentos que creó, asignaciones de
@@ -168,6 +169,32 @@ serve(async (req) => {
     }
     if ((targetProfile.username ?? "").toLowerCase() !== confirmUsername.toLowerCase()) {
       return json({ error: "La confirmación no coincide con el nombre de usuario." }, 400)
+    }
+
+    // 7.b La cuenta FUNDADORA está protegida: no se elimina por procedimientos
+    //     administrativos. Se comprueba ANTES del borrado para no devolver el mensaje
+    //     genérico de «registros históricos» que produciría la restricción de la base.
+    const { data: founderRow, error: founderError } = await adminClient
+      .from("platform_founder")
+      .select("user_id")
+      .eq("user_id", targetUserId)
+      .maybeSingle()
+
+    if (founderError) {
+      console.error("[delete-platform-user] founder lookup failed", founderError)
+      return json({ error: "No se pudo verificar la protección de la cuenta fundadora." }, 500)
+    }
+
+    if (founderRow) {
+      console.error("[delete-platform-user] refused to delete the founder", { targetUserId })
+      return json(
+        {
+          error:
+            "La cuenta fundadora de SiteCorp no se puede eliminar ni desactivar: es la única autorizada para administrar el rol SuperAdmin.",
+          reason: "founder_protected",
+        },
+        409
+      )
     }
 
     // 8. Nunca la última cuenta activa de SuperAdmin

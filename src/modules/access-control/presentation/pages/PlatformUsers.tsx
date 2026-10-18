@@ -2,11 +2,16 @@ import * as React from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import {
+  FOUNDER_ACCOUNT_PROTECTED_MESSAGE,
+  SUPERADMIN_FOUNDER_ONLY_MESSAGE,
   assignPlatformRole,
+  assignablePlatformRoles,
   createPlatformUser,
   deletePlatformUser,
   deletionConfirmationMatches,
+  isSuperAdminPlatformRole,
   loadActivePlatformRoles,
+  loadIsPlatformFounder,
   loadPlatformPermission,
   loadPlatformUsers,
   platformUserDeletionBlockReason,
@@ -57,6 +62,9 @@ const PlatformUsers = () => {
   const navigate = useNavigate()
   const [users, setUsers] = React.useState<PlatformUser[]>([])
   const [roles, setRoles] = React.useState<PlatformRole[]>([])
+  // ¿La SESIÓN actual es la cuenta fundadora? Lo decide el servidor
+  // (`is_platform_founder()`); el cliente no lo deduce por nombre, correo ni antigüedad.
+  const [isFounder, setIsFounder] = React.useState(false)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [editingUser, setEditingUser] = React.useState<PlatformUser | null>(null)
@@ -103,10 +111,24 @@ const PlatformUsers = () => {
     }
   }, [])
 
+  const loadFounderFlag = React.useCallback(async () => {
+    // Lectura tolerante: si la identificación del fundador todavía no está aplicada en la
+    // base, responde `false` y los controles del rol SuperAdmin quedan ocultos (nunca al
+    // revés). La autorización real la aplica el servidor.
+    setIsFounder(await loadIsPlatformFounder())
+  }, [])
+
   React.useEffect(() => {
     loadUsers()
     loadRoles()
-  }, [loadUsers, loadRoles])
+    loadFounderFlag()
+  }, [loadUsers, loadRoles, loadFounderFlag])
+
+  // El rol SuperAdmin sólo se ofrece a la cuenta fundadora; el resto de roles sigue igual.
+  const assignableRoles = assignablePlatformRoles(roles, isFounder)
+  // Se avisa de la restricción sólo cuando realmente se está ocultando el rol SuperAdmin.
+  const superAdminRoleHidden =
+    !isFounder && roles.some((role) => isSuperAdminPlatformRole(role))
 
   const startCreate = () => {
     setEditingUser(null)
@@ -256,6 +278,15 @@ const PlatformUsers = () => {
 
   const assignRole = async (user: PlatformUser) => {
     if (!selectedRoleId) return
+
+    // Defensa de presentación: la base rechaza de todos modos cualquier intento que no
+    // provenga de la cuenta fundadora (disparador `enforce_founder_only_superadmin_role`).
+    const targetRole = roles.find((role) => role.id === selectedRoleId)
+    if (targetRole && isSuperAdminPlatformRole(targetRole) && !isFounder) {
+      setError(SUPERADMIN_FOUNDER_ONLY_MESSAGE)
+      return
+    }
+
     try {
       await assignPlatformRole(user.id, selectedRoleId)
       setAssigningRole(null)
@@ -326,6 +357,16 @@ const PlatformUsers = () => {
           size="sm"
           variant="outline"
           onClick={() => toggleActive(user)}
+          // La cuenta fundadora no se desactiva: la base lo impide con un disparador y aquí
+          // se evita ofrecer una acción que el servidor va a rechazar.
+          disabled={isFounder && user.id === currentUserId}
+          title={
+            isFounder && user.id === currentUserId
+              ? FOUNDER_ACCOUNT_PROTECTED_MESSAGE
+              : user.is_active
+                ? "Desactivar el usuario"
+                : "Reactivar el usuario"
+          }
         >
           {user.is_active ? (
             <>
@@ -441,7 +482,7 @@ const PlatformUsers = () => {
                     onValueChange={setSelectedRoleId}
                     required
                   >
-                    {roles.map((role) => (
+                    {assignableRoles.map((role) => (
                       <SelectItem key={role.id} value={role.id}>
                         {role.name}
                         {role.is_system_role && (
@@ -450,6 +491,11 @@ const PlatformUsers = () => {
                       </SelectItem>
                     ))}
                   </SiteCorpSelect>
+                  {superAdminRoleHidden && (
+                    <p className="text-xs text-muted-foreground">
+                      {SUPERADMIN_FOUNDER_ONLY_MESSAGE}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -547,7 +593,7 @@ const PlatformUsers = () => {
                 value={selectedRoleId}
                 onValueChange={setSelectedRoleId}
               >
-                {roles
+                {assignableRoles
                   .filter((r) => !assigningRole.roles.some((ur) => ur.name === r.name))
                   .map((role) => (
                     <SelectItem key={role.id} value={role.id}>
@@ -558,6 +604,12 @@ const PlatformUsers = () => {
                     </SelectItem>
                   ))}
               </SiteCorpSelect>
+              {superAdminRoleHidden &&
+                !assigningRole.roles.some((role) => isSuperAdminPlatformRole(role)) && (
+                  <p className="text-xs text-muted-foreground">
+                    {SUPERADMIN_FOUNDER_ONLY_MESSAGE}
+                  </p>
+                )}
             </div>
             <div className="flex items-center gap-3">
               <SiteCorpButton onClick={() => assignRole(assigningRole)}>

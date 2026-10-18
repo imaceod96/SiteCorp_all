@@ -1,4 +1,4 @@
-import type { PlatformUser } from "./entities"
+import type { PlatformRole, PlatformUser } from "./entities"
 
 /**
  * Control de acceso — Reglas de la ELIMINACIÓN de usuarios de plataforma (puras).
@@ -60,4 +60,42 @@ export function platformUserDeletionBlockReason(input: {
 /** La confirmación escrita debe coincidir exactamente con el nombre de usuario. */
 export function deletionConfirmationMatches(username: string, typed: string): boolean {
   return username.trim().toLowerCase() === typed.trim().toLowerCase() && typed.trim() !== ""
+}
+
+/* -------------------------------------------------------------------------- */
+/* Rol SuperAdmin reservado a la cuenta fundadora                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * El rol es el SuperAdmin del sistema.
+ *
+ * El rol SuperAdmin se identifica por nombre + marca de sistema, igual que en la base
+ * (`platform_roles.name = 'SuperAdmin' and is_system_role`). No hay roles paralelos.
+ */
+export function isSuperAdminPlatformRole(role: {
+  name: string
+  is_system_role: boolean
+}): boolean {
+  return role.name === "SuperAdmin" && role.is_system_role === true
+}
+
+export const SUPERADMIN_FOUNDER_ONLY_MESSAGE =
+  "Solo la cuenta fundadora puede asignar o retirar el rol SuperAdmin."
+
+export const FOUNDER_ACCOUNT_PROTECTED_MESSAGE =
+  "La cuenta fundadora no se puede desactivar ni eliminar."
+
+/**
+ * Roles que la sesión actual puede ofrecer para asignar.
+ *
+ * A la cuenta fundadora no se le esconde nada; al resto se le retira el SuperAdmin. La
+ * decisión es de presentación: la base rechaza cualquier intento que no venga del fundador
+ * (disparador `enforce_founder_only_superadmin_role`).
+ */
+export function assignablePlatformRoles(
+  roles: PlatformRole[],
+  isFounder: boolean
+): PlatformRole[] {
+  if (isFounder) return roles
+  return roles.filter((role) => !isSuperAdminPlatformRole(role))
 }
