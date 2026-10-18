@@ -10,6 +10,17 @@
 --   5. Varias filas válidas e inválidas en el mismo archivo         → por fila
 --   6. Validación repetida del mismo archivo                        → idéntica
 --   7. Ausencia de escrituras durante la validación                 → comprobada
+--   8. Formato del campo `messages` (contrato JSON del frontend)    → array de cadenas
+--   9. Cobertura de los 15 mensajes literales del validador         → sin 22P02 ni 55000
+--  10. Independencia entre filas de un mismo lote                   → por fila
+--
+-- Requiere
+--   · 20261103_01_migration_validate_rows_record_fix.sql  (RECORD tipado).
+--   · 20261103_02_migration_validate_rows_messages_array_fix.sql  (mensajes con
+--     array_append). Sin la segunda, las pruebas 0, 4, 5, 6, 8, 9 y 10 fallan con
+--     SQLSTATE 22P02 «malformed array literal» al anexar el primer mensaje:
+--     `text[] || '<literal>'` resuelve a array_cat(text[], text[]), no a
+--     array_append(text[], text).
 --
 -- Garantías del script
 --   · Se ejecuta dentro de BEGIN … ROLLBACK: no confirma nada.
@@ -102,6 +113,18 @@ CREATE FUNCTION pg_temp.ci(p_n integer) RETURNS text
 LANGUAGE sql STABLE AS $$
   SELECT ci FROM t_ci WHERE rn = p_n
 $$;
+
+-- Tipos de contrato activos, para las pruebas de contrato migrado (prueba 9).
+-- Pueden ser NULL si el catálogo está vacío: en ese caso la prueba omite los
+-- mensajes que dependen de ellos.
+CREATE TEMP TABLE t_ct ON COMMIT DROP AS
+SELECT
+  (SELECT t.id FROM public.employment_contract_types t
+    WHERE t.is_active = true
+    ORDER BY t.code LIMIT 1) AS any_type_id,
+  (SELECT t.id FROM public.employment_contract_types t
+    WHERE t.is_active = true AND upper(t.code) = 'DETERMINADO'
+    LIMIT 1) AS determinado_type_id;
 
 -- ---------------------------------------------------------------------------
 -- Instantánea «antes» para la prueba 7
@@ -504,6 +527,432 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'PRUEBA 6 OK (respuesta idéntica en dos llamadas): %', r1;
+END $$;
+
+-- ===========================================================================
+-- PRUEBA 8 · Formato del campo `messages` (contrato JSON del frontend)
+--   Cada fila debe ser { index: number, status: VALID|WARNING|ERROR,
+--   messages: string[], position_id: uuid|null, position_label: string|null }.
+--   `messages` debe ser un ARRAY JSON de cadenas: ni una cadena, ni un array con
+--   elementos no-cadena, ni un literal de array serializado («{…}»). Es lo que
+--   consume MigrationPreviewRow (src/modules/people/domain/entities.ts) y lo que
+--   el frontend recorre con spread en src/modules/people/domain/worker-migration.rules.ts.
+-- ===========================================================================
+DO $$
+DECLARE
+  r jsonb;
+  e jsonb;
+  v_code text;
+  v_estado_esperado text;
+BEGIN
+  SELECT free_position_code INTO v_code FROM t_ctx;
+  v_estado_esperado := CASE WHEN v_code IS NULL THEN 'ERROR' ELSE 'VALID' END;
+
+  SELECT public.migration_validate_rows(
+           (SELECT entity_id FROM t_ctx),
+           jsonb_build_array(
+             jsonb_build_object(
+               'first_name', 'PRUEBA',
+               'first_surname', 'FORMATO-OK',
+               'identification', pg_temp.ci(10),
+               'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+               'position_code', coalesce(v_code, 'PST-SIN-PUESTOS')
+             ),
+             jsonb_build_object(
+               'first_name', '',
+               'first_surname', '',
+               'identification', 'abc',
+               'employment_start_date', 'no-es-fecha',
+               'initial_vacation_balance', '-5'
+             )
+           )
+         ) INTO r;
+
+  IF jsonb_typeof(r) <> 'array' THEN
+    RAISE EXCEPTION 'T8: la respuesta debe ser un array JSON. Recibido: %', r;
+  END IF;
+  IF jsonb_array_length(r) <> 2 THEN
+    RAISE EXCEPTION 'T8: la respuesta debe tener 2 filas. Recibido: %', r;
+  END IF;
+
+  FOR e IN SELECT * FROM jsonb_array_elements(r) LOOP
+    IF NOT (e ? 'index' AND e ? 'status' AND e ? 'messages'
+            AND e ? 'position_id' AND e ? 'position_label') THEN
+      RAISE EXCEPTION 'T8: faltan claves del contrato en la fila: %', e;
+    END IF;
+    IF jsonb_typeof(e -> 'index') <> 'number' OR jsonb_typeof(e -> 'status') <> 'string' THEN
+      RAISE EXCEPTION 'T8: index debe ser número y status cadena: %', e;
+    END IF;
+    IF (e ->> 'status') NOT IN ('VALID', 'WARNING', 'ERROR') THEN
+      RAISE EXCEPTION 'T8: estado no previsto por el frontend: %', e ->> 'status';
+    END IF;
+    IF jsonb_typeof(e -> 'messages') <> 'array' THEN
+      RAISE EXCEPTION 'T8: messages debe ser un array JSON; recibido % (%): %',
+        jsonb_typeof(e -> 'messages'), e ->> 'messages', e;
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements(e -> 'messages') m
+      WHERE jsonb_typeof(m) <> 'string'
+    ) THEN
+      RAISE EXCEPTION 'T8: todos los elementos de messages deben ser cadenas: %', e -> 'messages';
+    END IF;
+    IF EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(e -> 'messages') m
+      WHERE btrim(m) = '' OR m LIKE '{%'
+    ) THEN
+      RAISE EXCEPTION 'T8: mensaje vacío o con forma de literal de array: %', e -> 'messages';
+    END IF;
+    IF (e ->> 'position_id') IS NOT NULL
+       AND (e ->> 'position_id')
+           !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      RAISE EXCEPTION 'T8: position_id debe ser un UUID o null: %', e ->> 'position_id';
+    END IF;
+    IF (e ->> 'position_label') IS NOT NULL
+       AND jsonb_typeof(e -> 'position_label') <> 'string' THEN
+      RAISE EXCEPTION 'T8: position_label debe ser cadena o null: %', e;
+    END IF;
+  END LOOP;
+
+  -- Fila 0: sin mensajes si el puesto se resolvió; en caso contrario, exactamente
+  -- el mensaje de puesto no encontrado (nunca una excepción ni un array inválido).
+  IF (r -> 0 ->> 'status') IS DISTINCT FROM v_estado_esperado THEN
+    RAISE EXCEPTION 'T8 fila 0: estado % (esperado %): %', r -> 0 ->> 'status', v_estado_esperado, r -> 0;
+  END IF;
+  IF v_code IS NOT NULL AND jsonb_array_length(r -> 0 -> 'messages') <> 0 THEN
+    RAISE EXCEPTION 'T8: la fila válida no debe acumular mensajes: %', r -> 0;
+  END IF;
+  IF v_code IS NULL AND jsonb_array_length(r -> 0 -> 'messages') <> 1 THEN
+    RAISE EXCEPTION 'T8: se esperaba un único mensaje de puesto no encontrado: %', r -> 0;
+  END IF;
+
+  -- Fila 1: varios mensajes acumulados en el mismo array JSON.
+  IF jsonb_array_length(r -> 1 -> 'messages') < 5 THEN
+    RAISE EXCEPTION 'T8 fila 1: se esperaban al menos 5 mensajes: %', r -> 1;
+  END IF;
+
+  RAISE NOTICE 'PRUEBA 8 OK: messages es array JSON de % cadenas (fila válida) y % (fila con varios avisos)',
+    jsonb_array_length(r -> 0 -> 'messages'), jsonb_array_length(r -> 1 -> 'messages');
+END $$;
+
+-- ===========================================================================
+-- PRUEBA 9 · Cobertura de los 15 mensajes literales → ningún 22P02 ni 55000
+--   Un solo lote que dispara TODOS los avisos que se acumulaban con
+--   `v_messages || '<literal>'`. Antes de 20261103_02 esta llamada abortaba con
+--   SQLSTATE 22P02 «malformed array literal» en la primera de esas líneas que se
+--   alcanzara (con la plantilla oficial: el aviso de pendiente de vinculación).
+--   Ahora debe devolver resultado por fila, sin excepción SQL, y cada texto debe
+--   aparecer como cadena dentro del array `messages`.
+-- ===========================================================================
+DO $$
+DECLARE
+  r jsonb;
+  v_code text;
+  v_any uuid;
+  v_det uuid;
+  v_payload jsonb;
+  v_observados text[];
+  v_faltantes text[];
+  v_esperados text[] := ARRAY[
+    'El nombre es obligatorio',
+    'El primer apellido es obligatorio',
+    'El carné de identidad es obligatorio',
+    'El número de identificación debe contener exactamente 11 dígitos',
+    'Fecha de incorporación inválida o vacía',
+    'La fecha de incorporación no puede ser futura',
+    'Se importará como pendiente de vinculación a plantilla',
+    'El saldo inicial de vacaciones debe estar entre 0 y 24 días',
+    'Saldo inicial de vacaciones inválido',
+    'Sin fecha de corte: se usará la fecha de incorporación',
+    'El contrato migrado requiere que el trabajador se vincule a un puesto'
+  ]::text[];
+BEGIN
+  SELECT free_position_code INTO v_code FROM t_ctx;
+  SELECT any_type_id, determinado_type_id INTO v_any, v_det FROM t_ct;
+
+  IF v_code IS NOT NULL THEN
+    v_esperados := v_esperados || 'Tipo de contrato no encontrado o inactivo';
+  END IF;
+  IF v_code IS NOT NULL AND v_any IS NOT NULL THEN
+    v_esperados := v_esperados || 'El contrato migrado requiere fecha de inicio';
+    v_esperados := v_esperados || 'La fecha de fin del contrato debe ser posterior a su inicio';
+  END IF;
+  IF v_code IS NOT NULL AND v_det IS NOT NULL THEN
+    v_esperados := v_esperados || 'El contrato por tiempo determinado requiere fecha de fin';
+  END IF;
+
+  SELECT jsonb_agg(row_obj ORDER BY ord) INTO v_payload
+  FROM (
+    VALUES
+      -- (1) nombre obligatorio
+      (1, jsonb_build_object('first_name', '', 'first_surname', 'COBERTURA-01',
+            'identification', pg_temp.ci(20),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'))),
+      -- (2) primer apellido obligatorio
+      (2, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', '',
+            'identification', pg_temp.ci(21),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'))),
+      -- (3) carné de identidad obligatorio
+      (3, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-03',
+            'identification', '   ',
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'))),
+      -- (4) regla de 11 dígitos
+      (4, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-04',
+            'identification', 'abc',
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'))),
+      -- (5) fecha de incorporación inválida
+      (5, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-05',
+            'identification', pg_temp.ci(22),
+            'employment_start_date', 'no-es-fecha')),
+      -- (6) fecha de incorporación futura
+      (6, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-06',
+            'identification', pg_temp.ci(23),
+            'employment_start_date', to_char(current_date + 1, 'YYYY-MM-DD'))),
+      -- (7) sin puesto → aviso de pendiente de vinculación (plantilla oficial)
+      (7, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-07',
+            'identification', pg_temp.ci(24),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'))),
+      -- (8) saldo inicial fuera de rango
+      (8, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-08',
+            'identification', pg_temp.ci(25),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'initial_vacation_balance', '-5')),
+      -- (9) saldo inicial no numérico
+      (9, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-09',
+            'identification', pg_temp.ci(26),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'initial_vacation_balance', 'abc')),
+      -- (10) sin fecha de corte (saldo válido)
+      (10, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-10',
+            'identification', pg_temp.ci(27),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'initial_vacation_balance', '5')),
+      -- (11) contrato migrado sin puesto vinculado
+      (11, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-11',
+            'identification', pg_temp.ci(28),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'contract', jsonb_build_object(
+              'start_date', to_char(current_date - 300, 'YYYY-MM-DD')))),
+      -- (12) tipo de contrato inexistente (requiere puesto)
+      (12, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-12',
+            'identification', pg_temp.ci(29),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'position_code', v_code,
+            'contract', jsonb_build_object(
+              'contract_type_id', gen_random_uuid()::text,
+              'start_date', to_char(current_date - 300, 'YYYY-MM-DD')))),
+      -- (13) contrato sin fecha de inicio
+      (13, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-13',
+            'identification', pg_temp.ci(30),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'position_code', v_code,
+            'contract', jsonb_build_object('contract_type_id', v_any::text))),
+      -- (14) contrato por tiempo determinado sin fecha de fin
+      (14, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-14',
+            'identification', pg_temp.ci(31),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'position_code', v_code,
+            'contract', jsonb_build_object(
+              'contract_type_id', v_det::text,
+              'start_date', to_char(current_date - 300, 'YYYY-MM-DD')))),
+      -- (15) fecha de fin anterior o igual al inicio
+      (15, jsonb_build_object('first_name', 'PRUEBA', 'first_surname', 'COBERTURA-15',
+            'identification', pg_temp.ci(32),
+            'employment_start_date', to_char(current_date - 400, 'YYYY-MM-DD'),
+            'position_code', v_code,
+            'contract', jsonb_build_object(
+              'contract_type_id', v_any::text,
+              'start_date', to_char(current_date - 300, 'YYYY-MM-DD'),
+              'end_date', to_char(current_date - 300, 'YYYY-MM-DD'))))
+  ) AS t(ord, row_obj)
+  WHERE (ord NOT IN (12, 13, 14, 15) OR v_code IS NOT NULL)
+    AND (ord <> 13 OR v_any IS NOT NULL)
+    AND (ord <> 14 OR v_det IS NOT NULL)
+    AND (ord <> 15 OR v_any IS NOT NULL);
+
+  BEGIN
+    SELECT public.migration_validate_rows((SELECT entity_id FROM t_ctx), v_payload) INTO r;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'T9: la validación lanzó un error SQL % (%) — se esperaba respuesta por fila',
+      SQLSTATE, SQLERRM;
+  END;
+
+  IF jsonb_typeof(r) <> 'array' THEN
+    RAISE EXCEPTION 'T9: la respuesta debe ser un array JSON: %', r;
+  END IF;
+  IF jsonb_array_length(r) < 10 THEN
+    RAISE EXCEPTION 'T9: respuesta inesperada (% filas): %', jsonb_array_length(r), r;
+  END IF;
+
+  SELECT array_agg(DISTINCT m ORDER BY m) INTO v_observados
+  FROM jsonb_array_elements(r) e, jsonb_array_elements_text(e -> 'messages') m;
+
+  SELECT array_agg(x.m ORDER BY x.m) INTO v_faltantes
+  FROM unnest(v_esperados) AS x(m)
+  WHERE NOT (coalesce(v_observados, ARRAY[]::text[]) @> ARRAY[x.m]);
+
+  IF v_faltantes IS NOT NULL THEN
+    RAISE EXCEPTION 'T9: faltan % de los mensajes esperados: %',
+      array_length(v_faltantes, 1), v_faltantes;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM unnest(coalesce(v_observados, ARRAY[]::text[])) o
+    WHERE btrim(o) = '' OR o LIKE '{%'
+  ) THEN
+    RAISE EXCEPTION 'T9: algún mensaje no tiene forma de cadena simple: %', v_observados;
+  END IF;
+
+  -- La fila sin puesto debe seguir siendo WARNING no bloqueante, sin puesto asignado.
+  IF NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(r) e
+    WHERE (e -> 'messages') @> to_jsonb(ARRAY['Se importará como pendiente de vinculación a plantilla'])
+      AND (e ->> 'status') = 'WARNING'
+      AND (e ->> 'position_id') IS NULL
+      AND (e ->> 'position_label') IS NULL
+  ) THEN
+    RAISE EXCEPTION 'T9: la fila sin puesto no quedó como WARNING con position_id null: %', r;
+  END IF;
+
+  IF v_code IS NOT NULL AND v_any IS NOT NULL AND v_det IS NOT NULL
+     AND array_length(v_esperados, 1) <> 15 THEN
+    RAISE EXCEPTION 'T9: cobertura incompleta de mensajes (% de 15)', array_length(v_esperados, 1);
+  END IF;
+
+  RAISE NOTICE 'PRUEBA 9 OK: % mensajes literales cubiertos sin error SQL (observados: %)',
+    array_length(v_esperados, 1), array_length(v_observados, 1);
+END $$;
+
+-- ===========================================================================
+-- PRUEBA 10 · Independencia entre filas de un mismo lote
+--  25 filas: 5 con puesto válido (VALID) · 5 con identificación repetida dentro
+--  del archivo (WARNING) · 10 sin puesto (WARNING) · 5 con puesto inexistente
+--  (ERROR). Comprueba que la posición resuelta y los mensajes NO se filtran de
+--  una fila a la siguiente (regresión del reinicio por fila de v_position).
+-- ===========================================================================
+DO $$
+DECLARE
+  r jsonb;
+  v_code text;
+  v_pos uuid;
+  v_cap integer;
+  v_payload jsonb;
+  v_problemas text;
+BEGIN
+  SELECT free_position_code, free_position_id, free_capacity
+    INTO v_code, v_pos, v_cap
+  FROM t_ctx;
+
+  IF v_code IS NULL THEN
+    RAISE NOTICE 'PRUEBA 10 SALTADA: la entidad no tiene puestos activos con vacante libre';
+    RETURN;
+  END IF;
+  IF coalesce(v_cap, 0) < 10 THEN
+    RAISE NOTICE 'PRUEBA 10 SALTADA: se necesitan 10 vacantes libres para las filas con puesto (disponible %)', v_cap;
+    RETURN;
+  END IF;
+
+  SELECT jsonb_agg(row_obj ORDER BY ord) INTO v_payload
+  FROM (
+    SELECT n AS ord,
+           jsonb_build_object(
+             'first_name', 'PRUEBA', 'first_surname', 'INDEP-VALIDA-' || n,
+             'identification', pg_temp.ci(50 + n),
+             'employment_start_date', to_char(current_date - 200, 'YYYY-MM-DD'),
+             'position_code', v_code) AS row_obj
+    FROM generate_series(1, 5) AS n
+    UNION ALL
+    SELECT 5 + n,
+           jsonb_build_object(
+             'first_name', 'PRUEBA', 'first_surname', 'INDEP-REPETIDA-' || n,
+             'identification', pg_temp.ci(51),
+             'employment_start_date', to_char(current_date - 200, 'YYYY-MM-DD'),
+             'position_code', v_code)
+    FROM generate_series(1, 5) AS n
+    UNION ALL
+    SELECT 10 + n,
+           jsonb_build_object(
+             'first_name', 'PRUEBA', 'first_surname', 'INDEP-PENDIENTE-' || n,
+             'identification', pg_temp.ci(60 + n),
+             'employment_start_date', to_char(current_date - 200, 'YYYY-MM-DD'))
+    FROM generate_series(1, 10) AS n
+    UNION ALL
+    SELECT 20 + n,
+           jsonb_build_object(
+             'first_name', 'PRUEBA', 'first_surname', 'INDEP-FANTASMA-' || n,
+             'identification', pg_temp.ci(70 + n),
+             'employment_start_date', to_char(current_date - 200, 'YYYY-MM-DD'),
+             'position_code', v_code || '-NO-EXISTE-' || n)
+    FROM generate_series(1, 5) AS n
+  ) AS t;
+
+  BEGIN
+    SELECT public.migration_validate_rows((SELECT entity_id FROM t_ctx), v_payload) INTO r;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'T10: la validación lanzó un error SQL % (%)', SQLSTATE, SQLERRM;
+  END;
+
+  IF jsonb_typeof(r) <> 'array' THEN
+    RAISE EXCEPTION 'T10: la respuesta debe ser un array JSON: %', r;
+  END IF;
+  IF jsonb_array_length(r) <> 25 THEN
+    RAISE EXCEPTION 'T10: se esperaban 25 filas, recibidas %', jsonb_array_length(r);
+  END IF;
+
+  SELECT string_agg(v.msg, ' · ') INTO v_problemas
+  FROM (
+    SELECT 'T10a fila ' || (e ->> 'index') || ' con puesto válido debería ser VALID pero es '
+             || (e ->> 'status') AS msg
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 0 AND 4 AND (e ->> 'status') <> 'VALID'
+    UNION ALL
+    SELECT 'T10b fila ' || (e ->> 'index') || ' con identificación repetida debería ser WARNING pero es '
+             || (e ->> 'status')
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 5 AND 9 AND (e ->> 'status') <> 'WARNING'
+    UNION ALL
+    SELECT 'T10c fila ' || (e ->> 'index') || ' sin puesto debería ser WARNING pero es '
+             || (e ->> 'status')
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 10 AND 19 AND (e ->> 'status') <> 'WARNING'
+    UNION ALL
+    SELECT 'T10d fila ' || (e ->> 'index') || ' con puesto inexistente debería ser ERROR pero es '
+             || (e ->> 'status')
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 20 AND 24 AND (e ->> 'status') <> 'ERROR'
+    UNION ALL
+    SELECT 'T10e fila ' || (e ->> 'index') || ' no debería exponer position_id (posición filtrada)'
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 10 AND 24 AND (e ->> 'position_id') IS NOT NULL
+    UNION ALL
+    SELECT 'T10f fila ' || (e ->> 'index') || ' debería exponer el puesto resuelto'
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 0 AND 9
+      AND (e ->> 'position_id')::uuid IS DISTINCT FROM v_pos
+    UNION ALL
+    SELECT 'T10g fila ' || (e ->> 'index') || ' no debería heredar «Puesto no encontrado»'
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 0 AND 9
+      AND (e -> 'messages') @> to_jsonb(ARRAY['Puesto no encontrado (' || v_code || ')'])
+    UNION ALL
+    SELECT 'T10h fila ' || (e ->> 'index') || ' sin puesto debería llevar el aviso de vinculación'
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 10 AND 19
+      AND NOT ((e -> 'messages') @> to_jsonb(ARRAY['Se importará como pendiente de vinculación a plantilla']))
+    UNION ALL
+    SELECT 'T10i fila ' || (e ->> 'index') || ' con puesto inexistente debería llevar el mensaje de no encontrado'
+    FROM jsonb_array_elements(r) e
+    WHERE (e ->> 'index')::int BETWEEN 20 AND 24
+      AND NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(e -> 'messages') m
+        WHERE m LIKE 'Puesto no encontrado (%'
+      )
+  ) AS v;
+
+  IF v_problemas IS NOT NULL THEN
+    RAISE EXCEPTION 'T10: %', v_problemas;
+  END IF;
+
+  RAISE NOTICE 'PRUEBA 10 OK: 25 filas independientes (5 VALID · 5 WARNING repetida · 10 WARNING sin puesto · 5 ERROR)';
 END $$;
 
 -- ===========================================================================
