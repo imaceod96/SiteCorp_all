@@ -17,7 +17,14 @@ import type {
  * el backend.
  */
 
-/** Anexo manual: condiciones retributivas, forma de pago, lugar y jornada. */
+/**
+ * Anexo manual: condiciones retributivas, forma de pago, lugar y jornada.
+ *
+ * `targetContractId` identifica el contrato seleccionado cuando el trabajador tiene DOS
+ * contratos vigentes (pluriempleo): es el contrato al que se vincula el anexo y del que
+ * salen las condiciones formalizadas que el diálogo usa como base. Con uno solo viaja
+ * `null`/ausente y la llamada es la misma de siempre.
+ */
 export async function createManualAddendum(input: {
   workerId: string
   changes: AddendumChangeInput[]
@@ -30,6 +37,7 @@ export async function createManualAddendum(input: {
   signaturePlace?: string | null
   representativeAssignmentId?: string | null
   requireFormalized?: boolean
+  targetContractId?: string | null
 }): Promise<ManualAddendumResult> {
   return rpcCreateContractAddendum(input)
 }

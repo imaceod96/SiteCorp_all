@@ -7,6 +7,7 @@ import { AddendumDetailDialog } from "@/modules/contracts/presentation/component
 import { CreateManualAddendumDialog } from "@/modules/contracts/presentation/components/CreateManualAddendumDialog"
 import type { RepresentativeSelectSlotRenderer } from "@/modules/contracts/presentation/components/representative-select-slot"
 import { ContractualDocumentSection } from "@/modules/document-generation/presentation/components/ContractualDocumentSection"
+import { PLURIEMPLEO_TARGET_REQUIRED_MESSAGE } from "@/shared/config/pluriempleo"
 import {
   ADDENDUM_STATUS_BADGE,
   ADDENDUM_STATUS_LABELS,
@@ -84,6 +85,15 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
     [addendums]
   )
   const currentContract = contracts.find((row) => row.isCurrent) || contracts[0] || null
+
+  // Pluriempleo: con DOS contratos vigentes el anexo exige contrato identificado. Es el
+  // contrato del que salen las condiciones formalizadas que se muestran (la base del
+  // antes/después): con uno solo no hay nada que elegir y todo sigue igual.
+  const activeContractCount = contracts.filter((row) => row.isCurrent).length
+  const requiresTargetContract = activeContractCount > 1
+  const targetContractId =
+    conditions?.formalized?.employment_contract_id ?? conditions?.employment_contract_id ?? null
+  const needsContractSelection = requiresTargetContract && !targetContractId
 
   const detailAddendum =
     addendums.find((row) => row.id === detailAddendumId) ||
@@ -253,17 +263,26 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
                 variant="outline"
                 size="sm"
                 onClick={() => setManualOpen(true)}
-                disabled={!formalized}
+                disabled={!formalized || needsContractSelection}
                 title={
-                  formalized
-                    ? undefined
-                    : "El trabajador no tiene un contrato vigente sobre el que formalizar el anexo"
+                  !formalized
+                    ? "El trabajador no tiene un contrato vigente sobre el que formalizar el anexo"
+                    : needsContractSelection
+                      ? PLURIEMPLEO_TARGET_REQUIRED_MESSAGE
+                      : undefined
                 }
               >
                 <FilePlus2 className="mr-2 h-3.5 w-3.5" /> Nuevo anexo
               </SiteCorpButton>
             )}
           </div>
+
+          {canManage && needsContractSelection && (
+            <SiteCorpAlert type="warning" title="Selecciona el contrato del anexo">
+              {PLURIEMPLEO_TARGET_REQUIRED_MESSAGE} Elige el contrato en la tarjeta de Pluriempleo
+              antes de crear un anexo.
+            </SiteCorpAlert>
+          )}
 
           {contracts.length === 0 ? (
             <SiteCorpAlert type="warning" title="Sin contrato">
@@ -372,6 +391,8 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
         canManage={canManage}
         formalized={formalized}
         paymentMethods={paymentMethods}
+        targetContractId={targetContractId}
+        requiresTargetContract={requiresTargetContract}
         onCreated={onChanged}
         renderRepresentativeSelect={renderRepresentativeSelect}
       />

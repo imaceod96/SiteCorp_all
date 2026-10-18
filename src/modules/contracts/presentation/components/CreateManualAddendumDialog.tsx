@@ -32,6 +32,7 @@ import {
   type FormalizedConditions,
   type PaymentMethodOption,
 } from "@/modules/contracts"
+import { PLURIEMPLEO_TARGET_REQUIRED_MESSAGE } from "@/shared/config/pluriempleo"
 import { showError, showSuccess } from "@/utils/toast"
 import { Info } from "lucide-react"
 
@@ -44,6 +45,14 @@ interface CreateManualAddendumDialogProps {
   /** Condiciones contractuales formalizadas vigentes (base del antes/después) */
   formalized: FormalizedConditions | null
   paymentMethods: PaymentMethodOption[]
+  /**
+   * Contrato SELECCIONADO en la ficha (pluriempleo): es el contrato al que se vincula el
+   * anexo y de donde proceden `formalized`. Con un solo contrato vigente viaja `null` y la
+   * llamada a la RPC no cambia.
+   */
+  targetContractId: string | null
+  /** El trabajador tiene DOS contratos vigentes: el anexo exige contrato identificado. */
+  requiresTargetContract: boolean
   onCreated: () => void
   /** Selector de representante inyectado por el contexto propietario (Personas). */
   renderRepresentativeSelect: RepresentativeSelectSlotRenderer
@@ -87,6 +96,8 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
   canManage,
   formalized,
   paymentMethods,
+  targetContractId,
+  requiresTargetContract,
   onCreated,
   renderRepresentativeSelect,
 }) => {
@@ -318,6 +329,12 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
       )
       return
     }
+    // Pluriempleo: con dos contratos vigentes no se elige uno al azar — el anexo se
+    // registra sobre el contrato seleccionado en la ficha (el de las condiciones mostradas).
+    if (requiresTargetContract && !targetContractId) {
+      setError(PLURIEMPLEO_TARGET_REQUIRED_MESSAGE)
+      return
+    }
     if (!effectiveDate) {
       setError("La fecha efectiva es obligatoria.")
       return
@@ -370,6 +387,8 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
         signaturePlace: formalizeNow ? signaturePlace : null,
         representativeAssignmentId: formalizeNow ? representativeAssignmentId : null,
         requireFormalized: formalizeNow,
+        // Contrato seleccionado: con uno solo viaja null y la RPC resuelve como siempre.
+        targetContractId,
       })
 
       const number =
@@ -439,6 +458,14 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
 
         {error && <SiteCorpAlert type="danger">{error}</SiteCorpAlert>}
 
+        {requiresTargetContract && !targetContractId && (
+          <SiteCorpAlert type="warning" title="Selecciona el contrato del anexo">
+            {PLURIEMPLEO_TARGET_REQUIRED_MESSAGE} Selecciona el contrato en la tarjeta de
+            Pluriempleo de la ficha: el anexo se registrará sobre ese contrato y con sus
+            condiciones.
+          </SiteCorpAlert>
+        )}
+
         {!formalized ? (
           <SiteCorpAlert type="warning" title="Sin contrato vigente">
             Este trabajador no tiene un contrato vigente con condiciones formalizadas. Registre el
@@ -475,6 +502,12 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
                 El cargo y el puesto se modifican con «Cambiar de puesto» y el salario de escala
                 proviene de la escala salarial: este anexo no puede editarlos.
               </p>
+              {requiresTargetContract && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Con dos contratos vigentes, el anexo se registra sobre el contrato seleccionado en
+                  la ficha: las condiciones de arriba son las de ese contrato.
+                </p>
+              )}
             </div>
 
             {/* Datos del anexo */}
@@ -671,7 +704,12 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
           <SiteCorpButton
             type="button"
             onClick={handleSubmit}
-            disabled={submitting || !formalized || changes.length === 0}
+            disabled={
+              submitting ||
+              !formalized ||
+              changes.length === 0 ||
+              (requiresTargetContract && !targetContractId)
+            }
           >
             {processStage
               ? processStage

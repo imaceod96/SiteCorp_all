@@ -137,7 +137,15 @@ export async function rpcWorkerFormalizedConditions(
   }
 }
 
-/** Anexo manual: condiciones retributivas, forma de pago, lugar y jornada. */
+/**
+ * Anexo manual: condiciones retributivas, forma de pago, lugar y jornada.
+ *
+ * `targetContractId` es el CONTRATO SELECCIONADO en la ficha (el de las condiciones que
+ * el diálogo muestra como base del antes/después). Con dos contratos vigentes viaja como
+ * `p_target_contract_id` y el anexo —con sus condiciones y su numeración— queda en ESE
+ * contrato; con uno solo no se envía (misma llamada de siempre y la RPC resuelve el
+ * contrato por sí misma).
+ */
 export async function rpcCreateContractAddendum(input: {
   workerId: string
   changes: AddendumChangeInput[]
@@ -150,21 +158,27 @@ export async function rpcCreateContractAddendum(input: {
   signaturePlace?: string | null
   representativeAssignmentId?: string | null
   requireFormalized?: boolean
+  targetContractId?: string | null
 }): Promise<ManualAddendumResult> {
-  const { data, error } = await supabase.rpc("create_contract_addendum", {
-    p_worker_id: input.workerId,
-    p_changes: input.changes,
-    p_reason_code: input.reasonCode,
-    p_reason: input.reason?.trim() || null,
-    p_effective_date: input.effectiveDate,
-    p_notes: input.notes?.trim() || null,
-    p_source_type: "MANUAL",
-    p_components: input.components && input.components.length > 0 ? input.components : null,
-    p_signature_date: input.signatureDate || null,
-    p_signature_place: input.signaturePlace?.trim() || null,
-    p_representative_assignment_id: input.representativeAssignmentId || null,
-    p_require_formalized: input.requireFormalized ?? false,
-  })
+  const params = withTargetContract(
+    {
+      p_worker_id: input.workerId,
+      p_changes: input.changes,
+      p_reason_code: input.reasonCode,
+      p_reason: input.reason?.trim() || null,
+      p_effective_date: input.effectiveDate,
+      p_notes: input.notes?.trim() || null,
+      p_source_type: "MANUAL",
+      p_components: input.components && input.components.length > 0 ? input.components : null,
+      p_signature_date: input.signatureDate || null,
+      p_signature_place: input.signaturePlace?.trim() || null,
+      p_representative_assignment_id: input.representativeAssignmentId || null,
+      p_require_formalized: input.requireFormalized ?? false,
+    },
+    input.targetContractId
+  )
+
+  const { data, error } = await supabase.rpc("create_contract_addendum", params)
   if (error) throw error
   return data as ManualAddendumResult
 }
