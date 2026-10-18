@@ -198,10 +198,21 @@ export {
 export {
   assignPlatformRole,
   createPlatformUser,
+  deletePlatformUser,
   removePlatformRole,
   setPlatformUserActive,
   updatePlatformUser,
 } from "./application/platform-users.commands"
+
+/* Reglas puras de la eliminación de usuarios de plataforma */
+export {
+  LAST_SUPERADMIN_MESSAGE,
+  SELF_DELETION_MESSAGE,
+  countActivePlatformSuperAdmins,
+  deletionConfirmationMatches,
+  isPlatformSuperAdminUser,
+  platformUserDeletionBlockReason,
+} from "./domain/platform-users.rules"
 
 /* Usuarios e invitaciones de un CLIENTE: casos de uso */
 export {

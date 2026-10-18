@@ -7,6 +7,7 @@ import {
   deletePlatformUserRole,
   insertPlatformUserRole,
   invokeCreatePlatformUser,
+  invokeDeletePlatformUser,
 } from "../infrastructure/platform-users.repository"
 import {
   setUserProfileActive,
@@ -42,6 +43,23 @@ export async function updatePlatformUser(input: UpdatePlatformUserInput): Promis
 /** Activación o desactivación del usuario de plataforma. */
 export async function setPlatformUserActive(userId: string, isActive: boolean): Promise<void> {
   await setUserProfileActive(userId, isActive)
+}
+
+/**
+ * ELIMINACIÓN definitiva de un usuario de plataforma.
+ *
+ * No sustituye a la desactivación: es una operación destructiva e irreversible que se
+ * resuelve ENTERAMENTE en el servidor (Edge Function). Se exige confirmar el nombre de
+ * usuario porque un error de la interfaz no debe poder borrar una cuenta.
+ *
+ * No se escribe nada antes del borrado: si el backend lo rechaza (cuenta propia, última
+ * cuenta de SuperAdmin, registros históricos), la base queda exactamente igual.
+ */
+export async function deletePlatformUser(input: {
+  userId: string
+  confirmUsername: string
+}): Promise<void> {
+  await invokeDeletePlatformUser(input)
 }
 
 /** Asignación de un rol de plataforma. */

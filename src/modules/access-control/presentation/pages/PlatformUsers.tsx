@@ -4,9 +4,12 @@ import { useAuth } from "@/contexts/AuthContext"
 import {
   assignPlatformRole,
   createPlatformUser,
+  deletePlatformUser,
+  deletionConfirmationMatches,
   loadActivePlatformRoles,
   loadPlatformPermission,
   loadPlatformUsers,
+  platformUserDeletionBlockReason,
   setPlatformUserActive,
   updatePlatformUser,
   type CreatedPlatformUser,
@@ -26,10 +29,31 @@ import { SiteCorpLoading } from "@/shared/components/ui/sitecorp-loading"
 import { SiteCorpError } from "@/shared/components/ui/sitecorp-error"
 import { SelectItem } from "@/shared/components/ui/select"
 import { Checkbox } from "@/shared/components/ui/checkbox"
-import { Check, Copy, Pencil, Plus, Power, UserMinus, UserCheck, Key, ShieldCheck } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/components/ui/alert-dialog"
+import {
+  Check,
+  Copy,
+  Pencil,
+  Plus,
+  Power,
+  Trash2,
+  UserMinus,
+  UserCheck,
+  Key,
+  ShieldCheck,
+} from "lucide-react"
 
 const PlatformUsers = () => {
-  const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
+  const { user, isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
   const navigate = useNavigate()
   const [users, setUsers] = React.useState<PlatformUser[]>([])
   const [roles, setRoles] = React.useState<PlatformRole[]>([])
@@ -50,6 +74,12 @@ const PlatformUsers = () => {
   // vive únicamente en este estado y se limpia al cerrar.
   const [createdUser, setCreatedUser] = React.useState<CreatedPlatformUser | null>(null)
   const [passwordCopied, setPasswordCopied] = React.useState(false)
+
+  // Eliminación DEFINITIVA: estado propio y separado del de desactivación.
+  const [userToDelete, setUserToDelete] = React.useState<PlatformUser | null>(null)
+  const [deleteConfirmation, setDeleteConfirmation] = React.useState("")
+  const [deleting, setDeleting] = React.useState(false)
+  const [deleteError, setDeleteError] = React.useState<string | null>(null)
 
   const loadUsers = React.useCallback(async () => {
     try {
@@ -165,6 +195,65 @@ const PlatformUsers = () => {
     }
   }
 
+  /**
+   * Abre la confirmación de borrado. El motivo por el que la acción no se ofrece (cuenta
+   * propia o última cuenta de SuperAdmin) lo decide la regla del dominio, la misma que
+   * revalida el servidor.
+   */
+  const startDelete = (target: PlatformUser) => {
+    const blocked = platformUserDeletionBlockReason({
+      currentUserId: user?.id,
+      target,
+      users,
+    })
+    if (blocked) {
+      setError(blocked)
+      return
+    }
+
+    setDeleteConfirmation("")
+    setDeleteError(null)
+    setUserToDelete(target)
+  }
+
+  const closeDelete = () => {
+    if (deleting) return
+    setUserToDelete(null)
+    setDeleteConfirmation("")
+    setDeleteError(null)
+  }
+
+  /**
+   * Confirma el borrado. El servidor exige el `username` exacto y vuelve a comprobar rol,
+   * cuenta propia y última cuenta de SuperAdmin: la interfaz no autoriza nada.
+   */
+  const confirmDelete = async () => {
+    const target = userToDelete
+    if (!target) return
+
+    if (!deletionConfirmationMatches(target.username, deleteConfirmation)) {
+      setDeleteError("El nombre de usuario no coincide.")
+      return
+    }
+
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await deletePlatformUser({ userId: target.id, confirmUsername: deleteConfirmation })
+
+      setUserToDelete(null)
+      setDeleteConfirmation("")
+      await loadUsers()
+    } catch (err) {
+      console.error("Error deleting platform user:", err)
+      setDeleteError(
+        err instanceof Error ? err.message : "No se pudo eliminar el usuario."
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const assignRole = async (user: PlatformUser) => {
     if (!selectedRoleId) return
     try {
@@ -186,6 +275,9 @@ const PlatformUsers = () => {
       console.error("Error loading permissions:", err)
     }
   }
+
+  // Cuenta que está operando: impide ofrecer el borrado de uno mismo.
+  const currentUserId = user?.id
 
   const columns = [
     { header: "Nombre completo", accessor: "full_name" },
@@ -244,6 +336,22 @@ const PlatformUsers = () => {
               <UserCheck className="h-3.5 w-3.5 mr-1" /> Reactivar
             </>
           )}
+        </SiteCorpButton>
+        {/* Acción DIFERENCIADA de la desactivación: irreversible y sólo para SuperAdmin. */}
+        <SiteCorpButton
+          size="sm"
+          variant="outline"
+          className="border-sitecorp-danger/40 text-sitecorp-danger hover:bg-sitecorp-danger/10"
+          onClick={() => startDelete(user)}
+          disabled={
+            platformUserDeletionBlockReason({ currentUserId, target: user, users }) !== null
+          }
+          title={
+            platformUserDeletionBlockReason({ currentUserId, target: user, users }) ??
+            "Eliminar definitivamente el usuario"
+          }
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
         </SiteCorpButton>
       </div>
     ),
@@ -495,6 +603,80 @@ const PlatformUsers = () => {
           </div>
         </SiteCorpFormSection>
       )}
+
+      {/* Eliminación DEFINITIVA: confirmación explícita e irreversible. */}
+      <AlertDialog
+        open={!!userToDelete}
+        onOpenChange={(open) => {
+          if (!open) closeDelete()
+        }}
+      >
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-sitecorp-danger">
+              <Trash2 className="h-5 w-5" /> Eliminar usuario definitivamente
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <p>
+                  Vas a eliminar la cuenta de acceso de{" "}
+                  <span className="font-semibold text-ink">
+                    {userToDelete?.full_name || userToDelete?.username}
+                  </span>
+                  . Esta acción es <span className="font-semibold">irreversible</span>: el usuario
+                  no podrá volver a iniciar sesión y su cuenta no se puede recuperar.
+                </p>
+
+                <SiteCorpAlert type="warning" title="Qué se elimina y qué se conserva">
+                  Se eliminan la cuenta, su perfil y sus permisos de acceso.{" "}
+                  <strong>No se eliminan</strong> trabajadores, contratos, documentos de empresa ni
+                  ningún registro histórico. Si el usuario participa en historial, la operación se
+                  rechazará y podrás desactivarlo en su lugar.
+                </SiteCorpAlert>
+
+                <div className="space-y-1">
+                  <p>
+                    Para confirmar, escribe el nombre de usuario{" "}
+                    <span className="font-mono text-ink">{userToDelete?.username}</span>:
+                  </p>
+                  <SiteCorpInput
+                    value={deleteConfirmation}
+                    onChange={(event) => {
+                      setDeleteConfirmation(event.target.value)
+                      setDeleteError(null)
+                    }}
+                    placeholder="Nombre de usuario"
+                    disabled={deleting}
+                    autoComplete="off"
+                  />
+                  {deleteError && (
+                    <p className="text-xs font-medium text-sitecorp-danger">{deleteError}</p>
+                  )}
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting} onClick={closeDelete}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={
+                deleting ||
+                !deletionConfirmationMatches(userToDelete?.username ?? "", deleteConfirmation)
+              }
+              className="bg-sitecorp-danger text-white hover:bg-sitecorp-danger/90"
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmDelete()
+              }}
+            >
+              {deleting ? "Eliminando..." : "Eliminar definitivamente"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

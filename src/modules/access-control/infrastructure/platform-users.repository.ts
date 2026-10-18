@@ -114,3 +114,47 @@ export async function invokeCreatePlatformUser(
     initialPassword: created.initial_password,
   }
 }
+
+/**
+ * ELIMINACIÓN definitiva de un usuario de plataforma mediante la Edge Function
+ * `delete-platform-user`.
+ *
+ * El borrado de una cuenta de Auth exige privilegios de administrador que el navegador
+ * NUNCA tiene: la única vía es esta función, que revalida el rol del llamante, impide
+ * borrar la propia cuenta o la última de SuperAdmin y conserva el historial.
+ *
+ * El servidor exige la confirmación del `username` exacto: un error de la interfaz no puede
+ * provocar un borrado por accidente.
+ */
+export async function invokeDeletePlatformUser(input: {
+  userId: string
+  confirmUsername: string
+}): Promise<void> {
+  const { data, error } = await supabase.functions.invoke("delete-platform-user", {
+    body: {
+      user_id: input.userId,
+      confirm_username: input.confirmUsername,
+    },
+  })
+
+  if (error) {
+    // El motivo REAL lo da el backend («última cuenta de SuperAdmin», «registros
+    // históricos»…). En una respuesta no-2xx el cuerpo llega en `error.context`, así que se
+    // lee antes de caer al mensaje genérico del cliente.
+    let backendMessage: string | null = null
+    const context = (error as { context?: Response }).context
+    if (context && typeof context.json === "function") {
+      try {
+        const body = (await context.json()) as { error?: string } | null
+        backendMessage = body?.error ?? null
+      } catch {
+        backendMessage = null
+      }
+    }
+
+    throw new Error(backendMessage || error.message || "No se pudo eliminar el usuario.")
+  }
+
+  const failure = (data as { error?: string } | null)?.error
+  if (failure) throw new Error(failure)
+}
