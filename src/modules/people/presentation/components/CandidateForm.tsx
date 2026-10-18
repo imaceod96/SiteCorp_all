@@ -20,7 +20,7 @@ import {
   DialogFooter,
 } from "@/shared/components/ui/dialog"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
-import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
+import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/components/AcademicDegreeCheckboxes"
 import {
@@ -309,8 +309,10 @@ const CandidateForm = ({
           disciplinary_document: null,
         })
 
-        if (data.province && MUNICIPIOS_BY_PROVINCE_FULL[data.province]) {
-          setMunicipalities(MUNICIPIOS_BY_PROVINCE_FULL[data.province].map(name => ({ id: name, name })))
+        if (data.province) {
+          setMunicipalities(
+            cubaMunicipalityOptions(data.province, data.municipality).map(name => ({ id: name, name }))
+          )
         }
       } catch (err) {
         console.error("Error fetching candidate:", err)
@@ -361,8 +363,8 @@ const CandidateForm = ({
     setFormData(prev => ({ ...prev, province, municipality: "" }))
     setMunicipalities([])
 
-    if (province && MUNICIPIOS_BY_PROVINCE_FULL[province]) {
-      setMunicipalities(MUNICIPIOS_BY_PROVINCE_FULL[province].map(name => ({ id: name, name })))
+    if (province) {
+      setMunicipalities(cubaMunicipalityOptions(province).map(name => ({ id: name, name })))
     }
   }
 

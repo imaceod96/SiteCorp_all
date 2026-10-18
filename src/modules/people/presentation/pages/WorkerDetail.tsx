@@ -36,7 +36,7 @@ import WorkerVacationsTab from "@/modules/vacations-licenses/vacations/presentat
 import WorkerMedicalCertificatesTab from "@/modules/vacations-licenses/medical-certificates/presentation/components/WorkerMedicalCertificatesTab"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { toRomanNumeral } from "@/utils/roman-numerals"
-import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
+import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { WorkerForm } from "@/modules/people/presentation/components/WorkerForm"
 import { WorkerDocumentsTab } from "@/modules/people/presentation/components/WorkerDocumentsTab"
 import {
@@ -1967,7 +1967,7 @@ const WorkerDetail = () => {
                   disabled={!editForm.province}
                 >
                   <option value="">Seleccionar municipio</option>
-                  {(MUNICIPIOS_BY_PROVINCE_FULL[editForm.province || ""] || []).map((name) => (
+                  {cubaMunicipalityOptions(editForm.province, editForm.municipality).map((name) => (
                     <option key={name} value={name}>{name}</option>
                   ))}
                 </SiteCorpSelect>

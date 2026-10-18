@@ -11,7 +11,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/shared/components/ui/dialog"
 import { Label } from "@/shared/components/ui/label"
-import { CUBA_PROVINCES, MUNICIPIOS_BY_PROVINCE } from "@/data/cuba-locations"
+import { cubaMunicipalityOptions, cubaProvinceOptions } from "@/data/cuba-locations-full"
 import { showSuccess, showError } from "@/utils/toast"
 import {
   MAX_REPRESENTATIVE_POSITIONS,
@@ -170,9 +170,7 @@ const EntitySettingsContractData = () => {
     )
   }
 
-  const municipalityOptions = contractData.province
-    ? MUNICIPIOS_BY_PROVINCE[contractData.province] || []
-    : []
+  const municipalityOptions = cubaMunicipalityOptions(contractData.province, contractData.municipality)
 
   return (
     <div className="space-y-6 p-6">
@@ -243,9 +241,9 @@ const EntitySettingsContractData = () => {
               disabled={!canManage}
             >
               <option value="">Seleccionar provincia</option>
-              {CUBA_PROVINCES.map((province) => (
-                <option key={province.id} value={province.id}>
-                  {province.name}
+              {cubaProvinceOptions(contractData.province).map((name) => (
+                <option key={name} value={name}>
+                  {name}
                 </option>
               ))}
             </SiteCorpSelect>

@@ -27,6 +27,7 @@ import {
 import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import CandidateForm from "@/modules/people/presentation/components/CandidateForm"
+import { CUBA_PROVINCES_FULL } from "@/data/cuba-locations-full"
 
 interface Gender {
   id: string
@@ -52,13 +53,6 @@ interface Municipality {
   id: string
   name: string
 }
-
-const CUBA_PROVINCES = [
-  "Pinar del Río", "Artemisa", "La Habana", "Mayabeque", "Matanzas",
-  "Cienfuegos", "Villa Clara", "Sancti Spíritus", "Ciego de Ávila",
-  "Camagüey", "Las Tunas", "Holguín", "Granma", "Santiago de Cuba",
-  "Guantánamo", "Isla de la Juventud",
-]
 
 /**
  * Listado de candidatos de la entidad.
@@ -101,8 +95,8 @@ const EntityCandidates = () => {
         setEducationLevels(catalogs.educationLevels)
         setSkinColors(catalogs.skinColors)
 
-        // Set provinces from Cuba list
-        setProvinces(CUBA_PROVINCES.map(name => ({ id: name, name })))
+        // Provincias: fuente única compartida (sin listas locales duplicadas)
+        setProvinces(CUBA_PROVINCES_FULL.map(name => ({ id: name, name })))
       } catch (err) {
         console.error("Error fetching reference data:", err)
         setError("Error al cargar datos de referencia")

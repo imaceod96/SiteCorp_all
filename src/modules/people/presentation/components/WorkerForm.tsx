@@ -8,7 +8,7 @@ import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button
 import { Label } from "@/shared/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
-import { CUBA_PROVINCES_FULL, MUNICIPIOS_BY_PROVINCE_FULL } from "@/data/cuba-locations-full"
+import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/modules/representatives"
 import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
@@ -327,8 +327,8 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
   }, [entityId])
 
   const municipalities = React.useMemo(
-    () => (form.province && MUNICIPIOS_BY_PROVINCE_FULL[form.province]) || [],
-    [form.province]
+    () => cubaMunicipalityOptions(form.province, form.municipality),
+    [form.province, form.municipality]
   )
 
   // Solo puestos ACTIVOS con plazas disponibles (currentAssignments < authorized_quantity)
