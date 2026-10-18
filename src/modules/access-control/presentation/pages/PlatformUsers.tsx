@@ -12,6 +12,7 @@ import {
   isSuperAdminPlatformRole,
   loadActivePlatformRoles,
   loadIsPlatformFounder,
+  loadPlatformFounderId,
   loadPlatformPermission,
   loadPlatformUsers,
   platformUserDeletionBlockReason,
@@ -65,6 +66,9 @@ const PlatformUsers = () => {
   // ¿La SESIÓN actual es la cuenta fundadora? Lo decide el servidor
   // (`is_platform_founder()`); el cliente no lo deduce por nombre, correo ni antigüedad.
   const [isFounder, setIsFounder] = React.useState(false)
+  // UUID de la cuenta fundadora, para cerrar su fila (eliminar/desactivar) también a los demás
+  // SuperAdmin. Lo aporta el servidor; si aún no está designada, es `null`.
+  const [founderUserId, setFounderUserId] = React.useState<string | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [editingUser, setEditingUser] = React.useState<PlatformUser | null>(null)
@@ -111,18 +115,21 @@ const PlatformUsers = () => {
     }
   }, [])
 
-  const loadFounderFlag = React.useCallback(async () => {
+  const loadFounder = React.useCallback(async () => {
     // Lectura tolerante: si la identificación del fundador todavía no está aplicada en la
     // base, responde `false` y los controles del rol SuperAdmin quedan ocultos (nunca al
     // revés). La autorización real la aplica el servidor.
     setIsFounder(await loadIsPlatformFounder())
+    // Mismo criterio: sin identificación disponible devuelve `null` y la fila del fundador no
+    // se puede distinguir; el servidor sigue rechazando la operación.
+    setFounderUserId(await loadPlatformFounderId())
   }, [])
 
   React.useEffect(() => {
     loadUsers()
     loadRoles()
-    loadFounderFlag()
-  }, [loadUsers, loadRoles, loadFounderFlag])
+    loadFounder()
+  }, [loadUsers, loadRoles, loadFounder])
 
   // El rol SuperAdmin sólo se ofrece a la cuenta fundadora; el resto de roles sigue igual.
   const assignableRoles = assignablePlatformRoles(roles, isFounder)
@@ -227,6 +234,7 @@ const PlatformUsers = () => {
       currentUserId: user?.id,
       target,
       users,
+      founderUserId,
     })
     if (blocked) {
       setError(blocked)
@@ -310,6 +318,17 @@ const PlatformUsers = () => {
   // Cuenta que está operando: impide ofrecer el borrado de uno mismo.
   const currentUserId = user?.id
 
+  // ¿La fila es la cuenta FUNDADORA? Lo resuelve el servidor (`platform_founder`), no la
+  // interfaz: así la acción de eliminar queda cerrada también para los demás SuperAdmin, que
+  // ven esta misma pantalla y no son la cuenta fundadora.
+  const isFounderRow = (target: PlatformUser) =>
+    founderUserId !== null && target.id === founderUserId
+
+  // Motivo por el que NO se ofrece eliminar esa fila (cuenta fundadora, cuenta propia o última
+  // cuenta activa de SuperAdmin). Mismas reglas que revalida el servidor.
+  const deletionBlockReason = (target: PlatformUser) =>
+    platformUserDeletionBlockReason({ currentUserId, target, users, founderUserId })
+
   const columns = [
     { header: "Nombre completo", accessor: "full_name" },
     { header: "Usuario", accessor: "username" },
@@ -359,9 +378,9 @@ const PlatformUsers = () => {
           onClick={() => toggleActive(user)}
           // La cuenta fundadora no se desactiva: la base lo impide con un disparador y aquí
           // se evita ofrecer una acción que el servidor va a rechazar.
-          disabled={isFounder && user.id === currentUserId}
+          disabled={isFounderRow(user)}
           title={
-            isFounder && user.id === currentUserId
+            isFounderRow(user)
               ? FOUNDER_ACCOUNT_PROTECTED_MESSAGE
               : user.is_active
                 ? "Desactivar el usuario"
@@ -378,19 +397,16 @@ const PlatformUsers = () => {
             </>
           )}
         </SiteCorpButton>
-        {/* Acción DIFERENCIADA de la desactivación: irreversible y sólo para SuperAdmin. */}
+        {/* Acción DIFERENCIADA de la desactivación: irreversible y sólo para SuperAdmin.
+            La cuenta fundadora no se puede eliminar desde aquí para NADIE (tampoco para otro
+            SuperAdmin): la base lo impide igualmente con la restricción de su clave foránea. */}
         <SiteCorpButton
           size="sm"
           variant="outline"
           className="border-sitecorp-danger/40 text-sitecorp-danger hover:bg-sitecorp-danger/10"
           onClick={() => startDelete(user)}
-          disabled={
-            platformUserDeletionBlockReason({ currentUserId, target: user, users }) !== null
-          }
-          title={
-            platformUserDeletionBlockReason({ currentUserId, target: user, users }) ??
-            "Eliminar definitivamente el usuario"
-          }
+          disabled={deletionBlockReason(user) !== null}
+          title={deletionBlockReason(user) ?? "Eliminar definitivamente el usuario"}
         >
           <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
         </SiteCorpButton>

@@ -219,7 +219,7 @@ export {
 } from "./domain/platform-users.rules"
 
 /* Cuenta fundadora: quién es (lo resuelve el servidor) */
-export { loadIsPlatformFounder } from "./application/platform-founder.queries"
+export { loadIsPlatformFounder, loadPlatformFounderId } from "./application/platform-founder.queries"
 
 /* Usuarios e invitaciones de un CLIENTE: casos de uso */
 export {

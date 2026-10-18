@@ -29,6 +29,13 @@
 --   ya designada). Un `raise` revierte la migración completa en la transacción de aplicación:
 --   nunca puede quedar aplicada a medias ni con una cuenta equivocada.
 --
+-- BORRADOS EN CASCADA
+--   Eliminar una cuenta arrastra sus asignaciones de rol por integridad referencial. Esa
+--   cascada se autoriza con una prueba POSITIVA (disparador anidado o el servicio de Auth),
+--   nunca por la mera ausencia de sesión, y la vía de las Edge Functions (`service_role`)
+--   queda siempre sujeta a la regla: con `auth.uid()` nulo y `service_role` la operación se
+--   rechaza.
+--
 -- ESTADO: NO EJECUTADO. Requiere autorización expresa antes de aplicarse.
 -- ============================================================================
 
@@ -135,17 +142,25 @@ declare
 begin
   v_role_id := case when tg_op = 'DELETE' then old.platform_role_id else new.platform_role_id end;
 
-  -- (1) Borrado SIN sesión de aplicación: no es una "retirada de rol".
-  --     Cuando `auth.uid()` es nulo, un DELETE de esta tabla es el borrado de la propia
-  --     CUENTA arrastrando sus asignaciones (integridad referencial / GoTrue) o una
-  --     intervención directa en la base; nunca una retirada de rol hecha desde la aplicación
-  --     o desde una Edge Function. Se comprueba ANTES de leer el catálogo de roles para no
-  --     depender de los privilegios de lectura del rol de infraestructura que ejecuta la
-  --     cascada.
-  --     `service_role` queda FUERA de esta excepción: es la vía de las Edge Functions y no
-  --     puede eludir la regla. Sólo afecta a DELETE; en INSERT/UPDATE la única vía de
-  --     mantenimiento es `postgres`/`supabase_admin` (punto 3).
-  if tg_op = 'DELETE' and auth.uid() is null and current_user <> 'service_role' then
+  -- (1) Borrado en CASCADA de una cuenta: NO es una retirada de rol.
+  --     La ausencia de sesión (`auth.uid()` nulo) NO se acepta como prueba por sí sola. Hace
+  --     falta una prueba POSITIVA de que el borrado lo provoca la desaparición de la cuenta:
+  --       · `pg_trigger_depth() > 1`: el disparador se ejecuta ANIDADO dentro de otro
+  --         disparador, que es exactamente la situación de un borrado en cascada de la
+  --         integridad referencial al eliminar la cuenta; o
+  --       · `current_user = 'supabase_auth_admin'`: lo ejecuta el servicio de Auth al borrar la
+  --         cuenta (GoTrue). No es alcanzable desde la aplicación ni desde una Edge Function.
+  --     Además se exige que NO haya sesión de aplicación y que el actor no sea `service_role`
+  --     (la vía de las Edge Functions, que nunca puede eludir la regla: una operación con
+  --     `auth.uid()` nulo y `service_role` cae en los puntos 2–5 y se rechaza).
+  --     Se comprueba ANTES de leer el catálogo de roles para no depender de los privilegios de
+  --     lectura del rol de infraestructura que ejecuta la cascada.
+  --     Sólo afecta a DELETE: en INSERT/UPDATE no existe ninguna excepción de este tipo y la
+  --     única vía de mantenimiento es `postgres`/`supabase_admin` (punto 3).
+  if tg_op = 'DELETE'
+     and auth.uid() is null
+     and current_user <> 'service_role'
+     and (pg_trigger_depth() > 1 or current_user = 'supabase_auth_admin') then
     return old;
   end if;
 

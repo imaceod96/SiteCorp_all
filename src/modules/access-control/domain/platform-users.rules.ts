@@ -36,15 +36,26 @@ export const LAST_SUPERADMIN_MESSAGE =
 /**
  * Motivo por el que NO debe ofrecerse la eliminación, o `null` si la acción es admisible.
  *
- * Mismas condiciones que aplica el servidor: nunca la cuenta propia y nunca la última
- * cuenta activa de SuperAdmin.
+ * Mismas condiciones que aplica el servidor: nunca la cuenta fundadora, nunca la cuenta propia
+ * y nunca la última cuenta activa de SuperAdmin.
  */
 export function platformUserDeletionBlockReason(input: {
   currentUserId: string | null | undefined
   target: PlatformUser
   users: PlatformUser[]
+  /**
+   * UUID de la cuenta fundadora, cuando la sesión puede conocerlo. La cuenta fundadora no se
+   * elimina por procedimientos administrativos: la base lo impide (clave foránea
+   * `ON DELETE RESTRICT`) y el servidor lo rechaza, así que la interfaz no debe ofrecerlo ni a
+   * otro SuperAdmin.
+   */
+  founderUserId?: string | null
 }): string | null {
-  const { currentUserId, target, users } = input
+  const { currentUserId, target, users, founderUserId } = input
+
+  if (founderUserId && target.id === founderUserId) {
+    return FOUNDER_ACCOUNT_PROTECTED_MESSAGE
+  }
 
   if (currentUserId && target.id === currentUserId) {
     return SELF_DELETION_MESSAGE

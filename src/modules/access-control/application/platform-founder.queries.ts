@@ -1,4 +1,7 @@
-import { rpcIsPlatformFounder } from "../infrastructure/platform-founder.repository"
+import {
+  rpcIsPlatformFounder,
+  selectPlatformFounderId,
+} from "../infrastructure/platform-founder.repository"
 
 /**
  * Control de acceso — Consulta del fundador (aplicación).
@@ -9,4 +12,16 @@ import { rpcIsPlatformFounder } from "../infrastructure/platform-founder.reposit
  */
 export async function loadIsPlatformFounder(): Promise<boolean> {
   return rpcIsPlatformFounder()
+}
+
+/**
+ * UUID de la cuenta fundadora, si ya está designada.
+ *
+ * Permite que la pantalla de usuarios cierre la fila del fundador (eliminar y desactivar) para
+ * CUALQUIER SuperAdmin, no sólo para la propia cuenta fundadora. `null` significa «no
+ * identificada» (migración sin aplicar o sin permiso de lectura) y no cambia el comportamiento
+ * previo: el servidor sigue siendo quien autoriza.
+ */
+export async function loadPlatformFounderId(): Promise<string | null> {
+  return selectPlatformFounderId()
 }

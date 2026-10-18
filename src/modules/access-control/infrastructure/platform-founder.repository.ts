@@ -16,3 +16,23 @@ export async function rpcIsPlatformFounder(): Promise<boolean> {
   if (error) return false
   return data === true
 }
+
+/**
+ * UUID de la cuenta fundadora (una sola fila; RLS la permite leer a los SuperAdmin).
+ *
+ * Lo necesita la pantalla de usuarios para cerrar la fila de la cuenta fundadora —eliminar y
+ * desactivar— también cuando quien mira NO es el fundador: sólo su propia sesión conoce su
+ * condición, pero cualquier SuperAdmin puede ver esta pantalla.
+ *
+ * Lectura TOLERANTE: sin fila, sin permiso o con la migración sin aplicar devuelve `null` y la
+ * interfaz se comporta como antes. La autorización efectiva sigue siendo del servidor.
+ */
+export async function selectPlatformFounderId(): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("platform_founder")
+    .select("user_id")
+    .maybeSingle()
+
+  if (error || !data) return null
+  return (data as { user_id: string }).user_id
+}
