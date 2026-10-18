@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderOpen,
+  History,
 } from "lucide-react"
 
 const PlatformAdminLayout = React.forwardRef<
@@ -111,6 +112,10 @@ const PlatformAdminLayout = React.forwardRef<
             {/* Documentos globales: exclusivo del Super Admin (la RLS aplica la misma regla). */}
             {isPlatformSuperAdmin &&
               navItem("/admin/documents", <FolderOpen className="h-5 w-5" />, "Documentos")}
+
+            {/* Historial: auditoría centralizada, exclusiva del Super Admin. */}
+            {isPlatformSuperAdmin &&
+              navItem("/admin/history", <History className="h-5 w-5" />, "Historial")}
 
             {/* Sección Ajustes: desplegable que se oculta cuando no se usa. */}
             <div className="space-y-1 pt-3">
