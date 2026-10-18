@@ -1,9 +1,12 @@
 -- ============================================================================
 -- PLURIEMPLEO — BLOQUE 3 (A): OPERACIONES CONTRACTUALES POR CONTRATO
--- Estado: PREPARADA · NO EJECUTADA (pendiente de autorización explícita).
+-- Estado: APLICADA en Supabase y verificada. Este archivo incorpora ya, dentro de su
+--   propio SQL, las correcciones de consolidación posteriores a la ejecución
+--   (sección 2 BIS y sección 3): el anexo se formaliza sobre el contrato objetivo y el
+--   contrato —con su saldo de vacaciones— se revincula al puesto al cambiar de puesto.
 --
 -- NO es un archivo de migración de Supabase (no vive en supabase/migrations/).
--- Se aplicará tras los Bloques 1 y 2.
+-- Se aplica tras los Bloques 1 y 2.
 --
 -- OBJETIVO
 --   Permitir que las operaciones contractuales actúen sobre UN contrato/asignación
@@ -313,6 +316,383 @@ $$;
 
 
 -- ---------------------------------------------------------------------------
+-- 2 BIS. ANEXO SOBRE EL CONTRATO OBJETIVO (`create_contract_addendum`)
+--    Función PREVIA del proyecto (no creada por Pluriempleo): se publica aquí completa
+--    —reproducida de Supabase— con un parámetro final opcional `p_target_contract_id`,
+--    porque su ÚNICO consumidor interno es `change_worker_position` (ver más abajo) y
+--    éste debe formalizar el anexo sobre el CONTRATO MODIFICADO, no sobre el contrato
+--    vigente más reciente del trabajador: con 2 contratos, el anexo del cambio de puesto
+--    se vinculaba al OTRO contrato (el de `start_date` mayor).
+--    Sin el parámetro, la resolución del contrato es EXACTAMENTE la anterior, así que las
+--    llamadas de 17 argumentos (frontend de anexos manuales) siguen funcionando igual.
+--    Se define AQUÍ, antes de su consumidor y en el archivo que ya reescribe el cambio de
+--    puesto: no se duplica ninguna función ni se añade un archivo nuevo.
+-- ---------------------------------------------------------------------------
+drop function if exists public.create_contract_addendum(
+  uuid, jsonb, text, text, date, text, text, uuid, uuid, text, date, text, uuid, boolean, jsonb, numeric, numeric
+);
+
+create or replace function public.create_contract_addendum(
+  p_worker_id uuid,
+  p_changes jsonb,
+  p_reason_code text default null,
+  p_reason text default null,
+  p_effective_date date default null,
+  p_notes text default null,
+  p_source_type text default null,
+  p_source_id uuid default null,
+  p_salary_history_id uuid default null,
+  p_addendum_type text default null,
+  p_signature_date date default null,
+  p_signature_place text default null,
+  p_representative_assignment_id uuid default null,
+  p_require_formalized boolean default false,
+  p_components jsonb default null,
+  p_total_before numeric default null,
+  p_total_after numeric default null,
+  p_target_contract_id uuid default null
+)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'auth'
+AS $function$
+DECLARE
+  v_worker public.workers%ROWTYPE;
+  v_contract public.employment_contracts%ROWTYPE;
+  v_conditions jsonb;
+  v_existing public.contract_addendums%ROWTYPE;
+  v_addendum_id uuid;
+  v_item jsonb;
+  v_field text;
+  v_code text;
+  v_before numeric;
+  v_after numeric;
+  v_salary numeric;
+  v_prev_additional numeric := 0;
+  v_prev_abnormal numeric := 0;
+  v_prev_other numeric := 0;
+  v_new_additional numeric := 0;
+  v_new_abnormal numeric := 0;
+  v_new_other numeric := 0;
+  v_components_count integer := 0;
+  v_checklist jsonb;
+  v_blocking text[];
+  v_status text;
+  v_type text;
+  v_number integer;
+  v_prev_payment uuid;
+  v_currency text;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'No autenticado';
+  END IF;
+
+  IF p_worker_id IS NULL THEN
+    RAISE EXCEPTION 'El trabajador es obligatorio';
+  END IF;
+
+  SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Trabajador no encontrado';
+  END IF;
+
+  IF NOT public.can_access_entity(v_worker.organization_entity_id, 'workers.manage') THEN
+    RAISE EXCEPTION 'No tiene permiso para gestionar anexos de esta entidad';
+  END IF;
+
+  -- 73/74: solo puede existir un anexo sobre un contrato vigente del trabajador.
+  -- Con 2 contratos vigentes, `p_target_contract_id` identifica EL contrato del anexo;
+  -- sin él se mantiene la resolución histórica (el contrato vigente más reciente).
+  IF p_target_contract_id IS NOT NULL THEN
+    SELECT * INTO v_contract FROM public.employment_contracts
+    WHERE id = public.resolve_worker_target_contract(p_worker_id, p_target_contract_id)
+    FOR UPDATE;
+  ELSE
+    SELECT * INTO v_contract FROM public.employment_contracts
+    WHERE worker_id = p_worker_id AND is_current = true
+    ORDER BY start_date DESC
+    LIMIT 1
+    FOR UPDATE;
+  END IF;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'El trabajador no tiene un contrato vigente sobre el que formalizar el anexo';
+  END IF;
+
+  -- 61: idempotencia por origen
+  IF p_source_type IS NOT NULL AND p_source_id IS NOT NULL THEN
+    SELECT * INTO v_existing FROM public.contract_addendums
+    WHERE employment_contract_id = v_contract.id
+      AND source_type = p_source_type
+      AND source_id = p_source_id;
+
+    IF FOUND THEN
+      RETURN jsonb_build_object(
+        'status', 'ALREADY_EXISTS',
+        'addendum_id', v_existing.id,
+        'addendum_number', v_existing.addendum_number,
+        'addendum_status', v_existing.status,
+        'total_after', v_existing.total_after
+      );
+    END IF;
+  END IF;
+
+  -- 14/24: un anexo agrupa 1..N cambios, nunca se crea vacío
+  IF p_changes IS NULL OR jsonb_typeof(p_changes) <> 'array' OR jsonb_array_length(p_changes) = 0 THEN
+    RAISE EXCEPTION 'Un anexo debe contener al menos un cambio de condiciones';
+  END IF;
+
+  v_code := nullif(btrim(coalesce(p_reason_code, '')), '');
+
+  -- 65/66: el anexo manual nunca cambia Cargo/Puesto ni la escala salarial
+  IF p_source_type IN ('MANUAL', 'MANUAL_COMPENSATION_CHANGE') THEN
+    FOR v_item IN SELECT value FROM jsonb_array_elements(p_changes)
+    LOOP
+      v_field := upper(btrim(coalesce(v_item->>'field_code', '')));
+      IF v_field IN ('AREA', 'JOB', 'POSITION', 'SALARY_GROUP', 'SALARY', 'OCCUPATIONAL_CATEGORY') THEN
+        RAISE EXCEPTION 'El campo % no puede modificarse desde un anexo manual: use Cambiar de puesto o la escala salarial', v_field;
+      END IF;
+    END LOOP;
+  END IF;
+
+  v_type := CASE
+    WHEN p_addendum_type IS NOT NULL THEN p_addendum_type
+    WHEN v_code = 'SALARY_CHANGE' THEN 'SALARY_CHANGE_ADDENDUM'
+    ELSE 'CONTRACT_VARIATION_ADDENDUM'
+  END;
+
+  IF v_type NOT IN ('SALARY_CHANGE_ADDENDUM', 'CONTRACT_VARIATION_ADDENDUM') THEN
+    RAISE EXCEPTION 'El tipo de anexo no es válido';
+  END IF;
+
+  -- Totales: el backend es la autoridad y parte de las condiciones formalizadas vigentes
+  v_conditions := public.contract_formalized_conditions(v_contract.id);
+  v_salary := nullif(v_conditions->>'salary_amount', '')::numeric;
+  v_prev_additional := COALESCE(nullif(v_conditions->>'additional_payment', '')::numeric, 0);
+  v_prev_abnormal := COALESCE(nullif(v_conditions->>'abnormal_conditions', '')::numeric, 0);
+  v_prev_other := COALESCE(nullif(v_conditions->>'other_payment', '')::numeric, 0);
+  v_prev_payment := nullif(v_conditions->>'payment_method_id', '')::uuid;
+  v_currency := COALESCE(nullif(v_conditions->>'currency_code', ''), 'CUP');
+
+  IF p_components IS NOT NULL AND jsonb_typeof(p_components) = 'array' THEN
+    SELECT COALESCE(SUM(CASE WHEN value->>'component_type' = 'ADDITIONAL_PAYMENT' THEN (value->>'amount')::numeric ELSE 0 END), 0),
+           COALESCE(SUM(CASE WHEN value->>'component_type' = 'ABNORMAL_CONDITIONS' THEN (value->>'amount')::numeric ELSE 0 END), 0),
+           COALESCE(SUM(CASE WHEN value->>'component_type' = 'OTHER' THEN (value->>'amount')::numeric ELSE 0 END), 0)
+    INTO v_new_additional, v_new_abnormal, v_new_other
+    FROM jsonb_array_elements(p_components);
+
+    v_before := COALESCE(nullif(v_conditions->>'total_compensation', '')::numeric,
+                         COALESCE(v_salary, 0) + v_prev_additional + v_prev_abnormal + v_prev_other);
+    v_after := COALESCE(v_salary, 0) + v_new_additional + v_new_abnormal + v_new_other;
+  ELSE
+    v_before := p_total_before;
+    v_after := p_total_after;
+  END IF;
+
+  INSERT INTO public.contract_addendums (
+    company_client_id, organization_entity_id, worker_id, employment_contract_id,
+    addendum_type, document_type_id, status, effective_date,
+    reason_code, reason, notes, source_type, source_id, salary_history_id,
+    total_before, total_after, currency_code, created_by
+  ) VALUES (
+    v_worker.company_client_id, v_worker.organization_entity_id, p_worker_id, v_contract.id,
+    v_type, 'CONTRACT_ADDENDUM', 'PENDING_TEMPLATE',
+    COALESCE(p_effective_date, CURRENT_DATE),
+    v_code,
+    nullif(btrim(coalesce(p_reason, '')), ''),
+    nullif(btrim(coalesce(p_notes, '')), ''),
+    nullif(btrim(coalesce(p_source_type, '')), ''),
+    p_source_id,
+    p_salary_history_id,
+    v_before,
+    v_after,
+    v_currency,
+    auth.uid()
+  ) RETURNING id INTO v_addendum_id;
+
+  -- Numeración por contrato, segura ante concurrencia
+  v_number := public.assign_addendum_number(v_addendum_id);
+
+  -- Cambios antes/después (snapshots: nunca se resuelven con datos vivos)
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_changes)
+  LOOP
+    v_field := upper(btrim(coalesce(v_item->>'field_code', '')));
+    IF v_field = '' THEN
+      RAISE EXCEPTION 'Cada cambio del anexo necesita un código de campo';
+    END IF;
+
+    INSERT INTO public.employment_contract_addendum_changes (
+      company_client_id, organization_entity_id, addendum_id, field_code,
+      old_value, new_value, old_display_value, new_display_value,
+      old_reference_id, new_reference_id, display_order
+    ) VALUES (
+      v_worker.company_client_id, v_worker.organization_entity_id, v_addendum_id, v_field,
+      v_item->>'old_value',
+      v_item->>'new_value',
+      COALESCE(nullif(btrim(coalesce(v_item->>'old_display_value','')), ''), v_item->>'old_value'),
+      COALESCE(nullif(btrim(coalesce(v_item->>'new_display_value','')), ''), v_item->>'new_value'),
+      nullif(v_item->>'old_reference_id','')::uuid,
+      nullif(v_item->>'new_reference_id','')::uuid,
+      COALESCE((v_item->>'display_order')::integer, 0) + 1
+    );
+  END LOOP;
+
+  -- Nueva versión de conceptos retributivos vinculada al anexo (la anterior no se destruye)
+  IF p_components IS NOT NULL AND jsonb_typeof(p_components) = 'array' THEN
+    FOR v_item IN SELECT value FROM jsonb_array_elements(p_components)
+    LOOP
+      v_field := upper(btrim(coalesce(v_item->>'component_type', '')));
+      IF v_field NOT IN ('ADDITIONAL_PAYMENT', 'ABNORMAL_CONDITIONS', 'OTHER') THEN
+        RAISE EXCEPTION 'El tipo del concepto retributivo no es válido';
+      END IF;
+      IF btrim(coalesce(v_item->>'description', '')) = '' THEN
+        RAISE EXCEPTION 'Cada concepto retributivo necesita una descripción';
+      END IF;
+      IF (v_item->>'amount') IS NULL
+         OR NOT (v_item->>'amount') ~ '^-?[0-9]+([.][0-9]+)?$' THEN
+        RAISE EXCEPTION 'El importe del concepto retributivo no es válido';
+      END IF;
+      IF (v_item->>'amount')::numeric < 0 THEN
+        RAISE EXCEPTION 'El importe del concepto retributivo no puede ser negativo';
+      END IF;
+
+      v_components_count := v_components_count + 1;
+
+      INSERT INTO public.employment_contract_compensation_components (
+        employment_contract_id, addendum_id, component_type, description, amount, display_order
+      ) VALUES (
+        v_contract.id, v_addendum_id, v_field,
+        btrim(v_item->>'description'),
+        round((v_item->>'amount')::numeric, 2),
+        COALESCE((v_item->>'display_order')::integer, v_components_count)
+      );
+    END LOOP;
+
+    -- Los cambios retributivos los calcula el backend (no el frontend)
+    DELETE FROM public.employment_contract_addendum_changes
+    WHERE addendum_id = v_addendum_id
+      AND field_code IN ('ADDITIONAL_PAYMENT', 'ABNORMAL_CONDITIONS', 'OTHER_PAYMENT', 'TOTAL_COMPENSATION');
+
+    IF v_prev_additional IS DISTINCT FROM v_new_additional THEN
+      INSERT INTO public.employment_contract_addendum_changes (
+        company_client_id, organization_entity_id, addendum_id, field_code,
+        old_value, new_value, old_display_value, new_display_value, display_order
+      ) VALUES (
+        v_worker.company_client_id, v_worker.organization_entity_id, v_addendum_id, 'ADDITIONAL_PAYMENT',
+        v_prev_additional::text, v_new_additional::text,
+        public.format_amount_text(v_prev_additional) || ' ' || v_currency,
+        public.format_amount_text(v_new_additional) || ' ' || v_currency,
+        13
+      );
+    END IF;
+
+    IF v_prev_abnormal IS DISTINCT FROM v_new_abnormal THEN
+      INSERT INTO public.employment_contract_addendum_changes (
+        company_client_id, organization_entity_id, addendum_id, field_code,
+        old_value, new_value, old_display_value, new_display_value, display_order
+      ) VALUES (
+        v_worker.company_client_id, v_worker.organization_entity_id, v_addendum_id, 'ABNORMAL_CONDITIONS',
+        v_prev_abnormal::text, v_new_abnormal::text,
+        public.format_amount_text(v_prev_abnormal) || ' ' || v_currency,
+        public.format_amount_text(v_new_abnormal) || ' ' || v_currency,
+        14
+      );
+    END IF;
+
+    IF v_prev_other IS DISTINCT FROM v_new_other THEN
+      INSERT INTO public.employment_contract_addendum_changes (
+        company_client_id, organization_entity_id, addendum_id, field_code,
+        old_value, new_value, old_display_value, new_display_value, display_order
+      ) VALUES (
+        v_worker.company_client_id, v_worker.organization_entity_id, v_addendum_id, 'OTHER_PAYMENT',
+        v_prev_other::text, v_new_other::text,
+        public.format_amount_text(v_prev_other) || ' ' || v_currency,
+        public.format_amount_text(v_new_other) || ' ' || v_currency,
+        15
+      );
+    END IF;
+
+    IF v_before IS DISTINCT FROM v_after THEN
+      INSERT INTO public.employment_contract_addendum_changes (
+        company_client_id, organization_entity_id, addendum_id, field_code,
+        old_value, new_value, old_display_value, new_display_value, display_order
+      ) VALUES (
+        v_worker.company_client_id, v_worker.organization_entity_id, v_addendum_id, 'TOTAL_COMPENSATION',
+        v_before::text, v_after::text,
+        public.format_amount_text(v_before) || ' ' || v_currency,
+        public.format_amount_text(v_after) || ' ' || v_currency,
+        16
+      );
+    END IF;
+  END IF;
+
+  -- El anexo nunca puede quedar vacío de cambios
+  IF NOT EXISTS (SELECT 1 FROM public.employment_contract_addendum_changes WHERE addendum_id = v_addendum_id) THEN
+    RAISE EXCEPTION 'El anexo no contiene cambios reales de condiciones';
+  END IF;
+
+  -- Firma del anexo
+  UPDATE public.contract_addendums SET
+    signature_date = p_signature_date,
+    signature_place = nullif(btrim(coalesce(p_signature_place, '')), ''),
+    updated_at = now()
+  WHERE id = v_addendum_id;
+
+  PERFORM public.capture_addendum_party_snapshot(
+    v_addendum_id,
+    p_representative_assignment_id,
+    COALESCE(p_signature_date, COALESCE(p_effective_date, CURRENT_DATE))
+  );
+
+  UPDATE public.contract_addendums SET
+    payment_method_id = (
+      SELECT c.new_reference_id FROM public.employment_contract_addendum_changes c
+      WHERE c.addendum_id = v_addendum_id AND c.field_code = 'PAYMENT_METHOD'
+    ),
+    previous_payment_method_id = CASE
+      WHEN EXISTS (SELECT 1 FROM public.employment_contract_addendum_changes c
+                   WHERE c.addendum_id = v_addendum_id AND c.field_code = 'PAYMENT_METHOD')
+      THEN v_prev_payment
+      ELSE NULL
+    END,
+    updated_at = now()
+  WHERE id = v_addendum_id;
+
+  v_checklist := public.pending_addendum_checklist(v_addendum_id);
+  v_blocking := ARRAY(SELECT jsonb_array_elements_text(v_checklist->'blocking'));
+  v_blocking := array_remove(v_blocking, NULL);
+
+  IF array_length(v_blocking, 1) IS NULL THEN
+    UPDATE public.contract_addendums
+    SET status = 'FORMALIZED', formalized_by = auth.uid(), formalized_at = now(), updated_at = now()
+    WHERE id = v_addendum_id;
+    v_status := 'FORMALIZED';
+  ELSE
+    IF p_require_formalized THEN
+      RAISE EXCEPTION 'No se puede formalizar el anexo. Datos pendientes: %',
+        array_to_string(v_blocking, ' · ');
+    END IF;
+    v_status := 'PENDING_TEMPLATE';
+  END IF;
+
+  RETURN jsonb_build_object(
+    'status', 'CREATED',
+    'addendum_id', v_addendum_id,
+    'addendum_number', v_number,
+    'addendum_status', v_status,
+    'employment_contract_id', v_contract.id,
+    'changes', (SELECT count(*) FROM public.employment_contract_addendum_changes WHERE addendum_id = v_addendum_id),
+    'components', v_components_count,
+    'total_before', v_before,
+    'total_after', v_after,
+    'pending', to_jsonb(v_blocking)
+  );
+END;
+$function$;
+
+
+-- ---------------------------------------------------------------------------
 -- 3. CAMBIO DE PUESTO (`change_worker_position`) — actúa sólo sobre la asignación objetivo
 -- ---------------------------------------------------------------------------
 drop function if exists public.change_worker_position(
@@ -452,6 +832,26 @@ begin
   values (p_worker_id, p_new_position_id, p_effective_date, null, true)
   returning id into v_new_assignment_id;
 
+  -- El CONTRATO (y lo que cuelga de él) acompaña al puesto nuevo. Sin esto, el contrato
+  -- seguía apuntando a la asignación cerrada y, en las operaciones siguientes,
+  -- `v_contract_id` (arriba) quedaba nulo: el anexo se omitía como NO_CONTRACT, el
+  -- histórico salarial se registraba sin contrato, la prenómina por contrato perdía el
+  -- vínculo y el saldo de vacaciones del contrato se leía 0 (los movimientos seguían en
+  -- la asignación anterior). Sólo se mueven los datos DE ESTE contrato: el otro no se toca.
+  if v_contract_id is not null then
+    update public.employment_contracts
+    set assignment_id = v_new_assignment_id, updated_at = now()
+    where id = v_contract_id;
+
+    update public.worker_vacations
+    set assignment_id = v_new_assignment_id, updated_at = now()
+    where worker_id = p_worker_id and assignment_id = v_current.id;
+
+    update public.worker_vacation_movements
+    set assignment_id = v_new_assignment_id
+    where worker_id = p_worker_id and assignment_id = v_current.id;
+  end if;
+
   insert into public.worker_employment_movements (
     worker_id, movement_type, previous_assignment_id, new_assignment_id,
     effective_date, reason, notes, created_by
@@ -490,6 +890,8 @@ begin
     if v_contract_id is null then
       v_skipped := 'NO_CONTRACT';
     else
+      -- El anexo se formaliza sobre EL contrato que se está moviendo (`v_contract_id`),
+      -- no sobre el contrato vigente más reciente del trabajador (parámetro 18).
       v_addendum := public.create_contract_addendum(
         p_worker_id, v_changes,
         coalesce(nullif(btrim(coalesce(p_reason_code, '')), ''), 'POSITION_CHANGE'),
@@ -497,7 +899,7 @@ begin
         p_effective_date, p_notes, 'POSITION_CHANGE', v_new_assignment_id, v_history_id,
         'CONTRACT_VARIATION_ADDENDUM', p_signature_date, p_signature_place,
         p_representative_assignment_id, p_require_formalized, null,
-        (v_preview->>'total_before')::numeric, (v_preview->>'total_after')::numeric
+        (v_preview->>'total_before')::numeric, (v_preview->>'total_after')::numeric, v_contract_id
       );
     end if;
   end if;
@@ -936,7 +1338,17 @@ revoke execute on function public.change_worker_contract(
 grant execute on function public.register_worker_separation(uuid, date, uuid, text, uuid) to authenticated;
 revoke execute on function public.register_worker_separation(uuid, date, uuid, text, uuid) from public, anon;
 
+-- Anexo sobre el contrato objetivo (sección 2 BIS): la firma de 18 argumentos sustituye
+-- a la de 17, por lo que la nueva firma necesita sus permisos explícitos (igual que las
+-- demás RPC de este bloque). Sin `p_target_contract_id` el comportamiento no cambia.
+grant execute on function public.create_contract_addendum(
+  uuid, jsonb, text, text, date, text, text, uuid, uuid, text, date, text, uuid, boolean, jsonb, numeric, numeric, uuid
+) to authenticated, service_role;
+revoke execute on function public.create_contract_addendum(
+  uuid, jsonb, text, text, date, text, text, uuid, uuid, text, date, text, uuid, boolean, jsonb, numeric, numeric, uuid
+) from public, anon;
+
 
 -- ============================================================================
--- FIN DEL BLOQUE 3 (A) — NO EJECUTADO.
+-- FIN DEL BLOQUE 3 (A) — APLICADO en Supabase (con las correcciones de consolidación).
 -- ============================================================================

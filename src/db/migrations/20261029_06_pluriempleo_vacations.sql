@@ -1,6 +1,8 @@
 -- ============================================================================
 -- PLURIEMPLEO — BLOQUE 4 (B): VACACIONES INDEPENDIENTES POR CONTRATO
--- Estado: PREPARADA · NO EJECUTADA (pendiente de autorización explícita).
+-- Estado: APLICADA en Supabase y verificada. Este archivo incorpora ya, dentro de su
+--   propio SQL, la corrección de consolidación del índice de devengos por contrato
+--   (`uq_worker_vacation_accrual`, sección 1).
 --
 -- NO es un archivo de migración de Supabase (no vive en supabase/migrations/).
 --
@@ -13,6 +15,9 @@
 -- ESTRUCTURA (mínima)
 --   · `worker_vacations.assignment_id`           (nullable, FK)
 --   · `worker_vacation_movements.assignment_id`  (nullable, FK) + índices
+--   · `uq_worker_vacation_accrual` pasa a ser POR CONTRATO (trabajador + asignación +
+--     año + mes): antes era trabajador + año + mes, y el devengo del segundo contrato
+--     del mismo mes fallaba con un error 23505.
 --   Se reutilizan `worker_vacations`, `worker_vacation_movements`, `worker_position_on` y
 --   las funciones actuales (ahora con parámetro de asignación opcional).
 --
@@ -41,6 +46,24 @@ create index if not exists idx_worker_vacations_assignment
 
 create index if not exists idx_worker_vacation_movements_assignment
   on public.worker_vacation_movements (worker_id, assignment_id);
+
+-- Devengo POR CONTRATO: el índice único previo (`uq_worker_vacation_accrual` sobre
+-- trabajador + año + mes) impedía que dos contratos del MISMO trabajador tuvieran su
+-- devengo del mismo mes: el segundo devengo fallaba con un error 23505 (clave duplicada)
+-- y el contrato se quedaba sin acumular su devengo. Se redefine por asignación,
+-- con el mismo patrón que los índices de contrato de los Bloques 1 y 4:
+-- `COALESCE(assignment_id, ceros)` mantiene la unicidad de los devengos legados (sin
+-- asignación) sin bloquear a los contratos que sí identifican el suyo.
+drop index if exists public.uq_worker_vacation_accrual;
+
+create unique index if not exists uq_worker_vacation_accrual
+  on public.worker_vacation_movements (
+    worker_id,
+    coalesce(assignment_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    accrual_year,
+    accrual_month
+  )
+  where movement_type = 'ACCRUAL';
 
 -- Adopción sin ambigüedad: sólo si el trabajador tiene UNA asignación vigente.
 update public.worker_vacations v
@@ -981,5 +1004,6 @@ revoke execute on function public.entity_vacation_overview(uuid) from public, an
 
 
 -- ============================================================================
--- FIN DEL BLOQUE 4 (B) — NO EJECUTADO.
+-- FIN DEL BLOQUE 4 (B) — APLICADO en Supabase (con la corrección del índice de
+-- devengos por contrato de la sección 1).
 -- ============================================================================
