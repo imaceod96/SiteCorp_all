@@ -190,19 +190,20 @@ const EntitySettingsSalary = () => {
   }
 
   const handleCreateEnterpriseScale = async () => {
-    if (!currentEntity) return
-    setCreatingScale(true)
-    try {
-      const name = newScaleName.trim() || "Escala salarial empresarial"
-      const currency = newScaleCurrency.trim() || "CUP"
-      const effectiveFrom = newScaleEffectiveFrom || new Date().toISOString().split('T')[0]
-      
-      const newScale = await createEntityEmpresarialScale(
-        currentEntity.id,
-        name,
-        currency,
-        effectiveFrom
-      )
+      if (!currentEntity) return
+      console.log("[EntitySettingsSalary] currentEntity.id:", currentEntity.id)
+      setCreatingScale(true)
+      try {
+        const name = newScaleName.trim() || "Escala salarial empresarial"
+        const currency = newScaleCurrency.trim() || "CUP"
+        const effectiveFrom = newScaleEffectiveFrom || new Date().toISOString().split('T')[0]
+        
+        const newScale = await createEntityEmpresarialScale(
+          currentEntity.id,
+          name,
+          currency,
+          effectiveFrom
+        )
       if (newScale) {
         setShowCreateEnterpriseScale(false)
         setNewScaleName("")
