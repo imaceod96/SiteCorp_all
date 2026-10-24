@@ -61,7 +61,7 @@ BEGIN
         RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
     END IF;
 
-    SELECT tenant_id, name INTO v_tenant_id, v_entity_name
+    SELECT company_client_id, name INTO v_tenant_id, v_entity_name
     FROM public.organization_entities
     WHERE id = p_entity_id AND is_active = true;
     IF v_tenant_id IS NULL THEN
@@ -93,7 +93,7 @@ BEGIN
     -- También protege la idempotencia del lote (reejecución → error claro).
     IF EXISTS (
         SELECT 1 FROM public.workers w
-        WHERE w.tenant_id = v_tenant_id
+        WHERE w.company_client_id = v_tenant_id
           AND w.identification = v_ident
           AND w.employment_status = 'active'
     ) THEN
@@ -131,7 +131,7 @@ BEGIN
         v_code := 'TRB-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6));
         BEGIN
             INSERT INTO public.workers (
-                tenant_id, organization_entity_id, code,
+                company_client_id, organization_entity_id, code,
                 first_name, first_surname, second_surname, identification, birth_date,
                 gender_id, marital_status_id, education_level_id, specialty, skin_color_id,
                 profession_or_trade, address, province, municipality, phone, email,
@@ -247,7 +247,7 @@ BEGIN
         -- El salario contractual migrado es el salario REAL del contrato:
         -- nunca se recalcula con la escala salarial actual.
         INSERT INTO public.employment_contracts (
-            tenant_id, organization_entity_id, worker_id, assignment_id,
+            company_client_id, organization_entity_id, worker_id, assignment_id,
             contract_type_id, start_date, end_date, is_current,
             salary_group_id, salary_scale_id, salary_amount, salary_currency_code,
             salary_effective_date, salary_captured_at, salary_snapshot_status,
@@ -302,7 +302,7 @@ BEGIN
         END IF;
 
         INSERT INTO public.worker_vacation_movements (
-            tenant_id, organization_entity_id, worker_id,
+            company_client_id, organization_entity_id, worker_id,
             movement_type, amount, calculated_amount, effective_date,
             description, created_by
         ) VALUES (
@@ -379,7 +379,7 @@ BEGIN
         RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
     END IF;
 
-    SELECT tenant_id INTO v_tenant_id
+    SELECT company_client_id INTO v_tenant_id
     FROM public.organization_entities WHERE id = p_entity_id AND is_active = true;
     IF v_tenant_id IS NULL THEN
         RAISE EXCEPTION 'La entidad no existe o no está activa';
