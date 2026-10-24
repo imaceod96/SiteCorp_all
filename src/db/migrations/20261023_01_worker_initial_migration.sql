@@ -174,12 +174,15 @@ BEGIN
     END IF;
 
     -- Licencias de conducción (catálogo global; reutiliza la tabla existente)
+    -- CORRECCIÓN: driving_license_categories.id es text. Se compara en text
+    -- (d.id = btrim(c)) y se inserta d.id; se conserva la validación contra el
+    -- catálogo y el descarte silencioso de categorías inexistentes.
     IF jsonb_typeof(p_row -> 'driving_license_category_ids') = 'array' THEN
         INSERT INTO public.worker_driving_license_categories (worker_id, driving_license_category_id)
-        SELECT DISTINCT v_worker_id, c::uuid
+        SELECT DISTINCT v_worker_id, d.id
         FROM jsonb_array_elements_text(p_row -> 'driving_license_category_ids') AS c
+        JOIN public.driving_license_categories d ON d.id = btrim(c)
         WHERE NULLIF(btrim(c), '') IS NOT NULL
-          AND EXISTS (SELECT 1 FROM public.driving_license_categories d WHERE d.id = c::uuid)
         ON CONFLICT DO NOTHING;
     END IF;
 
