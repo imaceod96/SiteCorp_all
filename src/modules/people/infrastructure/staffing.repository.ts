@@ -36,6 +36,7 @@ interface RawJobRow {
     | { id: string; salary_scale_id: string; sequence_number: number }[]
     | { id: string; salary_scale_id: string; sequence_number: number }
     | null
+  occupational_category: { id: string | null; name: string | null; code: string | null }[] | { id: string | null; name: string | null; code: string | null } | null
 }
 
 interface RawPositionRow {
@@ -60,6 +61,7 @@ const firstOrSelf = <T>(value: T[] | T | null): T | null =>
 const toStaffingPosition = (row: RawPositionRow): StaffingPosition => {
   const job = firstOrSelf(row.job)
   const area = job ? firstOrSelf(job.area) : null
+  const occupationalCategory = job ? firstOrSelf(job.occupational_category) : null
   return {
     id: row.id,
     name: row.name,
@@ -80,6 +82,9 @@ const toStaffingPosition = (row: RawPositionRow): StaffingPosition => {
           is_principal_specialist: job.is_principal_specialist,
           area: area ? { id: area.id ?? "", name: area.name ?? "" } : null,
           salary_group: firstOrSelf(job.salary_group),
+          occupational_category: occupationalCategory
+            ? { id: occupationalCategory.id ?? "", name: occupationalCategory.name ?? "", code: occupationalCategory.code ?? "" }
+            : null,
         }
       : null,
   }
@@ -90,7 +95,8 @@ const POSITION_COLUMNS = `id, name, code, is_active, authorized_quantity,
    job:organization_jobs(
      id, name, code, is_active, area_id, is_cuadro, is_principal_specialist,
      area:organization_areas(id, name),
-     salary_group:salary_groups(id, salary_scale_id, sequence_number)
+     salary_group:salary_groups(id, salary_scale_id, sequence_number),
+     occupational_category:occupational_categories(id, name, code)
    )`
 
 /** Puestos de la entidad con su cargo, área y grupo salarial. */
@@ -164,7 +170,8 @@ const STAFFING_WORKER_COLUMNS = `id, code, first_name, first_surname, second_sur
        job:organization_jobs(
          id, name, code, is_active, area_id,
          area:organization_areas(id, name),
-         salary_group:salary_groups(id, salary_scale_id, sequence_number)
+         salary_group:salary_groups(id, salary_scale_id, sequence_number),
+         occupational_category:occupational_categories(id, name, code)
        )
      )
    )`

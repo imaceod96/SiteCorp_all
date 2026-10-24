@@ -37,6 +37,7 @@ import {
 } from "@/modules/people/application/hiring.commands"
 import { loadHiringWorkspace } from "@/modules/people/application/staffing.queries"
 import {
+  isDirectorJob,
   isSpecialDocumentRole,
   requiresResolution,
   validateHireInput,
@@ -284,14 +285,15 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     !!selectedCandidate?.worker && selectedCandidate.worker.employment_status !== "active"
 
   const selectedGroup = selected?.job?.salary_group || null
-  const selectedSalary = salaryForGroup(applicableScaleId, selectedGroup, salaryValuesByGroup)
-  /**
-     * §44: si el Cargo destino es Especialista Principal, el documento es una
-     * RESOLUCIÓN (nunca un contrato). El comportamiento de Cuadro NO se modifica.
-     */
-    const isPrincipalSpecialist = requiresResolution(selected?.job)
-    const isCuadro = selected?.job?.category === 'CUADRO'
-    const selectedType = contractTypes.find((t) => t.id === contractTypeId) || null
+    const selectedSalary = salaryForGroup(applicableScaleId, selectedGroup, salaryValuesByGroup)
+    /**
+       * §44: si el Cargo destino es Especialista Principal, el documento es una
+       * RESOLUCIÓN (nunca un contrato). El comportamiento de Cuadro NO se modifica.
+       */
+      const isPrincipalSpecialist = requiresResolution(selected?.job)
+          const isCuadro = selected?.job?.is_cuadro === true
+          const isDirector = isDirectorJob(selected?.job)
+          const selectedType = contractTypes.find((t) => t.id === contractTypeId) || null
   const isDetermined = selectedType?.code === "DETERMINADO"
   const vacancies = selected
     ? Math.max(0, (selected.authorized_quantity || 0) - (occupancy[selected.id] || 0))
@@ -399,36 +401,37 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     setError(null)
 
     const specialDocumentRole = isSpecialDocumentRole(selected?.job)
-    const isPrincipalSpecialist = requiresResolution(selected?.job)
-    const isCuadro = selected?.job?.category === 'CUADRO'
+            const isPrincipalSpecialist = requiresResolution(selected?.job)
+            const isCuadro = selected?.job?.is_cuadro === true
+            const isDirector = isDirectorJob(selected?.job)
 
     // Reglas del dominio: persona, puesto, fecha, vigencia del contrato, condiciones
     // formalizadas, preparación contractual, plantilla documental y representante.
     const invalid = validateHireInput({
-      hasCandidate: !!selectedCandidate,
-      positionId,
-      hireDate,
-      resolutionDocument: isPrincipalSpecialist,
-      skipsContractTerms: isCuadro,
-      contractTypeId: isCuadro ? null : contractTypeId,
-      signatureDate: isCuadro ? null : signatureDate,
-      formalization: {
-        representativeAssignmentId: isCuadro ? null : representativeAssignmentId,
-        signatureDate: isCuadro ? null : signatureDate,
-        signaturePlace: isCuadro ? null : signaturePlace,
-        paymentMethodId: isCuadro ? null : paymentMethodId,
-        paymentScheduleText: isCuadro ? null : paymentSchedule,
-        hasInvalidComponents: isCuadro ? false : hasInvalidComponent(components),
-        blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
-      },
-      readiness,
-      templateBlockedMessage: templateBlocked
-        ? missingContractTemplateMessage(selectedType?.name || null)
-        : null,
-      isDetermined: isCuadro ? false : isDetermined,
-      contractStartDate: isCuadro ? null : contractStartDate,
-      contractEndDate: isCuadro ? null : contractEndDate,
-    })
+          hasCandidate: !!selectedCandidate,
+          positionId,
+          hireDate,
+          resolutionDocument: isPrincipalSpecialist,
+          skipsContractTerms: isCuadro || isDirector,
+          contractTypeId: isCuadro || isDirector ? null : contractTypeId,
+          signatureDate: isCuadro || isDirector ? null : signatureDate,
+          formalization: {
+            representativeAssignmentId: isCuadro || isDirector ? null : representativeAssignmentId,
+            signatureDate: isCuadro || isDirector ? null : signatureDate,
+            signaturePlace: isCuadro || isDirector ? null : signaturePlace,
+            paymentMethodId: isCuadro || isDirector ? null : paymentMethodId,
+            paymentScheduleText: isCuadro || isDirector ? null : paymentSchedule,
+            hasInvalidComponents: isCuadro || isDirector ? false : hasInvalidComponent(components),
+            blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
+          },
+          readiness,
+          templateBlockedMessage: templateBlocked
+            ? missingContractTemplateMessage(selectedType?.name || null)
+            : null,
+          isDetermined: isCuadro || isDirector ? false : isDetermined,
+          contractStartDate: isCuadro || isDirector ? null : contractStartDate,
+          contractEndDate: isCuadro || isDirector ? null : contractEndDate,
+        })
     if (invalid) {
       setError(invalid)
       return
@@ -542,12 +545,18 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       }
 
       if (specialDocumentRole) {
-        showSuccess(
-          isReincorporation
-            ? "Reincorporación completada. Este cargo no genera contrato (Cuadro/Especialista Principal)."
-            : "Contratación completada. Este cargo no genera contrato (Cuadro/Especialista Principal)."
-        )
-      } else {
+              showSuccess(
+                isReincorporation
+                  ? "Reincorporación completada. Este cargo no genera contrato (Cuadro/Especialista Principal)."
+                  : "Contratación completada. Este cargo no genera contrato (Cuadro/Especialista Principal)."
+              )
+            } else if (isDirector) {
+              showSuccess(
+                isReincorporation
+                  ? "Reincorporación completada. Director (Cuadro Directivo): movimiento de nómina registrado."
+                  : "Contratación completada. Director (Cuadro Directivo): movimiento de nómina registrado."
+              )
+            } else {
         showSuccess(
           isReincorporation
             ? "Reincorporación completada correctamente. El contrato y su documento fueron generados."
@@ -895,30 +904,40 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
         )}
 
         {/* ---------- Cuadro: Solo fecha de incorporación (no se pide más) ---------- */}
-        {isCuadro && !isPrincipalSpecialist && (
-          <div className="rounded-xl border border-border bg-muted/30 p-4">
-            <p className="text-sm text-muted-foreground">
-              Para cargos de Cuadro, la fecha de incorporación y la de inicio de contrato son la
-              misma. No se genera contrato, solo movimiento de nómina.
-            </p>
-          </div>
-        )}
+        {(isCuadro || isDirector) && !isPrincipalSpecialist && (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4">
+                    <p className="text-sm text-muted-foreground">
+                      {isDirector
+                        ? "Director (Cuadro Directivo): la fecha de incorporación es la única requerida. No se genera contrato, solo movimiento de nómina."
+                        : "Para cargos de Cuadro, la fecha de incorporación y la de inicio de contrato son la misma. No se genera contrato, solo movimiento de nómina."}
+                    </p>
+                  </div>
+                )}
 
         {/* ---------- Otros cargos: Campos de contrato ---------- */}
-        {!isPrincipalSpecialist && !isCuadro && (
+        {!isPrincipalSpecialist && !isCuadro && !isDirector && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Tipo de contrato *</Label>
-                <SiteCorpSelect value={contractTypeId} onValueChange={setContractTypeId}>
-                  <option value="">Seleccionar tipo</option>
-                  {contractTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </SiteCorpSelect>
-              </div>
+                          <div className="space-y-2">
+                            <Label>Tipo de contrato *</Label>
+                            <SiteCorpSelect
+                              value={contractTypeId}
+                              onValueChange={setContractTypeId}
+                              disabled={isDirector}
+                            >
+                              <option value="">Seleccionar tipo</option>
+                              {contractTypes.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}
+                                </option>
+                              ))}
+                            </SiteCorpSelect>
+                            {isDirector && (
+                              <p className="text-xs text-muted-foreground">
+                                Director (Cuadro Directivo): no se requiere tipo de contrato
+                              </p>
+                            )}
+                          </div>
               <div className="space-y-2">
                 <Label>Inicio del contrato *</Label>
                 <SiteCorpInput
@@ -1072,28 +1091,30 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
             Cancelar
           </SiteCorpButton>
           <SiteCorpButton
-            type="button"
-            onClick={handleSubmit}
-            disabled={
-              submitting ||
-              loading ||
-              !selectedCandidate ||
-              !positionId ||
-              !hasVacancy ||
-              (isPrincipalSpecialist
-                ? !resolutionValues || !resolutionValues.valid
-                : !contractTypeId ||
-                  !signatureDate ||
-                  !signaturePlace.trim() ||
-                  !paymentMethodId ||
-                  hasInvalidComponent(components) ||
-                  formalizationBlocked ||
-                  !representativeAssignmentId ||
-                  templateBlocked ||
-                  (!!contractTypeId && !!signatureDate && templateChecking) ||
-                  (!!readiness && !readiness.ready))
-            }
-          >
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={
+                        submitting ||
+                        loading ||
+                        !selectedCandidate ||
+                        !positionId ||
+                        !hasVacancy ||
+                        (isPrincipalSpecialist
+                          ? !resolutionValues || !resolutionValues.valid
+                          : isCuadro || isDirector
+                            ? false
+                            : !contractTypeId ||
+                              !signatureDate ||
+                              !signaturePlace.trim() ||
+                              !paymentMethodId ||
+                              hasInvalidComponent(components) ||
+                              formalizationBlocked ||
+                              !representativeAssignmentId ||
+                              templateBlocked ||
+                              (!!contractTypeId && !!signatureDate && templateChecking) ||
+                              (!!readiness && !readiness.ready))
+                      }
+                    >
             <UserPlus className="mr-2 h-4 w-4" />
             {processStage
               ? processStage

@@ -263,6 +263,7 @@ export interface PositionJobRef {
   is_principal_specialist?: boolean
   area: { id: string; name: string } | null
   salary_group: SalaryGroupRef | null
+  occupational_category: { id: string; name: string; code: string } | null
 }
 
 /**

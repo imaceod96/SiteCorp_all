@@ -373,6 +373,13 @@ export const requiresResolution = (job: JobDocumentRole | null | undefined): boo
 export const isSpecialDocumentRole = (job: JobDocumentRole | null | undefined): boolean =>
   job?.is_cuadro === true || job?.is_principal_specialist === true
 
+/** Identificador del cargo de Director (categoría ocupacional "Cuadro Directivo"). */
+export const DIRECTOR_CATEGORY_CODE = "CUADRO_DIRECTIVO"
+
+/** ¿El cargo es Director (Cuadro Directivo)? */
+export const isDirectorJob = (job: { occupational_category?: { code?: string | null } | null } | null | undefined): boolean =>
+  job?.occupational_category?.code === DIRECTOR_CATEGORY_CODE
+
 // ---------------------------------------------------------------------------
 // Preparación contractual: etiquetas y mensaje humano
 // ---------------------------------------------------------------------------
