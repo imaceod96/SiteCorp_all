@@ -422,12 +422,12 @@ BEGIN
                 v_seen := v_seen || jsonb_build_object(v_ident, true);
             END IF;
             -- Duplicado contra trabajadores activos existentes
-            IF EXISTS (
-                SELECT 1 FROM public.workers w
-                WHERE w.tenant_id = v_tenant_id
-                  AND w.identification = v_ident
-                  AND w.employment_status = 'active'
-            ) THEN
+                        IF EXISTS (
+                            SELECT 1 FROM public.workers w
+                            WHERE w.company_client_id = v_tenant_id
+                              AND w.identification = v_ident
+                              AND w.employment_status = 'active'
+                        ) THEN
                 v_status := 'ERROR';
                 v_messages := v_messages || format('Ya existe un trabajador activo con el carné de identidad %s', v_ident);
             END IF;
