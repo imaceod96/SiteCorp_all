@@ -89,6 +89,17 @@ export async function canManageSalary(entityId?: string): Promise<boolean> {
   return false
 }
 
+/**
+ * Verifica si el usuario puede CREAR una escala empresarial para una entidad específica.
+ *
+ * A diferencia de `canManageSalary`, esta función NO acepta permisos de plataforma:
+ * la política RLS `can_create_salary_scale` rechaza explícitamente a los superadmins
+ * de plataforma y requiere permiso organizativo `salary.manage` en la entidad.
+ */
+export async function canCreateEntityEmpresarialScale(entityId: string): Promise<boolean> {
+  return loadEntityPermission(entityId, "salary.manage")
+}
+
 /** Gestionar la escala presupuestada global es un permiso de plataforma. */
 export async function canManageGlobalSalary(): Promise<boolean> {
   return loadPlatformPermission("salary.manage")

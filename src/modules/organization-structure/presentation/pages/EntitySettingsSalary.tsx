@@ -37,21 +37,24 @@ const EntitySettingsSalary = () => {
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
   const {
-    fetchEntityEmpresarialScale,
-    fetchScaleWithGroups,
-    addSalaryGroup,
-    addSalaryValue,
-    fetchGlobalPresupuestadaScale,
-    createEntityEmpresarialScale,
-    canManageSalary,
-    fetchSalaryHistory
-  } = useSalary()
+      fetchEntityEmpresarialScale,
+      fetchScaleWithGroups,
+      addSalaryGroup,
+      addSalaryValue,
+      fetchGlobalPresupuestadaScale,
+      createEntityEmpresarialScale,
+      canManageSalary,
+      canCreateEntityEmpresarialScale,
+      canManageEntityEmpresarialSalary,
+      fetchSalaryHistory
+    } = useSalary()
   const [scale, setScale] = React.useState<SalaryScale | null>(null)
   const [groups, setGroups] = React.useState<SalaryGroupRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [showAddGroup, setShowAddGroup] = React.useState(false)
   const [canManageEntitySalary, setCanManageEntitySalary] = React.useState(false)
+  const [canCreateEntityScale, setCanCreateEntityScale] = React.useState(false)
   // Cambio salarial en revisión (Fase 11A): nunca se guarda directamente.
   const [changeGroup, setChangeGroup] = React.useState<SalaryGroupRow | null>(null)
   const [globalScale, setGlobalScale] = React.useState<SalaryScale | null>(null)
@@ -69,68 +72,69 @@ const EntitySettingsSalary = () => {
   const [historyLoading, setHistoryLoading] = React.useState(false)
 
   const currentEntityId = currentEntity?.id
-  const currentEntityRegimeId = currentEntity?.regime_id
-
-  const loadScale = React.useCallback(async () => {
-      if (!currentEntityId) return
-      try {
-        setLoading(true)
-        setError(null)
+    const currentEntityRegimeId = currentEntity?.regime_id
   
-        // PRESUPUESTADA: la escala global se muestra SIEMPRE en solo lectura dentro del
-        // contexto de la entidad; su administración vive en la pantalla de plataforma.
-        if (currentEntityRegimeId === "PRESUPUESTADA") {
-  
-          // Load global Presupuestada scale
-          const globalScaleData = await fetchGlobalPresupuestadaScale()
-          setGlobalScale(globalScaleData)
-  
-          if (globalScaleData) {
-            const scaleWithGroups = await fetchScaleWithGroups(globalScaleData.id)
-            if (scaleWithGroups) {
-              const mappedGroups: SalaryGroupRow[] = scaleWithGroups.groups.map((g) => ({
-                id: g.group.id,
-                sequence_number: g.group.sequence_number,
-                description: g.group.description,
-                is_active: g.group.is_active,
-                current_value: g.current_value,
-                roman_numeral: g.roman_numeral,
-              }))
-              setGroups(mappedGroups)
-              setScale(globalScaleData)
-            }
-          }
-        } else {
-          // EMPRESARIAL: Load entity-specific scale ONLY
-          const canManageEntity = await canManageSalary(currentEntityId)
-          setCanManageEntitySalary(canManageEntity)
-
-          const scaleData = await fetchEntityEmpresarialScale(currentEntityId)
-          if (scaleData) {
-            setScale(scaleData)
-            const scaleWithGroups = await fetchScaleWithGroups(scaleData.id)
-            if (scaleWithGroups) {
-              const mappedGroups: SalaryGroupRow[] = scaleWithGroups.groups.map((g) => ({
-                id: g.group.id,
-                sequence_number: g.group.sequence_number,
-                description: g.group.description,
-                is_active: g.group.is_active,
-                current_value: g.current_value,
-                roman_numeral: g.roman_numeral,
-              }))
-              setGroups(mappedGroups)
+    const loadScale = React.useCallback(async () => {
+        if (!currentEntityId) return
+        try {
+          setLoading(true)
+          setError(null)
+         
+          // PRESUPUESTADA: la escala global se muestra SIEMPRE en solo lectura dentro del
+          // contexto de la entidad; su administración vive en la pantalla de plataforma.
+          if (currentEntityRegimeId === "PRESUPUESTADA") {
+           
+            // Load global Presupuestada scale
+            const globalScaleData = await fetchGlobalPresupuestadaScale()
+            setGlobalScale(globalScaleData)
+           
+            if (globalScaleData) {
+              const scaleWithGroups = await fetchScaleWithGroups(globalScaleData.id)
+              if (scaleWithGroups) {
+                const mappedGroups: SalaryGroupRow[] = scaleWithGroups.groups.map((g) => ({
+                  id: g.group.id,
+                  sequence_number: g.group.sequence_number,
+                  description: g.group.description,
+                  is_active: g.group.is_active,
+                  current_value: g.current_value,
+                  roman_numeral: g.roman_numeral,
+                }))
+                setGroups(mappedGroups)
+                setScale(globalScaleData)
+              }
             }
           } else {
-            setScale(null)
-            setGroups([])
+            // EMPRESARIAL: Load entity-specific scale ONLY
+            // Usamos canCreateEntityEmpresarialScale para verificar permiso de CREACIÓN (no acepta permisos de plataforma)
+            const canCreate = await canCreateEntityEmpresarialScale(currentEntityId)
+            setCanManageEntitySalary(canCreate)
+           
+            const scaleData = await fetchEntityEmpresarialScale(currentEntityId)
+            if (scaleData) {
+              setScale(scaleData)
+              const scaleWithGroups = await fetchScaleWithGroups(scaleData.id)
+              if (scaleWithGroups) {
+                const mappedGroups: SalaryGroupRow[] = scaleWithGroups.groups.map((g) => ({
+                  id: g.group.id,
+                  sequence_number: g.group.sequence_number,
+                  description: g.group.description,
+                  is_active: g.group.is_active,
+                  current_value: g.current_value,
+                  roman_numeral: g.roman_numeral,
+                }))
+                setGroups(mappedGroups)
+              }
+            } else {
+              setScale(null)
+              setGroups([])
+            }
           }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Error al cargar la escala salarial")
+        } finally {
+          setLoading(false)
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al cargar la escala salarial")
-      } finally {
-        setLoading(false)
-      }
-    }, [currentEntityId, currentEntityRegimeId, fetchEntityEmpresarialScale, fetchScaleWithGroups, fetchGlobalPresupuestadaScale, canManageSalary])
+      }, [currentEntityId, currentEntityRegimeId, fetchEntityEmpresarialScale, fetchScaleWithGroups, fetchGlobalPresupuestadaScale, canCreateEntityEmpresarialScale])
 
   React.useEffect(() => {
     loadScale()

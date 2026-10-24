@@ -125,6 +125,7 @@ export {
   canManageGlobalSalary,
   canManageSalary,
   canViewSalary,
+  canCreateEntityEmpresarialScale,
   loadCurrentSalaryGroupValue,
   loadEntityEmpresarialScale,
   loadGlobalPresupuestadaScale,

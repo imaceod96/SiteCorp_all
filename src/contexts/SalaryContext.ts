@@ -32,6 +32,13 @@ interface SalaryContextType {
   createGlobalPresupuestadaScale: (name: string, currencyCode: string, effectiveFrom: string) => Promise<SalaryScale | null>
   createEntityEmpresarialScale: (entityId: string, name: string, currencyCode: string, effectiveFrom: string) => Promise<SalaryScale | null>
 
+  // Permissions
+  canViewSalary: (entityId?: string) => Promise<boolean>
+  canManageSalary: (entityId?: string) => Promise<boolean>
+  canManageGlobalSalary: () => Promise<boolean>
+  canCreateEntityEmpresarialScale: (entityId: string) => Promise<boolean>
+  canManageEntityEmpresarialSalary: (entityId: string) => Promise<boolean>
+
   // Group operations
   addSalaryGroup: (scaleId: string, description?: string) => Promise<SalaryGroup | null>
   updateSalaryGroup: (groupId: string, updates: Partial<SalaryGroup>) => Promise<SalaryGroup | null>

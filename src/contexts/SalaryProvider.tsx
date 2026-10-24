@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   addSalaryGroupValue,
   addSalaryGroup as addSalaryGroupCommand,
+  canCreateEntityEmpresarialScale as canCreateEntityEmpresarialScaleQuery,
   canManageGlobalSalary as canManageGlobalSalaryQuery,
   canManageSalary as canManageSalaryQuery,
   canViewSalary as canViewSalaryQuery,
@@ -225,6 +226,26 @@ export const SalaryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [user])
 
+  const canCreateEntityEmpresarialScale = React.useCallback(async (entityId: string): Promise<boolean> => {
+    if (!user) return false
+    try {
+      return await canCreateEntityEmpresarialScaleQuery(entityId)
+    } catch (err) {
+      console.error('[SalaryContext] Error checking entity empresarial scale create permission:', err)
+      return false
+    }
+  }, [user])
+
+  const canManageEntityEmpresarialSalary = React.useCallback(async (entityId: string): Promise<boolean> => {
+    if (!user) return false
+    try {
+      return await canManageSalaryQuery(entityId)
+    } catch (err) {
+      console.error('[SalaryContext] Error checking entity empresarial salary manage permission:', err)
+      return false
+    }
+  }, [user])
+
   return (
     <SalaryContext.Provider value={{
           resolveScaleForEntity,
@@ -242,7 +263,9 @@ export const SalaryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           resolveSalaryValue,
           canViewSalary,
           canManageSalary,
-          canManageGlobalSalary
+          canManageGlobalSalary,
+          canCreateEntityEmpresarialScale,
+          canManageEntityEmpresarialSalary
         }}>
       {children}
     </SalaryContext.Provider>
