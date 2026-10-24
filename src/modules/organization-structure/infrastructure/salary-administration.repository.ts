@@ -92,12 +92,12 @@ export async function insertEntityEmpresarialScale(
   name: string,
   currencyCode: string
 ): Promise<SalaryScale> {
-  const { data: superAdminCheck, error: superAdminError } =
-    await supabase.rpc("is_platform_superadmin")
+  const { data: newCheck, error: newError } =
+    await supabase.rpc("is_salary_superadmin")
 
-  console.log("[SalaryRepository] SuperAdmin RLS check:", {
-    result: superAdminCheck,
-    error: superAdminError,
+  console.log("[SalaryRepository] is_salary_superadmin:", {
+    result: newCheck,
+    error: newError,
   })
 
   const { data, error } = await supabase
