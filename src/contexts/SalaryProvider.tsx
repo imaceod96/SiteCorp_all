@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import {
   addSalaryGroupValue,
   addSalaryGroup as addSalaryGroupCommand,
@@ -96,15 +97,24 @@ export const SalaryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [user])
 
   const createEntityEmpresarialScale = React.useCallback(async (entityId: string, name: string, currencyCode: string, effectiveFrom: string): Promise<SalaryScale | null> => {
-    if (!user) return null
-    void effectiveFrom
-    try {
-      return await createEntityEmpresarialScaleCommand(entityId, name, currencyCode)
-    } catch (err) {
-      console.error('[SalaryContext] Error creating entity empresarial scale:', err)
-      throw err
-    }
-  }, [user])
+      if (!user) return null
+      void effectiveFrom
+  
+      // Verificar que existe una sesión autenticada de Supabase antes del INSERT
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) {
+        const err = new Error('No hay una sesión autenticada de Supabase disponible para crear la escala empresarial.')
+        console.error('[SalaryContext] Error creating entity empresarial scale:', err)
+        throw err
+      }
+  
+      try {
+        return await createEntityEmpresarialScaleCommand(entityId, name, currencyCode)
+      } catch (err) {
+        console.error('[SalaryContext] Error creating entity empresarial scale:', err)
+        throw err
+      }
+    }, [user])
 
   const addSalaryGroup = React.useCallback(async (scaleId: string, description?: string): Promise<SalaryGroup | null> => {
     if (!user) return null
