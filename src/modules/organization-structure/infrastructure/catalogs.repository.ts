@@ -39,7 +39,7 @@ export async function fetchOccupationalCategories(options?: {
 export async function fetchEntityRegimes(): Promise<EntityRegime[]> {
   const { data, error } = await supabase
     .from("entity_regimes")
-    .select("code, name")
+    .select("id, name")
     .order("name")
   if (error) throw error
   return (data as EntityRegime[]) || []

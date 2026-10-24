@@ -360,10 +360,10 @@ export const OrganizationEntityDialog = ({
               >
                 {loadingRegimes && <option value="">Cargando regímenes…</option>}
                 {regimeOptions.map((regime) => (
-                  <option key={regime.code} value={regime.code}>
-                    {regime.name}
-                  </option>
-                ))}
+                                  <option key={regime.id} value={regime.id}>
+                                    {regime.name}
+                                  </option>
+                                ))}
               </SiteCorpSelect>
               {regimeLoadError && (
                 <p className="text-xs text-sitecorp-warning">{regimeLoadError}</p>

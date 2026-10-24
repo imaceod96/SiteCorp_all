@@ -26,12 +26,12 @@ export interface PreparationLevel {
 /**
  * Régimen de entidad global (Presupuestada / Empresarial).
  *
- * `code` es el identificador canónico y estable: es el que se guarda en
+ * `id` es el identificador canónico y estable: es el que se guarda en
  * `organization_entities.regime_id` y el que comparan las RPC. `name` es la etiqueta
  * visible. El catálogo vive en la tabla `entity_regimes`: la UI nunca incrusta la lista.
  */
 export interface EntityRegime {
-  code: string
+  id: string
   name: string
 }
 
