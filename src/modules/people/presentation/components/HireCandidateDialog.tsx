@@ -28,6 +28,7 @@ import { RepresentativeSelect } from "@/modules/representatives/presentation/com
 import ResolutionForm, {
   type ResolutionFormValues,
 } from "@/modules/resolutions/presentation/components/ResolutionForm"
+import { ResolutionSummary } from "@/modules/resolutions/presentation/components/ResolutionSummary"
 import { updateJobWorkContent } from "@/modules/resolutions"
 import { checkHiringReadiness } from "@/modules/people/application/contract-readiness.queries"
 import {
@@ -76,6 +77,9 @@ import {
   type ContractFormalizationPending,
   type PaymentMethodOption,
 } from "@/modules/contracts"
+import {
+  fetchEntityContractData,
+} from "@/modules/representatives"
 
 export interface HireCandidateTarget {
   id: string
@@ -140,8 +144,9 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
   const [contractStartDate, setContractStartDate] = React.useState("")
   const [contractEndDate, setContractEndDate] = React.useState("")
   const [notes, setNotes] = React.useState("")
-  // Fase 11A.5: condiciones formalizadas en el contrato
-  const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethodOption[]>([])
+    const [entityMunicipality, setEntityMunicipality] = React.useState<string>("")
+    // Fase 11A.5: condiciones formalizadas en el contrato
+    const [paymentMethods, setPaymentMethods] = React.useState<PaymentMethodOption[]>([])
   const [signatureDate, setSignatureDate] = React.useState("")
   const [signaturePlace, setSignaturePlace] = React.useState("")
   const [paymentMethodId, setPaymentMethodId] = React.useState("")
@@ -197,6 +202,10 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
         .map((p) => p.job?.salary_group?.id)
         .filter((id): id is string => !!id)
       setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
+
+      // Fase 11A.5: municipio de la entidad para auto-poblar el lugar de firma
+      const contractData = await fetchEntityContractData(entityId)
+      setEntityMunicipality(contractData?.municipality || "")
     } catch (err) {
       console.error("Error loading hiring data:", err)
       setLoadError("No se pudieron cargar los datos para la contratación.")
@@ -277,11 +286,12 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
   const selectedGroup = selected?.job?.salary_group || null
   const selectedSalary = salaryForGroup(applicableScaleId, selectedGroup, salaryValuesByGroup)
   /**
-   * §44: si el Cargo destino es Especialista Principal, el documento es una
-   * RESOLUCIÓN (nunca un contrato). El comportamiento de Cuadro NO se modifica.
-   */
-  const isPrincipalSpecialist = requiresResolution(selected?.job)
-  const selectedType = contractTypes.find((t) => t.id === contractTypeId) || null
+     * §44: si el Cargo destino es Especialista Principal, el documento es una
+     * RESOLUCIÓN (nunca un contrato). El comportamiento de Cuadro NO se modifica.
+     */
+    const isPrincipalSpecialist = requiresResolution(selected?.job)
+    const isCuadro = selected?.job?.category === 'CUADRO'
+    const selectedType = contractTypes.find((t) => t.id === contractTypeId) || null
   const isDetermined = selectedType?.code === "DETERMINADO"
   const vacancies = selected
     ? Math.max(0, (selected.authorized_quantity || 0) - (occupancy[selected.id] || 0))
@@ -389,6 +399,8 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     setError(null)
 
     const specialDocumentRole = isSpecialDocumentRole(selected?.job)
+    const isPrincipalSpecialist = requiresResolution(selected?.job)
+    const isCuadro = selected?.job?.category === 'CUADRO'
 
     // Reglas del dominio: persona, puesto, fecha, vigencia del contrato, condiciones
     // formalizadas, preparación contractual, plantilla documental y representante.
@@ -397,25 +409,25 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       positionId,
       hireDate,
       resolutionDocument: isPrincipalSpecialist,
-      skipsContractTerms: specialDocumentRole,
-      contractTypeId,
-      signatureDate,
+      skipsContractTerms: isCuadro,
+      contractTypeId: isCuadro ? null : contractTypeId,
+      signatureDate: isCuadro ? null : signatureDate,
       formalization: {
-        representativeAssignmentId,
-        signatureDate,
-        signaturePlace,
-        paymentMethodId,
-        paymentScheduleText: paymentSchedule,
-        hasInvalidComponents: hasInvalidComponent(components),
+        representativeAssignmentId: isCuadro ? null : representativeAssignmentId,
+        signatureDate: isCuadro ? null : signatureDate,
+        signaturePlace: isCuadro ? null : signaturePlace,
+        paymentMethodId: isCuadro ? null : paymentMethodId,
+        paymentScheduleText: isCuadro ? null : paymentSchedule,
+        hasInvalidComponents: isCuadro ? false : hasInvalidComponent(components),
         blocking: (pending || EMPTY_FORMALIZATION_PENDING).blocking,
       },
       readiness,
       templateBlockedMessage: templateBlocked
         ? missingContractTemplateMessage(selectedType?.name || null)
         : null,
-      isDetermined,
-      contractStartDate,
-      contractEndDate,
+      isDetermined: isCuadro ? false : isDetermined,
+      contractStartDate: isCuadro ? null : contractStartDate,
+      contractEndDate: isCuadro ? null : contractEndDate,
     })
     if (invalid) {
       setError(invalid)
@@ -843,35 +855,32 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
         )}
 
         {/* ---------- Contrato ---------- */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>
-              {isReincorporation ? "Fecha de reincorporación *" : "Fecha de incorporación *"}
-            </Label>
-            <SiteCorpInput
-              type="date"
-              value={hireDate}
-              onChange={(e) => {
-                setHireDate(e.target.value)
-                if (!contractStartDate) setContractStartDate(e.target.value)
-              }}
-            />
-          </div>
-          {!isPrincipalSpecialist && (
-            <div className="space-y-2">
-              <Label>Tipo de contrato *</Label>
-              <SiteCorpSelect value={contractTypeId} onValueChange={setContractTypeId}>
-                <option value="">Seleccionar tipo</option>
-                {contractTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </SiteCorpSelect>
-            </div>
-          )}
+        {/* ---------- Movimiento de Nómina (automático para todos) ---------- */}
+        <div className="rounded-xl border border-border bg-muted/30 p-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Movimiento de Nómina
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Se generará automáticamente para este cargo.
+          </p>
         </div>
 
+        {/* ---------- Fecha de incorporación (todos) ---------- */}
+        <div className="space-y-2">
+          <Label>
+            {isReincorporation ? "Fecha de reincorporación *" : "Fecha de incorporación *"}
+          </Label>
+          <SiteCorpInput
+            type="date"
+            value={hireDate}
+            onChange={(e) => {
+              setHireDate(e.target.value)
+              if (!contractStartDate) setContractStartDate(e.target.value)
+            }}
+          />
+        </div>
+
+        {/* ---------- Especialista Principal: Formulario de Resolución ---------- */}
         {isPrincipalSpecialist && (
           <ResolutionForm
             key={`${positionId}-${hireDate}`}
@@ -885,120 +894,165 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
           />
         )}
 
-        {!isPrincipalSpecialist && (
-        <>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Inicio del contrato *</Label>
-            <SiteCorpInput
-              type="date"
-              value={contractStartDate || hireDate}
-              onChange={(e) => setContractStartDate(e.target.value)}
-            />
+        {/* ---------- Cuadro: Solo fecha de incorporación (no se pide más) ---------- */}
+        {isCuadro && !isPrincipalSpecialist && (
+          <div className="rounded-xl border border-border bg-muted/30 p-4">
+            <p className="text-sm text-muted-foreground">
+              Para cargos de Cuadro, la fecha de incorporación y la de inicio de contrato son la
+              misma. No se genera contrato, solo movimiento de nómina.
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label>Final del contrato{isDetermined ? " *" : ""}</Label>
-            <SiteCorpInput
-              type="date"
-              value={contractEndDate}
-              onChange={(e) => setContractEndDate(e.target.value)}
-              disabled={!isDetermined}
-              min={contractStartDate || hireDate || undefined}
+        )}
+
+        {/* ---------- Otros cargos: Campos de contrato ---------- */}
+        {!isPrincipalSpecialist && !isCuadro && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Tipo de contrato *</Label>
+                <SiteCorpSelect value={contractTypeId} onValueChange={setContractTypeId}>
+                  <option value="">Seleccionar tipo</option>
+                  {contractTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </SiteCorpSelect>
+              </div>
+              <div className="space-y-2">
+                <Label>Inicio del contrato *</Label>
+                <SiteCorpInput
+                  type="date"
+                  value={contractStartDate || hireDate}
+                  onChange={(e) => setContractStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Final del contrato{isDetermined ? " *" : ""}</Label>
+                <SiteCorpInput
+                  type="date"
+                  value={contractEndDate}
+                  onChange={(e) => setContractEndDate(e.target.value)}
+                  disabled={!isDetermined}
+                  min={contractStartDate || hireDate || undefined}
+                />
+                {!isDetermined && (
+                  <p className="text-xs text-muted-foreground">
+                    La modalidad de tiempo indeterminado no requiere fecha final.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* ---------- Contrato: firma, lugar, forma y momento de pago ---------- */}
+            <ContractSignatureFields
+              signatureDate={signatureDate}
+              onSignatureDateChange={setSignatureDate}
+              signaturePlace={signaturePlace}
+              onSignaturePlaceChange={setSignaturePlace}
+              paymentMethodId={paymentMethodId}
+              onPaymentMethodIdChange={setPaymentMethodId}
+              paymentMethods={paymentMethods}
+              paymentSchedule={paymentSchedule}
+              onPaymentScheduleChange={setPaymentSchedule}
+              defaultSignaturePlace={entityMunicipality}
             />
-            {!isDetermined && (
+
+            <ContractFormalizationAlerts
+              entityId={entityId}
+              positionId={positionId || null}
+              signatureDate={signatureDate || null}
+              signaturePlace={signaturePlace || null}
+              paymentMethodId={paymentMethodId || null}
+              representativeAssignmentId={representativeAssignmentId}
+              canManage={canManageOrganization}
+              onPendingChange={setPending}
+            />
+
+            {/* ---------- Representante (resuelto por la fecha de firma) ---------- */}
+            <RepresentativeSelect
+              entityId={entityId}
+              onDate={contractReferenceDate}
+              value={representativeAssignmentId}
+              onChange={setRepresentativeAssignmentId}
+              canManage={canManageOrganization}
+              label="Representante que suscribe el contrato *"
+              dateHint={`Representante vigente en la fecha de firma (${formatConditionDate(
+                signatureDate
+              )}). Los cambios posteriores de representante no modifican este contrato.`}
+              onOptionsChange={setRepresentatives}
+            />
+
+            {/* ---------- Condiciones retributivas ---------- */}
+            <ContractRetributionFields
+              components={components}
+              onComponentsChange={setComponents}
+              baseSalaryAmount={baseSalaryAmount}
+              baseSalaryCurrency={baseSalaryCurrency}
+              salaryGroupSequence={selectedGroup?.sequence_number ?? null}
+              disabled={!selected}
+            />
+
+            {/* ---------- Resumen ---------- */}
+            <ContractFormalizationSummary
+              workerName={selectedCandidate?.fullName || ""}
+              personIdentification={selectedCandidate?.identification || null}
+              positionName={selected?.name || ""}
+              jobName={selected?.job?.name || null}
+              areaName={selected?.job?.area?.name || null}
+              contractTypeName={selectedType?.name || null}
+              startDate={contractStartDate || hireDate}
+              endDate={isDetermined ? contractEndDate || null : null}
+              signatureDate={signatureDate}
+              signaturePlace={signaturePlace}
+              paymentMethodName={
+                paymentMethods.find((method) => method.id === paymentMethodId)?.name || null
+              }
+              representativeName={selectedRepresentative?.person_name || null}
+              representativeTitle={selectedRepresentative?.title || null}
+              baseSalaryAmount={baseSalaryAmount}
+              baseSalaryCurrency={baseSalaryCurrency}
+              salaryGroupSequence={selectedGroup?.sequence_number ?? null}
+              components={components}
+            />
+
+            <ContractReadinessChecklist readiness={readiness} loading={readinessLoading} />
+
+            {/* §16/§17: la plantilla documental se valida antes de contratar */}
+            {templateBlocked && selectedType && (
+              <SiteCorpAlert type="warning" title="Plantilla documental requerida">
+                <span className="whitespace-pre-line">
+                  {missingContractTemplateMessage(selectedType.name)}
+                </span>
+              </SiteCorpAlert>
+            )}
+            {templateChecking && !templateBlocked && (
               <p className="text-xs text-muted-foreground">
-                La modalidad de tiempo indeterminado no requiere fecha final.
+                Comprobando la plantilla documental…
               </p>
             )}
-          </div>
-        </div>
-
-        {/* ---------- Contrato: firma, lugar, forma y momento de pago ---------- */}
-        <ContractSignatureFields
-          signatureDate={signatureDate}
-          onSignatureDateChange={setSignatureDate}
-          signaturePlace={signaturePlace}
-          onSignaturePlaceChange={setSignaturePlace}
-          paymentMethodId={paymentMethodId}
-          onPaymentMethodIdChange={setPaymentMethodId}
-          paymentMethods={paymentMethods}
-          paymentSchedule={paymentSchedule}
-          onPaymentScheduleChange={setPaymentSchedule}
-        />
-
-        <ContractFormalizationAlerts
-          entityId={entityId}
-          positionId={positionId || null}
-          signatureDate={signatureDate || null}
-          signaturePlace={signaturePlace || null}
-          paymentMethodId={paymentMethodId || null}
-          representativeAssignmentId={representativeAssignmentId}
-          canManage={canManageOrganization}
-          onPendingChange={setPending}
-        />
-
-        {/* ---------- Representante (resuelto por la fecha de firma) ---------- */}
-        <RepresentativeSelect
-          entityId={entityId}
-          onDate={contractReferenceDate}
-          value={representativeAssignmentId}
-          onChange={setRepresentativeAssignmentId}
-          canManage={canManageOrganization}
-          label="Representante que suscribe el contrato *"
-          dateHint={`Representante vigente en la fecha de firma (${formatConditionDate(
-            signatureDate
-          )}). Los cambios posteriores de representante no modifican este contrato.`}
-          onOptionsChange={setRepresentatives}
-        />
-
-        {/* ---------- Condiciones retributivas ---------- */}
-        <ContractRetributionFields
-          components={components}
-          onComponentsChange={setComponents}
-          baseSalaryAmount={baseSalaryAmount}
-          baseSalaryCurrency={baseSalaryCurrency}
-          salaryGroupSequence={selectedGroup?.sequence_number ?? null}
-          disabled={!selected}
-        />
-
-        {/* ---------- Resumen ---------- */}
-        <ContractFormalizationSummary
-          workerName={selectedCandidate?.fullName || ""}
-          personIdentification={selectedCandidate?.identification || null}
-          positionName={selected?.name || ""}
-          jobName={selected?.job?.name || null}
-          areaName={selected?.job?.area?.name || null}
-          contractTypeName={selectedType?.name || null}
-          startDate={contractStartDate || hireDate}
-          endDate={isDetermined ? contractEndDate || null : null}
-          signatureDate={signatureDate}
-          signaturePlace={signaturePlace}
-          paymentMethodName={
-            paymentMethods.find((method) => method.id === paymentMethodId)?.name || null
-          }
-          representativeName={selectedRepresentative?.person_name || null}
-          representativeTitle={selectedRepresentative?.title || null}
-          baseSalaryAmount={baseSalaryAmount}
-          baseSalaryCurrency={baseSalaryCurrency}
-          salaryGroupSequence={selectedGroup?.sequence_number ?? null}
-          components={components}
-        />
-
-        <ContractReadinessChecklist readiness={readiness} loading={readinessLoading} />
-
-        {/* §16/§17: la plantilla documental se valida antes de contratar */}
-        {templateBlocked && selectedType && (
-          <SiteCorpAlert type="warning" title="Plantilla documental requerida">
-            <span className="whitespace-pre-line">
-              {missingContractTemplateMessage(selectedType.name)}
-            </span>
-          </SiteCorpAlert>
+          </>
         )}
-        {templateChecking && !templateBlocked && (
-          <p className="text-xs text-muted-foreground">Comprobando la plantilla documental…</p>
-        )}
-        </>
-        )}
+
+        {/* ---------- Resumen (condicional) ---------- */}
+        {isPrincipalSpecialist ? (
+          <ResolutionSummary
+            workerName={selectedCandidate?.fullName || ""}
+            personIdentification={selectedCandidate?.identification || null}
+            positionName={selected?.name || ""}
+            jobName={selected?.job?.name || null}
+            areaName={selected?.job?.area?.name || null}
+            resolutionDate={resolutionValues?.resolutionDate || hireDate}
+            representativeName={resolutionValues?.representativeName || null}
+            representativeTitle={resolutionValues?.representativeTitle || null}
+            municipality={resolutionValues?.municipality || null}
+            revolutionYear={resolutionValues?.revolutionYear || null}
+            workContent={resolutionValues?.workContent || null}
+            baseSalaryAmount={baseSalaryAmount}
+            baseSalaryCurrency={baseSalaryCurrency}
+            salaryGroupSequence={selectedGroup?.sequence_number ?? null}
+          />
+        ) : null}
 
         <div className="space-y-2">
           <Label>Observaciones</Label>

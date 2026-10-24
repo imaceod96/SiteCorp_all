@@ -48,6 +48,11 @@ export interface ContractSignatureFieldsProps {
   onPaymentScheduleChange?: (value: string) => void
   disabled?: boolean
   className?: string
+  /**
+   * Valor por defecto para el lugar de firma (municipio de la entidad).
+   * Se muestra como placeholder cuando el usuario no ha escrito nada.
+   */
+  defaultSignaturePlace?: string
 }
 
 export const ContractSignatureFields: React.FC<ContractSignatureFieldsProps> = ({
@@ -62,33 +67,42 @@ export const ContractSignatureFields: React.FC<ContractSignatureFieldsProps> = (
   onPaymentScheduleChange,
   disabled = false,
   className,
-}) => (
-  <div className={cn("grid gap-4 sm:grid-cols-3", className)}>
-    <div className="space-y-2">
-      <Label htmlFor="contract-signature-date">Fecha de firma *</Label>
-      <SiteCorpInput
-        id="contract-signature-date"
-        type="date"
-        value={signatureDate}
-        onChange={(e) => onSignatureDateChange(e.target.value)}
-        disabled={disabled}
-      />
-      <p className="text-xs text-muted-foreground">
-        Formalización del contrato. Puede ser anterior a la fecha de inicio.
-      </p>
-    </div>
+  defaultSignaturePlace = "",
+}) => {
+  const displayPlace = signaturePlace || defaultSignaturePlace
 
-    <div className="space-y-2">
-      <Label htmlFor="contract-signature-place">Lugar de firma *</Label>
-      <SiteCorpInput
-        id="contract-signature-place"
-        type="text"
-        value={signaturePlace}
-        onChange={(e) => onSignaturePlaceChange(e.target.value)}
-        placeholder="Ej.: La Habana"
-        disabled={disabled}
-      />
-    </div>
+  return (
+    <div className={cn("grid gap-4 sm:grid-cols-3", className)}>
+      <div className="space-y-2">
+        <Label htmlFor="contract-signature-date">Fecha de firma *</Label>
+        <SiteCorpInput
+          id="contract-signature-date"
+          type="date"
+          value={signatureDate}
+          onChange={(e) => onSignatureDateChange(e.target.value)}
+          disabled={disabled}
+        />
+        <p className="text-xs text-muted-foreground">
+          Formalización del contrato. Puede ser anterior a la fecha de inicio.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="contract-signature-place">Lugar de firma *</Label>
+        <SiteCorpInput
+          id="contract-signature-place"
+          type="text"
+          value={displayPlace}
+          onChange={(e) => onSignaturePlaceChange(e.target.value)}
+          placeholder="Ej.: La Habana"
+          disabled={disabled}
+        />
+        {defaultSignaturePlace && !signaturePlace && (
+          <p className="text-xs text-muted-foreground">
+            Municipio de la entidad: {defaultSignaturePlace}
+          </p>
+        )}
+      </div>
 
     <div className="space-y-2">
       <Label htmlFor="contract-payment-method">Forma de pago *</Label>
@@ -126,6 +140,7 @@ export const ContractSignatureFields: React.FC<ContractSignatureFieldsProps> = (
     )}
   </div>
 )
+}
 
 export interface ContractRetributionFieldsProps {
   /** Conceptos específicos del contrato */

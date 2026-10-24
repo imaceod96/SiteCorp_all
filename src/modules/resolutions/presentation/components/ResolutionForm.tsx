@@ -76,6 +76,8 @@ const ResolutionForm: React.FC<ResolutionFormProps> = ({
   const [representativeAssignmentId, setRepresentativeAssignmentId] = React.useState<string | null>(
     null
   )
+  const selectedRepresentative =
+    representatives.find((row) => row.assignment_id === representativeAssignmentId) || null
   const [workContent, setWorkContent] = React.useState("")
   const [municipality, setMunicipality] = React.useState("")
   const [revolutionYear, setRevolutionYear] = React.useState("")
@@ -194,33 +196,37 @@ const ResolutionForm: React.FC<ResolutionFormProps> = ({
   const parentCompanyMissing = context?.entity.entity_type === "ueb" && !parentCompany
 
   React.useEffect(() => {
-    onValuesChange({
+      onValuesChange({
+        resolutionDate,
+        representativeAssignmentId,
+        workContent: workContent.trim() || null,
+        workContentChanged,
+        municipality: municipality.trim() || null,
+        municipalityChanged,
+        revolutionYear: revolutionYear.trim() || null,
+        revolutionYearChanged,
+        templateVersionId: template?.versionId ?? null,
+        valid,
+        error,
+        // NUEVOS CAMPOS para el resumen:
+        representativeName: selectedRepresentative?.person_name || null,
+        representativeTitle: selectedRepresentative?.title || null,
+      })
+    }, [
+      onValuesChange,
       resolutionDate,
       representativeAssignmentId,
-      workContent: workContent.trim() || null,
+      workContent,
       workContentChanged,
-      municipality: municipality.trim() || null,
+      municipality,
       municipalityChanged,
-      revolutionYear: revolutionYear.trim() || null,
+      revolutionYear,
       revolutionYearChanged,
-      templateVersionId: template?.versionId ?? null,
+      template,
       valid,
       error,
-    })
-  }, [
-    onValuesChange,
-    resolutionDate,
-    representativeAssignmentId,
-    workContent,
-    workContentChanged,
-    municipality,
-    municipalityChanged,
-    revolutionYear,
-    revolutionYearChanged,
-    template,
-    valid,
-    error,
-  ])
+      selectedRepresentative,
+    ])
 
   const persistEntityField = async (
     field: "municipality" | "revolution_year",
