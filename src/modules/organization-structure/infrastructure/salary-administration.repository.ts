@@ -93,17 +93,11 @@ export async function insertEntityEmpresarialScale(
   currencyCode: string
 ): Promise<SalaryScale> {
   const { data, error } = await supabase
-    .from("salary_scales")
-    .insert({
-      scope_type: "EMPRESARIAL_ENTITY",
-      organization_entity_id: entityId,
-      regime_id: "EMPRESARIAL",
-      name,
-      description: "Escala salarial empresarial de la entidad",
-      currency_code: currencyCode,
-      is_active: true,
+    .rpc("create_entity_empresarial_scale", {
+      p_entity_id: entityId,
+      p_name: name,
+      p_currency_code: currencyCode,
     })
-    .select()
     .single()
 
   if (error) throw error
