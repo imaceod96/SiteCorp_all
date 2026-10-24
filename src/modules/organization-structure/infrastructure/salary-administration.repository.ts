@@ -72,7 +72,6 @@ export async function insertGlobalPresupuestadaScale(
     .from("salary_scales")
     .insert({
       scope_type: "PRESUPUESTADA_GLOBAL",
-      tenant_id: null,
       organization_entity_id: null,
       regime_id: "PRESUPUESTADA",
       name,
@@ -94,19 +93,18 @@ export async function insertEntityEmpresarialScale(
   currencyCode: string
 ): Promise<SalaryScale> {
   const { data, error } = await supabase
-    .from("salary_scales")
-    .insert({
-      scope_type: "EMPRESARIAL_ENTITY",
-      tenant_id: null,
-      organization_entity_id: entityId,
-      regime_id: "EMPRESARIAL",
-      name,
-      description: "Escala salarial empresarial de la entidad",
-      currency_code: currencyCode,
-      is_active: true,
-    })
-    .select()
-    .single()
+      .from("salary_scales")
+      .insert({
+        scope_type: "EMPRESARIAL_ENTITY",
+        organization_entity_id: entityId,
+        regime_id: "EMPRESARIAL",
+        name,
+        description: "Escala salarial empresarial de la entidad",
+        currency_code: currencyCode,
+        is_active: true,
+      })
+      .select()
+      .single()
 
   if (error) throw error
   return data as SalaryScale
