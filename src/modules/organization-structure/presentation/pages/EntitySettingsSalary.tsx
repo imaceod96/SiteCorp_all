@@ -191,7 +191,6 @@ const EntitySettingsSalary = () => {
 
   const handleCreateEnterpriseScale = async () => {
       if (!currentEntity) return
-      console.log("[EntitySettingsSalary] currentEntity.id:", currentEntity.id)
       setCreatingScale(true)
       try {
         const name = newScaleName.trim() || "Escala salarial empresarial"
