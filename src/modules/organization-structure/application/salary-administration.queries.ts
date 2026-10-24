@@ -1,4 +1,4 @@
-import { isPlatformSuperadmin, loadEntityPermission, loadPlatformPermission } from "@/modules/access-control"
+import { loadEntityPermission, loadPlatformPermission } from "@/modules/access-control"
 import { resolveApplicableScaleId } from "../infrastructure/salary.repository"
 import {
   rpcResolveSalaryValue,
@@ -92,17 +92,21 @@ export async function canManageSalary(entityId?: string): Promise<boolean> {
 /**
  * Verifica si el usuario puede CREAR una escala empresarial para una entidad específica.
  *
- * A diferencia de `canManageSalary`, esta función NO acepta permisos de plataforma:
- * la política RLS `can_create_salary_scale` rechaza explícitamente a los superadmins
- * de plataforma y requiere permiso organizativo `salary.manage` en la entidad.
+ * A diferencia de `canManageSalary`, esta función NO acepta permisos de plataforma "sólos":
+ * la política RLS `can_create_salary_scale` requiere que el usuario tenga el permiso
+ * organizativo `salary.manage` en la entidad, a menos que sea superadmin global.
  *
- * Sin embargo, los superadmins de plataforma pueden crear cualquier escala, incluyendo
- * las empresariales, por ser administradores globales del sistema.
+ * La política RLS en la base de datos ya verifica `is_platform_superadmin()` internamente,
+ * así que aquí solo verificamos el permiso organizativo, y la RLS se encargará del superadmin.
  */
 export async function canCreateEntityEmpresarialScale(entityId: string): Promise<boolean> {
-  // Los superadmins de plataforma tienen acceso total sin restricción
-  if (await isPlatformSuperadmin()) return true
-  return loadEntityPermission(entityId, "salary.manage")
+  // Primero verificamos permiso organizativo
+  const hasEntityPermission = await loadEntityPermission(entityId, "salary.manage")
+  if (hasEntityPermission) return true
+  
+  // Si no tiene permiso organizativo, la política RLS en Supabase
+  // verificará is_platform_superadmin() internamente si el usuario es superadmin
+  return false
 }
 
 /** Gestionar la escala presupuestada global es un permiso de plataforma. */
