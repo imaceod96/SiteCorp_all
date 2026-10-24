@@ -92,28 +92,19 @@ export async function insertEntityEmpresarialScale(
   name: string,
   currencyCode: string
 ): Promise<SalaryScale> {
-  const {
-    data: { user: currentUser },
-  } = await supabase.auth.getUser()
-
-  console.log("[SalaryRepository] AUTH DEBUG", {
-    clientUserId: currentUser?.id,
-    clientUserEmail: currentUser?.email,
-  })
-
   const { data, error } = await supabase
-      .from("salary_scales")
-      .insert({
-        scope_type: "EMPRESARIAL_ENTITY",
-        organization_entity_id: entityId,
-        regime_id: "EMPRESARIAL",
-        name,
-        description: "Escala salarial empresarial de la entidad",
-        currency_code: currencyCode,
-        is_active: true,
-      })
-      .select()
-      .single()
+    .from("salary_scales")
+    .insert({
+      scope_type: "EMPRESARIAL_ENTITY",
+      organization_entity_id: entityId,
+      regime_id: "EMPRESARIAL",
+      name,
+      description: "Escala salarial empresarial de la entidad",
+      currency_code: currencyCode,
+      is_active: true,
+    })
+    .select()
+    .single()
 
   if (error) throw error
   return data as SalaryScale
