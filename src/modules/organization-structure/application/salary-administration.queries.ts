@@ -1,4 +1,4 @@
-import { loadEntityPermission, loadPlatformPermission } from "@/modules/access-control"
+import { isPlatformSuperadmin, loadEntityPermission, loadPlatformPermission } from "@/modules/access-control"
 import { resolveApplicableScaleId } from "../infrastructure/salary.repository"
 import {
   rpcResolveSalaryValue,
@@ -95,8 +95,13 @@ export async function canManageSalary(entityId?: string): Promise<boolean> {
  * A diferencia de `canManageSalary`, esta función NO acepta permisos de plataforma:
  * la política RLS `can_create_salary_scale` rechaza explícitamente a los superadmins
  * de plataforma y requiere permiso organizativo `salary.manage` en la entidad.
+ *
+ * Sin embargo, los superadmins de plataforma pueden crear cualquier escala, incluyendo
+ * las empresariales, por ser administradores globales del sistema.
  */
 export async function canCreateEntityEmpresarialScale(entityId: string): Promise<boolean> {
+  // Los superadmins de plataforma tienen acceso total sin restricción
+  if (await isPlatformSuperadmin()) return true
   return loadEntityPermission(entityId, "salary.manage")
 }
 
