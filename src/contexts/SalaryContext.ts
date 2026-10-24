@@ -51,11 +51,6 @@ interface SalaryContextType {
 
   // Resolution
   resolveSalaryValue: (entityId: string, groupId: string, effectiveDate?: string) => Promise<SalaryGroupValue | null>
-
-  // Permissions
-  canViewSalary: (entityId?: string) => Promise<boolean>
-  canManageSalary: (entityId?: string) => Promise<boolean>
-  canManageGlobalSalary: () => Promise<boolean>
 }
 
 const SalaryContext = React.createContext<SalaryContextType | undefined>(undefined)
