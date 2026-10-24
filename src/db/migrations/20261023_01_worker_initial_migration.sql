@@ -40,15 +40,15 @@ DECLARE
     v_code text;
     v_assignment_id uuid;
     v_contract_id uuid;
-    v_position record;
-    v_job record;
-    v_occ integer;
-    v_ident text;
-    v_start date;
-    v_balance numeric;
-    v_cutoff date;
-    v_contract jsonb;
-    v_rep record;
+    v_position public.organization_positions%rowtype;
+        v_job public.organization_jobs%rowtype;
+        v_occ integer;
+        v_ident text;
+        v_start date;
+        v_balance numeric;
+        v_cutoff date;
+        v_contract jsonb;
+        v_rep public.organization_representative_assignments%rowtype;
     v_scale_id uuid;
     v_group_id uuid;
     v_group_seq integer;
@@ -361,40 +361,40 @@ DECLARE
     v_messages text[];
     v_ident text;
     v_start date;
-    v_position record;
-    v_pos_raw text;
-    v_pos_id uuid;
-    v_pos_label text;
-    v_matches integer;
-    v_occ integer;
-    v_batch jsonb := '{}'::jsonb;
-    v_seen jsonb := '{}'::jsonb;
-    v_balance text;
-    v_contract jsonb;
-    v_contract_type_code text;
-    v_cstart date;
-    v_cend date;
-BEGIN
-    IF NOT public.can_access_entity(p_entity_id, 'workers.manage') THEN
-        RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
-    END IF;
-
-    SELECT company_client_id INTO v_tenant_id
-    FROM public.organization_entities WHERE id = p_entity_id AND is_active = true;
-    IF v_tenant_id IS NULL THEN
-        RAISE EXCEPTION 'La entidad no existe o no está activa';
-    END IF;
-
-    IF jsonb_typeof(p_rows) <> 'array' THEN
-        RAISE EXCEPTION 'Se esperaba una lista de filas';
-    END IF;
-
-    FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
-        v_status := 'VALID';
-        v_messages := ARRAY[]::text[];
-        v_pos_id := NULL;
-        v_pos_label := NULL;
-        v_position := NULL;
+        v_position public.organization_positions%rowtype;
+        v_pos_raw text;
+        v_pos_id uuid;
+        v_pos_label text;
+        v_matches integer;
+        v_occ integer;
+        v_batch jsonb := '{}'::jsonb;
+        v_seen jsonb := '{}'::jsonb;
+        v_balance text;
+        v_contract jsonb;
+        v_contract_type_code text;
+        v_cstart date;
+        v_cend date;
+    BEGIN
+        IF NOT public.can_access_entity(p_entity_id, 'workers.manage') THEN
+            RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
+        END IF;
+    
+        SELECT company_client_id INTO v_tenant_id
+        FROM public.organization_entities WHERE id = p_entity_id AND is_active = true;
+        IF v_tenant_id IS NULL THEN
+            RAISE EXCEPTION 'La entidad no existe o no está activa';
+        END IF;
+    
+        IF jsonb_typeof(p_rows) <> 'array' THEN
+            RAISE EXCEPTION 'Se esperaba una lista de filas';
+        END IF;
+    
+        FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
+            v_status := 'VALID';
+            v_messages := ARRAY[]::text[];
+            v_pos_id := NULL;
+            v_pos_label := NULL;
+            v_position := NULL;
         v_contract_type_code := NULL;
         v_cstart := NULL;
         v_cend := NULL;
@@ -671,18 +671,18 @@ SET search_path TO 'public', 'auth'
 AS $$
 DECLARE
     v_worker public.workers%ROWTYPE;
-    v_position record;
-    v_occ integer;
-    v_assignment_id uuid;
-    v_start date;
-BEGIN
-    SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Trabajador no encontrado';
-    END IF;
-    IF NOT public.can_access_entity(v_worker.organization_entity_id, 'workers.manage') THEN
-        RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
-    END IF;
+        v_position public.organization_positions%rowtype;
+        v_occ integer;
+        v_assignment_id uuid;
+        v_start date;
+    BEGIN
+        SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Trabajador no encontrado';
+        END IF;
+        IF NOT public.can_access_entity(v_worker.organization_entity_id, 'workers.manage') THEN
+            RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
+        END IF;
     IF v_worker.employment_status <> 'active' THEN
         RAISE EXCEPTION 'Solo se pueden vincular trabajadores activos';
     END IF;

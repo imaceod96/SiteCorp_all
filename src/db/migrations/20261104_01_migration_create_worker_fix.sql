@@ -44,14 +44,14 @@ DECLARE
     v_code text;
     v_assignment_id uuid;
     v_contract_id uuid;
-    v_position record;
+    v_position public.organization_positions%rowtype;
     v_occ integer;
     v_ident text;
     v_start date;
     v_balance numeric;
     v_cutoff date;
     v_contract jsonb;
-    v_rep record;
+    v_rep public.organization_representative_assignments%rowtype;
     v_scale_id uuid;
     v_group_id uuid;
     v_group_seq integer;
