@@ -40,15 +40,15 @@ DECLARE
     v_code text;
     v_assignment_id uuid;
     v_contract_id uuid;
-    v_position record;
-    v_job record;
-    v_occ integer;
-    v_ident text;
-    v_start date;
-    v_balance numeric;
-    v_cutoff date;
-    v_contract jsonb;
-    v_rep record;
+    v_position public.organization_positions%rowtype;
+        v_job public.organization_jobs%rowtype;
+        v_occ integer;
+        v_ident text;
+        v_start date;
+        v_balance numeric;
+        v_cutoff date;
+        v_contract jsonb;
+        v_rep public.organization_representative_assignments%rowtype;
     v_scale_id uuid;
     v_group_id uuid;
     v_group_seq integer;
@@ -61,7 +61,7 @@ BEGIN
         RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
     END IF;
 
-    SELECT tenant_id, name INTO v_tenant_id, v_entity_name
+    SELECT company_client_id, name INTO v_tenant_id, v_entity_name
     FROM public.organization_entities
     WHERE id = p_entity_id AND is_active = true;
     IF v_tenant_id IS NULL THEN
@@ -93,7 +93,7 @@ BEGIN
     -- También protege la idempotencia del lote (reejecución → error claro).
     IF EXISTS (
         SELECT 1 FROM public.workers w
-        WHERE w.tenant_id = v_tenant_id
+        WHERE w.company_client_id = v_tenant_id
           AND w.identification = v_ident
           AND w.employment_status = 'active'
     ) THEN
@@ -131,7 +131,7 @@ BEGIN
         v_code := 'TRB-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 6));
         BEGIN
             INSERT INTO public.workers (
-                tenant_id, organization_entity_id, code,
+                company_client_id, organization_entity_id, code,
                 first_name, first_surname, second_surname, identification, birth_date,
                 gender_id, marital_status_id, education_level_id, specialty, skin_color_id,
                 profession_or_trade, address, province, municipality, phone, email,
@@ -174,12 +174,15 @@ BEGIN
     END IF;
 
     -- Licencias de conducción (catálogo global; reutiliza la tabla existente)
+    -- CORRECCIÓN: driving_license_categories.id es text. Se compara en text
+    -- (d.id = btrim(c)) y se inserta d.id; se conserva la validación contra el
+    -- catálogo y el descarte silencioso de categorías inexistentes.
     IF jsonb_typeof(p_row -> 'driving_license_category_ids') = 'array' THEN
         INSERT INTO public.worker_driving_license_categories (worker_id, driving_license_category_id)
-        SELECT DISTINCT v_worker_id, c::uuid
+        SELECT DISTINCT v_worker_id, d.id
         FROM jsonb_array_elements_text(p_row -> 'driving_license_category_ids') AS c
+        JOIN public.driving_license_categories d ON d.id = btrim(c)
         WHERE NULLIF(btrim(c), '') IS NOT NULL
-          AND EXISTS (SELECT 1 FROM public.driving_license_categories d WHERE d.id = c::uuid)
         ON CONFLICT DO NOTHING;
     END IF;
 
@@ -244,7 +247,7 @@ BEGIN
         -- El salario contractual migrado es el salario REAL del contrato:
         -- nunca se recalcula con la escala salarial actual.
         INSERT INTO public.employment_contracts (
-            tenant_id, organization_entity_id, worker_id, assignment_id,
+            company_client_id, organization_entity_id, worker_id, assignment_id,
             contract_type_id, start_date, end_date, is_current,
             salary_group_id, salary_scale_id, salary_amount, salary_currency_code,
             salary_effective_date, salary_captured_at, salary_snapshot_status,
@@ -299,7 +302,7 @@ BEGIN
         END IF;
 
         INSERT INTO public.worker_vacation_movements (
-            tenant_id, organization_entity_id, worker_id,
+            company_client_id, organization_entity_id, worker_id,
             movement_type, amount, calculated_amount, effective_date,
             description, created_by
         ) VALUES (
@@ -358,40 +361,40 @@ DECLARE
     v_messages text[];
     v_ident text;
     v_start date;
-    v_position record;
-    v_pos_raw text;
-    v_pos_id uuid;
-    v_pos_label text;
-    v_matches integer;
-    v_occ integer;
-    v_batch jsonb := '{}'::jsonb;
-    v_seen jsonb := '{}'::jsonb;
-    v_balance text;
-    v_contract jsonb;
-    v_contract_type_code text;
-    v_cstart date;
-    v_cend date;
-BEGIN
-    IF NOT public.can_access_entity(p_entity_id, 'workers.manage') THEN
-        RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
-    END IF;
-
-    SELECT tenant_id INTO v_tenant_id
-    FROM public.organization_entities WHERE id = p_entity_id AND is_active = true;
-    IF v_tenant_id IS NULL THEN
-        RAISE EXCEPTION 'La entidad no existe o no está activa';
-    END IF;
-
-    IF jsonb_typeof(p_rows) <> 'array' THEN
-        RAISE EXCEPTION 'Se esperaba una lista de filas';
-    END IF;
-
-    FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
-        v_status := 'VALID';
-        v_messages := ARRAY[]::text[];
-        v_pos_id := NULL;
-        v_pos_label := NULL;
-        v_position := NULL;
+        v_position public.organization_positions%rowtype;
+        v_pos_raw text;
+        v_pos_id uuid;
+        v_pos_label text;
+        v_matches integer;
+        v_occ integer;
+        v_batch jsonb := '{}'::jsonb;
+        v_seen jsonb := '{}'::jsonb;
+        v_balance text;
+        v_contract jsonb;
+        v_contract_type_code text;
+        v_cstart date;
+        v_cend date;
+    BEGIN
+        IF NOT public.can_access_entity(p_entity_id, 'workers.manage') THEN
+            RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
+        END IF;
+    
+        SELECT company_client_id INTO v_tenant_id
+        FROM public.organization_entities WHERE id = p_entity_id AND is_active = true;
+        IF v_tenant_id IS NULL THEN
+            RAISE EXCEPTION 'La entidad no existe o no está activa';
+        END IF;
+    
+        IF jsonb_typeof(p_rows) <> 'array' THEN
+            RAISE EXCEPTION 'Se esperaba una lista de filas';
+        END IF;
+    
+        FOR v_row IN SELECT * FROM jsonb_array_elements(p_rows) LOOP
+            v_status := 'VALID';
+            v_messages := ARRAY[]::text[];
+            v_pos_id := NULL;
+            v_pos_label := NULL;
+            v_position := NULL;
         v_contract_type_code := NULL;
         v_cstart := NULL;
         v_cend := NULL;
@@ -419,12 +422,12 @@ BEGIN
                 v_seen := v_seen || jsonb_build_object(v_ident, true);
             END IF;
             -- Duplicado contra trabajadores activos existentes
-            IF EXISTS (
-                SELECT 1 FROM public.workers w
-                WHERE w.tenant_id = v_tenant_id
-                  AND w.identification = v_ident
-                  AND w.employment_status = 'active'
-            ) THEN
+                        IF EXISTS (
+                            SELECT 1 FROM public.workers w
+                            WHERE w.company_client_id = v_tenant_id
+                              AND w.identification = v_ident
+                              AND w.employment_status = 'active'
+                        ) THEN
                 v_status := 'ERROR';
                 v_messages := v_messages || format('Ya existe un trabajador activo con el carné de identidad %s', v_ident);
             END IF;
@@ -668,18 +671,18 @@ SET search_path TO 'public', 'auth'
 AS $$
 DECLARE
     v_worker public.workers%ROWTYPE;
-    v_position record;
-    v_occ integer;
-    v_assignment_id uuid;
-    v_start date;
-BEGIN
-    SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id;
-    IF NOT FOUND THEN
-        RAISE EXCEPTION 'Trabajador no encontrado';
-    END IF;
-    IF NOT public.can_access_entity(v_worker.organization_entity_id, 'workers.manage') THEN
-        RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
-    END IF;
+        v_position public.organization_positions%rowtype;
+        v_occ integer;
+        v_assignment_id uuid;
+        v_start date;
+    BEGIN
+        SELECT * INTO v_worker FROM public.workers WHERE id = p_worker_id;
+        IF NOT FOUND THEN
+            RAISE EXCEPTION 'Trabajador no encontrado';
+        END IF;
+        IF NOT public.can_access_entity(v_worker.organization_entity_id, 'workers.manage') THEN
+            RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
+        END IF;
     IF v_worker.employment_status <> 'active' THEN
         RAISE EXCEPTION 'Solo se pueden vincular trabajadores activos';
     END IF;

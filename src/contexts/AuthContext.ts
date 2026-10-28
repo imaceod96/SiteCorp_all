@@ -1,38 +1,82 @@
 import * as React from "react"
 import type { User } from "@supabase/supabase-js"
+import type {
+  AuthMembershipRecord,
+  AuthProfileRecord,
+  AuthTenantSummary as AuthTenantSummaryRecord,
+  PasswordRequirement,
+} from "@/modules/access-control"
 
-export interface AuthProfile {
-  id: string
-  username: string | null
-  full_name: string | null
-  avatar_url: string | null
-  is_active: boolean
-  created_at: string | null
-  updated_at: string | null
-}
+/**
+ * Contrato PÚBLICO del contexto de autenticación.
+ *
+ * Las formas del perfil y de la membresía son las del dominio de control de acceso: NO se
+ * duplican aquí. Los nombres públicos se conservan como alias, de modo que ningún consumidor
+ * cambia su importación y el contrato sigue siendo el mismo:
+ *
+ *   import { useAuth, type AuthProfile } from "@/contexts/AuthContext"
+ *
+ * La autenticación (sesión, inicio y cierre de sesión, contraseña) vive en el dominio; este
+ * contexto sólo publica el estado ya cargado a la presentación.
+ */
+export type AuthProfile = AuthProfileRecord
 
-export interface AuthTenantSummary {
-  id: string
-  name: string
-}
+export type AuthTenantSummary = AuthTenantSummaryRecord
 
-export interface AuthMembership {
-  id: string
-  tenant_id: string
-  user_id: string
-  is_active: boolean
-  tenant: AuthTenantSummary | null
-}
+export type AuthMembership = AuthMembershipRecord
 
 interface AuthContextType {
   user: User | null
   profile: AuthProfile | null
+  /**
+   * URL FIRMADA vigente del avatar del usuario (o `null` si no tiene avatar o no se pudo
+   * firmar). El bucket es privado, así que `profile.avatar_url` guarda la RUTA del objeto y
+   * NUNCA se pinta directamente: la imagen se resuelve con esta URL temporal, que se renueva
+   * al montar, al recuperar el foco de la ventana y al alcanzar el 80 % de su vida útil.
+   */
+  avatarUrl: string | null
   isPlatformSuperAdmin: boolean
   isPlatformUser: boolean
   isProfileActive: boolean
   memberships: AuthMembership[]
+  /**
+   * Hay una lectura de sesión o una resolución de identidad EN CURSO (la carga inicial o un
+   * evento de Auth). Mientras sea `true` no se puede elegir interfaz.
+   */
   authLoading: boolean
+  /**
+   * La identidad del usuario actual está RESUELTA y es fiable (o no hay sesión que resolver).
+   * Es la condición que habilita elegir plataforma o cliente: con `false` la aplicación
+   * muestra la pantalla de carga neutral, nunca un layout provisional.
+   */
   authReady: boolean
+  /**
+   * Mensaje de usuario (nunca técnico) cuando la identidad NO se pudo determinar por un
+   * fallo de red o de RPC. Con un valor distinto de `null` la aplicación muestra el estado
+   * neutral de error y NUNCA elige interfaz ni concede privilegios por defecto.
+   */
+  identityError: string | null
+  /**
+   * Requisito de cambio obligatorio de la contraseña inicial:
+   *   · `required`     → debe cambiarla (la aplicación no monta ningún layout).
+   *   · `not_required` → acceso normal (incluye usuarios legacy sin fila).
+   *   · `unverified`   → no se pudo comprobar: NUNCA se concede acceso normal.
+   * `null` mientras la identidad aún no está resuelta.
+   */
+  passwordChangeRequired: PasswordRequirement | null
+  /**
+   * Vuelve a resolver el requisito de cambio obligatorio (se usa tras completar el cambio y
+   * en el reintento del estado `unverified`). Nunca se ejecuta en bucle.
+   */
+  refreshPasswordRequirement: () => Promise<void>
+  /** Reintento manual de la resolución de identidad. Nunca se ejecuta en bucle. */
+  retryIdentity: () => void
+  /**
+   * Vuelve a resolver la URL firmada del avatar. Sin argumento reutiliza la ruta guardada
+   * conocida; con argumento (`null` incluido) adopta la ruta indicada, lo que permite
+   * publicar de inmediato un avatar recién subido o eliminado.
+   */
+  refreshAvatar: (storedAvatar?: string | null) => Promise<void>
   logout: () => Promise<void>
   hasPlatformPermission: (code: string) => Promise<boolean>
   hasTenantPermission: (code: string) => Promise<boolean>

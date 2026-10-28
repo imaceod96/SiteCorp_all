@@ -1,61 +1,64 @@
 import * as React from "react"
-import { Toaster } from "@/components/ui/toaster"
-import { Toaster as Sonner } from "@/components/ui/sonner"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { Toaster } from "@/shared/components/ui/toaster"
+import { Toaster as Sonner } from "@/shared/components/ui/sonner"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom"
-import { useAuth } from "@/contexts/AuthContext"
-import { AuthProvider } from "@/contexts/AuthProvider"
-import { useCurrentTenant } from "@/contexts/CurrentTenantContext"
-import { CurrentTenantProvider } from "@/contexts/CurrentTenantProvider"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { CurrentEntityProvider } from "@/contexts/CurrentEntityProvider"
-import { SalaryProvider } from "@/contexts/SalaryProvider"
-import { PlatformAdminLayout } from "@/components/platform-admin-layout"
-import EntityRouteWrapper from "@/components/entity-route-wrapper"
-import { TenantLayout } from "@/components/tenant-layout"
-import { SiteCorpBrand } from "@/components/sitecorp-brand"
-import Login from "./pages/Login"
-import Index from "./pages/Index"
-import Organization from "./pages/Organization"
-import OrganizationDetail from "./pages/OrganizationDetail"
-import Candidates from "./pages/Candidates"
-import Hiring from "./pages/Hiring"
-import Admin from "./pages/Admin"
-import Account from "./pages/Account"
-import Organizations from "./pages/Organizations"
-import PlatformUsers from "./pages/PlatformUsers"
-import RolesPermissions from "./pages/RolesPermissions"
-import TenantUsers from "./pages/TenantUsers"
-import TenantInvitations from "./pages/TenantInvitations"
-import TenantRoles from "./pages/TenantRoles"
-import AdminSettingsSalaryScale from "./pages/AdminSettingsSalaryScale"
-import EntitySummary from "./pages/EntitySummary"
-import EntityCandidates from "./pages/EntityCandidates"
-import EntityPrenomina from "./pages/EntityPrenomina"
-import CandidateDetail from "./pages/CandidateDetail"
-import CandidateEdit from "./pages/CandidateEdit"
-import EntityStaffing from "./pages/EntityStaffing"
-import EntityWorkers from "./pages/EntityWorkers"
-import EntityReentries from "./pages/EntityReentries"
-import EntityHiring from "./pages/EntityHiring"
-import EntityContractAlerts from "./pages/EntityContractAlerts"
-import EntityVacations from "./pages/EntityVacations"
-import EntityMedicalCertificates from "./pages/EntityMedicalCertificates"
-import EntityPendingDocuments from "./pages/EntityPendingDocuments"
-import WorkerDetail from "./pages/WorkerDetail"
-import EntitySettings from "./pages/EntitySettings"
-import EntitySettingsUsers from "./pages/EntitySettingsUsers"
-import EntitySettingsRoles from "./pages/EntitySettingsRoles"
-import EntitySettingsSalary from "./pages/EntitySettingsSalary"
-import EntitySettingsTenureScale from "./pages/EntitySettingsTenureScale"
-import EntitySettingsGoverningDocuments from "./pages/EntitySettingsGoverningDocuments"
-import EntitySettingsStaffing from "./pages/EntitySettingsStaffing"
-import EntitySettingsContractData from "./pages/EntitySettingsContractData"
-import EntitySettingsDocumentTemplates from "./pages/EntitySettingsDocumentTemplates"
-import EntitySettingsDocumentTemplateDetail from "./pages/EntitySettingsDocumentTemplateDetail"
-import EntitySettingsInitialImport from "./pages/EntitySettingsInitialImport"
-import NotFound from "./pages/NotFound"
+import { AuthProvider, useAuth } from "@/app/providers"
+import { CurrentCompanyClientProvider } from "@/app/providers"
+import { CurrentEntityProvider } from "@/app/providers"
+import { SalaryProvider } from "@/app/providers"
+import { PlatformAdminLayout } from "@/modules/access-control/presentation/components/platform-admin-layout"
+import EntityRouteWrapper from "@/modules/access-control/presentation/components/entity-route-wrapper"
+import { CompanyClientLayout } from "@/modules/company-client/presentation/components/company-client-layout"
+import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
+import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
+import Login from "@/modules/access-control/presentation/pages/Login"
+import Index from "@/modules/organization-structure/presentation/pages/Index"
+import Organization from "@/modules/organization-structure/presentation/pages/Organization"
+import OrganizationDetail from "@/modules/organization-structure/presentation/pages/OrganizationDetail"
+import Candidates from "@/modules/people/presentation/pages/Candidates"
+import Hiring from "@/modules/people/presentation/pages/Hiring"
+import Admin from "@/modules/access-control/presentation/pages/Admin"
+import Account from "@/modules/access-control/presentation/pages/Account"
+import Organizations from "@/modules/access-control/presentation/pages/Organizations"
+import PlatformUsers from "@/modules/access-control/presentation/pages/PlatformUsers"
+import AdminDocuments from "@/modules/platform-documents/presentation/pages/AdminDocuments"
+import AdminHistory from "@/modules/audit-history/presentation/pages/AdminHistory"
+import MustChangePassword from "@/modules/access-control/presentation/pages/MustChangePassword"
+import RolesPermissions from "@/modules/access-control/presentation/pages/RolesPermissions"
+import CompanyClientUsers from "@/modules/company-client/presentation/pages/CompanyClientUsers"
+import CompanyClientInvitations from "@/modules/company-client/presentation/pages/CompanyClientInvitations"
+import CompanyClientRoles from "@/modules/company-client/presentation/pages/CompanyClientRoles"
+import AdminSettingsSalaryScale from "@/modules/organization-structure/presentation/pages/AdminSettingsSalaryScale"
+import EntitySummary from "@/modules/entity-summary/presentation/pages/EntitySummary"
+import EntityCandidates from "@/modules/people/presentation/pages/EntityCandidates"
+import EntityPrenomina from "@/modules/payroll-preparation/presentation/pages/EntityPrenomina"
+import CandidateDetail from "@/modules/people/presentation/pages/CandidateDetail"
+import CandidateEdit from "@/modules/people/presentation/pages/CandidateEdit"
+import EntityStaffing from "@/modules/organization-structure/presentation/pages/EntityStaffing"
+import EntityWorkers from "@/modules/people/presentation/pages/EntityWorkers"
+import EntityReentries from "@/modules/people/presentation/pages/EntityReentries"
+import EntityHiring from "@/modules/people/presentation/pages/EntityHiring"
+import EntityContractAlerts from "@/modules/contracts/presentation/pages/EntityContractAlerts"
+import ChangeContractDialog from "@/modules/people/presentation/components/ChangeContractDialog"
+import SeparateWorkerDialog from "@/modules/people/presentation/components/SeparateWorkerDialog"
+import EntityVacations from "@/modules/vacations-licenses/vacations/presentation/pages/EntityVacations"
+import EntityMedicalCertificates from "@/modules/vacations-licenses/medical-certificates/presentation/pages/EntityMedicalCertificates"
+import EntityPendingDocuments from "@/modules/document-generation/presentation/pages/EntityPendingDocuments"
+import WorkerDetail from "@/modules/people/presentation/pages/WorkerDetail"
+import EntitySettings from "@/modules/organization-structure/presentation/pages/EntitySettings"
+import EntitySettingsUsers from "@/modules/organization-structure/presentation/pages/EntitySettingsUsers"
+import EntitySettingsRoles from "@/modules/organization-structure/presentation/pages/EntitySettingsRoles"
+import EntitySettingsSalary from "@/modules/organization-structure/presentation/pages/EntitySettingsSalary"
+import EntitySettingsTenureScale from "@/modules/organization-structure/presentation/pages/EntitySettingsTenureScale"
+import EntitySettingsGoverningDocuments from "@/modules/organization-structure/presentation/pages/EntitySettingsGoverningDocuments"
+import EntitySettingsStaffing from "@/modules/organization-structure/presentation/pages/EntitySettingsStaffing"
+import EntitySettingsContractData from "@/modules/organization-structure/presentation/pages/EntitySettingsContractData"
+import EntitySettingsDocumentTemplates from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates"
+import EntitySettingsDocumentTemplateDetail from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail"
+import EntitySettingsInitialImport from "@/modules/organization-structure/presentation/pages/EntitySettingsInitialImport"
+import NotFound from "@/app/pages/NotFound"
 
 const queryClient = new QueryClient()
 
@@ -101,30 +104,109 @@ class AppErrorBoundary extends React.Component<
   }
 }
 
-// Loading screen component
 const LoadingScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-sitecorp-background">
-    <div className="flex flex-col items-center text-center">
-      <SiteCorpBrand variant="isotype" size="lg" className="mb-4 animate-pulse" />
+  <div className="flex min-h-screen w-full items-center justify-center bg-white">
+    <div
+      role="status"
+      aria-live="polite"
+      className="flex flex-col items-center gap-6 px-6 text-center"
+    >
+      <SiteCorpBrand
+        variant="full"
+        size="lg"
+        className="w-full max-w-[280px] sm:max-w-[420px]"
+        alt="SiteCorp"
+      />
+      <span
+        aria-hidden="true"
+        className="h-8 w-8 animate-spin rounded-full border-[3px] border-sitecorp-primary/25 border-t-sitecorp-primary motion-reduce:animate-none"
+      />
       <p className="text-sm text-muted-foreground">Cargando SiteCorp...</p>
     </div>
   </div>
 )
 
-// /panel compatibility redirect: resolves to the sibling canonical route
-// /entity/<REAL_ENTITY_ID>/summary (NOT /entity/<id>/panel/summary)
+const IdentityErrorScreen = ({ onRetry }: { onRetry: () => void }) => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-white">
+    <div role="alert" className="w-full max-w-md px-6 text-center">
+      <SiteCorpBrand
+        variant="full"
+        size="md"
+        className="mx-auto w-full max-w-[240px]"
+        alt="SiteCorp"
+      />
+      <p className="mt-6 text-sm font-semibold text-ink">No se pudo verificar tu identidad</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Comprueba tu conexión e inténtalo de nuevo. Si el problema continúa, cierra sesión y
+        vuelve a entrar.
+      </p>
+      <SiteCorpButton className="mt-6" onClick={onRetry}>
+        Reintentar
+      </SiteCorpButton>
+    </div>
+  </div>
+)
+
+/**
+ * No se pudo COMPROBAR el requisito de cambio de contraseña: NO se concede acceso normal.
+ * Se ofrece reintentar (manual) y cerrar sesión.
+ */
+const PasswordRequirementErrorScreen = ({
+  onRetry,
+  onLogout,
+}: {
+  onRetry: () => void
+  onLogout: () => void
+}) => (
+  <div className="flex min-h-screen w-full items-center justify-center bg-white">
+    <div role="alert" className="w-full max-w-md px-6 text-center">
+      <SiteCorpBrand
+        variant="full"
+        size="md"
+        className="mx-auto w-full max-w-[240px]"
+        alt="SiteCorp"
+      />
+      <p className="mt-6 text-sm font-semibold text-ink">No se pudo verificar tu acceso</p>
+      <p className="mt-2 text-sm text-muted-foreground">
+        No pudimos comprobar el estado de tu contraseña. Por seguridad no se concede acceso
+        hasta verificarlo. Comprueba tu conexión e inténtalo de nuevo.
+      </p>
+      <div className="mt-6 flex items-center justify-center gap-3">
+        <SiteCorpButton onClick={onRetry}>Reintentar</SiteCorpButton>
+        <SiteCorpButton variant="outline" onClick={onLogout}>
+          Cerrar sesión
+        </SiteCorpButton>
+      </div>
+    </div>
+  </div>
+)
+
 const EntityPanelRedirect = () => {
   const { entityId } = useParams<{ entityId: string }>()
   return <Navigate to={`/entity/${entityId}/summary`} replace />
 }
 
-// Main routing logic
 const AppRoutes = () => {
-  const { authLoading, authReady, user, isPlatformUser, isProfileActive } = useAuth()
+  const {
+    authLoading,
+    authReady,
+    identityError,
+    passwordChangeRequired,
+    refreshPasswordRequirement,
+    retryIdentity,
+    logout,
+    user,
+    isPlatformUser,
+    isProfileActive,
+  } = useAuth()
   const location = useLocation()
 
   if (authLoading) {
     return <LoadingScreen />
+  }
+
+  if (identityError) {
+    return <IdentityErrorScreen onRetry={retryIdentity} />
   }
 
   if (!authReady) {
@@ -140,10 +222,23 @@ const AppRoutes = () => {
     )
   }
 
-  // Entity routes are evaluated BEFORE platform/tenant branching.
-  // currentTenant is intentionally NOT used here: Platform users may have a
-  // null tenant, and a stale non-null tenant must not hide entity routes.
-  // EntityRouteWrapper remains responsible for authorization.
+  // BLOQUEO DE NAVEGACIÓN: con un cambio obligatorio pendiente NO se monta ningún layout ni
+  // página protegida. La barrera real está en el backend; esto impide el uso normal por la
+  // interfaz y garantiza que no se pueda «saltar» por navegación.
+  if (passwordChangeRequired === "required") {
+    return <MustChangePassword />
+  }
+
+  // No se pudo COMPROBAR el requisito: no se concede acceso normal hasta verificarlo.
+  if (passwordChangeRequired === "unverified") {
+    return (
+      <PasswordRequirementErrorScreen
+        onRetry={() => void refreshPasswordRequirement()}
+        onLogout={logout}
+      />
+    )
+  }
+
   if (location.pathname.startsWith("/entity/")) {
     return (
       <Routes>
@@ -151,7 +246,7 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/summary" element={<EntitySummary />} />
           <Route path="/entity/:entityId/panel" element={<EntityPanelRedirect />} />
           <Route path="/entity/:entityId/candidates" element={<EntityCandidates />} />
-                    <Route path="/entity/:entityId/payroll-preparation" element={<EntityPrenomina />} />
+          <Route path="/entity/:entityId/payroll-preparation" element={<EntityPrenomina />} />
           <Route path="/entity/:entityId/candidates/:candidateId" element={<CandidateDetail />} />
           <Route path="/entity/:entityId/candidates/:candidateId/edit" element={<CandidateEdit />} />
           <Route path="/entity/:entityId/workers" element={<EntityWorkers />} />
@@ -160,7 +255,17 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/staffing" element={<EntityStaffing />} />
           <Route path="/entity/:entityId/staffing/workers/:workerId" element={<WorkerDetail />} />
           <Route path="/entity/:entityId/hiring" element={<EntityHiring />} />
-          <Route path="/entity/:entityId/contracts/alerts" element={<EntityContractAlerts />} />
+          {/* Composición modular: la página de vencimientos (Contratos) recibe los
+              diálogos de acciones laborales que pertenecen a Personas. */}
+          <Route
+            path="/entity/:entityId/contracts/alerts"
+            element={
+              <EntityContractAlerts
+                ChangeContractDialog={ChangeContractDialog}
+                SeparateWorkerDialog={SeparateWorkerDialog}
+              />
+            }
+          />
           <Route path="/entity/:entityId/vacations" element={<EntityVacations />} />
           <Route path="/entity/:entityId/medical-certificates" element={<EntityMedicalCertificates />} />
           <Route path="/entity/:entityId/documents/pending" element={<EntityPendingDocuments />} />
@@ -180,10 +285,6 @@ const AppRoutes = () => {
     )
   }
 
-  // Platform User (any active Platform Role, including SuperAdmin)
-  // -> Global Platform Administration.
-  // currentTenant is intentionally NOT required: a Platform User's default
-  // application is Global Administration.
   if (isPlatformUser) {
     return (
       <Routes>
@@ -191,6 +292,8 @@ const AppRoutes = () => {
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/companies" element={<Organizations />} />
           <Route path="/admin/users" element={<PlatformUsers />} />
+          <Route path="/admin/documents" element={<AdminDocuments />} />
+          <Route path="/admin/history" element={<AdminHistory />} />
           <Route path="/admin/roles" element={<RolesPermissions />} />
           <Route path="/admin/account" element={<Account />} />
           <Route path="/admin/settings/salary-scale" element={<AdminSettingsSalaryScale />} />
@@ -201,18 +304,17 @@ const AppRoutes = () => {
     )
   }
 
-  // Tenant user -> Tenant Application
   return (
     <Routes>
-      <Route element={<TenantLayout />}>
+      <Route element={<CompanyClientLayout />}>
         <Route path="/" element={<Index />} />
         <Route path="/organization" element={<Organization />} />
         <Route path="/organization/:entityId" element={<OrganizationDetail />} />
         <Route path="/candidates" element={<Candidates />} />
         <Route path="/hiring" element={<Hiring />} />
-        <Route path="/tenant/users" element={<TenantUsers />} />
-        <Route path="/tenant/roles" element={<TenantRoles />} />
-        <Route path="/tenant/invitations" element={<TenantInvitations />} />
+        <Route path="/tenant/users" element={<CompanyClientUsers />} />
+        <Route path="/tenant/roles" element={<CompanyClientRoles />} />
+        <Route path="/tenant/invitations" element={<CompanyClientInvitations />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -227,14 +329,14 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-                      <CurrentTenantProvider>
-                        <CurrentEntityProvider>
-                          <SalaryProvider>
-                            <AppRoutes />
-                          </SalaryProvider>
-                        </CurrentEntityProvider>
-                      </CurrentTenantProvider>
-                    </AuthProvider>
+            <CurrentCompanyClientProvider>
+              <CurrentEntityProvider>
+                <SalaryProvider>
+                  <AppRoutes />
+                </SalaryProvider>
+              </CurrentEntityProvider>
+            </CurrentCompanyClientProvider>
+          </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

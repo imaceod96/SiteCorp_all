@@ -57,6 +57,17 @@ serve(async (req) => {
       return json({ error: "Unauthorized" }, 401)
     }
 
+    // Barrera de servidor: el llamante no puede tener un cambio de contraseña pendiente
+    // (esta función usa el rol de servicio para leer ficheros y eludiría RLS).
+    const { data: callerLifecycle } = await serviceClient
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", userData.user.id)
+      .maybeSingle()
+    if (callerLifecycle?.must_change_password === true) {
+      return json({ error: "Forbidden: pending password change" }, 403)
+    }
+
     const payload = await req.json().catch(() => ({}))
     const batchId = payload?.batch_id as string | undefined
     if (!batchId) {

@@ -1,0 +1,223 @@
+import { test, expect } from "@playwright/test"
+import { existsSync, readFileSync } from "node:fs"
+import { PENDING_ADDENDUM_STATUSES, isAddendumPending } from "../src/modules/contracts/domain/rules"
+
+/**
+ * INTEGRACIÓN DEL EXPEDIENTE — pestañas, contratos y documentos, diálogos laborales y alta de
+ * candidatos.
+ *
+ * Comprueba dos cosas que no se ven en pantalla pero deciden si la arquitectura se mantiene:
+ *   1. El criterio de negocio de los anexos pendientes no cambia al moverlo al contexto de
+ *      contratos.
+ *   2. Ningún componente de este bloque (pestañas del trabajador, anexos y contratos,
+ *      diálogos laborales y listado de candidatos) habla con Supabase: todo pasa por los
+ *      casos de uso de su dominio. Los servicios de contratos y de salario tampoco.
+ *
+ * Las importaciones son deliberadamente profundas (`domain/…`): las reglas son puras y no
+ * arrastran el cliente de Supabase, igual que en el resto de pruebas del expediente.
+ */
+
+const read = (path: string) => readFileSync(path, "utf8")
+
+test("los estados de un anexo pendiente se resuelven con la misma regla", () => {
+  expect(PENDING_ADDENDUM_STATUSES).toEqual([
+    "PENDING_TEMPLATE",
+    "READY_TO_GENERATE",
+    "GENERATION_ERROR",
+  ])
+
+  // Pendiente de formalizar: el anexo todavía no forma parte de las condiciones vigentes.
+  expect(isAddendumPending("PENDING_TEMPLATE")).toBe(true)
+  expect(isAddendumPending("READY_TO_GENERATE")).toBe(true)
+  expect(isAddendumPending("GENERATION_ERROR")).toBe(true)
+
+  // Formalizado, generado o cancelado: ya no se cuenta como pendiente.
+  expect(isAddendumPending("FORMALIZED")).toBe(false)
+  expect(isAddendumPending("GENERATED")).toBe(false)
+  expect(isAddendumPending("CANCELLED")).toBe(false)
+})
+
+test("el contexto de contratos concentra las consultas del contrato, del anexo y del salario", () => {
+  const repositories = [
+    "src/modules/contracts/infrastructure/addendums.repository.ts",
+    "src/modules/contracts/infrastructure/contract-conditions.repository.ts",
+    "src/modules/contracts/infrastructure/salary.repository.ts",
+  ]
+
+  for (const repository of repositories) {
+    const source = read(repository)
+    expect(source, `${repository} es la frontera de Supabase`).toMatch(/@\/lib\/supabase/)
+  }
+
+  // La automatización documental del contrato ya no es una frontera de Supabase: la vigencia de
+  // la plantilla la resuelve el dominio de plantillas y la generación, el motor documental.
+  const contractDocuments = read(
+    "src/modules/contracts/infrastructure/contract-documents.repository.ts"
+  )
+  expect(contractDocuments).not.toMatch(/@\/lib\/supabase/)
+  expect(contractDocuments).toMatch(/from "@\/(domains|modules)\/document-generation"/)
+  expect(contractDocuments).toMatch(/from "@\/(domains|modules)\/document-templates"/)
+  expect(contractDocuments).toMatch(/resolveDocumentTemplateVersion\(/)
+
+  // Los casos de uso de la aplicación no hablan con Supabase ni con el motor documental.
+  const useCases = [
+    "src/modules/contracts/application/addendums.queries.ts",
+    "src/modules/contracts/application/addendums.commands.ts",
+    "src/modules/contracts/application/contract-conditions.queries.ts",
+    "src/modules/contracts/application/salary.queries.ts",
+    "src/modules/contracts/application/salary.commands.ts",
+  ]
+
+  for (const useCase of useCases) {
+    const source = read(useCase)
+    expect(source, `${useCase} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
+    expect(source, `${useCase} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
+    expect(source, `${useCase} no debe usar Storage`).not.toMatch(/supabase\.storage/)
+  }
+
+  // La interfaz pública del contexto expone lo que consumen las pantallas y los diálogos.
+  const index = read("src/modules/contracts/index.ts")
+  for (const symbol of [
+    "fetchWorkerAddendums",
+    "fetchAddendumPending",
+    "fetchWorkerContractualConditions",
+    "createManualAddendum",
+    "formalizeAddendum",
+    "cancelAddendum",
+    "fetchPaymentMethods",
+    "fetchContractFormalizationPending",
+    "fetchComponentsByContract",
+    "fetchContractConditions",
+    "fetchWorkerSalaryHistory",
+    "previewSalaryChange",
+    "fetchSalaryChangeImpact",
+    "applySalaryChange",
+    "finalizeSalaryChangeEvent",
+    "resolveContractTemplateAvailability",
+    "resolveAddendumTemplateAvailability",
+    "ensureContractDocumentGenerated",
+    "ensureAddendumDocumentGenerated",
+  ]) {
+    expect(index, `el contexto de contratos debe exportar ${symbol}`).toContain(symbol)
+  }
+})
+
+test("los servicios de contratos y de salario ya no consultan Supabase", () => {
+  // Las etiquetas de los anexos, las condiciones contractuales, la automatización y el
+  // historial salarial ya no son módulos de `src/lib`: son reglas puras del dominio de
+  // contratos y siguen sin hablar con Supabase.
+  const services = [
+    "src/modules/contracts/domain/addendum-labels.ts",
+    "src/modules/contracts/domain/compensation.rules.ts",
+    "src/modules/contracts/domain/automation.messages.ts",
+    "src/modules/contracts/domain/salary-labels.ts",
+    "src/modules/contracts/domain/formats.ts",
+  ]
+
+  for (const service of services) {
+    const source = read(service)
+    expect(source, `${service} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
+    expect(source, `${service} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
+  }
+
+  // Y las fachadas legacy se retiraron cuando el último consumidor migró al dominio.
+  for (const facade of [
+    "src/lib/addendums.ts",
+    "src/lib/contract-conditions.ts",
+    "src/lib/contract-automation.ts",
+    "src/lib/worker-salary.ts",
+  ]) {
+    expect(existsSync(facade), `${facade} no debe seguir existiendo`).toBe(false)
+  }
+})
+
+test("las pestañas del trabajador y los diálogos laborales consumen sus dominios", () => {
+  const peopleScreens = [
+    "src/modules/people/presentation/components/WorkerDocumentsTab.tsx",
+    "src/modules/vacations-licenses/medical-certificates/presentation/components/MedicalCertificateFormDialog.tsx",
+    "src/modules/people/presentation/components/MigratedWorkerDialog.tsx",
+    "src/modules/people/presentation/components/SeparateWorkerDialog.tsx",
+    "src/modules/people/presentation/components/ChangePositionDialog.tsx",
+    "src/modules/people/presentation/components/ChangeContractDialog.tsx",
+    "src/modules/people/presentation/components/ReincorporateWorkerDialog.tsx",
+  ]
+
+  for (const screen of peopleScreens) {
+    const source = read(screen)
+    expect(source, `${screen} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
+    expect(source, `${screen} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
+    expect(source, `${screen} no debe usar Storage`).not.toMatch(/supabase\.storage/)
+  }
+
+  const contractsScreens = [
+    "src/modules/contracts/presentation/components/ContractAddendumsSection.tsx",
+    "src/modules/contracts/presentation/components/AddendumDetailDialog.tsx",
+    "src/modules/contracts/presentation/components/CreateManualAddendumDialog.tsx",
+    "src/modules/contracts/presentation/components/ContractFormalizationAlerts.tsx",
+    "src/modules/contracts/presentation/components/ReviewSalaryChangeDialog.tsx",
+  ]
+
+  for (const screen of contractsScreens) {
+    const source = read(screen)
+    expect(source, `${screen} no debe consultar Supabase`).not.toMatch(/@\/lib\/supabase/)
+    expect(source, `${screen} no debe invocar RPC`).not.toMatch(/\.rpc\(/)
+    expect(source, `${screen} debe consumir el contexto de contratos`).toMatch(
+      /@\/(domains|modules)\/contracts/
+    )
+  }
+
+  // Las dos pestañas ya migradas siguen consumiendo sus propios módulos.
+  expect(
+    read("src/modules/vacations-licenses/vacations/presentation/components/WorkerVacationsTab.tsx")
+  ).toMatch(
+    /@\/(domains|modules)\/vacations-licenses/
+  )
+  expect(
+    read(
+      "src/modules/vacations-licenses/medical-certificates/presentation/components/WorkerMedicalCertificatesTab.tsx"
+    )
+  ).toMatch(
+    /@\/(domains|modules)\/vacations-licenses/
+  )
+})
+
+test("la pestaña de documentos resuelve su expediente con el dominio Personas", () => {
+  const tab = read("src/modules/people/presentation/components/WorkerDocumentsTab.tsx")
+  expect(tab).toMatch(/@\/(domains|modules)\/people/)
+  expect(tab).toMatch(/loadWorkerDocumentsView/)
+  expect(tab).toMatch(/uploadWorkerDocument/)
+  expect(tab).toMatch(/deleteWorkerDocument/)
+  expect(tab).not.toMatch(/worker_documents/)
+  expect(tab).not.toMatch(/crypto\.randomUUID/)
+
+  const commands = read("src/modules/people/application/worker-documents.commands.ts")
+  expect(commands).toMatch(/EXPEDIENTE_SIGNED_URL_TTL/)
+  expect(commands).not.toMatch(/@\/lib\/supabase/)
+
+  const repository = read("src/modules/people/infrastructure/worker-expediente.repository.ts")
+  expect(repository, "worker_documents se consulta en un único repositorio").toMatch(
+    /"worker_documents"/
+  )
+  expect(repository).toMatch(/sanitizeFileName/)
+})
+
+test("el listado de candidatos y la ficha de edición comparten un único formulario", () => {
+  const list = read("src/modules/people/presentation/pages/EntityCandidates.tsx")
+  expect(list).toMatch(/@\/modules\/people\/presentation\/components\/CandidateForm/)
+  expect(list).toMatch(/mode="create"/)
+  // Sin formulario paralelo: no hay estado de formulario ni datos vacíos propios del listado.
+  expect(list).not.toMatch(/emptyFormData/)
+  expect(list).not.toMatch(/CandidateFormData/)
+  expect(list).not.toMatch(/candidateRequiresSpecialty/)
+
+  const form = read("src/modules/people/presentation/components/CandidateForm.tsx")
+  expect(form, "el alta la resuelve el caso de uso del dominio").toMatch(/registerCandidate/)
+  expect(form, "la edición la resuelve el caso de uso del dominio").toMatch(
+    /updateCandidateExpediente/
+  )
+  expect(form, "las reglas del alta las aporta el dominio").toMatch(/validateCandidateRegistration/)
+  expect(form, "la especialidad depende del nivel educacional (regla del dominio)").toMatch(
+    /candidateRequiresSpecialty/
+  )
+  expect(form, "el documento disciplinario viaja con el alta").toMatch(/disciplinary_document/)
+})

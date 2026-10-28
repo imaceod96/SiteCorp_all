@@ -10,7 +10,6 @@ interface CreateSitecorpUserRequest {
   full_name: string
   username: string
   email: string
-  password: string
   platform_role_id?: string
   is_active?: boolean
 }
@@ -39,6 +38,72 @@ const json = (body: unknown, status = 200) =>
   })
 
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
+
+/* -------------------------------------------------------------------------- */
+/* Contraseña inicial: generación CRIPTOGRÁFICAMENTE SEGURA (sin Math.random)  */
+/* -------------------------------------------------------------------------- */
+
+/** Longitud de la contraseña inicial (requisito: mínimo 20 caracteres). */
+const INITIAL_PASSWORD_LENGTH = 24
+
+/** Alfabetos sin caracteres ambiguos (0/O, 1/l/I) para una transcripción segura. */
+const PASSWORD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+const PASSWORD_LOWER = "abcdefghijkmnopqrstuvwxyz"
+const PASSWORD_DIGITS = "23456789"
+const PASSWORD_SYMBOLS = "!@#$%^&*-_=+?"
+
+/**
+ * Entero uniforme en [0, maxExclusive) con `crypto.getRandomValues` (CSPRNG).
+ * Usa muestreo por rechazo para eliminar el sesgo del módulo.
+ */
+function randomInt(maxExclusive: number): number {
+  const limit = Math.floor(256 / maxExclusive) * maxExclusive
+  const buffer = new Uint8Array(1)
+  let value = 0
+  do {
+    crypto.getRandomValues(buffer)
+    value = buffer[0]
+  } while (value >= limit)
+  return value % maxExclusive
+}
+
+function randomChar(alphabet: string): string {
+  return alphabet.charAt(randomInt(alphabet.length))
+}
+
+/**
+ * Contraseña inicial ALEATORIA y segura.
+ *
+ * - Generada con `crypto.getRandomValues` (CSPRNG). NUNCA `Math.random()`.
+ * - 24 caracteres (≥ 20), con al menos uno de cada clase (mayúscula, minúscula, dígito,
+ *   símbolo) y mezclada con Fisher–Yates aleatorio seguro.
+ * - Sin valores fijos ni predecibles. NO se registra en logs ni se persiste en claro: se
+ *   entrega a Supabase Auth y se devuelve UNA SOLA VEZ al administrador autorizado.
+ */
+function generateInitialPassword(): string {
+  const all = PASSWORD_UPPER + PASSWORD_LOWER + PASSWORD_DIGITS + PASSWORD_SYMBOLS
+
+  const chars = [
+    randomChar(PASSWORD_UPPER),
+    randomChar(PASSWORD_LOWER),
+    randomChar(PASSWORD_DIGITS),
+    randomChar(PASSWORD_SYMBOLS),
+  ]
+
+  for (let i = chars.length; i < INITIAL_PASSWORD_LENGTH; i += 1) {
+    chars.push(randomChar(all))
+  }
+
+  // Mezcla Fisher–Yates con entropía segura (evita que las clases queden en posiciones fijas).
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1)
+    const tmp = chars[i]
+    chars[i] = chars[j]
+    chars[j] = tmp
+  }
+
+  return chars.join("")
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -84,6 +149,18 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
+    // El llamante NO puede tener un cambio de contraseña pendiente (barrera de servidor, no
+    // solo de interfaz): un administrador con cambio obligatorio no puede crear usuarios.
+    const { data: callerLifecycle } = await adminClient
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", callerId)
+      .maybeSingle()
+    if (callerLifecycle?.must_change_password === true) {
+      console.error("[create-sitecorp-user] caller has a pending password change", { callerId })
+      return json({ error: "Forbidden: pending password change" }, 403)
+    }
+
     // 3. Verify caller authorization: SuperAdmin OR has users.manage_all permission
     const { data: callerRoles, error: callerRolesError } = await adminClient
       .from("platform_user_roles")
@@ -125,7 +202,6 @@ serve(async (req) => {
         hasManageAllPermission = permData.some((p: PlatformPermissionRow) => {
           const permission = p.platform_permissions
           // Sólo se evalúa cuando la relación llega como objeto (no como arreglo ni null).
-          // Si llega como arreglo se conserva el resultado previo (false).
           if (permission === null || Array.isArray(permission)) return false
           return permission.code === "users.manage_all"
         })
@@ -138,11 +214,12 @@ serve(async (req) => {
     }
 
     // 4. Parse and validate request body
+    //    NOTA DE SEGURIDAD: el cuerpo NUNCA aporta la contraseña. La contraseña inicial la
+    //    genera SIEMPRE el servidor de forma aleatoria y segura (ver generateInitialPassword).
     const body = (await req.json()) as CreateSitecorpUserRequest
     const fullName = (body.full_name ?? "").trim()
     const username = (body.username ?? "").trim()
     const email = (body.email ?? "").trim().toLowerCase()
-    const password = (body.password ?? "temp1234!").trim()
     const platformRoleId = body.platform_role_id || null
     const isActive = body.is_active !== false
 
@@ -177,6 +254,35 @@ serve(async (req) => {
       return json({ error: "El rol de plataforma seleccionado está inactivo." }, 400)
     }
 
+    // 4.b El rol SuperAdmin queda RESERVADO a la cuenta fundadora.
+    //      Aquí se responde con un mensaje claro, pero la AUTORIDAD es la base: el disparador
+    //      `enforce_founder_only_superadmin_role` rechaza cualquier asignación del rol
+    //      SuperAdmin que no provenga de la cuenta fundadora, incluso desde service_role.
+    const isSuperAdminRole = roleData.name === "SuperAdmin" && roleData.is_system_role === true
+
+    if (isSuperAdminRole) {
+      const { data: founderRow, error: founderError } = await adminClient
+        .from("platform_founder")
+        .select("user_id")
+        .eq("user_id", callerId)
+        .maybeSingle()
+
+      if (founderError) {
+        console.error("[create-sitecorp-user] founder lookup failed", founderError)
+        return json({ error: "Forbidden: unable to verify founder status" }, 403)
+      }
+
+      if (!founderRow) {
+        console.error("[create-sitecorp-user] non-founder attempted to grant SuperAdmin", {
+          callerId,
+        })
+        return json(
+          { error: "Solo la cuenta fundadora puede asignar el rol SuperAdmin." },
+          403
+        )
+      }
+    }
+
     // Check if username already exists
     const { data: existingUsername, error: usernameError } = await adminClient
       .from("profiles")
@@ -191,6 +297,9 @@ serve(async (req) => {
     if (existingUsername) {
       return json({ error: "Ya existe un usuario con ese nombre." }, 409)
     }
+
+    // 5. Generate the initial password (server-side, cryptographically secure).
+    const password = generateInitialPassword()
 
     // Create auth user via Admin API with email_confirm: true for development
     // Duplicate email detection is handled by admin.createUser error response
@@ -239,7 +348,22 @@ serve(async (req) => {
     }
 
     // Assign platform role
-    const { error: roleAssignError } = await adminClient.from("platform_user_roles").insert({
+    //   · Rol SuperAdmin → se asigna con la IDENTIDAD DEL LLAMANTE (su propio token), para
+    //     que la base reconozca a la cuenta fundadora y el disparador autorice la operación.
+    //     La service role NO puede otorgar el SuperAdmin.
+    //   · Resto de roles → como hasta ahora, con el cliente de servicio.
+    const roleClient = isSuperAdminRole
+      ? createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+          {
+            auth: { persistSession: false },
+            global: { headers: { Authorization: authHeader } },
+          }
+        )
+      : adminClient
+
+    const { error: roleAssignError } = await roleClient.from("platform_user_roles").insert({
       user_id: userId,
       platform_role_id: platformRoleId,
       assigned_by: callerId,
@@ -257,6 +381,50 @@ serve(async (req) => {
       return json({ error: "Error al asignar el rol de plataforma: " + roleAssignError.message }, 500)
     }
 
+    // 6. Initialize the password lifecycle (born with must_change_password = true).
+    //    Operación privilegiada: se invoca con el cliente service_role vía PostgREST, que es
+    //    la ÚNICA vía autorizada (las RPC están restringidas a service_role en la base).
+    const { error: lifecycleError } = await adminClient.rpc("initialize_password_lifecycle", {
+      p_user_id: userId,
+    })
+
+    if (lifecycleError) {
+      console.error("[create-sitecorp-user] password lifecycle init failed", lifecycleError)
+      // Compensación: revertir el alta para no dejar una cuenta con contraseña temporal sin
+      // ciclo de vida. Se comprueba el resultado y, si la reversión falla, se informa del
+      // estado inconsistente sin ocultarlo.
+      let compensationFailed = false
+
+      const { error: profileDeleteError } = await adminClient
+        .from("profiles")
+        .delete()
+        .eq("id", userId)
+      if (profileDeleteError) {
+        console.error("[create-sitecorp-user] rollback profile delete failed", profileDeleteError)
+        compensationFailed = true
+      }
+
+      const { error: userDeleteError } = await adminClient.auth.admin.deleteUser(userId)
+      if (userDeleteError) {
+        console.error("[create-sitecorp-user] rollback auth user delete failed", userDeleteError)
+        compensationFailed = true
+      }
+
+      if (compensationFailed) {
+        return json(
+          {
+            error:
+              "No se pudo inicializar el ciclo de vida de la contraseña y la reversión del alta no se completó. El usuario puede haber quedado en un estado inconsistente; revísalo antes de reintentar.",
+            inconsistent_state: true,
+            user_id: userId,
+          },
+          500
+        )
+      }
+
+      return json({ error: "No se pudo inicializar la contraseña inicial. El alta se revirtió." }, 500)
+    }
+
     console.log("[create-sitecorp-user] user created successfully", {
       userId,
       email,
@@ -264,6 +432,8 @@ serve(async (req) => {
       isActive,
     })
 
+    // 7. La contraseña inicial se devuelve UNA SOLA VEZ al administrador autorizado.
+    //    Nunca se registra en logs ni se persiste: solo viaja en esta respuesta.
     return json(
       {
         user_id: userId,
@@ -272,6 +442,7 @@ serve(async (req) => {
         full_name: fullName,
         platform_role_id: platformRoleId,
         platform_role_name: roleData.name,
+        initial_password: password,
         message: "Usuario creado correctamente.",
       },
       201
@@ -283,9 +454,9 @@ serve(async (req) => {
 })
 
 /* To invoke this function:
- * 
+ *
  * curl -X POST 'https://<your-project-ref>.functions.supabase.co/create-sitecorp-user' \
  * -H 'Authorization: Bearer <your-jwt>' \
  * -H 'Content-Type: application/json' \
- * -d '{"full_name":"Jane Doe","username":"jane_doe","email":"jane@example.com","password":"secret","platform_role_id":"<uuid>"}'
+ * -d '{"full_name":"Jane Doe","username":"jane_doe","email":"jane@example.com","platform_role_id":"<uuid>"}'
  */

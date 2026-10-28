@@ -46,8 +46,8 @@ BEGIN
         RAISE EXCEPTION 'No tiene permiso para gestionar trabajadores en esta entidad';
     END IF;
 
-    -- 2. Obtener tenant_id de la entidad
-    SELECT tenant_id INTO v_tenant_id
+    -- 2. Obtener company_client_id de la entidad
+    SELECT company_client_id INTO v_tenant_id
     FROM public.organization_entities
     WHERE id = p_entity_id;
     IF v_tenant_id IS NULL THEN
@@ -310,8 +310,8 @@ BEGIN
         RAISE EXCEPTION 'No tiene permiso para formalizar contratos en esta entidad';
     END IF;
 
-    -- 2. Obtener tenant_id de la entidad
-    SELECT tenant_id INTO v_tenant_id
+    -- 2. Obtener company_client_id de la entidad
+    SELECT company_client_id INTO v_tenant_id
     FROM public.organization_entities
     WHERE id = p_entity_id;
     IF v_tenant_id IS NULL THEN
