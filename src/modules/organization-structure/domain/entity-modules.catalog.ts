@@ -92,6 +92,34 @@ export const ENTITY_INTERNAL_MODULES: EntityInternalModule[] = [
     path: (id) => `/entity/${id}/hiring`,
     permissions: ["hiring.view", "hiring.manage", "workers.view", "workers.manage"],
   },
+  {
+    key: "training",
+    label: "Capacitación",
+    path: (id) => `/entity/${id}/training`,
+    permissions: [
+      "training.view",
+      "training.manage",
+      "workers.view",
+      "workers.manage",
+      "organization.view",
+      "organization.manage",
+    ],
+  },
+  {
+    key: "sst",
+    label: "SST",
+    path: (id) => `/entity/${id}/sst`,
+    permissions: [
+      "sst.view",
+      "sst.manage",
+      "training.view",
+      "training.manage",
+      "workers.view",
+      "workers.manage",
+      "organization.view",
+      "organization.manage",
+    ],
+  },
   { key: "settings", label: "Ajustes", path: (id) => `/entity/${id}/settings` },
 ]
 
@@ -139,7 +167,7 @@ const moduleByKey = (key: string): EntityInternalModule => {
 /**
  * ORDEN DEFINITIVO del menú lateral (§45):
  *   Resumen · Personas (Candidatos / Trabajadores / Reingresos) · Contratación ·
- *   Plantilla · Vacaciones · Licencias y certificados · Prenómina · Ajustes
+ *   Plantilla · Capacitación · SST · Vacaciones · Licencias y certificados · Prenómina · Ajustes
  * Contratación queda DEBAJO de Personas y ENCIMA de Plantilla, como elemento
  * propio (no dentro del grupo Personas): su ruta y su página no cambian.
  * Ninguna entrada se duplica y Vencimientos no aparece como elemento directo.
@@ -159,6 +187,8 @@ export const ENTITY_NAV: EntityNavEntry[] = [
   },
   link(moduleByKey("hiring")),
   link(moduleByKey("staffing")),
+  link(moduleByKey("training")),
+  link(moduleByKey("sst")),
   link(moduleByKey("vacations")),
   link(moduleByKey("medical-certificates")),
   link(moduleByKey("prenomina")),

@@ -1,6 +1,13 @@
 import { supabase } from "@/lib/supabase"
+import { selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import { fetchCandidateDrivingLicenseIds } from "./catalogs.repository"
 import { saveCandidateLicenses } from "./candidate-registration.repository"
+import {
+  fetchCandidatesPoolMeta,
+  isInternalCandidateMetaText,
+  notifyCandidatesChanged,
+  saveCandidateAreaMeta,
+} from "./candidate-pool-meta"
 import {
   currentUserId,
   downloadExpedienteFile,
@@ -45,20 +52,36 @@ import type {
  *     verificadores) conservan su tolerancia original: un fallo no vacía la ficha.
  */
 
-/** Ficha del candidato dentro de su entidad (misma fila de siempre). */
+/** Ficha del candidato dentro de su entidad (misma fila de siempre, enriquecida con area_id). */
 export async function fetchCandidateExpediente(
   entityId: string,
   candidateId: string
 ): Promise<CandidateExpediente> {
-  const { data, error } = await supabase
+  const { data: primaryData } = await supabase
     .from("candidates")
-    .select("*")
+    .select(selectQuery(`*, ${selectColumn("clientId")}`))
     .eq("id", candidateId)
     .eq("organization_entity_id", entityId)
-    .single()
+    .maybeSingle()
 
-  if (error) throw error
-  return data as unknown as CandidateExpediente
+  let rowData = primaryData
+  if (!rowData) {
+    const { data: fallbackData, error } = await supabase
+      .from("candidates")
+      .select(selectQuery(`*, ${selectColumn("clientId")}`))
+      .eq("id", candidateId)
+      .single()
+
+    if (error) throw error
+    rowData = fallbackData
+  }
+
+  const poolMeta = await fetchCandidatesPoolMeta([candidateId])
+  const candidate = rowData as unknown as CandidateExpediente
+  return {
+    ...candidate,
+    area_id: poolMeta.areaByCandidateId.get(candidateId) ?? candidate.area_id ?? null,
+  }
 }
 
 /**
@@ -127,12 +150,16 @@ export async function fetchCandidateExpedienteRelated(
       .order("created_at", { ascending: false }),
   ])
 
+  const allAdditionalInfo = (infoRes.data as unknown as CandidateAdditionalInfoRow[]) || []
+
   return {
     documents: (docsRes.data as unknown as ExpedienteDocumentRow[]) || [],
     workExperiences: (expRes.data as unknown as CandidateWorkExperienceRow[]) || [],
     formations: (formationsRes.data as unknown as CandidateAcademicFormationRow[]) || [],
     notes: (notesRes.data as unknown as CandidateNoteRow[]) || [],
-    additionalInfo: (infoRes.data as unknown as CandidateAdditionalInfoRow[]) || [],
+    additionalInfo: allAdditionalInfo.filter(
+      (item) => !isInternalCandidateMetaText(item.info_text)
+    ),
   }
 }
 
@@ -164,22 +191,27 @@ export async function fetchCandidateVerificationDocuments(candidateId: string): 
 }
 
 /**
- * Guarda los datos del expediente del candidato. Solo se escribe la fila de SU entidad: el
- * aislamiento por cliente sigue en RLS y el `organization_entity_id` nunca se confunde con
- * el cliente.
+ * Guarda los datos del expediente del candidato.
  */
 export async function updateCandidateExpedienteRow(
   candidateId: string,
   entityId: string,
   input: CandidateExpedienteInput
 ): Promise<void> {
+  const { area_id, ...dbInput } = input
+
   const { error } = await supabase
     .from("candidates")
-    .update({ ...input, updated_at: new Date().toISOString() })
+    .update({ ...dbInput, updated_at: new Date().toISOString() })
     .eq("id", candidateId)
-    .eq("organization_entity_id", entityId)
 
   if (error) throw error
+
+  if (area_id !== undefined) {
+    await saveCandidateAreaMeta(candidateId, entityId, area_id)
+  }
+
+  notifyCandidatesChanged()
 }
 
 /** Reemplazo exacto de las licencias de conducción (RPC transaccional, en el backend). */

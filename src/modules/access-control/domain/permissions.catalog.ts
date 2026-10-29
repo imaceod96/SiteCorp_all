@@ -87,6 +87,20 @@ export const ENTITY_PERMISSION_LABELS: Record<string, string> = {
   "vacations.view": "Ver vacaciones (saldos, períodos e historial)",
   "vacations.manage": "Gestionar vacaciones (registrar, cancelar y ajustar)",
 
+  "medical_certificates.view": "Ver licencias y certificados médicos",
+  "medical_certificates.manage": "Gestionar certificados médicos y licencias",
+
+  "training.view": "Ver capacitación (carpetas, temas, calendario y sesiones)",
+  "training.manage": "Gestionar capacitación (temas, documentos, sesiones y participantes)",
+
+  "sst.view": "Ver seguridad y salud en el trabajo",
+  "sst.manage": "Gestionar seguridad y salud en el trabajo",
+
+  "resolutions.view": "Ver resoluciones laborales",
+  "resolutions.manage": "Emitir y gestionar resoluciones laborales",
+
+  "entity_audit.view": "Ver historial y auditoría de la entidad",
+
   "reports.view": "Ver informes",
 }
 
@@ -98,6 +112,9 @@ export const ENTITY_PERMISSION_GROUPS: RolePermissionGroup[] = [
   { title: "CONFIGURACIÓN DE PLANTILLA", codes: ["staffing.view", "staffing.manage"] },
   { title: "TRABAJADORES", codes: ["workers.view", "workers.manage", "workers.initial_import"] },
   { title: "CONTRATACIÓN", codes: ["hiring.view", "hiring.manage"] },
+  { title: "RESOLUCIONES LABORALES", codes: ["resolutions.view", "resolutions.manage"] },
+  { title: "CAPACITACIÓN", codes: ["training.view", "training.manage"] },
+  { title: "SEGURIDAD Y SALUD EN EL TRABAJO", codes: ["sst.view", "sst.manage"] },
   { title: "COMPENSACIÓN", codes: ["salary.view", "salary.manage", "tenure_scale.view", "tenure_scale.manage"] },
   { title: "CONTRATOS", codes: ["contracts.view", "contracts.manage"] },
   {
@@ -117,6 +134,11 @@ export const ENTITY_PERMISSION_GROUPS: RolePermissionGroup[] = [
   { title: "ALERTAS DE CONTRATOS", codes: ["contract_alerts.view"] },
   { title: "PRENÓMINA", codes: ["prenomina.view", "prenomina.manage"] },
   { title: "VACACIONES", codes: ["vacations.view", "vacations.manage"] },
+  {
+    title: "LICENCIAS Y CERTIFICADOS MÉDICOS",
+    codes: ["medical_certificates.view", "medical_certificates.manage"],
+  },
+  { title: "HISTORIAL Y AUDITORÍA", codes: ["entity_audit.view"] },
   { title: "INFORMES", codes: ["reports.view"] },
 ]
 
@@ -157,8 +179,12 @@ export function groupEntityPermissions(
 export const PLATFORM_CATEGORY_ORDER = [
   "CLIENTES",
   "ORGANIZACIONES",
+  "PLANES",
   "USUARIOS",
+  "CANDIDATOS",
   "ROLES Y PERMISOS",
+  "DOCUMENTOS GLOBALES",
+  "AUDITORÍA",
   "INFORMES",
   "CONFIGURACIÓN",
 ] as const
@@ -175,6 +201,13 @@ export const PLATFORM_PERMISSION_LABELS: Record<string, string> = {
   "organizations.view_all": "Ver todas las organizaciones",
   "organizations.manage_all": "Gestionar todas las organizaciones",
   "organizations.delete": "Eliminar organizaciones",
+  "entity_plans.view": "Ver planes de entidades",
+  "entity_plans.manage": "Gestionar planes de entidades",
+  "platform_candidates.view": "Ver bolsa general de candidatos",
+  "platform_candidates.manage": "Gestionar bolsa general de candidatos",
+  "platform_documents.view": "Ver documentos normativos de plataforma",
+  "platform_documents.manage": "Administrar documentos de plataforma",
+  "platform_audit.view": "Consultar historial de auditoría global",
   "users.view_all": "Ver usuarios globales",
   "users.manage_all": "Crear, editar y gestionar usuarios globales",
   "users.invite": "Invitar usuarios de plataforma",

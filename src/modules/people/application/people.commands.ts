@@ -34,12 +34,14 @@ export interface RegisterCandidateCommand {
   /** Cliente de la entidad: el UUID del compañero (`company_clients.id`). */
   companyClientId: string | null | undefined
   registration: CandidateRegistrationInput
+  /** Si se registra desde la Bolsa Global sin entidad inicial asignada. */
+  unassignedInPool?: boolean
 }
 
 export async function registerCandidate(
   command: RegisterCandidateCommand
 ): Promise<{ candidateId: string }> {
-  const { entityId, companyClientId, registration } = command
+  const { entityId, companyClientId, registration, unassignedInPool } = command
 
   // El formato del carnet de identidad es un objeto de valor del kernel compartido
   // (`@/utils/ci`): se aporta al dominio en vez de duplicar la regla de 11 dígitos.
@@ -77,6 +79,8 @@ export async function registerCandidate(
     province: registration.province.trim() || null,
     education_level_id: registration.education_level_id || null,
     specialty: requiresSpecialty ? registration.specialty.trim() || null : null,
+    area_id: registration.area_id || null,
+    unassignedInPool,
     has_masters_degree: registration.has_masters_degree,
     has_doctorate_degree: registration.has_doctorate_degree,
     profession_or_trade: registration.profession_or_trade.trim() || null,

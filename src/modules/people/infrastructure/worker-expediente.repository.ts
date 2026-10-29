@@ -13,6 +13,7 @@ import {
   storageFileName,
   uploadExpedienteFile,
 } from "./expediente-storage"
+import { ensureHiringTrainingNotification } from "@/modules/training"
 import type {
   DocumentTypeOption,
   NewWorkerDocumentRecord,
@@ -390,6 +391,13 @@ export async function createWorkerWithPosition(input: NewWorkerInput): Promise<s
 
   const workerId = (data as { worker_id?: string } | null)?.worker_id
   if (!workerId) throw new Error("No se pudo obtener el ID del trabajador creado")
+
+  await ensureHiringTrainingNotification({
+    workerId,
+    positionId: input.positionId,
+    hireDate: input.hireDate,
+  })
+
   return workerId
 }
 

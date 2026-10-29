@@ -1,6 +1,11 @@
 import { supabase } from "@/lib/supabase"
 import { saveCandidateDrivingLicenseIds } from "./catalogs.repository"
-import { columnName } from "@/integrations/supabase/schema-target"
+import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
+import {
+  notifyCandidatesChanged,
+  saveCandidateAreaMeta,
+  saveCandidateEntitiesMeta,
+} from "./candidate-pool-meta"
 import type { PersonIdentificationStatus } from "../domain/entities"
 
 /**
@@ -55,6 +60,8 @@ export interface NewCandidateRecord {
   province: string | null
   education_level_id: string | null
   specialty: string | null
+  area_id?: string | null
+  unassignedInPool?: boolean
   has_masters_degree: boolean
   has_doctorate_degree: boolean
   profession_or_trade: string | null
@@ -66,8 +73,18 @@ export interface NewCandidateRecord {
 
 /** Inserta el candidato y devuelve su identificador (UUID conservado, sin duplicar). */
 export async function insertCandidate(record: NewCandidateRecord): Promise<string> {
-  const payload = {
-    [columnName("clientId")]: record.companyClientId,
+  let resolvedClientId = record.companyClientId
+  if (!resolvedClientId && record.entityId) {
+    const { data: entRow } = await supabase
+      .from("organization_entities")
+      .select(selectQuery(`id, ${selectColumn("clientId")}`))
+      .eq("id", record.entityId)
+      .maybeSingle()
+    resolvedClientId = (entRow as { tenant_id?: string | null } | null)?.tenant_id ?? null
+  }
+
+  const payload: Record<string, unknown> = {
+    [columnName("clientId")]: resolvedClientId,
     organization_entity_id: record.entityId,
     first_name: record.first_name,
     first_surname: record.first_surname,
@@ -95,7 +112,18 @@ export async function insertCandidate(record: NewCandidateRecord): Promise<strin
 
   const { data, error } = await supabase.from("candidates").insert(payload).select("id").single()
   if (error) throw error
-  return (data as { id: string }).id
+  const candidateId = (data as { id: string }).id
+
+  if (record.area_id) {
+    await saveCandidateAreaMeta(candidateId, record.entityId, record.area_id)
+  }
+
+  if (record.unassignedInPool) {
+    await saveCandidateEntitiesMeta(candidateId, record.entityId, [])
+  }
+
+  notifyCandidatesChanged()
+  return candidateId
 }
 
 /** Reemplazo exacto (atómico, en el backend) de las licencias de conducción. */

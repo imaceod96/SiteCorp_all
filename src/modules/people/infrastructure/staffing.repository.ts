@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { fetchEntityPoolCandidateOverrides } from "./candidate-pool-meta"
 import { EMPLOYMENT_STATUS } from "../domain/entities"
 import type {
   ContractTypeOption,
@@ -289,18 +290,41 @@ interface RawHireablePersonRow {
  * trabajadora y no se ofrece para contratar. La identidad de persona no se duplica.
  */
 export async function fetchEntityHireablePeople(entityId: string): Promise<HireablePerson[]> {
-  const { data, error } = await supabase
-    .from("candidates")
-    .select(
-      `id, first_name, first_surname, second_surname, identification, email, phone,
-       worker:workers(id, code, employment_status)`
-    )
-    .eq("organization_entity_id", entityId)
-    .order("first_surname", { ascending: true })
-    .order("first_name", { ascending: true })
+  const [{ data, error }, overrides] = await Promise.all([
+    supabase
+      .from("candidates")
+      .select(
+        `id, first_name, first_surname, second_surname, identification, email, phone,
+         worker:workers(id, code, employment_status)`
+      )
+      .eq("organization_entity_id", entityId)
+      .order("first_surname", { ascending: true })
+      .order("first_name", { ascending: true }),
+    fetchEntityPoolCandidateOverrides(entityId),
+  ])
   if (error) throw error
 
-  return ((data as RawHireablePersonRow[] | null) || []).map((row) => ({
+  const baseRows = ((data as RawHireablePersonRow[] | null) || []).filter(
+    (row) => !overrides.excludedCandidateIds.has(row.id)
+  )
+  const baseIds = new Set(baseRows.map((r) => r.id))
+  const extraIds = overrides.assignedCandidateIds.filter((id) => !baseIds.has(id))
+
+  let extraRows: RawHireablePersonRow[] = []
+  if (extraIds.length > 0) {
+    const { data: extraData } = await supabase
+      .from("candidates")
+      .select(
+        `id, first_name, first_surname, second_surname, identification, email, phone,
+         worker:workers(id, code, employment_status)`
+      )
+      .in("id", extraIds)
+      .order("first_surname", { ascending: true })
+      .order("first_name", { ascending: true })
+    extraRows = (extraData as RawHireablePersonRow[] | null) || []
+  }
+
+  return [...baseRows, ...extraRows].map((row) => ({
     id: row.id,
     first_name: row.first_name,
     first_surname: row.first_surname,

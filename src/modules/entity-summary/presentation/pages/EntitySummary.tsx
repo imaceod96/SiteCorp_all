@@ -16,6 +16,9 @@ import type {
   SexReport,
   SkinColorReport,
 } from "@/modules/entity-summary"
+import { PendingInitialTrainingBanner } from "@/modules/training"
+import { PendingSstNotificationsBanner } from "@/modules/sst"
+import { useEntityPlan } from "@/modules/entity-plans"
 import {
   Building2,
   Layers,
@@ -258,9 +261,21 @@ const VistaGeneral: React.FC<VistaGeneralProps> = ({
       ? null
       : Math.max(0, summary.expirations.attention - summary.expirations.overdue)
 
+  const { canAccessTrainingSst } = useEntityPlan(entityId)
+
   return (
     <>
       {summary.scopeLoading && <SiteCorpLoading rows={2} />}
+
+      {/* AVISOS DE CAPACITACIÓN INICIAL PENDIENTE POR CONTRATACIÓN (solo si el paquete está habilitado en el plan) */}
+      {canAccessTrainingSst && (
+        <PendingInitialTrainingBanner entityId={entityId} showTrainingModuleLink />
+      )}
+
+      {/* AVISOS DE CAPACITACIÓN DE SST PENDIENTE POR CONTRATACIÓN O CAMBIO DE CARGO (solo si el paquete está habilitado en el plan) */}
+      {canAccessTrainingSst && (
+        <PendingSstNotificationsBanner entityId={entityId} showSstModuleLink />
+      )}
 
       {/* BLOQUE PRINCIPAL — PLANTILLA */}
       {showMainBlock && (

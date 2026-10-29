@@ -19,13 +19,42 @@ import {
   ChevronRight,
   FolderOpen,
   History,
+  Layers,
 } from "lucide-react"
 
 const PlatformAdminLayout = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => {
-  const { isPlatformSuperAdmin } = useAuth()
+  const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
+  const [canViewDocuments, setCanViewDocuments] = React.useState(isPlatformSuperAdmin)
+  const [canViewHistory, setCanViewHistory] = React.useState(isPlatformSuperAdmin)
+  const [canViewPlans, setCanViewPlans] = React.useState(isPlatformSuperAdmin)
+
+  React.useEffect(() => {
+    if (isPlatformSuperAdmin) {
+      setCanViewDocuments(true)
+      setCanViewHistory(true)
+      setCanViewPlans(true)
+      return
+    }
+    let cancelled = false
+    void Promise.all([
+      hasPlatformPermission("platform_documents.view"),
+      hasPlatformPermission("platform_audit.view"),
+      hasPlatformPermission("entity_plans.view"),
+    ]).then(([docs, hist, plans]) => {
+      if (!cancelled) {
+        setCanViewDocuments(docs)
+        setCanViewHistory(hist)
+        setCanViewPlans(plans)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [isPlatformSuperAdmin, hasPlatformPermission])
+
   const { currentCompanyClient, clearCurrentCompanyClient } = useCurrentCompanyClient()
   const { clearCurrentEntity } = useCurrentEntity()
   const navigate = useNavigate()
@@ -65,6 +94,17 @@ const PlatformAdminLayout = React.forwardRef<
       </Link>
     )
   }
+
+  // Sección "Gestión" desplegable: contiene Plan por entidad (§2)
+  const gestionRoutes = ["/admin/plans"]
+  const gestionContainsActive = gestionRoutes.some((route) =>
+    location.pathname.startsWith(route)
+  )
+  const [gestionOpen, setGestionOpen] = React.useState(gestionContainsActive || true)
+
+  React.useEffect(() => {
+    if (gestionContainsActive) setGestionOpen(true)
+  }, [gestionContainsActive])
 
   // Sección "Ajustes" desplegable: oculta por defecto, se abre al pulsar la
   // pestaña y se expande sola cuando la ruta activa pertenece al grupo.
@@ -108,14 +148,49 @@ const PlatformAdminLayout = React.forwardRef<
               <Building2 className="h-5 w-5" />,
               "Clientes"
             )}
+            {navItem(
+              "/admin/candidates",
+              <Users className="h-5 w-5" />,
+              "Bolsa de Candidatos"
+            )}
 
-            {/* Documentos globales: exclusivo del Super Admin (la RLS aplica la misma regla). */}
-            {isPlatformSuperAdmin &&
+            {/* Documentos globales: Super Admin o usuarios con platform_documents.view */}
+            {canViewDocuments &&
               navItem("/admin/documents", <FolderOpen className="h-5 w-5" />, "Documentos")}
 
-            {/* Historial: auditoría centralizada, exclusiva del Super Admin. */}
-            {isPlatformSuperAdmin &&
+            {/* Historial: auditoría centralizada (Super Admin o platform_audit.view) */}
+            {canViewHistory &&
               navItem("/admin/history", <History className="h-5 w-5" />, "Historial")}
+
+            {/* Sección Gestión: desplegable con Plan (§2) */}
+            {canViewPlans && (
+              <div className="space-y-1 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setGestionOpen((open) => !open)}
+                  aria-expanded={gestionOpen}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    gestionContainsActive
+                      ? "text-sitecorp-primary"
+                      : "text-ink hover:bg-muted hover:text-ink"
+                  )}
+                >
+                  <Layers className="h-5 w-5" />
+                  <span className="flex-1 text-left">Gestión</span>
+                  {gestionOpen ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+                {gestionOpen && (
+                  <div className="ml-4 space-y-1 border-l border-border pl-2">
+                    {navItem("/admin/plans", <Layers className="h-5 w-5" />, "Plan")}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Sección Ajustes: desplegable que se oculta cuando no se usa. */}
             <div className="space-y-1 pt-3">
