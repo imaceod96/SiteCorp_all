@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/supabase"
 import { fetchDrivingLicenseCategories, fetchSkinColors } from "./catalogs.repository"
+import {
+  fetchCandidatesPoolMeta,
+  fetchEntityPoolCandidateOverrides,
+} from "./candidate-pool-meta"
 import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import {
   buildEmploymentIndex,
@@ -45,15 +49,43 @@ import type {
 export async function fetchEntityCandidates(entityId: string): Promise<PersonCandidate[]> {
   // `*` más el alias de la frontera: la fila llega con la clave de JavaScript que el
   // modelo ya consume (`tenant_id`) aunque el nombre físico sea otro.
-  const { data, error } = await filterUnlinkedCandidates(
-    supabase
-      .from("candidates")
-      .select(selectQuery(`*, ${selectColumn("clientId")}`))
-      .eq("organization_entity_id", entityId)
-  ).order("created_at", { ascending: false })
+  const [{ data, error }, overrides] = await Promise.all([
+    filterUnlinkedCandidates(
+      supabase
+        .from("candidates")
+        .select(selectQuery(`*, ${selectColumn("clientId")}`))
+        .eq("organization_entity_id", entityId)
+    ).order("created_at", { ascending: false }),
+    fetchEntityPoolCandidateOverrides(entityId),
+  ])
 
   if (error) throw error
-  return (data as PersonCandidate[]) || []
+  const baseRows = ((data as PersonCandidate[]) || []).filter(
+    (c) => !overrides.excludedCandidateIds.has(c.id)
+  )
+
+  const baseIds = new Set(baseRows.map((c) => c.id))
+  const extraIds = overrides.assignedCandidateIds.filter((id) => !baseIds.has(id))
+
+  let extraRows: PersonCandidate[] = []
+  if (extraIds.length > 0) {
+    const { data: extraData } = await filterUnlinkedCandidates(
+      supabase
+        .from("candidates")
+        .select(selectQuery(`*, ${selectColumn("clientId")}`))
+        .in("id", extraIds)
+    ).order("created_at", { ascending: false })
+    extraRows = (extraData as PersonCandidate[]) || []
+  }
+
+  const combined = [...baseRows, ...extraRows]
+  if (combined.length === 0) return []
+
+  const poolMeta = await fetchCandidatesPoolMeta(combined.map((c) => c.id))
+  return combined.map((c) => ({
+    ...c,
+    area_id: poolMeta.areaByCandidateId.get(c.id) ?? c.area_id ?? null,
+  }))
 }
 
 /** Candidatos con al menos una categoría de licencia registrada (criterio booleano). */
@@ -251,25 +283,61 @@ export async function fetchClientEmploymentIndex(
 }
 
 // ---------------------------------------------------------------------------
-// Catálogos de persona
+// Catálogos de persona (cacheados en sesión para evitar consultas repetidas)
 // ---------------------------------------------------------------------------
 
+let cachedGenders: CatalogRow[] | null = null
+let gendersPromise: Promise<CatalogRow[]> | null = null
+
+let cachedMaritalStatuses: CatalogRow[] | null = null
+let maritalStatusesPromise: Promise<CatalogRow[]> | null = null
+
+let cachedEducationLevels: CatalogRow[] | null = null
+let educationLevelsPromise: Promise<CatalogRow[]> | null = null
+
 export async function fetchGenders(): Promise<CatalogRow[]> {
-  const { data, error } = await supabase.from("genders").select("id, name").order("name")
-  if (error) throw error
-  return (data as CatalogRow[]) || []
+  if (cachedGenders) return cachedGenders
+  if (gendersPromise) return gendersPromise
+
+  gendersPromise = (async () => {
+    const { data, error } = await supabase.from("genders").select("id, name").order("name")
+    gendersPromise = null
+    if (error) throw error
+    cachedGenders = (data as CatalogRow[]) || []
+    return cachedGenders
+  })()
+
+  return gendersPromise
 }
 
 export async function fetchMaritalStatuses(): Promise<CatalogRow[]> {
-  const { data, error } = await supabase.from("marital_statuses").select("id, name").order("name")
-  if (error) throw error
-  return (data as CatalogRow[]) || []
+  if (cachedMaritalStatuses) return cachedMaritalStatuses
+  if (maritalStatusesPromise) return maritalStatusesPromise
+
+  maritalStatusesPromise = (async () => {
+    const { data, error } = await supabase.from("marital_statuses").select("id, name").order("name")
+    maritalStatusesPromise = null
+    if (error) throw error
+    cachedMaritalStatuses = (data as CatalogRow[]) || []
+    return cachedMaritalStatuses
+  })()
+
+  return maritalStatusesPromise
 }
 
 export async function fetchEducationLevels(): Promise<CatalogRow[]> {
-  const { data, error } = await supabase.from("education_levels").select("id, name").order("name")
-  if (error) throw error
-  return (data as CatalogRow[]) || []
+  if (cachedEducationLevels) return cachedEducationLevels
+  if (educationLevelsPromise) return educationLevelsPromise
+
+  educationLevelsPromise = (async () => {
+    const { data, error } = await supabase.from("education_levels").select("id, name").order("name")
+    educationLevelsPromise = null
+    if (error) throw error
+    cachedEducationLevels = (data as CatalogRow[]) || []
+    return cachedEducationLevels
+  })()
+
+  return educationLevelsPromise
 }
 
 /** Color de piel (catálogo global, compartido por candidato y trabajador). */
@@ -281,3 +349,44 @@ export async function fetchSkinColorsCatalog(): Promise<CatalogOption[]> {
 export async function fetchLicenseCategories(): Promise<CatalogOption[]> {
   return fetchDrivingLicenseCategories()
 }
+
+/** Áreas globales de la plataforma, deduplicadas por nombre normalizado (sin repetidos). */
+export async function fetchDeduplicatedGlobalAreas(): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await supabase
+    .from("organization_areas")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("name")
+
+  if (error) {
+    console.warn("[people] could not fetch global areas", error)
+    return []
+  }
+
+  const seen = new Set<string>()
+  const unique: { id: string; name: string }[] = []
+  for (const area of (data || [])) {
+    const norm = (area.name || "").trim().toLowerCase()
+    if (norm && !seen.has(norm)) {
+      seen.add(norm)
+      unique.push({ id: area.id, name: area.name.trim() })
+    }
+  }
+
+  unique.sort((a, b) => a.name.localeCompare(b.name))
+  return unique
+}
+
+export async function fetchEntityActiveAreas(entityId: string): Promise<{ id: string; name: string }[]> {
+  const { data, error } = await supabase
+    .from("organization_areas")
+    .select("id, name")
+    .eq("organization_entity_id", entityId)
+    .eq("is_active", true)
+    .order("name")
+
+  if (error) throw error
+  return (data as { id: string; name: string }[]) || []
+}
+
+

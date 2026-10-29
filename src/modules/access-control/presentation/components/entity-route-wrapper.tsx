@@ -17,6 +17,7 @@ import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { EntityLayout } from "@/modules/organization-structure/presentation/components/entity-layout"
+import { useEntityPlan } from "@/modules/entity-plans"
 import { Outlet } from "react-router-dom"
 import { ShieldOff } from "lucide-react"
 
@@ -33,6 +34,38 @@ const EntityRouteWrapper = () => {
   const [modulesDisabled, setModulesDisabled] = React.useState(false)
   const [fallbackPath, setFallbackPath] = React.useState("/organization")
   const initialLoadDone = React.useRef(false)
+
+  // Consulta incondicional del plan activo a nivel superior (§7.5, reglas de hooks)
+  const { plan: entityPlan, loading: planLoading } = useEntityPlan(entityId)
+
+  // Bloqueo de acceso por URL directa a módulos desactivados en el plan (§7.5)
+  const planRestriction = React.useMemo(() => {
+    if (!entityPlan || planLoading) return null
+
+    if (
+      location.pathname.includes("/payroll-preparation") &&
+      entityPlan.packagePrenomina === false
+    ) {
+      return {
+        moduleName: "El módulo de Prenómina",
+        packageName: "Prenómina",
+      }
+    }
+
+    if (
+      (location.pathname.includes("/training") || location.pathname.includes("/sst")) &&
+      entityPlan.packageTrainingSst === false
+    ) {
+      return {
+        moduleName: location.pathname.includes("/sst")
+          ? "El módulo de Seguridad y Salud en el Trabajo (SST)"
+          : "El módulo de Capacitación",
+        packageName: "Capacitación y SST",
+      }
+    }
+
+    return null
+  }, [entityPlan, planLoading, location.pathname])
 
   React.useEffect(() => {
     if (!entityId) {
@@ -206,6 +239,42 @@ const EntityRouteWrapper = () => {
           </div>
         </SiteCorpCard>
       </div>
+    )
+  }
+
+  if (planRestriction) {
+    return (
+      <EntityLayout>
+        <div className="space-y-6 p-6">
+          <SiteCorpPageHeader
+            title="Módulo no disponible en el plan"
+            description="Funcionalidad no contratada para esta entidad"
+          />
+          <SiteCorpCard title="Acceso no habilitado">
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-amber-600">
+                <ShieldOff className="h-7 w-7" />
+              </span>
+              <h3 className="text-base font-bold text-ink">
+                {planRestriction.moduleName} no está incluido en el plan de esta entidad
+              </h3>
+              <p className="max-w-md text-xs text-muted-foreground">
+                Esta cuenta no tiene contratado el paquete <strong>{planRestriction.packageName}</strong>.
+                Un administrador autorizado de la plataforma puede habilitarlo desde la sección{" "}
+                <strong>Gestión → Plan</strong>.
+              </p>
+              <div className="pt-2">
+                <SiteCorpButton
+                  variant="outline"
+                  onClick={() => navigate(`/entity/${entityId}/summary`)}
+                >
+                  Ir al Resumen de la entidad
+                </SiteCorpButton>
+              </div>
+            </div>
+          </SiteCorpCard>
+        </div>
+      </EntityLayout>
     )
   }
 

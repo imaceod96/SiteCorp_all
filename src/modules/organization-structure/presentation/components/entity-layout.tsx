@@ -19,6 +19,8 @@ import {
   Calculator,
   FileSignature,
   FileArchive,
+  GraduationCap,
+  ShieldCheck,
   ChevronDown,
   ChevronRight,
 } from "lucide-react"
@@ -31,6 +33,7 @@ import {
   type EntityNavLink,
 } from "@/modules/organization-structure"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
+import { useEntityPlan, isModuleEnabledInPlan } from "@/modules/entity-plans"
 
 /** Iconos de los elementos del menú (la estructura está en ENTITY_NAV). */
 const navIcons: Record<string, React.ReactNode> = {
@@ -41,6 +44,8 @@ const navIcons: Record<string, React.ReactNode> = {
   reentries: <Undo2 className="h-5 w-5" />,
   staffing: <Briefcase className="h-5 w-5" />,
   hiring: <FileSignature className="h-5 w-5" />,
+  training: <GraduationCap className="h-5 w-5" />,
+  sst: <ShieldCheck className="h-5 w-5" />,
   prenomina: <Calculator className="h-5 w-5" />,
   vacations: <Palmtree className="h-5 w-5" />,
   "medical-certificates": <HeartPulse className="h-5 w-5" />,
@@ -79,17 +84,31 @@ const EntityLayout = React.forwardRef<
   // entidad actual (mismo motor que usa RLS).
   const { permissions: entityPermissions } = useEntityPermissions(modulesEnabled ? entityId : null)
 
-  // Elementos visibles según permisos reales, preservando el ORDEN definitivo.
+  // Consulta reactiva del plan activo de la entidad (§7, §8)
+  const { plan: entityPlan } = useEntityPlan(modulesEnabled ? entityId : null)
+
+  // Cada elemento del menú aparece según la combinación obligatoria:
+  // 1. Módulo habilitado en el plan de la entidad (§7)
+  // 2. Permiso interno del usuario en la entidad actual (§8)
+  const isNavEntryActive = React.useCallback(
+    (item: EntityNavLink): boolean => {
+      if (!isModuleEnabledInPlan(item.key, entityPlan)) return false
+      return isVisible(item, entityPermissions)
+    },
+    [entityPlan, entityPermissions]
+  )
+
+  // Elementos visibles según plan activo Y permisos reales, preservando el orden definitivo.
   const visibleNav = React.useMemo(() => {
     return ENTITY_NAV.map((entry) => {
       if (entry.kind === "group") {
-        const items = entry.items.filter((item) => isVisible(item, entityPermissions))
+        const items = entry.items.filter((item) => isNavEntryActive(item))
         if (items.length === 0) return null
         return { ...entry, items } as EntityNavGroup
       }
-      return isVisible(entry, entityPermissions) ? (entry as EntityNavLink) : null
+      return isNavEntryActive(entry) ? (entry as EntityNavLink) : null
     }).filter((entry): entry is EntityNavEntry => entry !== null)
-  }, [entityPermissions])
+  }, [isNavEntryActive])
 
   // Grupos desplegables: se expanden automáticamente cuando contienen la ruta activa.
   const [openGroups, setOpenGroups] = React.useState<Record<string, boolean>>({})

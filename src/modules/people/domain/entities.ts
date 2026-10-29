@@ -67,6 +67,7 @@ export interface PersonCandidate {
   province: string | null
   education_level_id: string | null
   specialty: string | null
+  area_id: string | null
   skin_color_id: string | null
   profession_or_trade: string | null
   has_masters_degree: boolean | null
@@ -220,6 +221,7 @@ export interface CandidateRegistrationInput {
   /** Nombre del nivel educacional elegido: determina si exige especialidad. */
   education_level_name: string
   specialty: string
+  area_id?: string | null
   phone: string
   email: string
   address: string
@@ -844,6 +846,7 @@ export interface CandidateExpedienteInput {
   province: string | null
   education_level_id: string | null
   specialty: string | null
+  area_id?: string | null
   has_masters_degree: boolean
   has_doctorate_degree: boolean
   profession_or_trade: string | null

@@ -25,12 +25,14 @@ import Organizations from "@/modules/access-control/presentation/pages/Organizat
 import PlatformUsers from "@/modules/access-control/presentation/pages/PlatformUsers"
 import AdminDocuments from "@/modules/platform-documents/presentation/pages/AdminDocuments"
 import AdminHistory from "@/modules/audit-history/presentation/pages/AdminHistory"
+import AdminCandidates from "@/modules/people/presentation/pages/AdminCandidates"
 import MustChangePassword from "@/modules/access-control/presentation/pages/MustChangePassword"
 import RolesPermissions from "@/modules/access-control/presentation/pages/RolesPermissions"
 import CompanyClientUsers from "@/modules/company-client/presentation/pages/CompanyClientUsers"
 import CompanyClientInvitations from "@/modules/company-client/presentation/pages/CompanyClientInvitations"
 import CompanyClientRoles from "@/modules/company-client/presentation/pages/CompanyClientRoles"
 import AdminSettingsSalaryScale from "@/modules/organization-structure/presentation/pages/AdminSettingsSalaryScale"
+import AdminEntityPlans from "@/modules/entity-plans/presentation/pages/AdminEntityPlans"
 import EntitySummary from "@/modules/entity-summary/presentation/pages/EntitySummary"
 import EntityCandidates from "@/modules/people/presentation/pages/EntityCandidates"
 import EntityPrenomina from "@/modules/payroll-preparation/presentation/pages/EntityPrenomina"
@@ -46,6 +48,8 @@ import SeparateWorkerDialog from "@/modules/people/presentation/components/Separ
 import EntityVacations from "@/modules/vacations-licenses/vacations/presentation/pages/EntityVacations"
 import EntityMedicalCertificates from "@/modules/vacations-licenses/medical-certificates/presentation/pages/EntityMedicalCertificates"
 import EntityPendingDocuments from "@/modules/document-generation/presentation/pages/EntityPendingDocuments"
+import EntityTraining from "@/modules/training/presentation/pages/EntityTraining"
+import EntitySst from "@/modules/sst/presentation/pages/EntitySst"
 import WorkerDetail from "@/modules/people/presentation/pages/WorkerDetail"
 import EntitySettings from "@/modules/organization-structure/presentation/pages/EntitySettings"
 import EntitySettingsUsers from "@/modules/organization-structure/presentation/pages/EntitySettingsUsers"
@@ -255,6 +259,8 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/staffing" element={<EntityStaffing />} />
           <Route path="/entity/:entityId/staffing/workers/:workerId" element={<WorkerDetail />} />
           <Route path="/entity/:entityId/hiring" element={<EntityHiring />} />
+          <Route path="/entity/:entityId/training" element={<EntityTraining />} />
+          <Route path="/entity/:entityId/sst" element={<EntitySst />} />
           {/* Composición modular: la página de vencimientos (Contratos) recibe los
               diálogos de acciones laborales que pertenecen a Personas. */}
           <Route
@@ -291,10 +297,12 @@ const AppRoutes = () => {
         <Route element={<PlatformAdminLayout />}>
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/companies" element={<Organizations />} />
+          <Route path="/admin/candidates" element={<AdminCandidates />} />
           <Route path="/admin/users" element={<PlatformUsers />} />
           <Route path="/admin/documents" element={<AdminDocuments />} />
           <Route path="/admin/history" element={<AdminHistory />} />
           <Route path="/admin/roles" element={<RolesPermissions />} />
+          <Route path="/admin/plans" element={<AdminEntityPlans />} />
           <Route path="/admin/account" element={<Account />} />
           <Route path="/admin/settings/salary-scale" element={<AdminSettingsSalaryScale />} />
           <Route path="/organization/:entityId" element={<OrganizationDetail />} />

@@ -1,4 +1,7 @@
 import { supabase } from "@/lib/supabase"
+import { syncCandidateEntityWithPosition } from "./candidate-pool-meta"
+import { ensureHiringTrainingNotification } from "@/modules/training"
+import { ensureSstAssignmentNotification } from "@/modules/sst"
 import type {
   ContractualChange,
   PluriemployContractInput,
@@ -138,6 +141,8 @@ const withTarget = (
 export async function hireCandidateRpc(
   payload: HireCandidateRpcPayload
 ): Promise<WorkerEngagementResult> {
+  await syncCandidateEntityWithPosition(payload.candidateId, payload.positionId)
+
   const params: Record<string, unknown> = {
     p_candidate_id: payload.candidateId,
     p_position_id: payload.positionId,
@@ -163,6 +168,23 @@ export async function hireCandidateRpc(
     contract_id?: string | null
     resolution_id?: string | null
   }
+
+  await ensureHiringTrainingNotification({
+    workerId: result.worker_id ?? null,
+    candidateId: payload.candidateId,
+    positionId: payload.positionId,
+    hireDate: payload.hireDate,
+    contractOrResolutionId: result.contract_id ?? result.resolution_id ?? null,
+  })
+
+  await ensureSstAssignmentNotification({
+    workerId: result.worker_id ?? null,
+    positionId: payload.positionId,
+    effectiveDate: payload.hireDate,
+    triggerType: "NUEVA_CONTRATACION",
+    sourceId: result.contract_id ?? result.resolution_id ?? null,
+  })
+
   return {
     workerId: result.worker_id ?? null,
     contractId: result.contract_id ?? null,
@@ -199,6 +221,15 @@ export async function reincorporateWorkerRpc(
     contract_id?: string | null
     resolution_id?: string | null
   }
+
+  await ensureSstAssignmentNotification({
+    workerId: result.worker_id ?? payload.workerId ?? null,
+    positionId: payload.positionId,
+    effectiveDate: payload.reincorporationDate,
+    triggerType: "NUEVA_CONTRATACION",
+    sourceId: result.contract_id ?? result.resolution_id ?? null,
+  })
+
   return {
     workerId: result.worker_id ?? null,
     contractId: result.contract_id ?? null,
@@ -279,6 +310,15 @@ export async function changeWorkerPositionRpc(
 
   const { data, error } = await supabase.rpc("change_worker_position", params)
   if (error) throw error
+
+  await ensureSstAssignmentNotification({
+    workerId: payload.workerId,
+    positionId: payload.newPositionId,
+    effectiveDate: payload.effectiveDate,
+    triggerType: "CAMBIO_CARGO",
+    sourceId: payload.targetAssignmentId ?? null,
+  })
+
   return data as WorkerPositionChangeResult
 }
 
@@ -310,6 +350,15 @@ export async function createWorkerPluriemployRpc(
   if (error) throw error
 
   const result = (data || {}) as { assignment_id?: string | null; contract_id?: string | null }
+
+  await ensureSstAssignmentNotification({
+    workerId: payload.workerId,
+    positionId: payload.positionId,
+    effectiveDate: payload.hireDate,
+    triggerType: "CAMBIO_CARGO",
+    sourceId: result.assignment_id ?? result.contract_id ?? null,
+  })
+
   return {
     assignmentId: result.assignment_id ?? null,
     contractId: result.contract_id ?? null,
