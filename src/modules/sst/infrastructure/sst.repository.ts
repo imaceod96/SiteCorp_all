@@ -439,7 +439,7 @@ export async function fetchEntityOrganizationJobs(entityId: string): Promise<Ent
   if (!entityId) return []
   const { data, error } = await supabase
     .from("organization_jobs")
-    .select("id, name, code, is_active, area_id, area:organization_areas(id, name)")
+    .select("id, name, is_active, area_id, area:organization_areas(id, name)")
     .eq("organization_entity_id", entityId)
     .order("name", { ascending: true })
 
@@ -450,7 +450,6 @@ export async function fetchEntityOrganizationJobs(entityId: string): Promise<Ent
       | {
           id: string
           name: string
-          code: string | null
           is_active: boolean | null
           area_id: string | null
           area: { id: string; name: string } | { id: string; name: string }[] | null
@@ -461,7 +460,7 @@ export async function fetchEntityOrganizationJobs(entityId: string): Promise<Ent
     return {
       id: row.id,
       name: row.name,
-      code: row.code ?? null,
+      code: null,
       areaId: area?.id ?? row.area_id ?? null,
       areaName: area?.name ?? null,
       isActive: row.is_active ?? true,
@@ -475,16 +474,16 @@ export async function fetchEntityOrganizationAreasForSst(
   if (!entityId) return []
   const { data, error } = await supabase
     .from("organization_areas")
-    .select("id, name, code, is_active")
+    .select("id, name, is_active")
     .eq("organization_entity_id", entityId)
     .order("name", { ascending: true })
 
   if (error) throw error
-  return ((data as { id: string; name: string; code: string | null; is_active: boolean }[]) || []).map(
+  return ((data as { id: string; name: string; is_active: boolean }[]) || []).map(
     (row) => ({
       id: row.id,
       name: row.name,
-      code: row.code ?? null,
+      code: null,
       isActive: row.is_active ?? true,
     })
   )

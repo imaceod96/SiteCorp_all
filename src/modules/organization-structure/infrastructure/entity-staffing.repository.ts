@@ -22,20 +22,25 @@ import type { SalaryGroupRef } from "../domain/entities"
 export interface EntityStaffingJob {
   id: string
   name: string
-  code: string
+  code?: string | null
+  hierarchy_order?: number
   is_active: boolean
   area_id: string
-  area: { id: string | null; name: string | null } | null
+  area: { id: string | null; name: string | null; hierarchy_order?: number } | null
   salary_group: SalaryGroupRef | null
 }
 
 interface RawEntityStaffingJob {
   id: string
   name: string
-  code: string
+  code?: string | null
+  hierarchy_order?: number
   is_active: boolean
   area_id: string
-  area: { id: string; name: string }[] | null
+  area:
+    | { id: string; name: string; hierarchy_order?: number }[]
+    | { id: string; name: string; hierarchy_order?: number }
+    | null
   salary_group: SalaryGroupRef | SalaryGroupRef[] | null
 }
 
@@ -54,17 +59,37 @@ export async function fetchEntityStaffingJobs(entityId: string): Promise<EntityS
   const { data, error } = await supabase
     .from("organization_jobs")
     .select(
-      `id, name, code, is_active, area_id,
-       area:organization_areas(id, name),
+      `id, name, hierarchy_order, is_active, area_id,
+       area:organization_areas(id, name, hierarchy_order),
        salary_group:salary_groups(id, salary_scale_id, sequence_number)`
     )
     .eq("organization_entity_id", entityId)
-    .order("name")
+    .order("hierarchy_order", { ascending: true })
+    .order("name", { ascending: true })
   if (error) throw error
 
-  return ((data as RawEntityStaffingJob[] | null) || []).map((job) => ({
-    ...job,
-    area: job.area ? { id: job.area[0]?.id || null, name: job.area[0]?.name || null } : null,
-    salary_group: Array.isArray(job.salary_group) ? job.salary_group[0] ?? null : job.salary_group,
-  }))
+  return ((data as RawEntityStaffingJob[] | null) || [])
+    .map((job) => {
+      const areaObj = Array.isArray(job.area) ? job.area[0] : job.area
+      return {
+        ...job,
+        area: areaObj
+          ? {
+              id: areaObj.id || null,
+              name: areaObj.name || null,
+              hierarchy_order: areaObj.hierarchy_order,
+            }
+          : null,
+        salary_group: Array.isArray(job.salary_group) ? job.salary_group[0] ?? null : job.salary_group,
+      }
+    })
+    .sort(
+      (a, b) =>
+        (a.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) -
+          (b.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) ||
+        (a.area?.name || "").localeCompare(b.area?.name || "") ||
+        (a.hierarchy_order ?? 0) - (b.hierarchy_order ?? 0) ||
+        a.name.localeCompare(b.name)
+    )
 }
+

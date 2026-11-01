@@ -18,7 +18,7 @@ export interface ConfigurationJobRow {
   id: string
   organization_entity_id: string
   area_id: string
-  code: string
+  code?: string | null
   name: string
   description: string | null
   salary_group_id: string
@@ -38,7 +38,8 @@ export interface ConfigurationJobRow {
   area: {
     id: string
     name: string
-    code: string
+    code?: string | null
+    hierarchy_order?: number
     is_active: boolean
     organization_entity_id: string
   } | null
@@ -67,7 +68,7 @@ export async function selectConfigurationJobRows(
     .from("organization_jobs")
     .select(`
       *,
-      area:organization_areas(id, name, code, is_active, organization_entity_id),
+      area:organization_areas(id, name, hierarchy_order, is_active, organization_entity_id),
       salary_group:salary_groups(
         id,
         salary_scale_id,
@@ -85,10 +86,19 @@ export async function selectConfigurationJobRows(
       )
     `)
     .eq("organization_entity_id", entityId)
-    .order("hierarchy_order")
+    .order("hierarchy_order", { ascending: true })
+    .order("name", { ascending: true })
 
   if (error) throw error
-  return (data as ConfigurationJobRow[]) || []
+  const rows = (data as ConfigurationJobRow[]) || []
+  return rows.sort(
+    (a, b) =>
+      (a.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) -
+        (b.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) ||
+      (a.area?.name || "").localeCompare(b.area?.name || "") ||
+      (a.hierarchy_order ?? 0) - (b.hierarchy_order ?? 0) ||
+      a.name.localeCompare(b.name)
+  )
 }
 
 /** Cargo completo por identificador (para el formulario y sus validaciones). */
@@ -99,7 +109,7 @@ export async function selectConfigurationJobRow(
     .from("organization_jobs")
     .select(`
       *,
-      area:organization_areas(id, name, code, is_active, organization_entity_id),
+      area:organization_areas(id, name, hierarchy_order, is_active, organization_entity_id),
       salary_group:salary_groups(
         id,
         salary_scale_id,

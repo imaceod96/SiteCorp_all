@@ -18,6 +18,8 @@ export async function selectEntityAreas(entityId: string): Promise<OrganizationA
     .from("organization_areas")
     .select("*")
     .eq("organization_entity_id", entityId)
+    .order("hierarchy_order", { ascending: true })
+    .order("name", { ascending: true })
 
   if (error) throw error
   return (data as OrganizationArea[]) || []
@@ -30,7 +32,8 @@ export async function selectActiveEntityAreas(entityId: string): Promise<Organiz
     .select("*")
     .eq("organization_entity_id", entityId)
     .eq("is_active", true)
-    .order("hierarchy_order")
+    .order("hierarchy_order", { ascending: true })
+    .order("name", { ascending: true })
 
   if (error) throw error
   return (data as OrganizationArea[]) || []

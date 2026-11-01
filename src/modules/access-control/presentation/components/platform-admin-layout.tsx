@@ -20,6 +20,7 @@ import {
   FolderOpen,
   History,
   Layers,
+  BookOpen,
 } from "lucide-react"
 
 const PlatformAdminLayout = React.forwardRef<
@@ -95,8 +96,8 @@ const PlatformAdminLayout = React.forwardRef<
     )
   }
 
-  // Sección "Gestión" desplegable: contiene Plan por entidad (§2)
-  const gestionRoutes = ["/admin/plans"]
+  // Sección "Gestión" desplegable: contiene Plan por entidad (§2) y Manual de Gestor
+  const gestionRoutes = ["/admin/plans", "/admin/manual"]
   const gestionContainsActive = gestionRoutes.some((route) =>
     location.pathname.startsWith(route)
   )
@@ -187,6 +188,7 @@ const PlatformAdminLayout = React.forwardRef<
                 {gestionOpen && (
                   <div className="ml-4 space-y-1 border-l border-border pl-2">
                     {navItem("/admin/plans", <Layers className="h-5 w-5" />, "Plan")}
+                    {navItem("/admin/manual", <BookOpen className="h-5 w-5" />, "Manual de Gestor")}
                   </div>
                 )}
               </div>

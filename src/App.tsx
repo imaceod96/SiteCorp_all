@@ -62,6 +62,7 @@ import EntitySettingsContractData from "@/modules/organization-structure/present
 import EntitySettingsDocumentTemplates from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates"
 import EntitySettingsDocumentTemplateDetail from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail"
 import EntitySettingsInitialImport from "@/modules/organization-structure/presentation/pages/EntitySettingsInitialImport"
+import { UserManualPage } from "@/modules/user-manual"
 import NotFound from "@/app/pages/NotFound"
 
 const queryClient = new QueryClient()
@@ -286,6 +287,8 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/settings/contract-data" element={<EntitySettingsContractData />} />
           <Route path="/entity/:entityId/settings/document-templates" element={<EntitySettingsDocumentTemplates />} />
           <Route path="/entity/:entityId/settings/document-templates/:templateId" element={<EntitySettingsDocumentTemplateDetail />} />
+          <Route path="/entity/:entityId/manual" element={<UserManualPage />} />
+          <Route path="/entity/:entityId/settings/manual" element={<UserManualPage />} />
         </Route>
       </Routes>
     )
@@ -305,6 +308,7 @@ const AppRoutes = () => {
           <Route path="/admin/plans" element={<AdminEntityPlans />} />
           <Route path="/admin/account" element={<Account />} />
           <Route path="/admin/settings/salary-scale" element={<AdminSettingsSalaryScale />} />
+          <Route path="/admin/manual" element={<UserManualPage />} />
           <Route path="/organization/:entityId" element={<OrganizationDetail />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Route>
@@ -323,6 +327,7 @@ const AppRoutes = () => {
         <Route path="/tenant/users" element={<CompanyClientUsers />} />
         <Route path="/tenant/roles" element={<CompanyClientRoles />} />
         <Route path="/tenant/invitations" element={<CompanyClientInvitations />} />
+        <Route path="/manual" element={<UserManualPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

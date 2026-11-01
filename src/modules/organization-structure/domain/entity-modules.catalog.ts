@@ -121,6 +121,7 @@ export const ENTITY_INTERNAL_MODULES: EntityInternalModule[] = [
     ],
   },
   { key: "settings", label: "Ajustes", path: (id) => `/entity/${id}/settings` },
+  { key: "manual", label: "Manual de Usuario", path: (id) => `/entity/${id}/manual` },
 ]
 
 /** Ruta existente de Vencimientos (acceso directo permitido aunque no esté en el menú). */
@@ -167,10 +168,7 @@ const moduleByKey = (key: string): EntityInternalModule => {
 /**
  * ORDEN DEFINITIVO del menú lateral (§45):
  *   Resumen · Personas (Candidatos / Trabajadores / Reingresos) · Contratación ·
- *   Plantilla · Capacitación · SST · Vacaciones · Licencias y certificados · Prenómina · Ajustes
- * Contratación queda DEBAJO de Personas y ENCIMA de Plantilla, como elemento
- * propio (no dentro del grupo Personas): su ruta y su página no cambian.
- * Ninguna entrada se duplica y Vencimientos no aparece como elemento directo.
+ *   Plantilla · Capacitación · SST · Vacaciones · Licencias y certificados · Prenómina · Ajustes · Manual
  */
 export const ENTITY_NAV: EntityNavEntry[] = [
   link(moduleByKey("summary")),

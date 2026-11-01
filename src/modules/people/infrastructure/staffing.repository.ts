@@ -30,9 +30,13 @@ import type {
 interface RawJobRow {
   id: string
   name: string
+  hierarchy_order?: number
   is_cuadro?: boolean
   is_principal_specialist?: boolean
-  area: { id: string | null; name: string | null }[] | { id: string | null; name: string | null } | null
+  area:
+    | { id: string | null; name: string | null; hierarchy_order?: number }[]
+    | { id: string | null; name: string | null; hierarchy_order?: number }
+    | null
   salary_group:
     | { id: string; salary_scale_id: string; sequence_number: number }[]
     | { id: string; salary_scale_id: string; sequence_number: number }
@@ -43,7 +47,8 @@ interface RawJobRow {
 interface RawPositionRow {
   id: string
   name: string
-  code: string | null
+  code?: string | null
+  position_order?: number
   is_active: boolean
   authorized_quantity: number
   work_location: string | null
@@ -91,16 +96,16 @@ const toStaffingPosition = (row: RawPositionRow): StaffingPosition => {
   }
 }
 
-const POSITION_COLUMNS = `id, name, code, is_active, authorized_quantity,
+const POSITION_COLUMNS = `id, name, position_order, is_active, authorized_quantity,
    work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
    job:organization_jobs(
-     id, name, code, is_active, area_id, is_cuadro, is_principal_specialist,
-     area:organization_areas(id, name),
+     id, name, hierarchy_order, is_active, area_id, is_cuadro, is_principal_specialist,
+     area:organization_areas(id, name, hierarchy_order),
      salary_group:salary_groups(id, salary_scale_id, sequence_number),
      occupational_category:occupational_categories(id, name, code)
    )`
 
-/** Puestos de la entidad con su cargo, área y grupo salarial. */
+/** Puestos de la entidad con su cargo, área y grupo salarial, ordenados por área → cargo → puesto. */
 export async function fetchEntityStaffingPositions(
   entityId: string,
   options: { onlyActive?: boolean } = {}
@@ -112,10 +117,31 @@ export async function fetchEntityStaffingPositions(
 
   if (options.onlyActive) query = query.eq("is_active", true)
 
-  const { data, error } = await query.order("name", { ascending: true })
+  const { data, error } = await query
+    .order("position_order", { ascending: true })
+    .order("name", { ascending: true })
   if (error) throw error
 
-  return ((data as RawPositionRow[] | null) || []).map(toStaffingPosition)
+  const rawRows = (data as RawPositionRow[] | null) || []
+  rawRows.sort((a, b) => {
+    const jobA = firstOrSelf(a.job)
+    const jobB = firstOrSelf(b.job)
+    const areaA = jobA ? firstOrSelf(jobA.area) : null
+    const areaB = jobB ? firstOrSelf(jobB.area) : null
+
+    return (
+      (areaA?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) -
+        (areaB?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) ||
+      (areaA?.name || "").localeCompare(areaB?.name || "") ||
+      (jobA?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) -
+        (jobB?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) ||
+      (jobA?.name || "").localeCompare(jobB?.name || "") ||
+      (a.position_order ?? 0) - (b.position_order ?? 0) ||
+      a.name.localeCompare(b.name)
+    )
+  })
+
+  return rawRows.map(toStaffingPosition)
 }
 
 interface RawStaffingAssignmentRow {
@@ -167,9 +193,9 @@ const STAFFING_WORKER_COLUMNS = `id, code, first_name, first_surname, second_sur
    assignments:worker_position_assignments(
      id, position_id, start_date, end_date, is_current,
      position:organization_positions(
-       id, name, code, is_active, job_id,
+       id, name, is_active, job_id,
        job:organization_jobs(
-         id, name, code, is_active, area_id,
+         id, name, is_active, area_id,
          area:organization_areas(id, name),
          salary_group:salary_groups(id, salary_scale_id, sequence_number),
          occupational_category:occupational_categories(id, name, code)

@@ -5,11 +5,13 @@ import {
   areaParentOptions,
   areaSaveErrorMessage,
   buildAreaTree,
+  sortAreasByOrder,
   validateAreaInput,
 } from "../src/modules/organization-structure/domain/areas.rules"
 import {
   jobSaveErrorMessage,
   parseJobCla,
+  sortJobsByHierarchyOrder,
   validateJobInput,
 } from "../src/modules/organization-structure/domain/jobs.rules"
 import {
@@ -18,12 +20,15 @@ import {
   normalizeScheduleTime,
   positionSaveErrorMessage,
   positionSchedulePayload,
+  sortPositionsByHierarchyOrder,
   sortScheduleSegments,
   validatePositionInput,
 } from "../src/modules/organization-structure/domain/positions.rules"
 import type {
   JobClaDraft,
   OrganizationArea,
+  OrganizationJob,
+  OrganizationPosition,
   PositionScheduleSegment,
 } from "../src/modules/organization-structure/domain/entities"
 
@@ -55,7 +60,6 @@ const area = (id: string, over: Partial<OrganizationArea> = {}): OrganizationAre
   id,
   organization_entity_id: "entity-1",
   parent_area_id: null,
-  code: id.toUpperCase(),
   name: `Área ${id}`,
   description: null,
   hierarchy_order: 0,
@@ -129,7 +133,7 @@ test("la jerarquía de áreas evita ciclos y ordena el árbol", () => {
   const areas = [
     area("raiz", { name: "Casa Matriz", hierarchy_order: 0 }),
     area("produccion", { name: "Producción", parent_area_id: "raiz", hierarchy_order: 1 }),
-    area("linea", { name: "Línea 1", parent_area_id: "produccion", hierarchy_order: 0 }),
+    area("linea", { name: "Línea 1", parent_area_id: "produccion", hierarchy_order: 2 }),
     area("comercial", { name: "Comercial", parent_area_id: "raiz", hierarchy_order: 0 }),
     area("inactiva", { name: "Antigua", parent_area_id: "raiz", is_active: false }),
     area("huerfana", { name: "Sin padre visible", parent_area_id: "desconocida" }),
@@ -141,7 +145,7 @@ test("la jerarquía de áreas evita ciclos y ordena el árbol", () => {
     "produccion",
   ])
 
-  const options = areaParentOptions(areas, area("produccion", { parent_area_id: "raiz" }))
+  const options = areaParentOptions(areas, area("produccion", { parent_area_id: "raiz", hierarchy_order: 1 }), 1)
   // Se ordena por orden y nombre; «Producción» y su rama quedan fuera.
   expect(options.map((o) => o.id)).toEqual(["raiz", "comercial", "huerfana"])
 
@@ -160,6 +164,164 @@ test("la jerarquía de áreas evita ciclos y ordena el árbol", () => {
   const raiz = tree.find((n) => n.id === "raiz")!
   expect(raiz.children.map((n) => n.id)).toEqual(["inactiva", "comercial", "produccion"])
   expect(raiz.children[2].children.map((n) => n.id)).toEqual(["linea"])
+})
+
+test("nunca un área de orden mayor puede estar por encima de una de orden menor y cargos/puestos respetan la jerarquía de órdenes", () => {
+  // Se crea primero el área de orden 2 y después el área de orden 1:
+  const areaOrden2 = area("area-2", { name: "Operaciones", hierarchy_order: 2 })
+  const areaOrden1 = area("area-1", { name: "Dirección General", hierarchy_order: 1 })
+  const areas = [areaOrden2, areaOrden1]
+
+  // 1. sortAreasByOrder coloca siempre Orden 1 antes que Orden 2:
+  expect(sortAreasByOrder(areas).map((a) => a.id)).toEqual(["area-1", "area-2"])
+
+  // 2. Cuando se crea un área con Orden 1, el área de Orden 2 NO aparece como opción de Área superior:
+  expect(areaParentOptions([areaOrden2], null, 1)).toEqual([])
+  // Y si se crea con Orden 3, sí aparecen Orden 1 y Orden 2 en ese orden:
+  expect(areaParentOptions(areas, null, 3).map((a) => a.id)).toEqual(["area-1", "area-2"])
+
+  // 3. validateAreaInput rechaza que un área de Orden 1 dependa de un área de Orden 2:
+  expect(
+    validateAreaInput({
+      name: "Dirección General",
+      parentAreaId: "area-2",
+      hierarchyOrder: 1,
+      entityId: "entity-1",
+      areas: [areaOrden2],
+    })
+  ).toBe("Un área de orden mayor no puede estar por encima de un área de orden menor")
+
+  // 4. Incluso si en base de datos quedó un registro histórico con parent_area_id invertido,
+  //    buildAreaTree lo eleva a la raíz y coloca Orden 1 antes que Orden 2:
+  const invertidas = [
+    areaOrden2,
+    area("area-1-invertida", {
+      name: "Dirección General",
+      hierarchy_order: 1,
+      parent_area_id: "area-2",
+    }),
+  ]
+  const treeInvertido = buildAreaTree(invertidas)
+  expect(treeInvertido.map((n) => n.id)).toEqual(["area-1-invertida", "area-2"])
+  expect(treeInvertido[1].children).toEqual([])
+
+  // 5. Los cargos se ordenan primero por el orden del Área y luego por el orden del Cargo:
+  const jobs: OrganizationJob[] = [
+    {
+      id: "job-op-2",
+      organization_entity_id: "entity-1",
+      area_id: "area-2",
+      occupational_category_id: "cat-1",
+      salary_group_id: "sg-1",
+      name: "Supervisor de Planta",
+      description: null,
+      hierarchy_order: 2,
+      is_active: true,
+      has_abnormal_conditions: false,
+      cla_day_enabled: false,
+      cla_day_hourly_rate: null,
+      cla_night_enabled: false,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    },
+    {
+      id: "job-dir-2",
+      organization_entity_id: "entity-1",
+      area_id: "area-1",
+      occupational_category_id: "cat-1",
+      salary_group_id: "sg-1",
+      name: "Subdirector",
+      description: null,
+      hierarchy_order: 2,
+      is_active: true,
+      has_abnormal_conditions: false,
+      cla_day_enabled: false,
+      cla_day_hourly_rate: null,
+      cla_night_enabled: false,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    },
+    {
+      id: "job-op-1",
+      organization_entity_id: "entity-1",
+      area_id: "area-2",
+      occupational_category_id: "cat-1",
+      salary_group_id: "sg-1",
+      name: "Jefe de Operaciones",
+      description: null,
+      hierarchy_order: 1,
+      is_active: true,
+      has_abnormal_conditions: false,
+      cla_day_enabled: false,
+      cla_day_hourly_rate: null,
+      cla_night_enabled: false,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    },
+    {
+      id: "job-dir-1",
+      organization_entity_id: "entity-1",
+      area_id: "area-1",
+      occupational_category_id: "cat-1",
+      salary_group_id: "sg-1",
+      name: "Director General",
+      description: null,
+      hierarchy_order: 1,
+      is_active: true,
+      has_abnormal_conditions: false,
+      cla_day_enabled: false,
+      cla_day_hourly_rate: null,
+      cla_night_enabled: false,
+      created_at: "2024-01-01T00:00:00Z",
+      updated_at: "2024-01-01T00:00:00Z",
+    },
+  ]
+
+  expect(sortJobsByHierarchyOrder(jobs, areas).map((j) => j.id)).toEqual([
+    "job-dir-1",
+    "job-dir-2",
+    "job-op-1",
+    "job-op-2",
+  ])
+
+  // 6. Los puestos se ordenan por: orden del Área -> orden del Cargo -> orden del Puesto:
+  const makePos = (id: string, jobId: string, positionOrder: number): OrganizationPosition => ({
+    id,
+    organization_entity_id: "entity-1",
+    job_id: jobId,
+    name: `Puesto ${id}`,
+    description: null,
+    authorized_quantity: 1,
+    position_order: positionOrder,
+    is_active: true,
+    work_schedule_type_id: null,
+    shift_regime_id: null,
+    weekly_hours: null,
+    monthly_hours: null,
+    work_days_description: null,
+    rest_days_description: null,
+    schedule_notes: null,
+    created_at: "2024-01-01T00:00:00Z",
+    updated_at: "2024-01-01T00:00:00Z",
+  })
+
+  const positions = [
+    makePos("pos-op2-2", "job-op-2", 2),
+    makePos("pos-dir1-2", "job-dir-1", 2),
+    makePos("pos-op1-1", "job-op-1", 1),
+    makePos("pos-dir1-1", "job-dir-1", 1),
+    makePos("pos-dir2-1", "job-dir-2", 1),
+    makePos("pos-op2-1", "job-op-2", 1),
+  ]
+
+  expect(sortPositionsByHierarchyOrder(positions, areas, jobs).map((p) => p.id)).toEqual([
+    "pos-dir1-1",
+    "pos-dir1-2",
+    "pos-dir2-1",
+    "pos-op1-1",
+    "pos-op2-1",
+    "pos-op2-2",
+  ])
 })
 
 // ---------------------------------------------------------------------------
