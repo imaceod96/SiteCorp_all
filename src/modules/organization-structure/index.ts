@@ -73,6 +73,7 @@ export {
   areaDescendantIds,
   areaParentOptions,
   buildAreaTree,
+  sortAreasByOrder,
   validateAreaInput,
   areaSaveErrorMessage,
 } from "./domain/areas.rules"
@@ -81,6 +82,7 @@ export {
 export {
   parseJobCla,
   jobSaveErrorMessage,
+  sortJobsByHierarchyOrder,
   validateJobCla,
   validateJobInput,
 } from "./domain/jobs.rules"
@@ -95,6 +97,7 @@ export {
   positionSaveErrorMessage,
   positionSchedulePayload,
   removeScheduleSegment,
+  sortPositionsByHierarchyOrder,
   sortScheduleSegments,
   validatePositionInput,
 } from "./domain/positions.rules"

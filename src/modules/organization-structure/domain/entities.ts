@@ -140,6 +140,7 @@ export interface OrganizationJob {
     id: string
     name: string
     code?: string | null
+    hierarchy_order?: number
     is_active: boolean
     organization_entity_id: string
   } | null
@@ -152,10 +153,11 @@ export interface OrganizationPositionJobRef {
   id: string
   name: string
   code?: string | null
+  hierarchy_order?: number
   is_active: boolean
   area_id: string
   occupational_category_id: string | null
-  area: { id: string; name: string; code?: string | null } | null
+  area: { id: string; name: string; code?: string | null; hierarchy_order?: number } | null
   salary_group: SalaryGroupRef | null
 }
 
@@ -264,12 +266,14 @@ export interface PositionJobOption {
   id: string
   name: string
   code?: string | null
+  hierarchy_order?: number
   is_active: boolean
   area_id: string
   area: {
     id: string
     name: string
     code?: string | null
+    hierarchy_order?: number
   }
   salary_group: {
     id: string

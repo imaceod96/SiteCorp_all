@@ -40,12 +40,35 @@ export const AreaForm: React.FC<AreaFormProps> = ({
 }) => {
   const [submitting, setSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
-
-  // Opciones de «Área superior»: activas de esta entidad, sin el área ni sus descendientes.
-  const parentOptions = React.useMemo(
-    () => areaParentOptions(areas, editingArea),
-    [areas, editingArea]
+  const [hierarchyOrder, setHierarchyOrder] = React.useState<string>(() =>
+    editingArea?.hierarchy_order !== undefined ? String(editingArea.hierarchy_order) : "0"
   )
+  const [selectedParentId, setSelectedParentId] = React.useState<string>(
+    () => editingArea?.parent_area_id || ""
+  )
+
+  React.useEffect(() => {
+    setHierarchyOrder(
+      editingArea?.hierarchy_order !== undefined ? String(editingArea.hierarchy_order) : "0"
+    )
+    setSelectedParentId(editingArea?.parent_area_id || "")
+  }, [editingArea])
+
+  const parsedOrder = parseInt(hierarchyOrder, 10)
+  const effectiveOrder = Number.isNaN(parsedOrder) ? 0 : parsedOrder
+
+  // Opciones de «Área superior»: activas de esta entidad, sin el área ni sus descendientes,
+  // y con orden menor o igual al orden del área actual.
+  const parentOptions = React.useMemo(
+    () => areaParentOptions(areas, editingArea, effectiveOrder),
+    [areas, editingArea, effectiveOrder]
+  )
+
+  React.useEffect(() => {
+    if (selectedParentId && !parentOptions.some((a) => a.id === selectedParentId)) {
+      setSelectedParentId("")
+    }
+  }, [parentOptions, selectedParentId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,18 +80,15 @@ export const AreaForm: React.FC<AreaFormProps> = ({
     const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim()
     const description =
       (form.elements.namedItem("description") as HTMLTextAreaElement).value.trim() || null
-    const parent_area_id =
-      (form.elements.namedItem("parent_area_id") as HTMLSelectElement).value || null
-    const hierarchy_order = parseInt(
-      (form.elements.namedItem("hierarchy_order") as HTMLInputElement).value,
-      10
-    )
+    const parent_area_id = selectedParentId.trim() || null
 
     const validationError = validateAreaInput({
       name,
       parentAreaId: parent_area_id,
       entityId,
       areas,
+      hierarchyOrder: effectiveOrder,
+      editingAreaId: editingArea ? editingArea.id : null,
     })
     if (validationError) {
       setFormError(validationError)
@@ -83,8 +103,8 @@ export const AreaForm: React.FC<AreaFormProps> = ({
         areaId: editingArea ? editingArea.id : null,
         name,
         description,
-        parentAreaId: parent_area_id || null,
-        hierarchyOrder: isNaN(hierarchy_order) ? 0 : hierarchy_order,
+        parentAreaId: parent_area_id,
+        hierarchyOrder: effectiveOrder,
       })
       onSuccess()
     } catch (err) {
@@ -100,42 +120,49 @@ export const AreaForm: React.FC<AreaFormProps> = ({
       {formError && <SiteCorpAlert type="danger">{formError}</SiteCorpAlert>}
 
       <div className="space-y-2">
-              <Label htmlFor="area-name">Nombre *</Label>
-              <SiteCorpInput
-                name="name"
-                defaultValue={editingArea?.name || ""}
-                placeholder="Ej.: Recursos Humanos"
-                required
-              />
-            </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="area-order">Orden</Label>
+        <Label htmlFor="area-name">Nombre *</Label>
         <SiteCorpInput
-          name="hierarchy_order"
-          type="number"
-          defaultValue={editingArea?.hierarchy_order || 0}
-          placeholder="0"
+          id="area-name"
+          name="name"
+          defaultValue={editingArea?.name || ""}
+          placeholder="Ej.: Recursos Humanos"
+          required
         />
       </div>
 
       <div className="space-y-2">
-              <Label htmlFor="area-parent">Área superior</Label>
-              <SiteCorpSelect
-                name="parent_area_id"
-                defaultValue={editingArea?.parent_area_id || ""}
-              >
-                <option value="">Seleccionar área superior (opcional)</option>
-                {parentOptions.map((area) => (
-                  <option key={area.id} value={area.id}>
-                    {area.name}
-                  </option>
-                ))}
-              </SiteCorpSelect>
-              <p className="text-xs text-muted-foreground">
-                Dejar vacío para crear un área raíz.
-              </p>
-            </div>
+        <Label htmlFor="area-order">Orden</Label>
+        <SiteCorpInput
+          id="area-order"
+          name="hierarchy_order"
+          type="number"
+          value={hierarchyOrder}
+          onChange={(e) => setHierarchyOrder(e.target.value)}
+          placeholder="0"
+        />
+        <p className="text-xs text-muted-foreground">
+          Define la posición del área en la ventana de áreas y en la plantilla (menor número = mayor prioridad).
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="area-parent">Área superior</Label>
+        <SiteCorpSelect
+          name="parent_area_id"
+          value={selectedParentId}
+          onValueChange={setSelectedParentId}
+        >
+          <option value="">Sin área superior (área principal)</option>
+          {parentOptions.map((area) => (
+            <option key={area.id} value={area.id}>
+              {area.name} (Orden {area.hierarchy_order})
+            </option>
+          ))}
+        </SiteCorpSelect>
+        <p className="text-xs text-muted-foreground">
+          Dejar vacío para crear un área principal. Nunca un área de orden mayor puede estar por encima de una de orden menor.
+        </p>
+      </div>
 
       <div className="space-y-2">
         <Label htmlFor="area-description">Descripción</Label>
@@ -159,3 +186,4 @@ export const AreaForm: React.FC<AreaFormProps> = ({
     </form>
   )
 }
+

@@ -115,3 +115,39 @@ export function jobSaveErrorMessage(error: unknown): string {
   }
   return message
 }
+
+/**
+ * Ordena los cargos respetando primero el orden del área (`area.hierarchy_order` y nombre)
+ * y, dentro de cada área, el orden del cargo (`job.hierarchy_order` y nombre).
+ */
+export function sortJobsByHierarchyOrder<
+  T extends {
+    area_id: string
+    name: string
+    hierarchy_order?: number
+    area?: { id?: string; name?: string | null; hierarchy_order?: number } | null
+  },
+>(jobs: T[], areas: Pick<OrganizationArea, "id" | "name" | "hierarchy_order">[] = []): T[] {
+  const areaById = new Map(areas.map((a) => [a.id, a]))
+
+  return [...jobs].sort((a, b) => {
+    const areaA = areaById.get(a.area_id) || a.area
+    const areaB = areaById.get(b.area_id) || b.area
+
+    const areaOrderA = areaA?.hierarchy_order ?? Number.MAX_SAFE_INTEGER
+    const areaOrderB = areaB?.hierarchy_order ?? Number.MAX_SAFE_INTEGER
+    if (areaOrderA !== areaOrderB) return areaOrderA - areaOrderB
+
+    const areaNameA = areaA?.name || ""
+    const areaNameB = areaB?.name || ""
+    const areaNameCmp = areaNameA.localeCompare(areaNameB)
+    if (areaNameCmp !== 0) return areaNameCmp
+
+    const jobOrderA = a.hierarchy_order ?? 0
+    const jobOrderB = b.hierarchy_order ?? 0
+    if (jobOrderA !== jobOrderB) return jobOrderA - jobOrderB
+
+    return a.name.localeCompare(b.name)
+  })
+}
+

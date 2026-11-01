@@ -62,6 +62,7 @@ export const JobForm: React.FC<JobFormProps> = ({
   const [error, setError] = React.useState<string | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
+  const [selectedAreaId, setSelectedAreaId] = React.useState<string>(editingJob?.area_id || "")
   const [selectedGroup, setSelectedGroup] = React.useState<string>("")
   const [selectedCategory, setSelectedCategory] = React.useState<string>("")
   const [salaryVigente, setSalaryVigente] = React.useState<SalaryValue | null>(null)
@@ -98,7 +99,11 @@ export const JobForm: React.FC<JobFormProps> = ({
         salaryGroupId: editingSalaryGroupId,
       })
 
-      setAreas(workspace.areas)
+      setAreas(
+        [...workspace.areas].sort(
+          (a, b) => (a.hierarchy_order ?? 0) - (b.hierarchy_order ?? 0) || a.name.localeCompare(b.name)
+        )
+      )
       setCategories(workspace.categories)
       setPreparationLevels(workspace.preparationLevels)
       setScaleInfo(workspace.scaleInfo)
@@ -136,6 +141,7 @@ export const JobForm: React.FC<JobFormProps> = ({
   React.useEffect(() => {
     if (!editingJob) {
       // Cargo nuevo: clasificación y retribución parten vacías
+      setSelectedAreaId("")
       setSelectedGroup("")
       setSelectedCategory("")
       setIsCuadro(false)
@@ -153,6 +159,7 @@ export const JobForm: React.FC<JobFormProps> = ({
       return
     }
 
+    setSelectedAreaId(editingJob.area_id || "")
     setSelectedGroup(editingJob.salary_group_id)
         setSelectedCategory(editingJob.occupational_category_id || "")
         setIsCuadro(!!editingJob.is_cuadro)
@@ -192,7 +199,7 @@ export const JobForm: React.FC<JobFormProps> = ({
   
       const form = e.target as HTMLFormElement
       const name = (form.elements.namedItem("name") as HTMLInputElement).value.trim()
-      const area_id = (form.elements.namedItem("area_id") as HTMLSelectElement).value
+      const area_id = selectedAreaId
       const description = (form.elements.namedItem("description") as HTMLTextAreaElement).value.trim() || null
       const required_profession_or_trade =
         ((form.elements.namedItem("required_profession_or_trade") as HTMLInputElement)?.value || "").trim() || null
@@ -300,7 +307,8 @@ export const JobForm: React.FC<JobFormProps> = ({
           <Label htmlFor="job-area">Área *</Label>
           <SiteCorpSelect
             name="area_id"
-            defaultValue={editingJob?.area_id || ""}
+            value={selectedAreaId}
+            onValueChange={setSelectedAreaId}
             required
           >
             <option value="">Seleccionar área</option>

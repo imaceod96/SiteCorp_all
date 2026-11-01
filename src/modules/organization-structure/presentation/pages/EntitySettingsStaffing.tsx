@@ -61,6 +61,9 @@ import {
   setAreaActive,
   setJobActive,
   setPositionActive,
+  sortAreasByOrder,
+  sortJobsByHierarchyOrder,
+  sortPositionsByHierarchyOrder,
   type AreaNode,
   type OrganizationArea,
   type OrganizationJob,
@@ -189,6 +192,8 @@ const EntitySettingsStaffing = () => {
     })
   }
 
+  const sortedAreas = React.useMemo(() => sortAreasByOrder(areas), [areas])
+
   const filteredJobs = React.useMemo(() => {
     let result = jobs
 
@@ -211,8 +216,8 @@ const EntitySettingsStaffing = () => {
       result = result.filter(j => !j.is_active)
     }
 
-    return result
-  }, [jobs, areaFilter, statusFilter, categoryFilter])
+    return sortJobsByHierarchyOrder(result, sortedAreas)
+  }, [jobs, areaFilter, statusFilter, categoryFilter, sortedAreas])
 
   // Opciones del filtro de categoría: sólo las categorías realmente usadas en los cargos
   const categoryFilterOptions = React.useMemo(() => {
@@ -229,15 +234,23 @@ const EntitySettingsStaffing = () => {
     [jobs]
   )
 
-  const activeJobs = React.useMemo(() => jobs.filter(j => j.is_active), [jobs])
+  const sortedJobs = React.useMemo(
+    () => sortJobsByHierarchyOrder(jobs, sortedAreas),
+    [jobs, sortedAreas]
+  )
 
-  // Opciones del filtro Cargo: cargos de la entidad, acotados al área filtrada
+  const activeJobs = React.useMemo(
+    () => sortedJobs.filter(j => j.is_active),
+    [sortedJobs]
+  )
+
+  // Opciones del filtro Cargo: cargos de la entidad, acotados al área filtrada y ordenados por área y cargo
   const jobFilterOptions = React.useMemo(() => {
     if (areaFilter !== "all") {
-      return jobs.filter(j => j.area_id === areaFilter)
+      return sortedJobs.filter(j => j.area_id === areaFilter)
     }
-    return jobs
-  }, [jobs, areaFilter])
+    return sortedJobs
+  }, [sortedJobs, areaFilter])
 
   const filteredPositions = React.useMemo(() => {
     const search = positionSearch.trim().toLowerCase()
@@ -262,12 +275,8 @@ const EntitySettingsStaffing = () => {
       )
     }
 
-    return [...result].sort((a, b) =>
-      (a.job?.name || "").localeCompare(b.job?.name || "") ||
-      a.position_order - b.position_order ||
-      a.name.localeCompare(b.name)
-    )
-  }, [positions, areaFilter, jobFilter, statusFilter, positionSearch])
+    return sortPositionsByHierarchyOrder(result, sortedAreas, sortedJobs)
+  }, [positions, areaFilter, jobFilter, statusFilter, positionSearch, sortedAreas, sortedJobs])
 
   // Salario resuelto: Puesto → Cargo → Grupo salarial → Escala aplicable → valor vigente
   const resolvePositionSalary = React.useCallback(
@@ -280,16 +289,17 @@ const EntitySettingsStaffing = () => {
     [applicableScaleId, salaryValuesByGroup]
   )
 
-  // Opciones de cargo para el formulario (información derivada del cargo incluida)
+  // Opciones de cargo para el formulario (información derivada del cargo incluida), en orden Área → Cargo
   const positionJobOptions: PositionJobOption[] = React.useMemo(
     () =>
-      jobs.map(j => ({
+      sortedJobs.map(j => ({
         id: j.id,
         name: j.name,
+        hierarchy_order: j.hierarchy_order,
         is_active: j.is_active,
         area_id: j.area_id,
         area: j.area
-          ? { id: j.area.id, name: j.area.name }
+          ? { id: j.area.id, name: j.area.name, hierarchy_order: j.area.hierarchy_order }
           : { id: j.area_id, name: "—" },
         salary_group: j.salary_group
           ? {
@@ -307,7 +317,7 @@ const EntitySettingsStaffing = () => {
           name: level.name,
         })),
       })),
-    [jobs, preparationLevelsByJob]
+    [sortedJobs, preparationLevelsByJob]
   )
 
   // Position dialog handlers
@@ -396,7 +406,13 @@ const EntitySettingsStaffing = () => {
     }
   }
 
-  const tree = React.useMemo(() => buildAreaTree(areas), [areas])
+  const filteredAreas = React.useMemo(() => {
+    if (statusFilter === "active") return sortedAreas.filter(a => a.is_active)
+    if (statusFilter === "inactive") return sortedAreas.filter(a => !a.is_active)
+    return sortedAreas
+  }, [sortedAreas, statusFilter])
+
+  const tree = React.useMemo(() => buildAreaTree(filteredAreas), [filteredAreas])
 
   // Area dialog handlers
   const openCreateAreaDialog = () => {
@@ -515,6 +531,9 @@ const EntitySettingsStaffing = () => {
               )}
             >
               {node.name}
+            </span>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+              Orden {node.hierarchy_order}
             </span>
             <SiteCorpStatusBadge status={node.is_active ? "success" : "neutral"}>
               {node.is_active ? "Activa" : "Inactiva"}
@@ -731,7 +750,7 @@ const EntitySettingsStaffing = () => {
                 onValueChange={(value) => setAreaFilter(value)}
               >
                 <SelectItem value="all">Todas las áreas</SelectItem>
-                {areas.filter(a => a.is_active).map(area => (
+                {sortedAreas.filter(a => a.is_active).map(area => (
                   <SelectItem key={area.id} value={area.id}>
                     {area.name}
                   </SelectItem>
@@ -793,15 +812,21 @@ const EntitySettingsStaffing = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Group jobs by area */}
-                {areas.filter(a => a.is_active).map(area => {
+                {/* Group jobs by area (ordered by area.hierarchy_order, then job.hierarchy_order) */}
+                {(statusFilter === "active"
+                  ? sortedAreas.filter(a => a.is_active)
+                  : sortedAreas
+                ).map(area => {
                   const areaJobs = filteredJobs.filter(j => j.area_id === area.id)
                   if (areaJobs.length === 0) return null
 
                   return (
                     <div key={area.id} className="space-y-2">
-                      <h4 className="text-sm font-semibold text-ink">
-                        {area.name}
+                      <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
+                        <span>{area.name}</span>
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                          Orden {area.hierarchy_order}
+                        </span>
                       </h4>
                       <div className="space-y-2">
                         {areaJobs.map(job => (
@@ -812,6 +837,9 @@ const EntitySettingsStaffing = () => {
                             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
                               <span className="text-sm font-medium text-ink">
                                 {job.name}
+                              </span>
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                Orden {job.hierarchy_order}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 Grupo: {job.salary_group
@@ -957,7 +985,7 @@ const EntitySettingsStaffing = () => {
                     }}
                   >
                     <SelectItem value="all">Todas las áreas</SelectItem>
-                    {areas.filter(a => a.is_active).map(area => (
+                    {sortedAreas.filter(a => a.is_active).map(area => (
                       <SelectItem key={area.id} value={area.id}>
                         {area.name}
                       </SelectItem>
@@ -1004,6 +1032,9 @@ const EntitySettingsStaffing = () => {
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                               <span className="text-sm font-semibold text-ink">
                                 {position.name}
+                              </span>
+                              <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                                Orden {position.position_order}
                               </span>
                               <SiteCorpStatusBadge status={position.is_active ? "success" : "neutral"}>
                                 {position.is_active ? "Activo" : "Inactivo"}
