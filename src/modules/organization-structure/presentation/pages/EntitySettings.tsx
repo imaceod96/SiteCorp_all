@@ -4,7 +4,7 @@ import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
-import { Users, Shield, Scale, FileText, Network, ClipboardList, FileType2, Briefcase, FileSpreadsheet } from "lucide-react"
+import { Users, Shield, Scale, FileText, Network, ClipboardList, FileType2, Briefcase, FileSpreadsheet, BookOpen } from "lucide-react"
 
 interface SettingsItem {
   title: string
@@ -91,12 +91,20 @@ const EntitySettings = () => {
         href: `/entity/${currentEntity?.id}/settings/governing-documents`,
         permissions: ["organization.view", "organization.manage"],
       },
+      {
+        title: "Manual de usuario",
+        description:
+          "Guía oficial de operación de personal, plantilla, nómina, SST y contratos.",
+        icon: BookOpen,
+        href: `/entity/${currentEntity?.id}/manual`,
+        permissions: [],
+      },
     ],
     [currentEntity?.id]
   )
 
-  const visibleItems = settingsItems.filter((item) =>
-    item.permissions.some((code) => entityPermissions.includes(code))
+  const visibleItems = settingsItems.filter(
+    (item) => item.permissions.length === 0 || item.permissions.some((code) => entityPermissions.includes(code))
   )
 
   return (

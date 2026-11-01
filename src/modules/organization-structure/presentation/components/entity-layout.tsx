@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronRight,
+  BookOpen,
 } from "lucide-react"
 import { SidebarUserMenu } from "@/modules/access-control/presentation/components/sidebar-user-menu"
 import {
@@ -52,6 +53,7 @@ const navIcons: Record<string, React.ReactNode> = {
   "pending-documents": <FileArchive className="h-5 w-5" />,
   "contract-alerts": <CalendarClock className="h-5 w-5" />,
   settings: <Settings className="h-5 w-5" />,
+  manual: <BookOpen className="h-5 w-5" />,
 }
 
 const isVisible = (entry: EntityNavEntry, permissions: string[]): boolean => {
