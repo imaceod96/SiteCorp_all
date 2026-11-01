@@ -51,7 +51,7 @@ import type {
 interface RawWorkerJobRow {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   area: { id: string; name: string }[] | null
@@ -64,7 +64,7 @@ interface RawWorkerJobRow {
 interface RawWorkerPositionRow {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   job_id: string
   work_location: string | null
@@ -181,10 +181,10 @@ export async function fetchWorkerExpediente(
       assignments:worker_position_assignments(
         id, position_id, start_date, end_date, is_current,
         position:organization_positions(
-          id, name, code, is_active, job_id,
+          id, name, is_active, job_id,
           work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
           job:organization_jobs(
-            id, name, code, is_active, area_id,
+            id, name, is_active, area_id,
             area:organization_areas(id, name),
             salary_group:salary_groups(id, salary_scale_id, sequence_number)
           )

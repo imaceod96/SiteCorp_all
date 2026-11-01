@@ -15,20 +15,6 @@ import type { PositionScheduleSegment } from "./entities"
 /** Tope de plazas autorizadas por puesto. */
 export const MAX_AUTHORIZED_QUANTITY = 9999
 
-/** Alfabeto sin caracteres ambiguos (0/O, 1/I) para códigos legibles. */
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
-/** Código del puesto: lo genera la interfaz cuando el backend no recibe uno. */
-export function generatePositionCode(): string {
-  const bytes = new Uint8Array(6)
-  crypto.getRandomValues(bytes)
-  let suffix = ""
-  for (let i = 0; i < bytes.length; i++) {
-    suffix += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
-  }
-  return `PST-${suffix}`
-}
-
 /** "08:00:00" | "08:00" → "08:00" (la base de datos guarda `time`). */
 export function normalizeScheduleTime(time: string): string {
   const [hours, minutes] = time.split(":")

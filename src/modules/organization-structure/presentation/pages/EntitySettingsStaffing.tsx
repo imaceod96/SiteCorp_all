@@ -257,7 +257,6 @@ const EntitySettingsStaffing = () => {
     if (search) {
       result = result.filter(p =>
         p.name.toLowerCase().includes(search) ||
-        p.code.toLowerCase().includes(search) ||
         (p.job?.name || "").toLowerCase().includes(search) ||
         (p.job?.area?.name || "").toLowerCase().includes(search)
       )
@@ -287,12 +286,11 @@ const EntitySettingsStaffing = () => {
       jobs.map(j => ({
         id: j.id,
         name: j.name,
-        code: j.code,
         is_active: j.is_active,
         area_id: j.area_id,
         area: j.area
-          ? { id: j.area.id, name: j.area.name, code: j.area.code }
-          : { id: j.area_id, name: "—", code: "—" },
+          ? { id: j.area.id, name: j.area.name }
+          : { id: j.area_id, name: "—" },
         salary_group: j.salary_group
           ? {
               id: j.salary_group.id,
@@ -323,7 +321,6 @@ const EntitySettingsStaffing = () => {
       setEditingPosition({
         id: position.id,
         job_id: position.job_id,
-        code: position.code,
         name: position.name,
         description: position.description,
         authorized_quantity: position.authorized_quantity,
@@ -518,9 +515,6 @@ const EntitySettingsStaffing = () => {
               )}
             >
               {node.name}
-            </span>
-            <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-              {node.code}
             </span>
             <SiteCorpStatusBadge status={node.is_active ? "success" : "neutral"}>
               {node.is_active ? "Activa" : "Inactiva"}
@@ -739,7 +733,7 @@ const EntitySettingsStaffing = () => {
                 <SelectItem value="all">Todas las áreas</SelectItem>
                 {areas.filter(a => a.is_active).map(area => (
                   <SelectItem key={area.id} value={area.id}>
-                    {area.name} ({area.code})
+                    {area.name}
                   </SelectItem>
                 ))}
               </SiteCorpSelect>
@@ -807,7 +801,7 @@ const EntitySettingsStaffing = () => {
                   return (
                     <div key={area.id} className="space-y-2">
                       <h4 className="text-sm font-semibold text-ink">
-                        {area.name} ({area.code})
+                        {area.name}
                       </h4>
                       <div className="space-y-2">
                         {areaJobs.map(job => (
@@ -818,9 +812,6 @@ const EntitySettingsStaffing = () => {
                             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
                               <span className="text-sm font-medium text-ink">
                                 {job.name}
-                              </span>
-                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                                {job.code}
                               </span>
                               <span className="text-xs text-muted-foreground">
                                 Grupo: {job.salary_group
@@ -954,7 +945,7 @@ const EntitySettingsStaffing = () => {
                     <SiteCorpInput
                       value={positionSearch}
                       onChange={(e) => setPositionSearch(e.target.value)}
-                      placeholder="Buscar por puesto, código, cargo o área..."
+                      placeholder="Buscar por puesto, cargo o área..."
                       className="pl-9"
                     />
                   </div>
@@ -968,7 +959,7 @@ const EntitySettingsStaffing = () => {
                     <SelectItem value="all">Todas las áreas</SelectItem>
                     {areas.filter(a => a.is_active).map(area => (
                       <SelectItem key={area.id} value={area.id}>
-                        {area.name} ({area.code})
+                        {area.name}
                       </SelectItem>
                     ))}
                   </SiteCorpSelect>
@@ -1013,9 +1004,6 @@ const EntitySettingsStaffing = () => {
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                               <span className="text-sm font-semibold text-ink">
                                 {position.name}
-                              </span>
-                              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                                {position.code}
                               </span>
                               <SiteCorpStatusBadge status={position.is_active ? "success" : "neutral"}>
                                 {position.is_active ? "Activo" : "Inactivo"}

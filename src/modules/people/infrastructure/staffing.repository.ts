@@ -43,7 +43,7 @@ interface RawJobRow {
 interface RawPositionRow {
   id: string
   name: string
-  code: string | null
+  code?: string | null
   is_active: boolean
   authorized_quantity: number
   work_location: string | null
@@ -91,10 +91,10 @@ const toStaffingPosition = (row: RawPositionRow): StaffingPosition => {
   }
 }
 
-const POSITION_COLUMNS = `id, name, code, is_active, authorized_quantity,
+const POSITION_COLUMNS = `id, name, is_active, authorized_quantity,
    work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
    job:organization_jobs(
-     id, name, code, is_active, area_id, is_cuadro, is_principal_specialist,
+     id, name, is_active, area_id, is_cuadro, is_principal_specialist,
      area:organization_areas(id, name),
      salary_group:salary_groups(id, salary_scale_id, sequence_number),
      occupational_category:occupational_categories(id, name, code)
@@ -167,9 +167,9 @@ const STAFFING_WORKER_COLUMNS = `id, code, first_name, first_surname, second_sur
    assignments:worker_position_assignments(
      id, position_id, start_date, end_date, is_current,
      position:organization_positions(
-       id, name, code, is_active, job_id,
+       id, name, is_active, job_id,
        job:organization_jobs(
-         id, name, code, is_active, area_id,
+         id, name, is_active, area_id,
          area:organization_areas(id, name),
          salary_group:salary_groups(id, salary_scale_id, sequence_number),
          occupational_category:occupational_categories(id, name, code)

@@ -109,41 +109,15 @@ export const AreaForm: React.FC<AreaFormProps> = ({
               />
             </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="area-code">Código</Label>
-                {editingArea ? (
-                  <SiteCorpInput
-                    name="code"
-                    value={editingArea.code || ""}
-                    readOnly
-                    className="bg-muted/50"
-                  />
-                ) : (
-                  <SiteCorpInput
-                    name="code"
-                    value=""
-                    readOnly
-                    placeholder="Se generará automáticamente"
-                    className="bg-muted/50"
-                  />
-                )}
-                <p className="text-xs text-muted-foreground">
-                  {editingArea
-                    ? "Código generado automáticamente a partir del nombre. Es de solo lectura."
-                    : "El código se genera automáticamente al guardar, a partir del nombre del área."}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="area-order">Orden</Label>
-                <SiteCorpInput
-                  name="hierarchy_order"
-                  type="number"
-                  defaultValue={editingArea?.hierarchy_order || 0}
-                  placeholder="0"
-                />
-              </div>
-            </div>
+      <div className="space-y-2">
+        <Label htmlFor="area-order">Orden</Label>
+        <SiteCorpInput
+          name="hierarchy_order"
+          type="number"
+          defaultValue={editingArea?.hierarchy_order || 0}
+          placeholder="0"
+        />
+      </div>
 
       <div className="space-y-2">
               <Label htmlFor="area-parent">Área superior</Label>
@@ -154,7 +128,7 @@ export const AreaForm: React.FC<AreaFormProps> = ({
                 <option value="">Seleccionar área superior (opcional)</option>
                 {parentOptions.map((area) => (
                   <option key={area.id} value={area.id}>
-                    {area.name} ({area.code})
+                    {area.name}
                   </option>
                 ))}
               </SiteCorpSelect>

@@ -393,13 +393,13 @@ async function resolvePositionInfo(positionId: string | null | undefined): Promi
   try {
     const { data } = await supabase
       .from("organization_positions")
-      .select("id, name, code, organization_entity_id")
+      .select("id, name, organization_entity_id")
       .eq("id", positionId)
       .maybeSingle()
     if (data) {
       const info = {
         name: data.name || positionId,
-        code: data.code || "",
+        code: "",
         entityId: data.organization_entity_id || null,
       }
       positionNameCache.set(positionId, info)
@@ -461,7 +461,7 @@ async function syncDiscoveredPlatformEvents(
         .order("created_at", { ascending: false }),
       supabase
         .from("organization_positions")
-        .select("id, name, code, authorized_quantity, is_active, job_id, organization_entity_id, created_at")
+        .select("id, name, authorized_quantity, is_active, job_id, organization_entity_id, created_at")
         .order("created_at", { ascending: false }),
       supabase
         .from("worker_position_assignments")
@@ -469,11 +469,11 @@ async function syncDiscoveredPlatformEvents(
         .order("created_at", { ascending: false }),
       supabase
         .from("organization_areas")
-        .select("id, name, code, is_active, organization_entity_id, created_at")
+        .select("id, name, is_active, organization_entity_id, created_at")
         .order("created_at", { ascending: false }),
       supabase
         .from("organization_jobs")
-        .select("id, name, code, is_active, area_id, organization_entity_id, created_at")
+        .select("id, name, is_active, area_id, organization_entity_id, created_at")
         .order("created_at", { ascending: false }),
       supabase
         .from("candidates")
@@ -548,7 +548,7 @@ async function syncDiscoveredPlatformEvents(
       if (p.id) {
         positionNameCache.set(p.id, {
           name: p.name || "Puesto",
-          code: p.code || "",
+          code: "",
           entityId: p.organization_entity_id || null,
         })
       }
@@ -685,13 +685,12 @@ async function syncDiscoveredPlatformEvents(
         module: "entity_settings",
         action: "area_created",
         entity_type: "organization_area",
-        record_id: area.code || area.name,
+        record_id: area.name,
         description: `Creación del área "${area.name}"${entName ? ` en ${entName}` : ""}`,
         old_values: null,
         new_values: {
           area_id: area.id,
           name: area.name,
-          code: area.code,
           is_active: area.is_active,
         },
         result: "SUCCESS",
@@ -716,13 +715,12 @@ async function syncDiscoveredPlatformEvents(
         module: "positions",
         action: "job_created",
         entity_type: "organization_job",
-        record_id: job.code || job.name,
+        record_id: job.name,
         description: `Creación del cargo "${job.name}"${entName ? ` en ${entName}` : ""}`,
         old_values: null,
         new_values: {
           job_id: job.id,
           name: job.name,
-          code: job.code,
           is_active: job.is_active,
         },
         result: "SUCCESS",
@@ -747,13 +745,12 @@ async function syncDiscoveredPlatformEvents(
         module: "positions",
         action: "position_created",
         entity_type: "organization_position",
-        record_id: pos.code || pos.name,
+        record_id: pos.name,
         description: `Creación del puesto "${pos.name}" (${pos.authorized_quantity || 1} plaza(s)) en la plantilla${entName ? ` de ${entName}` : ""}`,
         old_values: null,
         new_values: {
           position_id: pos.id,
           name: pos.name,
-          code: pos.code,
           authorized_quantity: pos.authorized_quantity,
           is_active: pos.is_active,
         },
@@ -1223,7 +1220,7 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         action = reqObj?.p_position_id ? "position_updated" : "position_created"
         entityType = "organization_position"
         const pName = (reqObj?.p_name as string | undefined) || posLabel
-        recordId = (reqObj?.p_code as string | undefined) || pName
+        recordId = pName
         description = `${reqObj?.p_position_id ? "Actualización" : "Creación"} del puesto "${pName}" en la plantilla${entityName ? ` de ${entityName}` : ""}`
       } else if (rpcName.includes("addendum")) {
         module = "contracts"

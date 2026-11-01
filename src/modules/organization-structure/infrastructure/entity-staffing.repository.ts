@@ -22,7 +22,7 @@ import type { SalaryGroupRef } from "../domain/entities"
 export interface EntityStaffingJob {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   area: { id: string | null; name: string | null } | null
@@ -32,7 +32,7 @@ export interface EntityStaffingJob {
 interface RawEntityStaffingJob {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   area: { id: string; name: string }[] | null
@@ -54,7 +54,7 @@ export async function fetchEntityStaffingJobs(entityId: string): Promise<EntityS
   const { data, error } = await supabase
     .from("organization_jobs")
     .select(
-      `id, name, code, is_active, area_id,
+      `id, name, is_active, area_id,
        area:organization_areas(id, name),
        salary_group:salary_groups(id, salary_scale_id, sequence_number)`
     )

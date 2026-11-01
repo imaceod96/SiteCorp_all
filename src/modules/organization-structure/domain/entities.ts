@@ -89,7 +89,7 @@ export interface OrganizationArea {
   id: string
   organization_entity_id: string
   parent_area_id: string | null
-  code: string
+  code?: string | null
   name: string
   description: string | null
   hierarchy_order: number
@@ -118,7 +118,7 @@ export interface OrganizationJob {
   id: string
   organization_entity_id: string
   area_id: string
-  code: string
+  code?: string | null
   name: string
   description: string | null
   salary_group_id: string
@@ -139,7 +139,7 @@ export interface OrganizationJob {
   area: {
     id: string
     name: string
-    code: string
+    code?: string | null
     is_active: boolean
     organization_entity_id: string
   } | null
@@ -151,11 +151,11 @@ export interface OrganizationJob {
 export interface OrganizationPositionJobRef {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   occupational_category_id: string | null
-  area: { id: string; name: string; code: string } | null
+  area: { id: string; name: string; code?: string | null } | null
   salary_group: SalaryGroupRef | null
 }
 
@@ -164,7 +164,7 @@ export interface OrganizationPosition {
   id: string
   organization_entity_id: string
   job_id: string
-  code: string
+  code?: string | null
   name: string
   description: string | null
   position_order: number
@@ -247,7 +247,6 @@ export interface SavePositionInput {
   entityId: string
   positionId: string | null
   jobId: string
-  code: string
   name: string
   description: string | null
   authorizedQuantity: number
@@ -264,13 +263,13 @@ export interface SavePositionInput {
 export interface PositionJobOption {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   area: {
     id: string
     name: string
-    code: string
+    code?: string | null
   }
   salary_group: {
     id: string
@@ -286,7 +285,7 @@ export interface PositionJobOption {
 export interface PositionEditingData {
   id: string
   job_id: string
-  code: string
+  code?: string | null
   name: string
   description: string | null
   authorized_quantity: number

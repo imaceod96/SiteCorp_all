@@ -93,7 +93,6 @@ export async function savePosition(input: SavePositionInput): Promise<void> {
     entityId: input.entityId,
     positionId: input.positionId,
     jobId: input.jobId,
-    code: input.code,
     name: input.name,
     description: input.description,
     authorizedQuantity: input.authorizedQuantity,

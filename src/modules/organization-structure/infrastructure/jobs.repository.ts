@@ -18,7 +18,7 @@ export interface ConfigurationJobRow {
   id: string
   organization_entity_id: string
   area_id: string
-  code: string
+  code?: string | null
   name: string
   description: string | null
   salary_group_id: string
@@ -38,7 +38,7 @@ export interface ConfigurationJobRow {
   area: {
     id: string
     name: string
-    code: string
+    code?: string | null
     is_active: boolean
     organization_entity_id: string
   } | null
@@ -67,7 +67,7 @@ export async function selectConfigurationJobRows(
     .from("organization_jobs")
     .select(`
       *,
-      area:organization_areas(id, name, code, is_active, organization_entity_id),
+      area:organization_areas(id, name, is_active, organization_entity_id),
       salary_group:salary_groups(
         id,
         salary_scale_id,
@@ -99,7 +99,7 @@ export async function selectConfigurationJobRow(
     .from("organization_jobs")
     .select(`
       *,
-      area:organization_areas(id, name, code, is_active, organization_entity_id),
+      area:organization_areas(id, name, is_active, organization_entity_id),
       salary_group:salary_groups(
         id,
         salary_scale_id,

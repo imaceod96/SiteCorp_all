@@ -285,43 +285,15 @@ export const JobForm: React.FC<JobFormProps> = ({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="job-code">Código</Label>
-            {editingJob ? (
-              <SiteCorpInput
-                id="job-code"
-                name="code"
-                value={editingJob.code || ""}
-                readOnly
-                className="bg-muted/50"
-              />
-            ) : (
-              <SiteCorpInput
-                id="job-code"
-                name="code"
-                value=""
-                readOnly
-                placeholder="Se generará automáticamente"
-                className="bg-muted/50"
-              />
-            )}
-            <p className="text-xs text-muted-foreground">
-              {editingJob
-                ? "Código generado automáticamente a partir del área y el nombre. Es de solo lectura."
-                : "El código se genera automáticamente al guardar, combinando el código del área y el nombre del cargo."}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="job-order">Orden</Label>
-            <SiteCorpInput
-              id="job-order"
-              name="hierarchy_order"
-              type="number"
-              defaultValue={editingJob?.hierarchy_order || 0}
-              placeholder="0"
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="job-order">Orden</Label>
+          <SiteCorpInput
+            id="job-order"
+            name="hierarchy_order"
+            type="number"
+            defaultValue={editingJob?.hierarchy_order || 0}
+            placeholder="0"
+          />
         </div>
 
         <div className="space-y-2">
@@ -334,7 +306,7 @@ export const JobForm: React.FC<JobFormProps> = ({
             <option value="">Seleccionar área</option>
             {areas.map((area) => (
               <option key={area.id} value={area.id}>
-                {area.name} ({area.code})
+                {area.name}
               </option>
             ))}
           </SiteCorpSelect>

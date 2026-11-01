@@ -90,7 +90,6 @@ export type { PositionFormValidation } from "./domain/positions.rules"
 export {
   MAX_AUTHORIZED_QUANTITY,
   addDraftScheduleSegments,
-  generatePositionCode,
   normalizeScheduleTime,
   parseNullableNumber,
   positionSaveErrorMessage,

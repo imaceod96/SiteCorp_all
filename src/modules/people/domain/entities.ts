@@ -161,14 +161,14 @@ export interface PersonIdentificationStatus {
 export interface MigrationTemplateCatalogItem {
   id: string
   name: string
-  code: string
+  code?: string | null
 }
 
 /** Cargo de la entidad dentro de la plantilla de carga inicial. */
 export interface MigrationTemplateJob {
   id: string
   name: string
-  code: string
+  code?: string | null
   area_id: string
 }
 
@@ -176,7 +176,7 @@ export interface MigrationTemplateJob {
 export interface MigrationTemplatePosition {
   id: string
   name: string
-  code: string
+  code?: string | null
   job_id: string
   authorized_quantity: number
 }
@@ -276,7 +276,7 @@ export interface PositionJobRef {
 export interface StaffingPosition {
   id: string
   name: string
-  code: string | null
+  code?: string | null
   is_active: boolean
   authorized_quantity: number
   work_location: string | null
@@ -894,7 +894,7 @@ export interface CandidateTextEntryInput {
 export interface WorkerPositionRef {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   work_location: string | null
   daily_hours: number | null
@@ -908,7 +908,7 @@ export interface WorkerPositionRef {
 export interface WorkerJobRef {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   area: { id: string; name: string } | null
