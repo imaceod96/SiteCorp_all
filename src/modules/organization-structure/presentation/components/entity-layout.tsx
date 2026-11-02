@@ -35,6 +35,7 @@ import {
 } from "@/modules/organization-structure"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { useEntityPlan, isModuleEnabledInPlan } from "@/modules/entity-plans"
+import { EntitySwitcher } from "./entity-switcher"
 
 /** Iconos de los elementos del menú (la estructura está en ENTITY_NAV). */
 const navIcons: Record<string, React.ReactNode> = {
@@ -165,15 +166,12 @@ const EntityLayout = React.forwardRef<
     >
       {/* Sidebar */}
       <div className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border bg-card">
-        {/* Logo / Brand */}
-        <div className="flex h-16 shrink-0 items-center border-b border-border px-6">
-          <div className="flex min-w-0 items-center gap-3">
+        {/* Logo / Brand & Selector de Entidad */}
+        <div className="flex h-16 shrink-0 items-center border-b border-border px-4">
+          <div className="flex min-w-0 w-full items-center gap-2.5">
             <SiteCorpBrand variant="isotype" size="sm" />
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-ink">SiteCorp</h2>
-              <p className="truncate text-xs text-muted-foreground">
-                {currentEntity?.name || "Entidad"}
-              </p>
+            <div className="min-w-0 flex-1">
+              <EntitySwitcher />
             </div>
           </div>
         </div>
