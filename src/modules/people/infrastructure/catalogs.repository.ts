@@ -17,32 +17,56 @@ import type { CatalogOption } from "../domain/entities"
  * mismos filtros (`is_active`) y el mismo orden (`name` / `display_order`).
  */
 
-/** Color de piel: mismo catálogo para candidato y trabajador. */
-export const fetchSkinColors = async (): Promise<CatalogOption[]> => {
-  const { data, error } = await supabase
-    .from("skin_colors")
-    .select("id, name, code")
-    .eq("is_active", true)
-    .order("name")
+let cachedSkinColors: CatalogOption[] | null = null
+let skinColorsPromise: Promise<CatalogOption[]> | null = null
 
-  if (error) throw error
-  return (data as CatalogOption[]) || []
+let cachedLicenseCategories: CatalogOption[] | null = null
+let licenseCategoriesPromise: Promise<CatalogOption[]> | null = null
+
+/** Color de piel: mismo catálogo para candidato y trabajador (cacheado en sesión). */
+export const fetchSkinColors = async (): Promise<CatalogOption[]> => {
+  if (cachedSkinColors) return cachedSkinColors
+  if (skinColorsPromise) return skinColorsPromise
+
+  skinColorsPromise = (async () => {
+    const { data, error } = await supabase
+      .from("skin_colors")
+      .select("id, name, code")
+      .eq("is_active", true)
+      .order("name")
+
+    skinColorsPromise = null
+    if (error) throw error
+    cachedSkinColors = (data as CatalogOption[]) || []
+    return cachedSkinColors
+  })()
+
+  return skinColorsPromise
 }
 
 /**
  * Categorías de licencia de conducción (A, B, C, D, E).
- * El orden se rige por `display_order` del catálogo, nunca por texto libre.
+ * El orden se rige por `display_order` del catálogo, nunca por texto libre (cacheado en sesión).
  */
 export const fetchDrivingLicenseCategories = async (): Promise<CatalogOption[]> => {
-  const { data, error } = await supabase
-    .from("driving_license_categories")
-    .select("id, name, code")
-    .eq("is_active", true)
-    .order("display_order")
-    .order("name")
+  if (cachedLicenseCategories) return cachedLicenseCategories
+  if (licenseCategoriesPromise) return licenseCategoriesPromise
 
-  if (error) throw error
-  return (data as CatalogOption[]) || []
+  licenseCategoriesPromise = (async () => {
+    const { data, error } = await supabase
+      .from("driving_license_categories")
+      .select("id, name, code")
+      .eq("is_active", true)
+      .order("display_order")
+      .order("name")
+
+    licenseCategoriesPromise = null
+    if (error) throw error
+    cachedLicenseCategories = (data as CatalogOption[]) || []
+    return cachedLicenseCategories
+  })()
+
+  return licenseCategoriesPromise
 }
 
 /** Catálogos de persona en una sola carga (color de piel + licencias). */

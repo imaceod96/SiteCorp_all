@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { syncCandidateEntityWithPosition } from "./candidate-pool-meta"
 import type { ContractReadinessParams, ReadinessResult } from "../domain/entities"
 
 /**
@@ -14,6 +15,8 @@ import type { ContractReadinessParams, ReadinessResult } from "../domain/entitie
 export async function fetchHiringReadiness(
   params: ContractReadinessParams
 ): Promise<ReadinessResult> {
+  await syncCandidateEntityWithPosition(params.candidateId, params.positionId)
+
   const { data, error } = await supabase.rpc("validate_hiring_readiness", {
     p_candidate_id: params.candidateId || null,
     p_worker_id: params.workerId || null,

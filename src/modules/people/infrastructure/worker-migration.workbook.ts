@@ -40,8 +40,12 @@ const globalScope = globalThis as typeof globalThis & { ExcelJS?: ExcelJSModule 
 
 let excelJsBundlePromise: Promise<ExcelJSModule> | null = null
 
-function loadExcelJS(): Promise<ExcelJSModule> {
-  if (globalScope.ExcelJS) return Promise.resolve(globalScope.ExcelJS)
+async function loadExcelJS(): Promise<ExcelJSModule> {
+  if (globalScope.ExcelJS) return globalScope.ExcelJS
+  if (typeof document === "undefined") {
+    const mod = await import("exceljs")
+    return ((mod as any).default ?? mod) as unknown as ExcelJSModule
+  }
   if (!excelJsBundlePromise) {
     excelJsBundlePromise = new Promise<ExcelJSModule>((resolve, reject) => {
       const script = document.createElement("script")
@@ -191,6 +195,28 @@ export async function buildWorkerMigrationTemplate(
       })).filter((entry) => entry.values.length > 0)
     : []
 
+  const instructions = workbook.addWorksheet("Instrucciones")
+  instructions.columns = [{ width: 34 }, { width: 110 }]
+  instructions.addRows([
+    ["Campo", "Instrucciones"],
+    ["Identificación", "Obligatoria. Se conserva como texto; no elimine ceros ni cambie su formato."],
+    ["Fecha de nacimiento", "No se solicita: SiteCorp la deriva automáticamente de la identificación cuando es posible. Si no puede derivarse, el trabajador queda con información pendiente de completar."],
+    ["Fecha de incorporación", "Obligatoria. Indique la fecha real en la que el trabajador comenzó a trabajar en la entidad. SiteCorp utilizará esta fecha para calcular su antigüedad. Use DD/MM/AAAA o una fecha real de Excel. No puede ser futura."],
+    ["Fechas", "Use DD/MM/YYYY o una fecha real de Excel."],
+    [
+      "Sexo / Estado civil / Color / Nivel",
+      catalogLists.length
+        ? "Seleccione un valor de la lista desplegable (hoja «Catálogos»). SiteCorp guarda el identificador del catálogo: un valor fuera de la lista bloquea la fila."
+        : "Use el nombre del catálogo existente en la entidad/aplicación.",
+    ],
+    ["Tiene licencia", "Sí/No. Indique además las categorías separadas por coma cuando corresponda."],
+    ["Puesto", "La carga inicial no asigna puestos: los trabajadores quedan pendientes de vinculación y se asignan después desde Trabajadores."],
+    ["Saldo y corte de vacaciones", "Ambos son opcionales. Un saldo vacío queda desconocido; no se asume cero."],
+    ["Flujo", "Complete la hoja Trabajadores, pulse Validar para revisar el Preview y luego Iniciar carga para crear los trabajadores."],
+  ])
+  instructions.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } }
+  instructions.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174A67" } }
+
   if (catalogLists.length) {
     const catalogSheet = workbook.addWorksheet("Catálogos")
     catalogLists.forEach((entry, index) => {
@@ -219,27 +245,6 @@ export async function buildWorkerMigrationTemplate(
     })
   }
 
-  const instructions = workbook.addWorksheet("Instrucciones")
-  instructions.columns = [{ width: 34 }, { width: 110 }]
-  instructions.addRows([
-    ["Campo", "Instrucciones"],
-    ["Identificación", "Obligatoria. Se conserva como texto; no elimine ceros ni cambie su formato."],
-    ["Fecha de nacimiento", "No se solicita: SiteCorp la deriva automáticamente de la identificación cuando es posible. Si no puede derivarse, el trabajador queda con información pendiente de completar."],
-    ["Fecha de incorporación", "Obligatoria. Indique la fecha real en la que el trabajador comenzó a trabajar en la entidad. SiteCorp utilizará esta fecha para calcular su antigüedad. Use DD/MM/AAAA o una fecha real de Excel. No puede ser futura."],
-    ["Fechas", "Use DD/MM/YYYY o una fecha real de Excel."],
-    [
-      "Sexo / Estado civil / Color / Nivel",
-      catalogLists.length
-        ? "Seleccione un valor de la lista desplegable (hoja «Catálogos»). SiteCorp guarda el identificador del catálogo: un valor fuera de la lista bloquea la fila."
-        : "Use el nombre del catálogo existente en la entidad/aplicación.",
-    ],
-    ["Tiene licencia", "Sí/No. Indique además las categorías separadas por coma cuando corresponda."],
-    ["Puesto", "La carga inicial no asigna puestos: los trabajadores quedan pendientes de vinculación y se asignan después desde Trabajadores."],
-    ["Saldo y corte de vacaciones", "Ambos son opcionales. Un saldo vacío queda desconocido; no se asume cero."],
-    ["Flujo", "Complete la hoja Trabajadores, pulse Validar para revisar el Preview y luego Iniciar carga para crear los trabajadores."],
-  ])
-  instructions.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } }
-  instructions.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF174A67" } }
   const buffer = await workbook.xlsx.writeBuffer()
   return new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
 }

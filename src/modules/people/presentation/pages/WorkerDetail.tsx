@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useSearchParams } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
@@ -34,6 +34,7 @@ import { Tabs, TabsContent } from "@/shared/components/ui/tabs"
 import { SiteCorpTabsList, SiteCorpTabTrigger } from "@/shared/components/ui/sitecorp-tabs"
 import WorkerVacationsTab from "@/modules/vacations-licenses/vacations/presentation/components/WorkerVacationsTab"
 import WorkerMedicalCertificatesTab from "@/modules/vacations-licenses/medical-certificates/presentation/components/WorkerMedicalCertificatesTab"
+import { WorkerAdditionalInfoTab } from "@/modules/training"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
@@ -148,6 +149,16 @@ type Catalog = CatalogRow
 const WorkerDetail = () => {
   const { entityId, workerId } = useParams<{ entityId: string; workerId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const initialTab = searchParams.get("tab") || "resumen"
+  const [activeWorkerTab, setActiveWorkerTab] = React.useState<string>(initialTab)
+
+  React.useEffect(() => {
+    const requestedTab = searchParams.get("tab")
+    if (requestedTab) {
+      setActiveWorkerTab(requestedTab)
+    }
+  }, [searchParams])
 
   const [worker, setWorker] = React.useState<WorkerDetail | null>(null)
   const [genders, setGenders] = React.useState<Catalog[]>([])
@@ -817,7 +828,7 @@ const WorkerDetail = () => {
         </div>
       )}
 
-      <Tabs defaultValue="resumen" className="w-full">
+      <Tabs value={activeWorkerTab} onValueChange={setActiveWorkerTab} className="w-full">
         <SiteCorpTabsList className="mb-4">
           <SiteCorpTabTrigger value="resumen">Resumen</SiteCorpTabTrigger>
           <SiteCorpTabTrigger value="contratacion">
@@ -829,6 +840,7 @@ const WorkerDetail = () => {
             )}
           </SiteCorpTabTrigger>
           <SiteCorpTabTrigger value="documentos">Documentos</SiteCorpTabTrigger>
+          <SiteCorpTabTrigger value="informacion-adicional">Información adicional</SiteCorpTabTrigger>
           {canViewVacations && <SiteCorpTabTrigger value="vacaciones">Vacaciones</SiteCorpTabTrigger>}
           {canViewMedicalCerts && <SiteCorpTabTrigger value="medical-certificates">Certificados médicos</SiteCorpTabTrigger>}
         </SiteCorpTabsList>
@@ -1754,6 +1766,24 @@ const WorkerDetail = () => {
           <SiteCorpCard>
             <WorkerDocumentsTab workerId={worker.id} canManage={canManage} />
           </SiteCorpCard>
+        </TabsContent>
+
+        <TabsContent value="informacion-adicional" className="space-y-6">
+          <WorkerAdditionalInfoTab
+            entityId={entityId as string}
+            workerId={worker.id}
+            workerName={fullName(worker)}
+            currentAreaId={job?.area?.id ?? null}
+            currentAreaName={job?.area?.name ?? null}
+            currentJobId={job?.id ?? null}
+            currentJobName={job?.name ?? null}
+            currentPositionName={position?.name ?? null}
+            hireDate={worker.hire_date ?? null}
+            canManage={
+              canManage ||
+              hasEntityPermission(["sst.manage", "training.manage", "workers.manage"])
+            }
+          />
         </TabsContent>
 
         {canViewVacations && (

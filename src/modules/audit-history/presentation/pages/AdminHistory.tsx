@@ -15,6 +15,8 @@ import {
   formatAuditDateTime,
   loadAuditEntityOptions,
   loadAuditHistory,
+  recordAuditEvent,
+  exportAuditEventsToCsv,
   type AuditEntityOption,
   type AuditEvent,
   type AuditHistoryFilters,
@@ -38,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/components/ui/dialog"
-import { ChevronLeft, ChevronRight, Eye, Filter, History, Search, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Check, Copy, Database, Download, Eye, Filter, History, PlusCircle, Search, X } from "lucide-react"
 
 /**
  * Historial (SiteCorp global) — EXCLUSIVO del Super Admin.
@@ -53,6 +55,48 @@ import { ChevronLeft, ChevronRight, Eye, Filter, History, Search, X } from "luci
 
 /** Valor de «sin filtro» para los selectores (Radix no admite `""` como valor). */
 const ANY = "__any__"
+
+const AUDIT_SQL_SCRIPT = `-- ============================================================================
+-- SCRIPT DE CREACIÓN DE LA TABLA AUDIT_EVENTS EN SUPABASE
+-- Pega este script en el SQL Editor de Supabase (https://supabase.com) y pulsa Run
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS public.audit_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actor_user_id UUID,
+  actor_full_name TEXT,
+  actor_username TEXT,
+  scope TEXT NOT NULL DEFAULT 'SITECORP',
+  organization_entity_id UUID,
+  entity_name TEXT,
+  company_client_id UUID,
+  module TEXT NOT NULL,
+  action TEXT NOT NULL,
+  entity_type TEXT,
+  record_id TEXT,
+  description TEXT NOT NULL,
+  old_values JSONB,
+  new_values JSONB,
+  result TEXT NOT NULL DEFAULT 'SUCCESS'
+);
+
+CREATE INDEX IF NOT EXISTS audit_events_occurred_at_idx ON public.audit_events (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_scope_occurred_at_idx ON public.audit_events (scope, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS audit_events_entity_occurred_at_idx ON public.audit_events (organization_entity_id, occurred_at DESC);
+
+ALTER TABLE IF EXISTS public.candidates ADD COLUMN IF NOT EXISTS area_id UUID REFERENCES public.organization_areas(id);
+
+GRANT SELECT, INSERT ON TABLE public.audit_events TO authenticated, service_role;
+ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "audit_events_select_superadmin" ON public.audit_events;
+CREATE POLICY "audit_events_select_superadmin" ON public.audit_events
+  FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "audit_events_insert_authenticated" ON public.audit_events;
+CREATE POLICY "audit_events_insert_authenticated" ON public.audit_events
+  FOR INSERT TO authenticated WITH CHECK (true);
+`
 
 const AdminHistory = () => {
   const { isPlatformSuperAdmin } = useAuth()
@@ -71,6 +115,8 @@ const AdminHistory = () => {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = React.useState<AuditEvent | null>(null)
+  const [sqlModalOpen, setSqlModalOpen] = React.useState(false)
+  const [copiedSql, setCopiedSql] = React.useState(false)
 
   const years = React.useMemo(() => availableAuditYears(), [])
 
@@ -120,6 +166,57 @@ const AdminHistory = () => {
       cancelled = true
     }
   }, [isPlatformSuperAdmin, appliedFilters, page])
+
+  React.useEffect(() => {
+    const handleRecorded = () => {
+      loadAuditHistory({ filters: appliedFilters, page }).then(setResult)
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("sitecorp:audit_event_recorded", handleRecorded)
+      return () => window.removeEventListener("sitecorp:audit_event_recorded", handleRecorded)
+    }
+  }, [appliedFilters, page])
+
+  const handleExport = async () => {
+    try {
+      const csv = await exportAuditEventsToCsv()
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `historial-auditoria-${new Date().toISOString().slice(0, 10)}.csv`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("Error exporting audit history:", err)
+    }
+  }
+
+  const handleTestEvent = async () => {
+    try {
+      await recordAuditEvent({
+        module: "system",
+        action: "manual_audit_check",
+        description: "Verificación manual de auditoría ejecutada por el Administrador",
+        scope: "SITECORP",
+        recordId: `AUDIT-TEST-${Date.now().toString().slice(-4)}`,
+        newValues: { test_mode: true, timestamp: new Date().toISOString() },
+      })
+      const data = await loadAuditHistory({ filters: appliedFilters, page: 1 })
+      setResult(data)
+      setPage(1)
+    } catch (err) {
+      console.error("Error recording test event:", err)
+    }
+  }
+
+  const handleCopySql = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(AUDIT_SQL_SCRIPT)
+      setCopiedSql(true)
+      setTimeout(() => setCopiedSql(false), 2500)
+    }
+  }
 
   const updateDraft = <K extends keyof AuditHistoryFilters>(
     key: K,
@@ -179,11 +276,18 @@ const AdminHistory = () => {
       </span>
     ),
     event: (
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-ink">
-          {auditModuleLabel(event.module)}
+      <div className="min-w-0 max-w-md">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-medium text-ink">
+            {auditModuleLabel(event.module)}
+          </p>
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+            {event.action}
+          </span>
+        </div>
+        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+          {event.description}
         </p>
-        <p className="truncate text-xs text-muted-foreground">{event.action}</p>
       </div>
     ),
     actor: (
@@ -224,10 +328,40 @@ const AdminHistory = () => {
 
   return (
     <div className="space-y-6 p-6">
-      <SiteCorpPageHeader
-        title="Historial"
-        description="Registro de auditoría de las operaciones de SiteCorp"
-      />
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <SiteCorpPageHeader
+          title="Historial"
+          description="Registro de auditoría de las operaciones de SiteCorp"
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <SiteCorpButton
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            title="Descargar registro en CSV"
+          >
+            <Download className="mr-1.5 h-4 w-4" /> Exportar CSV
+          </SiteCorpButton>
+          <SiteCorpButton
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSqlModalOpen(true)}
+            title="Ver o copiar el script SQL para la base de datos de Supabase"
+          >
+            <Database className="mr-1.5 h-4 w-4" /> Script SQL para Nube
+          </SiteCorpButton>
+          <SiteCorpButton
+            type="button"
+            size="sm"
+            onClick={handleTestEvent}
+            title="Generar evento de auditoría de comprobación"
+          >
+            <PlusCircle className="mr-1.5 h-4 w-4" /> Registrar evento de prueba
+          </SiteCorpButton>
+        </div>
+      </div>
 
       {/* Filtros combinables */}
       <SiteCorpCard title="Filtros">
@@ -510,6 +644,55 @@ const AdminHistory = () => {
             <SiteCorpButton type="button" variant="outline" onClick={() => setSelectedEvent(null)}>
               Cerrar
             </SiteCorpButton>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para ver y copiar el script SQL de Supabase */}
+      <Dialog open={sqlModalOpen} onOpenChange={setSqlModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Script SQL para la Base de Datos en Supabase</DialogTitle>
+            <DialogDescription>
+              Para que la tabla se cree físicamente en tu nube de Supabase, copia este script y ejecútalo en la consola de tu proyecto.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900 border border-blue-200">
+              <p className="font-semibold mb-1">Instrucciones simples (1 minuto):</p>
+              <ol className="list-decimal pl-4 space-y-1">
+                <li>Haz clic en el botón <strong>«Copiar al portapapeles»</strong> a continuación.</li>
+                <li>Abre tu proyecto en <strong>supabase.com</strong> y pulsa en la sección <strong>SQL Editor</strong> del menú izquierdo.</li>
+                <li>Pega el contenido y pulsa el botón verde <strong>Run</strong>.</li>
+              </ol>
+            </div>
+
+            <pre className="max-h-64 overflow-auto rounded-lg bg-slate-900 p-4 text-xs font-mono text-emerald-400">
+              {AUDIT_SQL_SCRIPT}
+            </pre>
+
+            <div className="flex items-center justify-between pt-2">
+              <SiteCorpButton
+                type="button"
+                variant={copiedSql ? "default" : "secondary"}
+                onClick={handleCopySql}
+                className="flex items-center gap-2"
+              >
+                {copiedSql ? (
+                  <>
+                    <Check className="h-4 w-4 text-emerald-500" /> ¡Copiado con éxito!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" /> Copiar al portapapeles
+                  </>
+                )}
+              </SiteCorpButton>
+              <SiteCorpButton type="button" variant="outline" onClick={() => setSqlModalOpen(false)}>
+                Cerrar
+              </SiteCorpButton>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -15,7 +15,6 @@ import {
   WEEK_DAYS,
   addDraftScheduleSegments,
   formatTime,
-  generatePositionCode,
   normalizeScheduleTime,
   positionSaveErrorMessage,
   positionSchedulePayload,
@@ -167,7 +166,7 @@ export const PositionForm: React.FC<PositionFormProps> = ({
         : null
 
     return {
-      areaLabel: area ? `${area.name} (${area.code})` : "N/A",
+      areaLabel: area ? area.name : "N/A",
       groupLabel,
       salaryLabel,
       categoryLabel: selectedJob.occupational_category?.name || NO_OCCUPATIONAL_CATEGORY_LABEL,
@@ -236,7 +235,6 @@ export const PositionForm: React.FC<PositionFormProps> = ({
         entityId,
         positionId: isEditing ? editingPosition!.id : null,
         jobId: selectedJobId,
-        code: isEditing ? editingPosition!.code : generatePositionCode(),
         name,
         description: description.trim() || null,
         authorizedQuantity: validation.quantity,
@@ -276,7 +274,7 @@ export const PositionForm: React.FC<PositionFormProps> = ({
             <option value="">Seleccionar cargo</option>
             {jobOptions.map((job) => (
               <option key={job.id} value={job.id}>
-                {job.name} ({job.code}){!job.is_active ? " — inactivo" : ""}
+                {job.name}{!job.is_active ? " — inactivo" : ""}
               </option>
             ))}
           </SiteCorpSelect>
@@ -286,25 +284,15 @@ export const PositionForm: React.FC<PositionFormProps> = ({
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="position-name">Nombre del puesto *</Label>
-            <SiteCorpInput
-              id="position-name"
-              value={baseName}
-              onChange={(e) => setBaseName(e.target.value)}
-              placeholder="Ej.: Almacenero"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="position-code">Código</Label>
-            <SiteCorpInput
-              id="position-code"
-              value={isEditing ? editingPosition!.code : "Se genera automáticamente"}
-              disabled
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="position-name">Nombre del puesto *</Label>
+          <SiteCorpInput
+            id="position-name"
+            value={baseName}
+            onChange={(e) => setBaseName(e.target.value)}
+            placeholder="Ej.: Almacenero"
+            required
+          />
         </div>
 
         <div className="space-y-2">

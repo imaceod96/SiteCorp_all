@@ -1,0 +1,8 @@
+{
+  "name": "SiteCorp",
+  "description": "Plataforma integral de gestión de recursos humanos, personal, contratos, nómina y expedientes laborales.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

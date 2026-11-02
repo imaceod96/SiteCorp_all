@@ -28,6 +28,8 @@ import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import CandidateForm from "@/modules/people/presentation/components/CandidateForm"
 import { CUBA_PROVINCES_FULL } from "@/data/cuba-locations-full"
+import { supabase } from "@/lib/supabase"
+import { CANDIDATES_CHANGED_EVENT } from "@/modules/people/infrastructure/candidate-pool-meta"
 
 interface Gender {
   id: string
@@ -49,11 +51,6 @@ interface Province {
   name: string
 }
 
-interface Municipality {
-  id: string
-  name: string
-}
-
 /**
  * Listado de candidatos de la entidad.
  *
@@ -70,7 +67,7 @@ const EntityCandidates = () => {
   const [maritalStatuses, setMaritalStatuses] = React.useState<MaritalStatus[]>([])
   const [educationLevels, setEducationLevels] = React.useState<EducationLevel[]>([])
   const [skinColors, setSkinColors] = React.useState<CatalogOption[]>([])
-  const [provinces, setProvinces] = React.useState<Province[]>([])
+  const [, setProvinces] = React.useState<Province[]>([])
 
   const [searchTerm, setSearchTerm] = React.useState("")
   const [candidatesWithLicense, setCandidatesWithLicense] = React.useState<Set<string>>(new Set())
@@ -84,7 +81,7 @@ const EntityCandidates = () => {
   const [formOpen, setFormOpen] = React.useState(false)
   const [formSuccess, setFormSuccess] = React.useState(false)
 
-  // Fetch reference data
+  // Fetch reference data (catálogos cacheados en memoria)
   React.useEffect(() => {
     const fetchReferenceData = async () => {
       try {
@@ -108,22 +105,23 @@ const EntityCandidates = () => {
     }
   }, [entityId])
 
-  // Fetch candidates
-  React.useEffect(() => {
-    const fetchCandidates = async () => {
+  // Función reutilizable para cargar o refrescar los candidatos de la entidad
+  const fetchCandidates = React.useCallback(
+    async (options?: { silent?: boolean }) => {
       if (!entityId) {
         setCandidates([])
         setCandidatesWithLicense(new Set())
         return
       }
 
-      setLoading(true)
+      if (!options?.silent) {
+        setLoading(true)
+      }
       setError(null)
 
       try {
         // Caso de uso del dominio de personas: filas de la entidad + clasificación por
-        // identidad (cliente, identificación) + licencias de conducción. La búsqueda y
-        // los filtros se resuelven sobre el resultado ya clasificado.
+        // identidad (cliente, identificación) + licencias de conducción.
         const view = await loadEntityCandidatesView({
           entityId,
           companyClientId: currentEntity?.tenant_id,
@@ -132,18 +130,57 @@ const EntityCandidates = () => {
         setCandidatesWithLicense(view.candidatesWithLicense)
       } catch (err) {
         console.error("Error fetching candidates:", err)
-        setError("Error al cargar los candidatos")
-        setCandidates([])
-        setCandidatesWithLicense(new Set())
+        if (!options?.silent) {
+          setError("Error al cargar los candidatos")
+          setCandidates([])
+          setCandidatesWithLicense(new Set())
+        }
       } finally {
-        setLoading(false)
+        if (!options?.silent) {
+          setLoading(false)
+        }
       }
-    }
+    },
+    [entityId, currentEntity?.tenant_id]
+  )
 
+  // Carga inicial al entrar o cambiar de entidad
+  React.useEffect(() => {
     if (entityId) {
       fetchCandidates()
     }
-  }, [entityId, currentEntity?.tenant_id])
+  }, [entityId, fetchCandidates])
+
+  // Suscripción automática a cambios locales y en tiempo real (Supabase Realtime)
+  React.useEffect(() => {
+    if (!entityId) return
+
+    const handleCandidatesChanged = () => {
+      fetchCandidates({ silent: true })
+    }
+
+    window.addEventListener(CANDIDATES_CHANGED_EVENT, handleCandidatesChanged)
+
+    const channel = supabase
+      .channel(`entity_candidates_${entityId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "candidates",
+        },
+        () => {
+          fetchCandidates({ silent: true })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      window.removeEventListener(CANDIDATES_CHANGED_EVENT, handleCandidatesChanged)
+      supabase.removeChannel(channel)
+    }
+  }, [entityId, fetchCandidates])
 
   // ---------- Filtros (constructor común, criterios reales de Candidato) ----------
   const filterDefinitions = React.useMemo<EntityFilterDefinition[]>(
@@ -225,10 +262,11 @@ const EntityCandidates = () => {
   // Navigation
   const navigate = useNavigate()
 
-  /** Alta terminada: se cierra el diálogo y se anuncia el resultado (mismo mensaje). */
+  /** Alta terminada: se cierra el diálogo, se refresca el listado de inmediato y se anuncia el resultado. */
   const handleFormCreated = () => {
     setFormOpen(false)
     setFormSuccess(true)
+    fetchCandidates({ silent: true })
     setTimeout(() => setFormSuccess(false), 3000)
   }
 
@@ -563,13 +601,15 @@ const EntityCandidates = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <CandidateForm
-            mode="create"
-            variant="dialog"
-            entityId={entityId}
-            onSuccess={handleFormCreated}
-            onCancel={handleFormCancel}
-          />
+          {formOpen && (
+            <CandidateForm
+              mode="create"
+              variant="dialog"
+              entityId={entityId}
+              onSuccess={handleFormCreated}
+              onCancel={handleFormCancel}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

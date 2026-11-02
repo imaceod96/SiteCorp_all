@@ -40,3 +40,9 @@ export {
   loadAuditEntityOptions,
   loadAuditHistory,
 } from "./application/audit-history.queries"
+
+export {
+  recordAuditEvent,
+  exportAuditEventsToCsv,
+  resetAuditHistoryStore,
+} from "./application/audit-history.commands"

@@ -67,6 +67,7 @@ export interface PersonCandidate {
   province: string | null
   education_level_id: string | null
   specialty: string | null
+  area_id: string | null
   skin_color_id: string | null
   profession_or_trade: string | null
   has_masters_degree: boolean | null
@@ -160,14 +161,14 @@ export interface PersonIdentificationStatus {
 export interface MigrationTemplateCatalogItem {
   id: string
   name: string
-  code: string
+  code?: string | null
 }
 
 /** Cargo de la entidad dentro de la plantilla de carga inicial. */
 export interface MigrationTemplateJob {
   id: string
   name: string
-  code: string
+  code?: string | null
   area_id: string
 }
 
@@ -175,7 +176,7 @@ export interface MigrationTemplateJob {
 export interface MigrationTemplatePosition {
   id: string
   name: string
-  code: string
+  code?: string | null
   job_id: string
   authorized_quantity: number
 }
@@ -220,6 +221,7 @@ export interface CandidateRegistrationInput {
   /** Nombre del nivel educacional elegido: determina si exige especialidad. */
   education_level_name: string
   specialty: string
+  area_id?: string | null
   phone: string
   email: string
   address: string
@@ -274,7 +276,7 @@ export interface PositionJobRef {
 export interface StaffingPosition {
   id: string
   name: string
-  code: string | null
+  code?: string | null
   is_active: boolean
   authorized_quantity: number
   work_location: string | null
@@ -844,6 +846,7 @@ export interface CandidateExpedienteInput {
   province: string | null
   education_level_id: string | null
   specialty: string | null
+  area_id?: string | null
   has_masters_degree: boolean
   has_doctorate_degree: boolean
   profession_or_trade: string | null
@@ -891,7 +894,7 @@ export interface CandidateTextEntryInput {
 export interface WorkerPositionRef {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   work_location: string | null
   daily_hours: number | null
@@ -905,7 +908,7 @@ export interface WorkerPositionRef {
 export interface WorkerJobRef {
   id: string
   name: string
-  code: string
+  code?: string | null
   is_active: boolean
   area_id: string
   area: { id: string; name: string } | null

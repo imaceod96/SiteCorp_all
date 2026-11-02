@@ -15,20 +15,6 @@ import type { PositionScheduleSegment } from "./entities"
 /** Tope de plazas autorizadas por puesto. */
 export const MAX_AUTHORIZED_QUANTITY = 9999
 
-/** Alfabeto sin caracteres ambiguos (0/O, 1/I) para códigos legibles. */
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-
-/** Código del puesto: lo genera la interfaz cuando el backend no recibe uno. */
-export function generatePositionCode(): string {
-  const bytes = new Uint8Array(6)
-  crypto.getRandomValues(bytes)
-  let suffix = ""
-  for (let i = 0; i < bytes.length; i++) {
-    suffix += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
-  }
-  return `PST-${suffix}`
-}
-
 /** "08:00:00" | "08:00" → "08:00" (la base de datos guarda `time`). */
 export function normalizeScheduleTime(time: string): string {
   const [hours, minutes] = time.split(":")
@@ -233,3 +219,72 @@ export function positionSaveErrorMessage(error: unknown): string {
   }
   return message
 }
+
+/**
+ * Ordena los puestos respetando:
+ *   1. El orden del área (`area.hierarchy_order`, luego `area.name`).
+ *   2. Dentro del área, el orden del cargo (`job.hierarchy_order`, luego `job.name`).
+ *   3. Dentro del cargo, el orden del puesto (`position.position_order`, luego `position.name`).
+ */
+export function sortPositionsByHierarchyOrder<
+  T extends {
+    name: string
+    position_order?: number
+    job_id?: string
+    job?: {
+      id?: string
+      name?: string | null
+      hierarchy_order?: number
+      area_id?: string
+      area?: { id?: string | null; name?: string | null; hierarchy_order?: number } | null
+    } | null
+  },
+>(
+  positions: T[],
+  areas: { id: string; name: string; hierarchy_order: number }[] = [],
+  jobs: { id: string; name: string; hierarchy_order: number; area_id: string }[] = []
+): T[] {
+  const areaById = new Map(areas.map((a) => [a.id, a]))
+  const jobById = new Map(jobs.map((j) => [j.id, j]))
+
+  return [...positions].sort((a, b) => {
+    const jobIdA = a.job_id || a.job?.id || ""
+    const jobIdB = b.job_id || b.job?.id || ""
+    const jobA = jobById.get(jobIdA)
+    const jobB = jobById.get(jobIdB)
+
+    const areaIdA = jobA?.area_id || a.job?.area_id || a.job?.area?.id || ""
+    const areaIdB = jobB?.area_id || b.job?.area_id || b.job?.area?.id || ""
+    const areaA = areaById.get(areaIdA)
+    const areaB = areaById.get(areaIdB)
+
+    const areaOrderA =
+      areaA?.hierarchy_order ?? a.job?.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER
+    const areaOrderB =
+      areaB?.hierarchy_order ?? b.job?.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER
+    if (areaOrderA !== areaOrderB) return areaOrderA - areaOrderB
+
+    const areaNameA = areaA?.name || a.job?.area?.name || ""
+    const areaNameB = areaB?.name || b.job?.area?.name || ""
+    const areaNameCmp = areaNameA.localeCompare(areaNameB)
+    if (areaNameCmp !== 0) return areaNameCmp
+
+    const jobOrderA =
+      jobA?.hierarchy_order ?? a.job?.hierarchy_order ?? Number.MAX_SAFE_INTEGER
+    const jobOrderB =
+      jobB?.hierarchy_order ?? b.job?.hierarchy_order ?? Number.MAX_SAFE_INTEGER
+    if (jobOrderA !== jobOrderB) return jobOrderA - jobOrderB
+
+    const jobNameA = jobA?.name || a.job?.name || ""
+    const jobNameB = jobB?.name || b.job?.name || ""
+    const jobNameCmp = jobNameA.localeCompare(jobNameB)
+    if (jobNameCmp !== 0) return jobNameCmp
+
+    const posOrderA = a.position_order ?? 0
+    const posOrderB = b.position_order ?? 0
+    if (posOrderA !== posOrderB) return posOrderA - posOrderB
+
+    return a.name.localeCompare(b.name)
+  })
+}
+

@@ -1,0 +1,6 @@
+export * from "./domain/entities"
+export * from "./application/training.service"
+export { TRAINING_CHANGED_EVENT, notifyTrainingChanged } from "./infrastructure/training.repository"
+export { PendingInitialTrainingBanner } from "./presentation/components/PendingInitialTrainingBanner"
+export { WorkerAdditionalInfoTab } from "./presentation/components/WorkerAdditionalInfoTab"
+export { default as EntityTraining } from "./presentation/pages/EntityTraining"

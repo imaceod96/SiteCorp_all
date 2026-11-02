@@ -20,6 +20,7 @@ import {
   type EntityRegime,
   type OrganizationEntity,
 } from "@/modules/organization-structure"
+import { recordAuditEvent } from "@/modules/audit-history"
 
 /**
  * Alta y edición de una entidad organizativa (Grupo Empresarial → Empresa → UEB).
@@ -245,6 +246,26 @@ export const OrganizationEntityDialog = ({
           title: "Entidad creada",
           description: `La entidad "${data.name}" ha sido creada correctamente.`,
         })
+      }
+
+      try {
+        await recordAuditEvent({
+          module: "entities",
+          action: editingEntity ? "entity_updated" : "entity_created",
+          description: editingEntity
+            ? `Actualización de datos de la entidad "${data.name}"`
+            : `Creación de la entidad "${data.name}" (${data.entity_type})`,
+          scope: "ENTITY",
+          entityName: data.name,
+          recordId: editingEntity?.code || data.name,
+          entityType: "organization_entity",
+          oldValues: editingEntity
+            ? { name: editingEntity.name, is_active: editingEntity.is_active }
+            : null,
+          newValues: { name: data.name, is_active: data.is_active, regime_id: data.regime_id },
+        })
+      } catch (auditErr) {
+        console.warn("[organization-entity] No se pudo registrar auditoría:", auditErr)
       }
 
       onSaved()

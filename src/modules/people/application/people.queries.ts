@@ -16,6 +16,8 @@ import {
   fetchSkinColorsCatalog,
   fetchWorkersLastSeparation,
   fetchWorkersLinkedToStaffing,
+  fetchDeduplicatedGlobalAreas,
+  fetchEntityActiveAreas,
 } from "../infrastructure/people.repository"
 import type {
   CatalogOption,
@@ -68,16 +70,21 @@ export async function loadEntityCandidatesView(input: {
   companyClientId: string | null | undefined
 }): Promise<EntityCandidatesView> {
   const rows = await fetchEntityCandidates(input.entityId)
+  if (rows.length === 0) {
+    return { candidates: [], candidatesWithLicense: new Set() }
+  }
 
-  // Clasificación compartida: una persona ya contratada NO es candidata, aunque
-  // conserve una fila en `candidates` (p. ej. una fila antigua sin vincular).
-  const employmentIndex = await fetchClientEmploymentIndex(
-    input.companyClientId,
-    rows.map((row) => row.identification)
-  )
+  // Ejecutamos en paralelo el índice de empleo del cliente y las licencias de los candidatos
+  // para reducir a la mitad las rondas de red al abrir la vista de Candidatos.
+  const [employmentIndex, candidatesWithLicense] = await Promise.all([
+    fetchClientEmploymentIndex(
+      input.companyClientId,
+      rows.map((row) => row.identification)
+    ),
+    fetchCandidatesWithLicense(rows.map((row) => row.id)),
+  ])
+
   const candidates = rows.filter((row) => isPendingCandidate(row, employmentIndex))
-
-  const candidatesWithLicense = await fetchCandidatesWithLicense(candidates.map((row) => row.id))
 
   return { candidates, candidatesWithLicense }
 }
@@ -237,3 +244,14 @@ export async function loadPersonIdentificationStatus(
 ): Promise<PersonIdentificationStatus> {
   return fetchPersonIdentificationStatus(entityId, identification.trim())
 }
+
+export async function loadGlobalAreas(): Promise<{ id: string; name: string }[]> {
+  return fetchDeduplicatedGlobalAreas()
+}
+
+export async function loadEntityActiveAreas(entityId: string): Promise<{ id: string; name: string }[]> {
+  return fetchEntityActiveAreas(entityId)
+}
+
+
+

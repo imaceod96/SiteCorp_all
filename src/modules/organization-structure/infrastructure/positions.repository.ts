@@ -54,7 +54,7 @@ export interface ConfigurationPositionRow {
   id: string
   organization_entity_id: string
   job_id: string
-  code: string
+  code?: string | null
   name: string
   description: string | null
   position_order: number
@@ -71,11 +71,12 @@ export interface ConfigurationPositionRow {
   job: {
     id: string
     name: string
-    code: string
+    code?: string | null
+    hierarchy_order?: number
     is_active: boolean
     area_id: string
     occupational_category_id: string | null
-    area: { id: string; name: string; code: string } | null
+    area: { id: string; name: string; code?: string | null; hierarchy_order?: number } | null
     salary_group: { id: string; salary_scale_id: string; sequence_number: number } | null
   } | null
 }
@@ -91,19 +92,31 @@ export async function selectConfigurationPositionRows(
       job:organization_jobs(
         id,
         name,
-        code,
+        hierarchy_order,
         is_active,
         area_id,
         occupational_category_id,
-        area:organization_areas(id, name, code),
+        area:organization_areas(id, name, hierarchy_order),
         salary_group:salary_groups(id, salary_scale_id, sequence_number)
       )
     `)
     .eq("organization_entity_id", entityId)
-    .order("created_at")
+    .order("position_order", { ascending: true })
+    .order("name", { ascending: true })
 
   if (error) throw error
-  return (data as ConfigurationPositionRow[]) || []
+  const rows = (data as ConfigurationPositionRow[]) || []
+  return rows.sort(
+    (a, b) =>
+      (a.job?.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) -
+        (b.job?.area?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) ||
+      (a.job?.area?.name || "").localeCompare(b.job?.area?.name || "") ||
+      (a.job?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) -
+        (b.job?.hierarchy_order ?? Number.MAX_SAFE_INTEGER) ||
+      (a.job?.name || "").localeCompare(b.job?.name || "") ||
+      (a.position_order ?? 0) - (b.position_order ?? 0) ||
+      a.name.localeCompare(b.name)
+  )
 }
 
 /**
@@ -115,7 +128,6 @@ export async function savePositionWithSchedule(input: {
   entityId: string
   positionId: string | null
   jobId: string
-  code: string
   name: string
   description: string | null
   authorizedQuantity: number
@@ -131,7 +143,6 @@ export async function savePositionWithSchedule(input: {
     p_entity_id: input.entityId,
     p_position_id: input.positionId,
     p_job_id: input.jobId,
-    p_code: input.code,
     p_name: input.name,
     p_description: input.description,
     p_authorized_quantity: input.authorizedQuantity,

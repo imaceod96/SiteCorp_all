@@ -6,7 +6,7 @@ import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
-import { Building2, Users, Shield, ArrowRight } from "lucide-react"
+import { Building2, Users, Shield, ArrowRight, Layers } from "lucide-react"
 
 const Admin = () => {
   const navigate = useNavigate()
@@ -73,7 +73,7 @@ const Admin = () => {
 
       <div className="grid gap-4">
         <SiteCorpCard title="Acciones rápidas">
-          <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <SiteCorpButton
               className="w-full justify-start"
               variant="outline"
@@ -81,6 +81,14 @@ const Admin = () => {
             >
               <Building2 className="h-4 w-4 mr-2" />
               Clientes
+            </SiteCorpButton>
+            <SiteCorpButton
+              className="w-full justify-start"
+              variant="outline"
+              onClick={() => navigate("/admin/plans")}
+            >
+              <Layers className="h-4 w-4 mr-2 text-sitecorp-primary" />
+              Planes por entidad
             </SiteCorpButton>
             <SiteCorpButton
               className="w-full justify-start"

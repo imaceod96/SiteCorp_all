@@ -1,6 +1,7 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { supabase } from "@/lib/supabase"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -26,6 +27,7 @@ import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/componen
 import {
   PeopleRuleError,
   candidateRequiresSpecialty,
+  convertDisplayDateToISO,
   specialtyForEducationLevel,
   validateCandidateRegistration,
 } from "@/modules/people/domain/rules"
@@ -35,6 +37,10 @@ import {
   loadCandidateFormCatalogs,
   loadCandidateFormData,
 } from "@/modules/people/application/candidate-expediente.queries"
+import {
+  loadGlobalAreas,
+  loadEntityActiveAreas,
+} from "@/modules/people/application/people.queries"
 import type {
   CandidateExpediente as Candidate,
   CandidateExpedienteInput,
@@ -86,6 +92,7 @@ export interface CandidateFormData {
   is_retired_or_rehired: string
   has_disciplinary_measures: boolean
   skin_color_id: string
+  area_id: string
   driving_license_ids: string[]
   // Chequeo Preempleo y Antecedentes Penales
   has_pre_employment_check: boolean
@@ -118,6 +125,7 @@ const emptyFormData: CandidateFormData = {
   is_retired_or_rehired: "",
   has_disciplinary_measures: false,
   skin_color_id: "",
+  area_id: "",
   driving_license_ids: [],
   has_pre_employment_check: false,
   has_criminal_record_check: false,
@@ -147,6 +155,15 @@ const EDUCATION_LEVEL_ORDER = [
   "Superior",
 ]
 
+const formatIsoDateToDisplay = (value: string | null | undefined): string => {
+  const trimmed = (value ?? "").trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`
+  }
+  return trimmed
+}
+
 /** `page` = ficha completa con tarjetas; `dialog` = mismas secciones dentro de un diálogo. */
 export type CandidateFormVariant = "page" | "dialog"
 
@@ -156,6 +173,8 @@ interface CandidateFormProps {
   mode?: "create" | "edit"
   /** Presentación: página del expediente (por defecto) o dentro de un diálogo. */
   variant?: CandidateFormVariant
+  /** Fuerza el uso del listado global deduplicado de áreas (Bolsa Global del SuperAdmin). */
+  useGlobalAreas?: boolean
   onSuccess?: () => void
   onCancel?: () => void
 }
@@ -188,6 +207,7 @@ const CandidateForm = ({
   entityId: propEntityId,
   mode = "edit",
   variant = "page",
+  useGlobalAreas = false,
   onSuccess,
   onCancel,
 }: CandidateFormProps) => {
@@ -206,6 +226,9 @@ const CandidateForm = ({
   const [drivingLicenseCategories, setDrivingLicenseCategories] = React.useState<CatalogOption[]>([])
   const [provinces, setProvinces] = React.useState<{ id: string; name: string }[]>([])
   const [municipalities, setMunicipalities] = React.useState<{ id: string; name: string }[]>([])
+  const [areas, setAreas] = React.useState<{ id: string; name: string }[]>([])
+  const [entitiesForSelect, setEntitiesForSelect] = React.useState<{ id: string; name: string }[]>([])
+  const [selectedCreateEntityId, setSelectedCreateEntityId] = React.useState<string>("__none__")
 
   const [formData, setFormData] = React.useState<CandidateFormData>(emptyFormData)
   const [formSubmitting, setFormSubmitting] = React.useState(false)
@@ -221,6 +244,33 @@ const CandidateForm = ({
   // Medidas disciplinarias: el archivo se conserva en memoria y viaja con el alta.
   const [disciplinaryDialogOpen, setDisciplinaryDialogOpen] = React.useState(false)
   const [disciplinaryDocument, setDisciplinaryDocument] = React.useState<File | null>(null)
+
+  // Load entities for select when no effectiveEntityId in create mode (SuperAdmin Bolsa)
+  React.useEffect(() => {
+    if (!effectiveEntityId && isCreate) {
+      supabase
+        .from("organization_entities")
+        .select("id, name")
+        .order("name")
+        .then(({ data }) => {
+          if (data && data.length > 0) {
+            setEntitiesForSelect(data)
+            setSelectedCreateEntityId("__none__")
+          }
+        })
+    }
+  }, [effectiveEntityId, isCreate])
+
+  // Load areas based on context:
+  // - In Bolsa Global (!effectiveEntityId or useGlobalAreas): deduplicated areas from all entities
+  // - In an Entity (effectiveEntityId): only active areas of that entity
+  React.useEffect(() => {
+    if (useGlobalAreas || !effectiveEntityId) {
+      loadGlobalAreas().then(setAreas).catch(() => setAreas([]))
+    } else {
+      loadEntityActiveAreas(effectiveEntityId).then(setAreas).catch(() => setAreas([]))
+    }
+  }, [effectiveEntityId, useGlobalAreas])
 
   // Fetch reference data
   React.useEffect(() => {
@@ -284,7 +334,7 @@ const CandidateForm = ({
           first_surname: data.first_surname,
           second_surname: data.second_surname || "",
           identification: data.identification,
-          birth_date: data.birth_date || "",
+          birth_date: formatIsoDateToDisplay(data.birth_date),
           gender_id: data.gender_id || "",
           marital_status_id: data.marital_status_id || "",
           phone: data.phone || "",
@@ -298,9 +348,15 @@ const CandidateForm = ({
           has_doctorate_degree: data.has_doctorate_degree || false,
           profession_or_trade: data.profession_or_trade || "",
           political_affiliation: data.political_affiliation || "",
-          is_retired_or_rehired: data.is_retired_or_rehired ? "yes" : "",
+          is_retired_or_rehired:
+            data.is_retired_or_rehired === true
+              ? "yes"
+              : data.is_retired_or_rehired === false
+                ? "no"
+                : "",
           has_disciplinary_measures: data.has_disciplinary_measures || false,
           skin_color_id: data.skin_color_id || "",
+          area_id: data.area_id || "",
           driving_license_ids: drivingLicenseIds,
           has_pre_employment_check: !!verificationDocuments.preEmployment,
           has_criminal_record_check: !!verificationDocuments.criminalRecord,
@@ -387,6 +443,7 @@ const CandidateForm = ({
     gender_id: formData.gender_id,
     marital_status_id: formData.marital_status_id,
     skin_color_id: formData.skin_color_id,
+    area_id: formData.area_id || null,
     education_level_id: formData.education_level_id,
     education_level_name: educationLevelName(),
     specialty: formData.specialty,
@@ -436,14 +493,31 @@ const CandidateForm = ({
 
     try {
       if (isCreate) {
-        // Alta: validación, unicidad de identidad (backend), inserción, licencias y
-        // documentos, todo el caso de uso, sin reglas duplicadas en la vista.
-        if (!effectiveEntityId) throw new Error("No se pudo determinar la entidad actual.")
+        const isUnassignedInPool =
+          !effectiveEntityId &&
+          (!selectedCreateEntityId || selectedCreateEntityId === "__none__")
+
+        let targetEntityId =
+          effectiveEntityId ||
+          (selectedCreateEntityId !== "__none__" ? selectedCreateEntityId : "") ||
+          entitiesForSelect[0]?.id ||
+          ""
+
+        if (!targetEntityId) {
+          const { data: entData } = await supabase.from("organization_entities").select("id").limit(1)
+          if (entData && entData.length > 0) {
+            targetEntityId = (entData[0] as { id: string }).id
+          }
+        }
+        if (!targetEntityId) {
+          throw new Error("Debe existir al menos una entidad registrada en la plataforma para almacenar candidatos.")
+        }
 
         await registerCandidate({
-          entityId: effectiveEntityId,
-          companyClientId: currentEntity?.tenant_id,
+          entityId: targetEntityId,
+          companyClientId: effectiveEntityId ? currentEntity?.tenant_id : undefined,
           registration: buildRegistrationInput(),
+          unassignedInPool: isUnassignedInPool,
         })
 
         resetForm()
@@ -461,7 +535,7 @@ const CandidateForm = ({
         first_surname: formData.first_surname.trim(),
         second_surname: formData.second_surname.trim() || null,
         identification: formData.identification.trim(),
-        birth_date: formData.birth_date || null,
+        birth_date: convertDisplayDateToISO(formData.birth_date) || formData.birth_date || null,
         gender_id: formData.gender_id || null,
         marital_status_id: formData.marital_status_id || null,
         phone: formData.phone.trim() || null,
@@ -472,6 +546,7 @@ const CandidateForm = ({
         education_level_id: formData.education_level_id || null,
         // La especialidad solo se conserva en los niveles educacionales que la exigen.
         specialty: specialtyForEducationLevel(educationLevelName(), formData.specialty),
+        area_id: formData.area_id || null,
         has_masters_degree: formData.has_masters_degree,
         has_doctorate_degree: formData.has_doctorate_degree,
         profession_or_trade: formData.profession_or_trade.trim() || null,
@@ -570,6 +645,20 @@ const CandidateForm = ({
 
   const form = (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {!effectiveEntityId && isCreate && entitiesForSelect.length > 0 && (
+        <FormSection title="Entidad Inicial (Opcional)" variant={variant}>
+          <div className="space-y-1.5">
+            <Label>Asignar a una entidad desde ahora (opcional)</Label>
+            <SiteCorpSelect value={selectedCreateEntityId} onValueChange={setSelectedCreateEntityId}>
+              <SelectItem value="__none__">Sin entidad inicial (guardar solo en Bolsa Global)</SelectItem>
+              {entitiesForSelect.map(ent => (
+                <SelectItem key={ent.id} value={ent.id}>{ent.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+        </FormSection>
+      )}
+
       {/* Section 1: Identificación */}
       <FormSection title="Identificación" variant={variant}>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -693,6 +782,15 @@ const CandidateForm = ({
       <FormSection title="Formación" variant={variant}>
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
+            <Label>Área de interés</Label>
+            <SiteCorpSelect value={formData.area_id || undefined} onValueChange={(value) => handleFormChange("area_id", value === "__placeholder__" ? "" : value)}>
+              <SelectItem value="__placeholder__">Seleccionar área...</SelectItem>
+              {areas.map(a => (
+                <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+              ))}
+            </SiteCorpSelect>
+          </div>
+          <div className="space-y-1.5">
             <Label>Nivel educacional</Label>
             <SiteCorpSelect value={formData.education_level_id || undefined} onValueChange={handleEducationLevelChange}>
               <SelectItem value="__placeholder__">Seleccionar...</SelectItem>
@@ -705,7 +803,7 @@ const CandidateForm = ({
             </SiteCorpSelect>
           </div>
           {requiresSpecialty && (
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label>Especialidad *</Label>
               <SiteCorpInput type="text" placeholder="Especialidad" value={formData.specialty} onChange={(e) => handleFormChange("specialty", e.target.value)} required />
             </div>

@@ -533,6 +533,27 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       invalidateContractAlertData(queryClient)
       setProcessStage(null)
 
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("sitecorp:record_audit", {
+            detail: {
+              module: "workers",
+              action: "worker_hired",
+              description: `Contratación y formalización de trabajador en la entidad`,
+              scope: "ENTITY",
+              recordId: workerId,
+              entityType: "worker",
+              newValues: {
+                worker_id: workerId,
+                candidate_id: candidateId,
+                position_id: positionId,
+                hire_date: hireDate,
+              },
+            },
+          })
+        )
+      }
+
       if (outcome.documentWarning && workerId) {
         // §67: no se presenta como completada sin documento, pero el contrato queda
         // registrado y su documento puede regenerarse desde la ficha del trabajador.
