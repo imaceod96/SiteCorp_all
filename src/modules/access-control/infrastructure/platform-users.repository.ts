@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { buildCustomSessionHeaders } from "./authentication.repository"
+import { saveStoredPlatformUserEmail } from "./user-profiles.repository"
 import type {
   CreatedPlatformUser,
   CreatePlatformUserInput,
@@ -109,6 +110,8 @@ export async function invokeCreatePlatformUser(
       throw new Error("El servidor no devolvió la contraseña inicial del usuario.")
     }
 
+    saveStoredPlatformUserEmail(createdRpc.user_id, createdRpc.email || input.email)
+
     return {
       userId: createdRpc.user_id,
       email: createdRpc.email,
@@ -175,6 +178,8 @@ export async function invokeCreatePlatformUser(
   if (!created.initial_password) {
     throw new Error("El servidor no devolvió la contraseña inicial del usuario.")
   }
+
+  saveStoredPlatformUserEmail(created.user_id, created.email || input.email)
 
   return {
     userId: created.user_id,

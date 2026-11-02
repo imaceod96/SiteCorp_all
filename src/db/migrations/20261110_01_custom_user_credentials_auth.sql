@@ -1020,11 +1020,12 @@ BEGIN
   END IF;
 
   -- 7. Persistir en public.profiles, public.user_credentials, public.user_password_lifecycle y public.platform_user_roles
-  INSERT INTO public.profiles (id, full_name, username, is_active)
-  VALUES (v_new_user_id, v_full_name, v_username, COALESCE(p_is_active, true))
+  INSERT INTO public.profiles (id, full_name, username, email, is_active)
+  VALUES (v_new_user_id, v_full_name, v_username, v_email, COALESCE(p_is_active, true))
   ON CONFLICT (id) DO UPDATE
   SET full_name = EXCLUDED.full_name,
       username = EXCLUDED.username,
+      email = EXCLUDED.email,
       is_active = EXCLUDED.is_active,
       updated_at = now();
 
@@ -1090,4 +1091,192 @@ $function$;
 REVOKE ALL ON FUNCTION public.create_platform_user_with_credentials(text, text, text, uuid, boolean, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.create_platform_user_with_credentials(text, text, text, uuid, boolean, text) TO authenticated, service_role;
 
+-- ----------------------------------------------------------------------------
+-- 12. Visibilidad y Sincronización Automática de Correo Electrónico en Perfiles
+-- ----------------------------------------------------------------------------
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email text;
+
+-- Backfill inmediato desde public.user_credentials
+UPDATE public.profiles AS p
+SET email = lower(btrim(uc.email))
+FROM public.user_credentials AS uc
+WHERE uc.user_id = p.id
+  AND uc.email IS NOT NULL
+  AND btrim(uc.email) <> ''
+  AND (p.email IS NULL OR btrim(p.email) = '');
+
+-- Backfill inmediato desde auth.users (cubre todos los usuarios existentes en Supabase)
+DO $$
+BEGIN
+  IF to_regclass('auth.users') IS NOT NULL THEN
+    UPDATE public.profiles AS p
+    SET email = lower(btrim(au.email))
+    FROM auth.users AS au
+    WHERE au.id = p.id
+      AND au.email IS NOT NULL
+      AND btrim(au.email) <> ''
+      AND (p.email IS NULL OR btrim(p.email) = '');
+  END IF;
+END;
+$$;
+
+-- Trigger para mantener public.profiles.email siempre sincronizado cuando cambie user_credentials
+CREATE OR REPLACE FUNCTION public.sync_user_credentials_email_to_profile()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+BEGIN
+  IF NEW.email IS NOT NULL AND btrim(NEW.email) <> '' THEN
+    UPDATE public.profiles
+    SET email = lower(btrim(NEW.email)),
+        updated_at = now()
+    WHERE id = NEW.user_id
+      AND (email IS DISTINCT FROM lower(btrim(NEW.email)));
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_sync_user_credentials_email_to_profile ON public.user_credentials;
+CREATE TRIGGER trg_sync_user_credentials_email_to_profile
+  AFTER INSERT OR UPDATE OF email ON public.user_credentials
+  FOR EACH ROW EXECUTE FUNCTION public.sync_user_credentials_email_to_profile();
+
+-- Trigger en public.profiles para autocompletar email al insertar/actualizar si viene vacío
+CREATE OR REPLACE FUNCTION public.populate_profile_email_on_write()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_found_email text;
+BEGIN
+  IF NEW.email IS NULL OR btrim(NEW.email) = '' THEN
+    SELECT uc.email INTO v_found_email
+    FROM public.user_credentials AS uc
+    WHERE uc.user_id = NEW.id;
+
+    IF (v_found_email IS NULL OR btrim(v_found_email) = '') AND to_regclass('auth.users') IS NOT NULL THEN
+      SELECT au.email INTO v_found_email
+      FROM auth.users AS au
+      WHERE au.id = NEW.id;
+    END IF;
+
+    IF v_found_email IS NOT NULL AND btrim(v_found_email) <> '' THEN
+      NEW.email := lower(btrim(v_found_email));
+    END IF;
+  ELSE
+    NEW.email := lower(btrim(NEW.email));
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_populate_profile_email_on_write ON public.profiles;
+CREATE TRIGGER trg_populate_profile_email_on_write
+  BEFORE INSERT OR UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.populate_profile_email_on_write();
+
+-- Permitir lectura exclusiva de (user_id, email) en user_credentials (nunca password_hash)
+GRANT SELECT (user_id, email) ON TABLE public.user_credentials TO authenticated;
+
+DROP POLICY IF EXISTS user_credentials_select_email ON public.user_credentials;
+CREATE POLICY user_credentials_select_email
+  ON public.user_credentials
+  FOR SELECT TO authenticated
+  USING (
+    auth.uid() = user_id
+    OR public.is_platform_superadmin()
+    OR public.has_platform_permission('users.view_all')
+    OR public.has_platform_permission('users.manage_all')
+  );
+
+-- RPC que consulta directamente profiles + user_credentials + auth.users
+CREATE OR REPLACE FUNCTION public.list_platform_user_emails()
+RETURNS TABLE (
+  user_id uuid,
+  email text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN;
+  END IF;
+
+  IF to_regclass('auth.users') IS NOT NULL THEN
+    RETURN QUERY
+    SELECT
+      p.id AS user_id,
+      COALESCE(
+        NULLIF(btrim(p.email), ''),
+        NULLIF(btrim(uc.email), ''),
+        NULLIF(btrim(au.email), '')
+      ) AS email
+    FROM public.profiles AS p
+    LEFT JOIN public.user_credentials AS uc ON uc.user_id = p.id
+    LEFT JOIN auth.users AS au ON au.id = p.id;
+  ELSE
+    RETURN QUERY
+    SELECT
+      p.id AS user_id,
+      COALESCE(
+        NULLIF(btrim(p.email), ''),
+        NULLIF(btrim(uc.email), '')
+      ) AS email
+    FROM public.profiles AS p
+    LEFT JOIN public.user_credentials AS uc ON uc.user_id = p.id;
+  END IF;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.list_platform_user_emails() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.list_platform_user_emails() TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.update_platform_user_email(
+  p_user_id uuid,
+  p_email text
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+DECLARE
+  v_clean_email text := lower(btrim(COALESCE(p_email, '')));
+BEGIN
+  IF p_user_id IS NULL OR v_clean_email = '' THEN
+    RETURN;
+  END IF;
+
+  UPDATE public.profiles
+  SET email = v_clean_email,
+      updated_at = now()
+  WHERE id = p_user_id;
+
+  UPDATE public.user_credentials
+  SET email = v_clean_email,
+      updated_at = now()
+  WHERE user_id = p_user_id;
+
+  IF to_regclass('auth.users') IS NOT NULL THEN
+    UPDATE auth.users
+    SET email = v_clean_email,
+        updated_at = now()
+    WHERE id = p_user_id;
+  END IF;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.update_platform_user_email(uuid, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_platform_user_email(uuid, text) TO authenticated, service_role;
+
 COMMIT;
+
+
