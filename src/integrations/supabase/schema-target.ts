@@ -174,9 +174,13 @@ export function selectQuery(text: string): "*" {
 
 export type SchemaTargetSetting = SchemaTarget | "auto"
 
-/** Ajuste explícito por entorno; si no es válido, se usa `auto`. */
+/** Ajuste explícito por entorno o configuración global; si no es válido, se usa `auto`. */
 export function schemaTargetSetting(): SchemaTargetSetting {
-  const raw = String(import.meta.env.VITE_SCHEMA_TARGET ?? "auto")
+  const raw = String(
+    import.meta.env.VITE_DB_SCHEMA_TARGET ??
+      import.meta.env.VITE_SCHEMA_TARGET ??
+      "auto"
+  )
     .trim()
     .toLowerCase()
   return raw === "legacy" || raw === "company_client" ? raw : "auto"

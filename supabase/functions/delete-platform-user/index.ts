@@ -27,7 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
 }
 
 interface DeletePlatformUserRequest {
@@ -82,14 +82,28 @@ serve(async (req) => {
   )
 
   try {
-    // 1. Identidad del llamante
-    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
-    if (callerError || !callerData?.user) {
-      console.error("[delete-platform-user] invalid caller token", callerError)
-      return json({ error: "Unauthorized" }, 401)
+    // 1. Identidad del llamante (soporta sesión propia en PostgreSQL o Bearer JWT)
+    let callerId: string | null = null
+    const customSessionToken = req.headers.get("x-sitecorp-session")?.trim() || ""
+
+    if (customSessionToken) {
+      const { data: sessionValidation } = await adminClient.rpc("validate_user_session", {
+        p_session_token: customSessionToken,
+      })
+      const parsed = sessionValidation as { valid?: boolean; user_id?: string } | null
+      if (parsed?.valid && parsed.user_id) {
+        callerId = parsed.user_id
+      }
     }
 
-    const callerId = callerData.user.id
+    if (!callerId) {
+      const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+      if (callerError || !callerData?.user) {
+        console.error("[delete-platform-user] invalid caller token", callerError)
+        return json({ error: "Unauthorized" }, 401)
+      }
+      callerId = callerData.user.id
+    }
 
     // 2. Perfil activo
     const { data: callerProfile, error: callerProfileError } = await adminClient
@@ -103,14 +117,20 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
-    // 3. Sin cambio de contraseña pendiente (misma barrera de servidor que el alta)
+    // 3. Sin cambio de contraseña pendiente (consulta user_credentials y user_password_lifecycle)
+    const { data: callerCreds } = await adminClient
+      .from("user_credentials")
+      .select("must_change_password")
+      .eq("user_id", callerId)
+      .maybeSingle()
+
     const { data: callerLifecycle } = await adminClient
       .from("user_password_lifecycle")
       .select("must_change_password")
       .eq("user_id", callerId)
       .maybeSingle()
 
-    if (callerLifecycle?.must_change_password === true) {
+    if (callerCreds?.must_change_password === true || callerLifecycle?.must_change_password === true) {
       console.error("[delete-platform-user] caller has a pending password change", { callerId })
       return json({ error: "Forbidden: pending password change" }, 403)
     }

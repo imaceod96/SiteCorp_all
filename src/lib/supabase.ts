@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js"
+import { appConfig } from "@/shared/config/app-config"
 
 export interface SupabaseMutationInterceptPayload {
   url: string
@@ -16,15 +17,8 @@ declare global {
     | undefined
 }
 
-// Create a single supabase client for interacting with your database
-const supabaseUrl =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) ||
-  (typeof process !== "undefined" && process.env?.VITE_SUPABASE_URL) ||
-  "https://xvswjkpoeccgpiewptur.supabase.co"
-const supabaseAnonKey =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_ANON_KEY) ||
-  (typeof process !== "undefined" && process.env?.VITE_SUPABASE_ANON_KEY) ||
-  "sb_publishable_4ZKRypToE3sUnlo_oAGdRA_KhkLmieP"
+const supabaseUrl = appConfig.api.baseUrl
+const supabaseAnonKey = appConfig.api.publicKey
 
 const baseFetch =
   typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : undefined

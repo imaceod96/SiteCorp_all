@@ -28,7 +28,10 @@ export async function loadPlatformUsers(): Promise<PlatformUser[]> {
   return Promise.all(
     profiles.map(async (profile): Promise<PlatformUser> => {
       const roleRows = await selectPlatformUserRoles(profile.id)
-      const roles = roleRows.map((row) => row.platform_roles).flat()
+      const roles = roleRows
+        .map((row) => row.platform_roles)
+        .flat()
+        .filter((role): role is PlatformRole => Boolean(role && role.name))
 
       return {
         id: profile.id,
