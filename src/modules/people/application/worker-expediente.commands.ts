@@ -1,5 +1,6 @@
 import { personRegistrationConflict, shouldUploadVerificationDocument } from "../domain/rules"
 import { fetchPersonIdentificationStatus } from "../infrastructure/candidate-registration.repository"
+import { persistWorkerSourceOfOrigin } from "../infrastructure/altas-bajas-registry.repository"
 import { ensureContractDocument } from "../infrastructure/transition-documents"
 import {
   createWorkerWithPosition,
@@ -72,6 +73,8 @@ export async function createWorkerExpediente(
   }
 ): Promise<string> {
   const workerId = await createWorkerWithPosition(input)
+
+  await persistWorkerSourceOfOrigin(workerId, input.hireDate, input.sourceOfOrigin)
 
   if (
     shouldUploadVerificationDocument(input.hasPreEmploymentCheck, input.preEmploymentCheckFile)

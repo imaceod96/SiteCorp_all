@@ -37,6 +37,7 @@ import {
 } from "@/modules/people/application/hiring.commands"
 import { loadHiringWorkspace } from "@/modules/people/application/staffing.queries"
 import {
+  OFFICIAL_SOURCES_OF_ORIGIN,
   isDirectorJob,
   isSpecialDocumentRole,
   requiresResolution,
@@ -141,6 +142,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
   const [selectedCandidateId, setSelectedCandidateId] = React.useState("")
   const [candidateSearch, setCandidateSearch] = React.useState("")
   const [hireDate, setHireDate] = React.useState("")
+  const [sourceOfOrigin, setSourceOfOrigin] = React.useState("")
   const [contractTypeId, setContractTypeId] = React.useState("")
   const [contractStartDate, setContractStartDate] = React.useState("")
   const [contractEndDate, setContractEndDate] = React.useState("")
@@ -221,6 +223,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     setSelectedCandidateId(candidate?.id || "")
     setCandidateSearch("")
     setHireDate("")
+    setSourceOfOrigin("")
     setContractTypeId("")
     setContractStartDate("")
     setContractEndDate("")
@@ -437,6 +440,11 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       return
     }
 
+    if (!sourceOfOrigin.trim()) {
+      setError("Selecciona la fuente de procedencia del trabajador.")
+      return
+    }
+
     const candidateId = selectedCandidate?.id as string
 
     // §44: Cargo Especialista Principal → formulario de RESOLUCIÓN (no contrato).
@@ -463,6 +471,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
           candidateId,
           positionId,
           hireDate,
+          sourceOfOrigin,
           notes,
           resolution: {
             representativeAssignmentId: resolutionValues.representativeAssignmentId,
@@ -514,6 +523,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
         candidateId,
         positionId,
         hireDate,
+        sourceOfOrigin,
         notes,
         contractTypeId,
         contractStartDate,
@@ -895,19 +905,32 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
           </p>
         </div>
 
-        {/* ---------- Fecha de incorporación (todos) ---------- */}
-        <div className="space-y-2">
-          <Label>
-            {isReincorporation ? "Fecha de reincorporación *" : "Fecha de incorporación *"}
-          </Label>
-          <SiteCorpInput
-            type="date"
-            value={hireDate}
-            onChange={(e) => {
-              setHireDate(e.target.value)
-              if (!contractStartDate) setContractStartDate(e.target.value)
-            }}
-          />
+        {/* ---------- Fecha de incorporación y Fuente de procedencia (todos) ---------- */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>
+              {isReincorporation ? "Fecha de reincorporación *" : "Fecha de incorporación *"}
+            </Label>
+            <SiteCorpInput
+              type="date"
+              value={hireDate}
+              onChange={(e) => {
+                setHireDate(e.target.value)
+                if (!contractStartDate) setContractStartDate(e.target.value)
+              }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Fuente de procedencia *</Label>
+            <SiteCorpSelect value={sourceOfOrigin} onValueChange={setSourceOfOrigin}>
+              <option value="">Seleccionar procedencia</option>
+              {OFFICIAL_SOURCES_OF_ORIGIN.map((item) => (
+                <option key={item.code} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </SiteCorpSelect>
+          </div>
         </div>
 
         {/* ---------- Especialista Principal: Formulario de Resolución ---------- */}
@@ -1119,6 +1142,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
                         loading ||
                         !selectedCandidate ||
                         !positionId ||
+                        !sourceOfOrigin.trim() ||
                         !hasVacancy ||
                         (isPrincipalSpecialist
                           ? !resolutionValues || !resolutionValues.valid

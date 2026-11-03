@@ -42,6 +42,7 @@
 
 import { EMPLOYMENT_STATUS } from "./entities"
 import type {
+  AltasBajasReasonColumnCode,
   CandidateRegistrationInput,
   ContractFormalizationInput,
   EmploymentIndex,
@@ -619,10 +620,149 @@ export function validateReincorporationInput(
 
 // --- Baja del trabajador ---
 
+export const OTHER_SEPARATION_REASON_CODE = "OTRAS"
+export const OTHER_SEPARATION_REASON_NAME = "Otras"
+
+/**
+ * Catálogo oficial de «Fuente de procedencia» (Columna 5 del modelo «b) Registro de Altas y Bajas»).
+ * Según nota oficial: estudiante, desempleado, ama de casa, sector no estatal, sector estatal,
+ * jubilado, egresados de SMA, de las FAR, del MININT, de centros penitenciarios o sancionado a
+ * trabajo correccional sin internamiento, persona con discapacidad, que regresa del exterior y disponibles.
+ */
+export const OFFICIAL_SOURCES_OF_ORIGIN: ReadonlyArray<{
+  code: string
+  name: string
+}> = [
+  { code: "ESTUDIANTE", name: "Estudiante" },
+  { code: "DESEMPLEADO", name: "Desempleado" },
+  { code: "AMA_DE_CASA", name: "Ama de casa" },
+  { code: "SECTOR_NO_ESTATAL", name: "Sector no estatal" },
+  { code: "SECTOR_ESTATAL", name: "Sector estatal" },
+  { code: "JUBILADO", name: "Jubilado" },
+  { code: "EGRESADO_SMA", name: "Egresado de SMA" },
+  { code: "EGRESADO_FAR", name: "Egresado de las FAR" },
+  { code: "EGRESADO_MININT", name: "Egresado del MININT" },
+  {
+    code: "CENTRO_PENITENCIARIO_O_TRABAJO_CORRECCIONAL",
+    name: "Centro penitenciario o trabajo correccional sin internamiento",
+  },
+  { code: "PERSONA_CON_DISCAPACIDAD", name: "Persona con discapacidad" },
+  { code: "REGRESA_DEL_EXTERIOR", name: "Que regresa del exterior" },
+  { code: "DISPONIBLE", name: "Disponible" },
+] as const
+
+export const ALTAS_BAJAS_FOOTNOTE_TEXT =
+  "En el caso de la columna número 5, se debe especificar si proviene de: estudiante, desempleado, ama de casa, sector no estatal, sector estatal, jubilado, egresados de SMA, de las FAR, del MININT, de centros penitenciarios o sancionado a trabajo correccional sin internamiento, persona con discapacidad, que regresa del exterior y disponibles."
+
+/**
+ * Columnas 7 a 17 del modelo oficial «b) Registro de Altas y Bajas» (ordenadas de izquierda a derecha).
+ */
+export const ALTAS_BAJAS_REASON_COLUMNS: ReadonlyArray<{
+  columnNumber: number
+  code: AltasBajasReasonColumnCode
+  label: string
+}> = [
+  { columnNumber: 7, code: "SALARIAL", label: "Salarial" },
+  { columnNumber: 8, code: "JUBILACION", label: "Jubilación" },
+  { columnNumber: 9, code: "FALLECIMIENTO", label: "Fallecimiento" },
+  { columnNumber: 10, code: "INVALIDEZ_TOTAL", label: "Invalidez total" },
+  { columnNumber: 11, code: "INVALIDEZ_PARCIAL", label: "Invalidez parcial" },
+  { columnNumber: 12, code: "PRIVACION_LIBERTAD", label: "Privación de libertad" },
+  { columnNumber: 13, code: "PASO_FORMAS_NO_ESTATALES", label: "Paso a formas no estatales" },
+  { columnNumber: 14, code: "PROCESO_DISPONIBILIDAD", label: "Proceso de disponibilidad" },
+  { columnNumber: 15, code: "SANCION_ADMINISTRATIVA", label: "Sanción administrativa" },
+  { columnNumber: 16, code: "SALIDA_PAIS", label: "Salida del país" },
+  { columnNumber: 17, code: "OTRAS", label: "Otras" },
+] as const
+
+/**
+ * Resuelve de forma determinista qué columna (7 a 17) debe marcarse con una «X»
+ * a partir del nombre o código del motivo de baja registrado.
+ */
+export function resolveSeparationReasonColumnCode(
+  reasonNameOrCode: string | null | undefined
+): AltasBajasReasonColumnCode {
+  if (!reasonNameOrCode) return "OTRAS"
+  const norm = reasonNameOrCode
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+
+  if (!norm) return "OTRAS"
+  if (norm.includes("salarial") || norm === "salarial") return "SALARIAL"
+  if (norm.includes("jubilacion") || norm.includes("juvilacion")) return "JUBILACION"
+  if (norm.includes("fallecimiento") || norm.includes("defuncion")) return "FALLECIMIENTO"
+  if (norm.includes("invalidez total") || norm === "invalidez_total") return "INVALIDEZ_TOTAL"
+  if (norm.includes("invalidez parcial") || norm === "invalidez_parcial") return "INVALIDEZ_PARCIAL"
+  if (norm.includes("privacion de libertad") || norm.includes("privacion_libertad")) {
+    return "PRIVACION_LIBERTAD"
+  }
+  if (
+    norm.includes("formas no estatales") ||
+    norm.includes("fonas no estatales") ||
+    norm.includes("paso_formas_no_estatales")
+  ) {
+    return "PASO_FORMAS_NO_ESTATALES"
+  }
+  if (norm.includes("disponibilidad") || norm.includes("proceso_disponibilidad")) {
+    return "PROCESO_DISPONIBILIDAD"
+  }
+  if (
+    norm.includes("sancion administrativa") ||
+    norm.includes("sancion_administrativa") ||
+    norm.includes("medida disciplinaria")
+  ) {
+    return "SANCION_ADMINISTRATIVA"
+  }
+  if (norm.includes("salida del pais") || norm.includes("salida_pais") || norm.includes("emigracion")) {
+    return "SALIDA_PAIS"
+  }
+  return "OTRAS"
+}
+
+/**
+ * Catálogo oficial de motivos de baja laboral en su orden de presentación.
+ */
+export const OFFICIAL_SEPARATION_REASONS: ReadonlyArray<{
+  code: string
+  name: string
+  sortOrder: number
+}> = [
+  { code: "SALARIAL", name: "Salarial", sortOrder: 10 },
+  { code: "JUBILACION", name: "Jubilación", sortOrder: 20 },
+  { code: "FALLECIMIENTO", name: "Fallecimiento", sortOrder: 30 },
+  { code: "INVALIDEZ_TOTAL", name: "Invalidez Total", sortOrder: 40 },
+  { code: "INVALIDEZ_PARCIAL", name: "Invalidez Parcial", sortOrder: 50 },
+  { code: "PRIVACION_LIBERTAD", name: "Privación de Libertad", sortOrder: 60 },
+  { code: "PASO_FORMAS_NO_ESTATALES", name: "Paso a formas no estatales", sortOrder: 70 },
+  { code: "PROCESO_DISPONIBILIDAD", name: "Proceso de disponibilidad", sortOrder: 80 },
+  { code: "SANCION_ADMINISTRATIVA", name: "Sanción Administrativa", sortOrder: 90 },
+  { code: "SALIDA_PAIS", name: "Salida del País", sortOrder: 100 },
+  { code: OTHER_SEPARATION_REASON_CODE, name: OTHER_SEPARATION_REASON_NAME, sortOrder: 110 },
+] as const
+
+/** Determina si el motivo seleccionado corresponde a «Otras» (única opción con cuadro de texto). */
+export function isOtherSeparationReason(reasonNameOrId: string | null | undefined): boolean {
+  if (!reasonNameOrId) return false
+  const normalized = reasonNameOrId
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+  return (
+    normalized === "otras" ||
+    normalized === "otra" ||
+    normalized === "catalog:otras"
+  )
+}
+
 export interface SeparationValidationInput {
   effectiveDate: string
   currentPositionStartDate: string | null
   separationReasonId: string
+  isOtherReason?: boolean
+  customReason?: string | null
 }
 
 export function validateSeparationInput(input: SeparationValidationInput): string | null {
@@ -631,6 +771,9 @@ export function validateSeparationInput(input: SeparationValidationInput): strin
     return "La fecha de baja no puede ser anterior al inicio del puesto actual."
   }
   if (!input.separationReasonId) return "Selecciona un motivo de baja."
+  if (input.isOtherReason && isBlank(input.customReason)) {
+    return "Especifique el motivo de baja para la opción «Otras»."
+  }
   return null
 }
 
