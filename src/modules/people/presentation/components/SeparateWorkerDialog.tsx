@@ -16,6 +16,8 @@ import { toRomanNumeral } from "@/utils/roman-numerals"
 import { showSuccess, showError } from "@/utils/toast"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import {
+  OFFICIAL_SEPARATION_REASONS,
+  isOtherSeparationReason,
   loadSeparationReasons,
   registerWorkerSeparation,
   validateSeparationInput,
@@ -39,19 +41,26 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
   current,
   onSuccess,
 }) => {
-  const [reasons, setReasons] = React.useState<SeparationReason[]>([])
+  const [reasons, setReasons] = React.useState<SeparationReason[]>(() =>
+    OFFICIAL_SEPARATION_REASONS.map((r) => ({ id: `catalog:${r.code}`, name: r.name }))
+  )
   const [loading, setLoading] = React.useState(false)
   const [effectiveDate, setEffectiveDate] = React.useState("")
   const [reasonId, setReasonId] = React.useState("")
+  const [customReason, setCustomReason] = React.useState("")
   const [notes, setNotes] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const queryClient = useQueryClient()
 
+  const selectedReason = reasons.find((r) => r.id === reasonId) ?? null
+  const showCustomReasonInput = isOtherSeparationReason(selectedReason?.name ?? reasonId)
+
   React.useEffect(() => {
     if (!open) return
     setEffectiveDate("")
     setReasonId("")
+    setCustomReason("")
     setNotes("")
     setError(null)
     setLoading(true)
@@ -59,19 +68,31 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
       .then((data) => setReasons(data))
       .catch((err) => {
         console.error("Error loading separation reasons:", err)
-        setError("No se pudieron cargar los motivos de baja.")
+        setReasons(
+          OFFICIAL_SEPARATION_REASONS.map((r) => ({ id: `catalog:${r.code}`, name: r.name }))
+        )
       })
       .finally(() => setLoading(false))
   }, [open])
 
+  const handleReasonChange = (nextReasonId: string) => {
+    setReasonId(nextReasonId)
+    const nextReason = reasons.find((r) => r.id === nextReasonId)
+    if (!isOtherSeparationReason(nextReason?.name ?? nextReasonId)) {
+      setCustomReason("")
+    }
+  }
+
   const handleSubmit = async () => {
     setError(null)
 
-    // Regla del dominio: fecha efectiva, motivo y no anterior al inicio del puesto actual.
+    // Regla del dominio: fecha efectiva, motivo (y especificación si es «Otras») y no anterior al inicio del puesto actual.
     const invalid = validateSeparationInput({
       effectiveDate,
       currentPositionStartDate: current.startDate,
       separationReasonId: reasonId,
+      isOtherReason: showCustomReasonInput,
+      customReason,
     })
     if (invalid) {
       setError(invalid)
@@ -85,6 +106,8 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
         workerId,
         effectiveDate,
         separationReasonId: reasonId,
+        reasonName: selectedReason?.name ?? null,
+        customReason: showCustomReasonInput ? customReason.trim() : null,
         notes,
         // Pluriempleo: con dos contratos vigentes se identifica la asignación afectada.
         targetAssignmentId: current.targetAssignmentId ?? null,
@@ -102,6 +125,8 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
         friendly = "El trabajador ya no está activo."
       } else if (/anterior al inicio/i.test(msg)) {
         friendly = "La fecha de baja no puede ser anterior al inicio del puesto actual."
+      } else if (/especificar el motivo/i.test(msg)) {
+        friendly = "Especifique el motivo de baja para la opción «Otras»."
       } else if (/motivo/i.test(msg)) {
         friendly = "Selecciona un motivo de baja válido."
       } else if (/no tiene un puesto actual/i.test(msg)) {
@@ -188,7 +213,7 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
 
           <div className="space-y-2">
             <Label>Motivo de baja *</Label>
-            <SiteCorpSelect value={reasonId} onValueChange={setReasonId}>
+            <SiteCorpSelect value={reasonId} onValueChange={handleReasonChange}>
               <option value="">{loading ? "Cargando motivos…" : "Seleccionar motivo"}</option>
               {reasons.map((r) => (
                 <option key={r.id} value={r.id}>
@@ -197,6 +222,19 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
               ))}
             </SiteCorpSelect>
           </div>
+
+          {showCustomReasonInput && (
+            <div className="space-y-2">
+              <Label>Especifique el motivo de baja *</Label>
+              <SiteCorpInput
+                type="text"
+                value={customReason}
+                onChange={(e) => setCustomReason(e.target.value)}
+                placeholder="Escriba el motivo de baja…"
+                autoFocus
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Observaciones</Label>

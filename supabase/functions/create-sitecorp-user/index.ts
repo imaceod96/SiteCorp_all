@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
 }
 
 interface CreateSitecorpUserRequest {
@@ -128,14 +128,28 @@ serve(async (req) => {
   )
 
   try {
-    // 1. Verify caller identity
-    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
-    if (callerError || !callerData?.user) {
-      console.error("[create-sitecorp-user] invalid caller token", callerError)
-      return json({ error: "Unauthorized" }, 401)
+    // 1. Verify caller identity (supports custom session token via validate_user_session RPC or Bearer JWT)
+    let callerId: string | null = null
+    const customSessionToken = req.headers.get("x-sitecorp-session")?.trim() || ""
+
+    if (customSessionToken) {
+      const { data: sessionValidation } = await adminClient.rpc("validate_user_session", {
+        p_session_token: customSessionToken,
+      })
+      const parsed = sessionValidation as { valid?: boolean; user_id?: string } | null
+      if (parsed?.valid && parsed.user_id) {
+        callerId = parsed.user_id
+      }
     }
 
-    const callerId = callerData.user.id
+    if (!callerId) {
+      const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+      if (callerError || !callerData?.user) {
+        console.error("[create-sitecorp-user] invalid caller token", callerError)
+        return json({ error: "Unauthorized" }, 401)
+      }
+      callerId = callerData.user.id
+    }
 
     // 2. Verify caller has an active platform profile
     const { data: callerProfile, error: callerProfileError } = await adminClient
@@ -149,14 +163,20 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
-    // El llamante NO puede tener un cambio de contraseña pendiente (barrera de servidor, no
-    // solo de interfaz): un administrador con cambio obligatorio no puede crear usuarios.
+    // El llamante NO puede tener un cambio de contraseña pendiente (consulta user_credentials y user_password_lifecycle)
+    const { data: callerCreds } = await adminClient
+      .from("user_credentials")
+      .select("must_change_password")
+      .eq("user_id", callerId)
+      .maybeSingle()
+
     const { data: callerLifecycle } = await adminClient
       .from("user_password_lifecycle")
       .select("must_change_password")
       .eq("user_id", callerId)
       .maybeSingle()
-    if (callerLifecycle?.must_change_password === true) {
+
+    if (callerCreds?.must_change_password === true || callerLifecycle?.must_change_password === true) {
       console.error("[create-sitecorp-user] caller has a pending password change", { callerId })
       return json({ error: "Forbidden: pending password change" }, 403)
     }
@@ -298,6 +318,17 @@ serve(async (req) => {
       return json({ error: "Ya existe un usuario con ese nombre." }, 409)
     }
 
+    // Check if email already exists in public.user_credentials (if table exists)
+    const { data: existingCredEmail } = await adminClient
+      .from("user_credentials")
+      .select("user_id")
+      .ilike("email", email)
+      .maybeSingle()
+
+    if (existingCredEmail) {
+      return json({ error: "Ya existe un usuario con este correo." }, 409)
+    }
+
     // 5. Generate the initial password (server-side, cryptographically secure).
     const password = generateInitialPassword()
 
@@ -423,6 +454,21 @@ serve(async (req) => {
       }
 
       return json({ error: "No se pudo inicializar la contraseña inicial. El alta se revirtió." }, 500)
+    }
+
+    // 6.b Persistir credenciales propias en `public.user_credentials` con hash bcrypt (pgcrypto RPC)
+    const { error: credentialsRpcError } = await adminClient.rpc("upsert_user_credentials", {
+      p_user_id: userId,
+      p_email: email,
+      p_plain_password: password,
+      p_must_change_password: true,
+    })
+
+    if (credentialsRpcError) {
+      console.warn(
+        "[create-sitecorp-user] upsert_user_credentials RPC notice (migration may be pending)",
+        credentialsRpcError
+      )
     }
 
     console.log("[create-sitecorp-user] user created successfully", {

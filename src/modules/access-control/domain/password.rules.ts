@@ -1,3 +1,5 @@
+import { appConfig } from "@/shared/config/app-config"
+
 /**
  * Control de acceso — Reglas PURAS del ciclo de vida de la contraseña inicial.
  *
@@ -31,8 +33,8 @@ export function resolvePasswordRequirement(read: PasswordLifecycleRead): Passwor
   return read.mustChange ? "required" : "not_required"
 }
 
-/** Longitud mínima de la contraseña nueva (coherente con la política del servidor). */
-export const PASSWORD_MIN_LENGTH = 12
+/** Longitud mínima de la contraseña nueva (leída de la configuración global / variables de entorno). */
+export const PASSWORD_MIN_LENGTH = appConfig.security.passwordMinLength
 
 /**
  * Validación de fortaleza de la contraseña nueva. Devuelve el mensaje de usuario o `null`.

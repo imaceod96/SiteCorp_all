@@ -72,8 +72,142 @@ export async function updateUserProfileAvatar(
   if (error) throw error
 }
 
-/** Edición administrativa: sólo el nombre visible y el nombre de usuario. */
+const PLATFORM_USER_EMAILS_STORAGE_KEY = "sitecorp_platform_user_emails"
+
+function readStoredPlatformUserEmails(): Record<string, string> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = window.localStorage.getItem(PLATFORM_USER_EMAILS_STORAGE_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "string" && value.trim()) {
+        result[key] = value.trim().toLowerCase()
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+export function saveStoredPlatformUserEmail(userId: string, email: string): void {
+  if (typeof window === "undefined") return
+  const cleanUserId = userId?.trim()
+  const cleanEmail = email?.trim().toLowerCase()
+  if (!cleanUserId || !cleanEmail) return
+  try {
+    const current = readStoredPlatformUserEmails()
+    current[cleanUserId] = cleanEmail
+    window.localStorage.setItem(PLATFORM_USER_EMAILS_STORAGE_KEY, JSON.stringify(current))
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+/**
+ * Resuelve el mapa `{ [userId]: email }` combinando:
+ *   1. Caché local inmediata (para altas/ediciones cuando la migración aún no se ha re-ejecutado).
+ *   2. Correo de la sesión activa (`supabase.auth.getSession()`).
+ *   3. RPC `list_platform_user_emails` en PostgreSQL (`public.user_credentials` / `public.profiles`).
+ */
+export async function selectPlatformUserEmails(): Promise<Record<string, string>> {
+  const emailMap: Record<string, string> = {
+    ...readStoredPlatformUserEmails(),
+  }
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const sessionUser = sessionData?.session?.user
+    if (sessionUser?.id && sessionUser?.email) {
+      emailMap[sessionUser.id] = sessionUser.email.trim().toLowerCase()
+    }
+  } catch {
+    // Ignorar fallo de lectura de sesión
+  }
+
+  try {
+    const customToken =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("sitecorp_custom_session_token")
+        : null
+    if (customToken) {
+      const { data: sessionVal } = await supabase.rpc("validate_user_session", {
+        p_session_token: customToken,
+      })
+      const row = (Array.isArray(sessionVal) ? sessionVal[0] : sessionVal) as
+        | { valid?: boolean; user_id?: string; email?: string }
+        | null
+      if (row?.valid && row.user_id && row.email) {
+        emailMap[row.user_id] = row.email.trim().toLowerCase()
+      }
+    }
+  } catch {
+    // Ignorar si validate_user_session no está disponible
+  }
+
+  try {
+    const { data: credRows, error: credError } = await supabase
+      .from("user_credentials")
+      .select("user_id, email")
+    if (!credError && Array.isArray(credRows)) {
+      for (const row of credRows as Array<{ user_id?: string; email?: string | null }>) {
+        if (row?.user_id && typeof row.email === "string" && row.email.trim()) {
+          emailMap[row.user_id] = row.email.trim().toLowerCase()
+        }
+      }
+    }
+  } catch {
+    // Si user_credentials aún no tiene GRANT SELECT(user_id, email), continúa con la RPC
+  }
+
+  try {
+    const { data: rpcRows, error: rpcError } = await supabase.rpc("list_platform_user_emails")
+    if (!rpcError && Array.isArray(rpcRows)) {
+      for (const row of rpcRows as Array<{ user_id?: string; email?: string | null }>) {
+        if (row?.user_id && typeof row.email === "string" && row.email.trim()) {
+          emailMap[row.user_id] = row.email.trim().toLowerCase()
+        }
+      }
+    }
+  } catch {
+    // Si la RPC aún no existe en la base de datos, se conserva el mapa disponible
+  }
+
+  return emailMap
+}
+
+/** Edición administrativa: nombre visible, nombre de usuario y correo electrónico. */
 export async function updateUserProfileNames(input: UpdatePlatformUserInput): Promise<void> {
+  const cleanEmail = input.email?.trim().toLowerCase()
+
+  if (cleanEmail) {
+    saveStoredPlatformUserEmail(input.userId, cleanEmail)
+
+    try {
+      await supabase.rpc("update_platform_user_email", {
+        p_user_id: input.userId,
+        p_email: cleanEmail,
+      })
+    } catch {
+      // Si la RPC aún no está desplegada, continúa con la actualización de profiles
+    }
+
+    const { error: withEmailError } = await supabase
+      .from("profiles")
+      .update({
+        full_name: input.fullName,
+        username: input.username,
+        email: cleanEmail,
+      })
+      .eq("id", input.userId)
+
+    if (!withEmailError) {
+      return
+    }
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({ full_name: input.fullName, username: input.username })
@@ -91,3 +225,4 @@ export async function setUserProfileActive(userId: string, isActive: boolean): P
 
   if (error) throw error
 }
+

@@ -1,4 +1,6 @@
 import { supabase } from "@/lib/supabase"
+import { buildCustomSessionHeaders } from "./authentication.repository"
+import { saveStoredPlatformUserEmail } from "./user-profiles.repository"
 import type {
   CreatedPlatformUser,
   CreatePlatformUserInput,
@@ -66,12 +68,12 @@ export async function deletePlatformUserRole(userId: string, roleId: string): Pr
 }
 
 /**
- * Alta de un usuario de plataforma mediante la Edge Function `create-sitecorp-user`.
- *
- * El cuerpo conserva las claves del contrato del backend (nombre completo, nombre de usuario,
- * correo, estado y rol de plataforma) pero YA NO envía contraseña: la genera el servidor de
- * forma aleatoria y segura. La función es la que crea el usuario en `auth.users` con
- * privilegios elevados, y el cliente nunca los tiene.
+ * Alta de un usuario de plataforma:
+ *   1. Prioriza la RPC nativa de PostgreSQL `create_platform_user_with_credentials` (`SECURITY DEFINER`
+ *      con `pgcrypto`), que genera la contraseña inicial CSPRNG de 24 caracteres directamente en
+ *      PostgreSQL sin depender de Edge Functions ni de `SUPABASE_SERVICE_ROLE_KEY`.
+ *   2. Si la RPC aún no se ha aplicado en la base de datos, recurre como respaldo a la Edge Function
+ *      `create-sitecorp-user`.
  *
  * Devuelve la CONTRASEÑA INICIAL generada, que viaja UNA SOLA VEZ en la respuesta y nunca se
  * persiste en el cliente.
@@ -79,6 +81,56 @@ export async function deletePlatformUserRole(userId: string, roleId: string): Pr
 export async function invokeCreatePlatformUser(
   input: CreatePlatformUserInput
 ): Promise<CreatedPlatformUser> {
+  const customHeaders = buildCustomSessionHeaders()
+  const sessionToken = Object.values(customHeaders)[0] ?? null
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "create_platform_user_with_credentials",
+    {
+      p_full_name: input.fullName,
+      p_username: input.username,
+      p_email: input.email,
+      p_platform_role_id: input.platformRoleId,
+      p_is_active: input.isActive,
+      p_session_token: sessionToken,
+    }
+  )
+
+  if (!rpcError && rpcData) {
+    const createdRpc = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as {
+      user_id: string
+      email: string
+      username: string
+      full_name: string
+      platform_role_id: string | null
+      initial_password?: string
+    }
+
+    if (!createdRpc?.initial_password) {
+      throw new Error("El servidor no devolvió la contraseña inicial del usuario.")
+    }
+
+    saveStoredPlatformUserEmail(createdRpc.user_id, createdRpc.email || input.email)
+
+    return {
+      userId: createdRpc.user_id,
+      email: createdRpc.email,
+      username: createdRpc.username,
+      fullName: createdRpc.full_name,
+      platformRoleId: createdRpc.platform_role_id ?? null,
+      initialPassword: createdRpc.initial_password,
+    }
+  }
+
+  const isMissingRpc =
+    rpcError?.code === "42883" ||
+    rpcError?.code === "PGRST202" ||
+    Boolean(rpcError?.message?.includes("Could not find the function"))
+
+  if (rpcError && !isMissingRpc) {
+    throw new Error(rpcError.message || "No se pudo crear el usuario.")
+  }
+
   const { data, error } = await supabase.functions.invoke("create-sitecorp-user", {
     body: {
       full_name: input.fullName,
@@ -87,9 +139,26 @@ export async function invokeCreatePlatformUser(
       is_active: input.isActive,
       platform_role_id: input.platformRoleId,
     },
+    headers: customHeaders,
   })
 
-  if (error) throw error
+  if (error) {
+    let backendMessage: string | null = null
+    const context = (error as { context?: Response }).context
+    if (context && typeof context.json === "function") {
+      try {
+        const body = (await context.json()) as { error?: string } | null
+        backendMessage = body?.error ?? null
+      } catch {
+        backendMessage = null
+      }
+    }
+    throw new Error(
+      backendMessage ||
+        error.message ||
+        "No se pudo crear el usuario (verifica haber ejecutado la migración SQL completa)."
+    )
+  }
   if (!data) throw new Error("Respuesta vacía del servidor")
 
   const created = data as {
@@ -99,11 +168,18 @@ export async function invokeCreatePlatformUser(
     full_name: string
     platform_role_id: string | null
     initial_password?: string
+    error?: string
+  }
+
+  if (created.error) {
+    throw new Error(created.error)
   }
 
   if (!created.initial_password) {
     throw new Error("El servidor no devolvió la contraseña inicial del usuario.")
   }
+
+  saveStoredPlatformUserEmail(created.user_id, created.email || input.email)
 
   return {
     userId: created.user_id,
@@ -119,7 +195,7 @@ export async function invokeCreatePlatformUser(
  * ELIMINACIÓN definitiva de un usuario de plataforma mediante la Edge Function
  * `delete-platform-user`.
  *
- * El borrado de una cuenta de Auth exige privilegios de administrador que el navegador
+ * El borrado de una cuenta exige privilegios de administrador que el navegador
  * NUNCA tiene: la única vía es esta función, que revalida el rol del llamante, impide
  * borrar la propia cuenta o la última de SuperAdmin y conserva el historial.
  *
@@ -135,6 +211,7 @@ export async function invokeDeletePlatformUser(input: {
       user_id: input.userId,
       confirm_username: input.confirmUsername,
     },
+    headers: buildCustomSessionHeaders(),
   })
 
   if (error) {

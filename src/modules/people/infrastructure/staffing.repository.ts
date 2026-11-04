@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { fetchEntityPoolCandidateOverrides } from "./candidate-pool-meta"
 import { EMPLOYMENT_STATUS } from "../domain/entities"
+import { OFFICIAL_SEPARATION_REASONS } from "../domain/rules"
 import type {
   ContractTypeOption,
   EmploymentLink,
@@ -397,7 +398,19 @@ export async function fetchWorkerIdentity(workerId: string): Promise<WorkerIdent
   }
 }
 
-/** Motivos de baja activos configurados por el cliente. */
+const normalizeReasonKey = (value: string): string =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+
+/**
+ * Motivos de baja activos en el orden oficial del catálogo.
+ * Si la base de datos ya contiene las filas sincronizadas, devuelve sus UUID reales;
+ * si alguna opción aún no ha sido migrada en la BD, asigna un identificador de catálogo
+ * (`catalog:<CODE>`) que `registerWorkerSeparationRpc` resuelve de forma transparente.
+ */
 export async function fetchSeparationReasons(): Promise<SeparationReason[]> {
   const { data, error } = await supabase
     .from("worker_separation_reasons")
@@ -405,5 +418,21 @@ export async function fetchSeparationReasons(): Promise<SeparationReason[]> {
     .eq("is_active", true)
     .order("sort_order")
   if (error) throw error
-  return (data as SeparationReason[] | null) || []
+
+  const dbRows = (data as SeparationReason[] | null) || []
+  const byNormalizedName = new Map<string, SeparationReason>()
+  for (const row of dbRows) {
+    const key = normalizeReasonKey(row.name)
+    if (!byNormalizedName.has(key)) {
+      byNormalizedName.set(key, row)
+    }
+  }
+
+  return OFFICIAL_SEPARATION_REASONS.map((official) => {
+    const matched = byNormalizedName.get(normalizeReasonKey(official.name))
+    return {
+      id: matched ? matched.id : `catalog:${official.code}`,
+      name: official.name,
+    }
+  })
 }

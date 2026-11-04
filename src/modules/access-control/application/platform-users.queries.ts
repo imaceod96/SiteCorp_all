@@ -3,7 +3,10 @@ import {
   selectActivePlatformRoles,
   selectPlatformUserRoles,
 } from "../infrastructure/platform-users.repository"
-import { selectAllUserProfiles } from "../infrastructure/user-profiles.repository"
+import {
+  selectAllUserProfiles,
+  selectPlatformUserEmails,
+} from "../infrastructure/user-profiles.repository"
 
 /**
  * Control de acceso — Consultas de la administración de plataforma (aplicación).
@@ -16,26 +19,34 @@ import { selectAllUserProfiles } from "../infrastructure/user-profiles.repositor
  */
 
 /**
- * Usuarios de plataforma con sus roles: perfil + roles asignados.
- *
- * La composición es la MISMA que hacía la pantalla (una consulta de roles por perfil y
- * aplanado de la relación embebida), incluida la forma de la proyección: si una respuesta no
- * trae roles, el resultado es una lista vacía.
+ * Usuarios de plataforma con sus roles: perfil + correo electrónico + roles asignados.
  */
 export async function loadPlatformUsers(): Promise<PlatformUser[]> {
-  const profiles = await selectAllUserProfiles()
+  const [profiles, emailsByUserId] = await Promise.all([
+    selectAllUserProfiles(),
+    selectPlatformUserEmails(),
+  ])
 
   return Promise.all(
     profiles.map(async (profile): Promise<PlatformUser> => {
       const roleRows = await selectPlatformUserRoles(profile.id)
-      const roles = roleRows.map((row) => row.platform_roles).flat()
+      const roles = roleRows
+        .map((row) => row.platform_roles)
+        .flat()
+        .filter((role): role is PlatformRole => Boolean(role && role.name))
+
+      const resolvedEmail =
+        emailsByUserId[profile.id] ||
+        (typeof profile.email === "string" ? profile.email.trim() : "") ||
+        ""
 
       return {
         id: profile.id,
-        full_name: profile.full_name,
-        username: profile.username,
+        full_name: profile.full_name ?? "",
+        username: profile.username ?? "",
+        email: resolvedEmail,
         is_active: profile.is_active,
-        created_at: profile.created_at,
+        created_at: profile.created_at ?? "",
         roles,
       }
     })

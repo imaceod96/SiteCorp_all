@@ -75,6 +75,8 @@ export type {
   WorkerPositionChangeResult,
   WorkerEngagementResult,
   WorkerContractChangeResult,
+  AltasBajasReasonColumnCode,
+  AltasBajasRegistryRow,
 } from "./domain/entities"
 
 export { EMPLOYMENT_STATUS } from "./domain/entities"
@@ -114,6 +116,14 @@ export {
   validateHireInput,
   validateReincorporationInput,
   validateSeparationInput,
+  OFFICIAL_SEPARATION_REASONS,
+  OTHER_SEPARATION_REASON_CODE,
+  OTHER_SEPARATION_REASON_NAME,
+  isOtherSeparationReason,
+  OFFICIAL_SOURCES_OF_ORIGIN,
+  ALTAS_BAJAS_FOOTNOTE_TEXT,
+  ALTAS_BAJAS_REASON_COLUMNS,
+  resolveSeparationReasonColumnCode,
   validateContractChangeInput,
   validatePositionChangeInput,
   MISSING_SIGNATURE_PLACE_MESSAGE,
@@ -430,3 +440,20 @@ export type { WorkerMigrationFileErrorCode } from "./infrastructure/worker-migra
 export type { TenureResult } from "./domain/tenure.rules"
 
 export { calculateTenure, calculateAge, ageRange } from "./domain/tenure.rules"
+
+/* Registro oficial de Altas y Bajas (Modelo b - Columnas 1 a 17) */
+export type {
+  EntityAltasBajasRegistryView,
+  ExportAltasBajasExcelOptions,
+  SaveAltasBajasAltaNumberInput,
+} from "./application/altas-bajas-registry.queries"
+
+export {
+  loadEntityAltasBajasRegistry,
+  saveAltasBajasAltaNumber,
+  formatAltaDisplay,
+  formatShortDate,
+  buildAltasBajasRegistryWorkbook,
+  downloadAltasBajasRegistryExcel,
+} from "./application/altas-bajas-registry.queries"
+

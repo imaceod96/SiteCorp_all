@@ -61,6 +61,14 @@ const EntitySettings = () => {
               permissions: ["staffing.view", "staffing.manage"],
             },
             {
+              title: "Registro de Altas y Bajas",
+              description:
+                "Registro oficial automático de contrataciones, reingresos y bajas laborales con descarga en formato Excel.",
+              icon: FileSpreadsheet,
+              href: `/entity/${currentEntity?.id}/settings/altas-bajas-registry`,
+              permissions: ["workers.view", "workers.manage", "organization.view", "organization.manage"],
+            },
+            {
               title: "Carga inicial de trabajadores",
               description: "Descarga la plantilla Excel, valida filas y carga trabajadores históricos.",
               icon: FileSpreadsheet,
