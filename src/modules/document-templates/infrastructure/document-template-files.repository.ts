@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { buildCustomSessionHeaders } from "@/modules/access-control"
 import {
   DOCUMENT_TEMPLATES_BUCKET,
   type DocumentTemplateFileKind,
@@ -25,6 +26,7 @@ export const invokeAnalyzeDocumentTemplate = async (
 ): Promise<TemplateFileProbe> => {
   const { data, error } = await supabase.functions.invoke("analyze-document-template", {
     body: { file_path: filePath },
+    headers: buildCustomSessionHeaders(),
   })
 
   const failure = (data as { error?: string } | null)?.error

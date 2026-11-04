@@ -14,7 +14,7 @@ import JSZip from "https://esm.sh/jszip@3.10.1"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
 }
 
 const DOCUMENTS_BUCKET = "documents"
@@ -39,7 +39,8 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization")
-    if (!authHeader) {
+    const sessionToken = req.headers.get("x-sitecorp-session")?.trim() ?? ""
+    if (!authHeader && !sessionToken) {
       return json({ error: "Unauthorized" }, 401)
     }
 
@@ -47,13 +48,38 @@ serve(async (req) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
-    const serviceClient = createClient(supabaseUrl, serviceKey)
+    const userHeaders: Record<string, string> = {}
+    if (authHeader) userHeaders.Authorization = authHeader
+    if (sessionToken) userHeaders["x-sitecorp-session"] = sessionToken
 
-    const { data: userData, error: userError } = await userClient.auth.getUser()
-    if (userError || !userData?.user) {
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: userHeaders },
+      auth: { persistSession: false },
+    })
+    const serviceClient = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
+    })
+
+    let callerId: string | null = null
+    if (sessionToken) {
+      const { data: sessionData, error: sessionError } = await serviceClient.rpc(
+        "validate_user_session",
+        { p_session_token: sessionToken }
+      )
+      const row = Array.isArray(sessionData) ? sessionData[0] : sessionData
+      if (!sessionError && row?.is_valid && row?.user_id) {
+        callerId = String(row.user_id)
+      }
+    }
+
+    if (!callerId && authHeader) {
+      const { data: userData, error: userError } = await userClient.auth.getUser()
+      if (!userError && userData?.user?.id) {
+        callerId = userData.user.id
+      }
+    }
+
+    if (!callerId) {
       return json({ error: "Unauthorized" }, 401)
     }
 
@@ -62,7 +88,7 @@ serve(async (req) => {
     const { data: callerLifecycle } = await serviceClient
       .from("user_password_lifecycle")
       .select("must_change_password")
-      .eq("user_id", userData.user.id)
+      .eq("user_id", callerId)
       .maybeSingle()
     if (callerLifecycle?.must_change_password === true) {
       return json({ error: "Forbidden: pending password change" }, 403)

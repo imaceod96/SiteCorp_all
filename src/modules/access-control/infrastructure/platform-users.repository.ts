@@ -206,18 +206,49 @@ export async function invokeDeletePlatformUser(input: {
   userId: string
   confirmUsername: string
 }): Promise<void> {
+  const customHeaders = buildCustomSessionHeaders()
+  const sessionToken = Object.values(customHeaders)[0] ?? null
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "delete_platform_user_account",
+    {
+      p_target_user_id: input.userId,
+      p_confirm_username: input.confirmUsername,
+      p_session_token: sessionToken,
+    }
+  )
+
+  if (!rpcError && rpcData) {
+    const rpcResult = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as {
+      deleted?: boolean
+      error?: string
+    } | null
+    if (rpcResult?.deleted === true) {
+      return
+    }
+    if (rpcResult?.error) {
+      throw new Error(rpcResult.error)
+    }
+  }
+
+  const isMissingRpc =
+    rpcError?.code === "42883" ||
+    rpcError?.code === "PGRST202" ||
+    Boolean(rpcError?.message?.includes("Could not find the function"))
+
+  if (rpcError && !isMissingRpc) {
+    throw new Error(rpcError.message || "No se pudo eliminar el usuario.")
+  }
+
   const { data, error } = await supabase.functions.invoke("delete-platform-user", {
     body: {
       user_id: input.userId,
       confirm_username: input.confirmUsername,
     },
-    headers: buildCustomSessionHeaders(),
+    headers: customHeaders,
   })
 
   if (error) {
-    // El motivo REAL lo da el backend («última cuenta de SuperAdmin», «registros
-    // históricos»…). En una respuesta no-2xx el cuerpo llega en `error.context`, así que se
-    // lee antes de caer al mensaje genérico del cliente.
     let backendMessage: string | null = null
     const context = (error as { context?: Response }).context
     if (context && typeof context.json === "function") {

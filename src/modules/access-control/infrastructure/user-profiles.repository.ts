@@ -1,4 +1,9 @@
 import { supabase } from "@/lib/supabase"
+import {
+  getCustomSessionToken,
+  getStoredSessionUserMetadata,
+  setStoredSessionUserMetadata,
+} from "./authentication.repository"
 import type {
   AuthProfileRecord,
   ProfileAccountInput,
@@ -8,19 +13,45 @@ import type {
 /**
  * Control de acceso — Repositorio de PERFILES (infraestructura).
  *
- * Único punto que escribe `public.profiles`. La tabla es la MISMA para todos los niveles:
- * la cuenta propia, la administración de plataforma y la administración de usuarios de un
- * cliente la editan desde aquí, y la lectura de sesión también pasa por aquí.
- *
- * No decide autorización: RLS y los privilegios del backend son los que permiten o rechazan
- * cada escritura. `profiles` NO almacena el correo (vive en `auth.users` y nunca se escribe
- * desde el cliente).
+ * Único punto que lee y escribe `public.profiles`.
+ * No depende de `supabase.auth.*`: utiliza exclusivamente la sesión nativa de PostgreSQL.
  */
 
 /** Perfil de la sesión: fila completa de `profiles`. Sin fila devuelve `null`. */
 export async function selectUserProfileById(userId: string): Promise<AuthProfileRecord | null> {
-  const { data } = await supabase.from("profiles").select("*").eq("id", userId).single()
-  return (data as AuthProfileRecord | null) || null
+  const sessionMeta = getStoredSessionUserMetadata()
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (!error && data) {
+    const record = data as AuthProfileRecord & { email?: string | null }
+    if (!record.email && sessionMeta && sessionMeta.userId === userId && sessionMeta.email) {
+      return {
+        ...record,
+        email: sessionMeta.email,
+      } as AuthProfileRecord
+    }
+    return record as AuthProfileRecord
+  }
+
+  // Respaldo con los metadatos del perfil ya verificados en PostgreSQL por validate_user_session
+  if (sessionMeta && sessionMeta.userId === userId) {
+    return {
+      id: sessionMeta.userId,
+      full_name: sessionMeta.fullName,
+      username: sessionMeta.username,
+      email: sessionMeta.email,
+      avatar_url: sessionMeta.avatarUrl,
+      is_active: sessionMeta.isActive,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as unknown as AuthProfileRecord
+  }
+
+  return null
 }
 
 /** Todos los perfiles visibles, del más reciente al más antiguo (listado de plataforma). */
@@ -36,10 +67,6 @@ export async function selectAllUserProfiles(): Promise<AuthProfileRecord[]> {
 
 /**
  * Edición de los datos de la CUENTA propia (nombre y usuario).
- *
- * El avatar NO se escribe aquí: `avatar_url` guarda la RUTA del objeto en el bucket privado y
- * sólo la cambia la operación de avatar. Si se escribiera desde el formulario, una URL
- * temporal acabaría almacenada como identificador permanente.
  */
 export async function updateUserProfileAccount(
   userId: string,
@@ -54,6 +81,15 @@ export async function updateUserProfileAccount(
     .eq("id", userId)
 
   if (error) throw error
+
+  const sessionMeta = getStoredSessionUserMetadata()
+  if (sessionMeta && sessionMeta.userId === userId) {
+    setStoredSessionUserMetadata({
+      ...sessionMeta,
+      fullName: input.fullName,
+      username: input.username,
+    })
+  }
 }
 
 /**
@@ -70,6 +106,14 @@ export async function updateUserProfileAvatar(
     .eq("id", userId)
 
   if (error) throw error
+
+  const sessionMeta = getStoredSessionUserMetadata()
+  if (sessionMeta && sessionMeta.userId === userId) {
+    setStoredSessionUserMetadata({
+      ...sessionMeta,
+      avatarUrl: avatarPath,
+    })
+  }
 }
 
 const PLATFORM_USER_EMAILS_STORAGE_KEY = "sitecorp_platform_user_emails"
@@ -108,30 +152,23 @@ export function saveStoredPlatformUserEmail(userId: string, email: string): void
 
 /**
  * Resuelve el mapa `{ [userId]: email }` combinando:
- *   1. Caché local inmediata (para altas/ediciones cuando la migración aún no se ha re-ejecutado).
- *   2. Correo de la sesión activa (`supabase.auth.getSession()`).
- *   3. RPC `list_platform_user_emails` en PostgreSQL (`public.user_credentials` / `public.profiles`).
+ *   1. Caché local inmediata.
+ *   2. Correo de la sesión nativa activa (`validate_user_session`).
+ *   3. Lectura permitida en `public.user_credentials` (`user_id, email`).
+ *   4. RPC `list_platform_user_emails` en PostgreSQL (`public.user_credentials` / `public.profiles`).
  */
 export async function selectPlatformUserEmails(): Promise<Record<string, string>> {
   const emailMap: Record<string, string> = {
     ...readStoredPlatformUserEmails(),
   }
 
-  try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    const sessionUser = sessionData?.session?.user
-    if (sessionUser?.id && sessionUser?.email) {
-      emailMap[sessionUser.id] = sessionUser.email.trim().toLowerCase()
-    }
-  } catch {
-    // Ignorar fallo de lectura de sesión
+  const sessionMeta = getStoredSessionUserMetadata()
+  if (sessionMeta?.userId && sessionMeta?.email) {
+    emailMap[sessionMeta.userId] = sessionMeta.email.trim().toLowerCase()
   }
 
   try {
-    const customToken =
-      typeof window !== "undefined"
-        ? window.localStorage.getItem("sitecorp_custom_session_token")
-        : null
+    const customToken = getCustomSessionToken()
     if (customToken) {
       const { data: sessionVal } = await supabase.rpc("validate_user_session", {
         p_session_token: customToken,
@@ -225,4 +262,3 @@ export async function setUserProfileActive(userId: string, isActive: boolean): P
 
   if (error) throw error
 }
-

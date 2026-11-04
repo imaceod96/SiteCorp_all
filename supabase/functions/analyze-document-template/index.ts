@@ -26,7 +26,7 @@ import JSZip from "https://esm.sh/jszip@3.10.1"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
 }
 
 const BUCKET = "document-templates"
@@ -264,7 +264,8 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization")
-    if (!authHeader) {
+    const sessionToken = req.headers.get("x-sitecorp-session")?.trim() ?? ""
+    if (!authHeader && !sessionToken) {
       return jsonResponse({ error: "No autorizado." }, 401)
     }
 
@@ -277,17 +278,39 @@ serve(async (req) => {
       return jsonResponse({ error: "Ruta de archivo no permitida." }, 400)
     }
 
-    const token = authHeader.replace("Bearer ", "")
+    const token = authHeader ? authHeader.replace("Bearer ", "") : ""
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!
+    const clientHeaders: Record<string, string> = {}
+    if (authHeader) clientHeaders.Authorization = authHeader
+    if (sessionToken) clientHeaders["x-sitecorp-session"] = sessionToken
+
     const client = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+      global: { headers: clientHeaders },
       auth: { persistSession: false },
     })
 
-    const { data: userData, error: userError } = await client.auth.getUser(token)
-    if (userError || !userData?.user) {
-      console.error("[analyze-document-template] token inválido", { userError })
+    let callerId: string | null = null
+    if (sessionToken) {
+      const { data: sessionData, error: sessionError } = await client.rpc(
+        "validate_user_session",
+        { p_session_token: sessionToken }
+      )
+      const row = Array.isArray(sessionData) ? sessionData[0] : sessionData
+      if (!sessionError && row?.is_valid && row?.user_id) {
+        callerId = String(row.user_id)
+      }
+    }
+
+    if (!callerId && token) {
+      const { data: userData, error: userError } = await client.auth.getUser(token)
+      if (!userError && userData?.user?.id) {
+        callerId = userData.user.id
+      }
+    }
+
+    if (!callerId) {
+      console.error("[analyze-document-template] sesión o token inválido")
       return jsonResponse({ error: "Sesión no válida." }, 401)
     }
 
@@ -296,13 +319,13 @@ serve(async (req) => {
     const { data: callerLifecycle } = await client
       .from("user_password_lifecycle")
       .select("must_change_password")
-      .eq("user_id", userData.user.id)
+      .eq("user_id", callerId)
       .maybeSingle()
     if (callerLifecycle?.must_change_password === true) {
       return jsonResponse({ error: "Debes cambiar tu contraseña inicial antes de continuar." }, 403)
     }
 
-    console.log("[analyze-document-template] analizando", { filePath, userId: userData.user.id })
+    console.log("[analyze-document-template] analizando", { filePath, userId: callerId })
 
     const { data: fileBlob, error: downloadError } = await client.storage.from(BUCKET).download(filePath)
     if (downloadError || !fileBlob) {

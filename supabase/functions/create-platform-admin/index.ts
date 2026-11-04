@@ -3,13 +3,14 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
 }
 
 interface CreatePlatformAdminRequest {
   full_name?: string
   username?: string
   email?: string
+  password?: string
   platform_role_id?: string
 }
 
@@ -43,11 +44,12 @@ serve(async (req) => {
   }
 
   const authHeader = req.headers.get("Authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
+  const sessionToken = req.headers.get("x-sitecorp-session")?.trim() ?? ""
+  if (!authHeader?.startsWith("Bearer ") && !sessionToken) {
     return json({ error: "Unauthorized" }, 401)
   }
 
-  const token = authHeader.replace("Bearer ", "")
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.replace("Bearer ", "") : ""
 
   const adminClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -56,13 +58,30 @@ serve(async (req) => {
   )
 
   try {
-    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
-    if (callerError || !callerData.user) {
-      console.error("[create-platform-admin] invalid caller token", callerError)
-      return json({ error: "Unauthorized" }, 401)
+    let callerId: string | null = null
+
+    if (sessionToken) {
+      const { data: sessionData, error: sessionError } = await adminClient.rpc(
+        "validate_user_session",
+        { p_session_token: sessionToken }
+      )
+      const row = Array.isArray(sessionData) ? sessionData[0] : sessionData
+      if (!sessionError && row?.is_valid && row?.user_id) {
+        callerId = String(row.user_id)
+      }
     }
 
-    const callerId = callerData.user.id
+    if (!callerId && token) {
+      const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+      if (!callerError && callerData?.user?.id) {
+        callerId = callerData.user.id
+      }
+    }
+
+    if (!callerId) {
+      console.error("[create-platform-admin] invalid caller session/token")
+      return json({ error: "Unauthorized" }, 401)
+    }
 
     const { data: callerProfile, error: callerProfileError } = await adminClient
       .from("profiles")
@@ -98,8 +117,6 @@ serve(async (req) => {
 
     const isSuperAdmin = (callerRoles || []).some((assignment: CallerPlatformRoleRow) => {
       const role = assignment.platform_roles
-      // Sólo se evalúa cuando la relación llega como objeto (no como arreglo ni null).
-      // Si llega como arreglo se conserva el resultado previo (false).
       if (role === null || Array.isArray(role)) return false
       return (
         role.name === "SuperAdmin" &&
@@ -118,6 +135,7 @@ serve(async (req) => {
     const username = (body.username ?? "").trim()
     const email = (body.email ?? "").trim().toLowerCase()
     const roleId = (body.platform_role_id ?? "").trim()
+    const initialPassword = (body.password ?? "").trim() || `SiteCorp#${crypto.randomUUID().slice(0, 8)}`
 
     if (!fullName) {
       return json({ error: "El nombre completo es obligatorio." }, 400)
@@ -146,93 +164,39 @@ serve(async (req) => {
       return json({ error: "No se puede asignar un rol del sistema reservado." }, 400)
     }
 
-    const { data: existingUsername, error: usernameError } = await adminClient
-      .from("profiles")
-      .select("id,username")
-      .eq("username", username)
-      .maybeSingle()
-
-    if (usernameError) {
-      console.error("[create-platform-admin] username validation failed", usernameError)
-      return json({ error: "No se pudo validar el usuario." }, 500)
-    }
-    if (existingUsername) {
-      return json({ error: "Ya existe un usuario con ese nombre." }, 409)
-    }
-
-    const { data: invitedUser, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
-      email,
+    const { data: createdData, error: createError } = await adminClient.rpc(
+      "create_platform_user_with_credentials",
       {
-        data: {
-          full_name: fullName,
-          username,
-        },
+        p_full_name: fullName,
+        p_username: username,
+        p_email: email,
+        p_password: initialPassword,
+        p_platform_role_id: role.id,
+        p_assigned_by: callerId,
       }
     )
 
-    if (inviteError || !invitedUser?.user) {
-      console.error("[create-platform-admin] invitation failed", inviteError)
-      const message = inviteError?.message ?? "No se pudo crear la cuenta."
-      const normalized = message.toLowerCase()
-      if (normalized.includes("already") || normalized.includes("registered")) {
-        return json({ error: "Ya existe una cuenta con ese email." }, 409)
-      }
-      return json({ error: message }, 500)
+    const createdRow = Array.isArray(createdData) ? createdData[0] : createdData
+    if (createError || !createdRow?.success) {
+      const errMsg = createError?.message ?? createdRow?.error_message ?? "No se pudo crear el administrador."
+      const isConflict =
+        errMsg.toLowerCase().includes("existe") ||
+        errMsg.toLowerCase().includes("already") ||
+        createdRow?.error_code === "username_taken" ||
+        createdRow?.error_code === "email_taken"
+      return json({ error: errMsg }, isConflict ? 409 : 400)
     }
 
-    const userId = invitedUser.user.id
-
-    try {
-      const { error: profileError } = await adminClient.from("profiles").upsert(
-        {
-          id: userId,
-          full_name: fullName,
-          username,
-          is_active: true,
-        },
-        { onConflict: "id" }
-      )
-
-      if (profileError) {
-        throw profileError
-      }
-
-      const { error: assignmentError } = await adminClient.from("platform_user_roles").insert({
-        user_id: userId,
-        platform_role_id: role.id,
-        assigned_by: callerId,
-      })
-
-      if (assignmentError) {
-        throw assignmentError
-      }
-
-      console.log("[create-platform-admin] administrator created", {
-        userId,
-        roleId: role.id,
+    return json(
+      {
+        user_id: createdRow.user_id,
+        email,
         username,
-      })
-
-      return json(
-        {
-          user_id: userId,
-          email,
-          username,
-          role: role.name,
-          invitation_sent: true,
-        },
-        201
-      )
-    } catch (assignmentPipelineError) {
-      console.error(
-        "[create-platform-admin] rolling back created auth user",
-        assignmentPipelineError
-      )
-
-      await adminClient.auth.admin.deleteUser(userId)
-
-      return json({ error: "No se pudo completar la asignación del rol." }, 500)
-    }
+        role: role.name,
+        invitation_sent: false,
+      },
+      201
+    )
   } catch (error) {
     console.error("[create-platform-admin] unexpected error", error)
     return json({ error: "Error inesperado al crear el administrador." }, 500)

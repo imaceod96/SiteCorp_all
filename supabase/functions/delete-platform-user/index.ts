@@ -255,15 +255,19 @@ serve(async (req) => {
       }
     }
 
-    // 9. Borrado definitivo. NO se escribe nada antes: si falla, la base queda intacta.
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(targetUserId)
+    // 9. Borrado definitivo en PostgreSQL (`public.profiles` cascada a credenciales, sesiones y roles).
+    const { error: deleteProfileError } = await adminClient
+      .from("profiles")
+      .delete()
+      .eq("id", targetUserId)
 
-    if (deleteError) {
-      const message = deleteError.message ?? ""
-      console.error("[delete-platform-user] auth delete failed", { targetUserId, message })
+    if (deleteProfileError) {
+      const message = deleteProfileError.message ?? ""
+      const code = (deleteProfileError as { code?: string }).code ?? ""
+      console.error("[delete-platform-user] profile delete failed", { targetUserId, code, message })
 
       // Registros históricos que referencian al usuario: se conserva el historial.
-      if (/foreign key|violates foreign key constraint|23503/i.test(message)) {
+      if (code === "23503" || /foreign key|violates foreign key constraint|23503/i.test(message)) {
         return json(
           {
             error:
@@ -275,6 +279,13 @@ serve(async (req) => {
       }
 
       return json({ error: "No se pudo eliminar el usuario: " + message }, 500)
+    }
+
+    // Limpieza opcional y no bloqueante en auth.users si existiera el registro
+    try {
+      await adminClient.auth.admin.deleteUser(targetUserId)
+    } catch {
+      // Ignorar si auth.users está vacío o GoTrue no está activo
     }
 
     console.log("[delete-platform-user] user deleted", {

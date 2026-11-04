@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { buildCustomSessionHeaders } from "@/modules/access-control"
 import { WORKER_DOCUMENTS_BUCKET } from "../domain/entities"
 import type { BatchStatus, PendingBatch, PendingBatchItem } from "../domain/entities"
 import { record, text } from "./values"
@@ -102,6 +103,7 @@ export const invokeGenerateBatchZip = async (
 ): Promise<{ zip_path: string; zip_file_name: string }> => {
   const { data, error } = await supabase.functions.invoke("generate-document-batch-zip", {
     body: { batch_id: batchId },
+    headers: buildCustomSessionHeaders(),
   })
   if (error) throw error
   const row = record(data)

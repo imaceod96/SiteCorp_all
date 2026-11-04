@@ -19,13 +19,73 @@ declare global {
 
 const supabaseUrl = appConfig.api.baseUrl
 const supabaseAnonKey = appConfig.api.publicKey
+const CUSTOM_SESSION_STORAGE_KEY = appConfig.auth.sessionStorageKey
+const CUSTOM_JWT_STORAGE_KEY = `${appConfig.auth.sessionStorageKey}_jwt`
+const CUSTOM_SESSION_HEADER = appConfig.auth.sessionHeaderName
+
+function readStoredToken(key: string): string | null {
+  if (typeof window === "undefined") return null
+  try {
+    const val = window.localStorage.getItem(key)
+    return val && val.trim().length > 0 ? val.trim() : null
+  } catch {
+    return null
+  }
+}
+
+function isJwtUnexpired(jwt: string): boolean {
+  try {
+    const parts = jwt.split(".")
+    if (parts.length !== 3) return false
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=")
+    const payload = JSON.parse(atob(padded)) as { exp?: number }
+    if (typeof payload.exp !== "number") return true
+    return payload.exp * 1000 > Date.now() + 15_000
+  } catch {
+    return false
+  }
+}
+
+function injectNativeSessionHeaders(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): RequestInit | undefined {
+  const sessionToken = readStoredToken(CUSTOM_SESSION_STORAGE_KEY)
+  const customJwt = readStoredToken(CUSTOM_JWT_STORAGE_KEY)
+
+  if (!sessionToken && !customJwt) {
+    return init
+  }
+
+  const headers = new Headers(
+    init?.headers || (typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined)
+  )
+
+  if (sessionToken && !headers.has(CUSTOM_SESSION_HEADER)) {
+    headers.set(CUSTOM_SESSION_HEADER, sessionToken)
+  }
+
+  if (customJwt && isJwtUnexpired(customJwt)) {
+    const currentAuth = headers.get("Authorization") || headers.get("authorization") || ""
+    if (!currentAuth || currentAuth === `Bearer ${supabaseAnonKey}`) {
+      headers.set("Authorization", `Bearer ${customJwt}`)
+    }
+  }
+
+  return {
+    ...init,
+    headers,
+  }
+}
 
 const baseFetch =
   typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : undefined
 
 const auditedFetch: typeof fetch | undefined = baseFetch
   ? async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const response = await baseFetch(input, init)
+      const enrichedInit = injectNativeSessionHeaders(input, init)
+      const response = await baseFetch(input, enrichedInit)
       try {
         const hook = globalThis.__sitecorpSupabaseMutationHook
         if (hook) {
@@ -36,7 +96,7 @@ const auditedFetch: typeof fetch | undefined = baseFetch
                 ? input.toString()
                 : input.url
           const method = (
-            init?.method ||
+            enrichedInit?.method ||
             (typeof Request !== "undefined" && input instanceof Request ? input.method : "GET") ||
             "GET"
           ).toUpperCase()
@@ -48,11 +108,11 @@ const auditedFetch: typeof fetch | undefined = baseFetch
             !url.includes("/auth/v1/")
           ) {
             let requestBody: unknown = null
-            if (typeof init?.body === "string" && init.body.trim().length > 0) {
+            if (typeof enrichedInit?.body === "string" && enrichedInit.body.trim().length > 0) {
               try {
-                requestBody = JSON.parse(init.body)
+                requestBody = JSON.parse(enrichedInit.body)
               } catch {
-                requestBody = init.body
+                requestBody = enrichedInit.body
               }
             }
             const cloned = response.clone()
@@ -88,11 +148,14 @@ const auditedFetch: typeof fetch | undefined = baseFetch
     }
   : undefined
 
-export const supabase = createClient(
-  supabaseUrl,
-  supabaseAnonKey,
-  auditedFetch ? { global: { fetch: auditedFetch } } : undefined
-)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+  ...(auditedFetch ? { global: { fetch: auditedFetch } } : {}),
+})
 
 // Types for our database (to be updated as we create tables)
 export type Database = {

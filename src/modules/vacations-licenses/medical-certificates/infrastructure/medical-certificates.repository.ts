@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase"
 import { selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
+import { getCurrentAuthenticatedUserId } from "@/modules/access-control"
 import type {
   EntityMedicalCertificatesResult,
   WorkerMedicalCertificatesResult,
@@ -90,7 +91,7 @@ async function uploadCertificateDocument(workerId: string, file: File): Promise<
       file_size: file.size,
       storage_path: storagePath,
       source: "MANUAL",
-      uploaded_by: (await supabase.auth.getUser()).data.user?.id || null,
+      uploaded_by: (await getCurrentAuthenticatedUserId()) || null,
     })
     .select("id")
     .single()
@@ -142,8 +143,7 @@ export async function createMedicalCertificate(params: {
   }
 
   // Obtener el usuario actual para created_by
-  const { data: { user } } = await supabase.auth.getUser()
-  const createdBy = user?.id
+  const createdBy = (await getCurrentAuthenticatedUserId()) ?? undefined
 
   const { data, error } = await supabase.rpc("create_worker_medical_certificate", {
     p_tenant_id: workerData.tenant_id,

@@ -1,4 +1,5 @@
 import { supabase, type SupabaseMutationInterceptPayload } from "@/lib/supabase"
+import { getCurrentAuthenticatedUser } from "@/modules/access-control"
 import type {
   AuditEntityOption,
   AuditEvent,
@@ -286,15 +287,17 @@ async function resolveCurrentActor(): Promise<{
   fullName: string
   username: string
 }> {
-  if (cachedActor && Date.now() - cachedActor.fetchedAt < 60_000) {
-    return cachedActor
-  }
   try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    const user = sessionData?.session?.user
+    const user = await getCurrentAuthenticatedUser()
     if (!user) {
+      cachedActor = null
       return { userId: null, fullName: "Administrador", username: "admin" }
     }
+
+    if (cachedActor && cachedActor.userId === user.id && Date.now() - cachedActor.fetchedAt < 60_000) {
+      return cachedActor
+    }
+
     const email = user.email || "admin"
     const metaName =
       (user.user_metadata?.full_name as string | undefined) ||
