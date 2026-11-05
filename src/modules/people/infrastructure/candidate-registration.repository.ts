@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase"
 import { saveCandidateDrivingLicenseIds } from "./catalogs.repository"
-import { currentUserId } from "./expediente-storage"
 import { columnName, selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import {
   notifyCandidatesChanged,
@@ -159,7 +158,7 @@ export async function uploadCandidateVerificationDocument(
     mime_type: file.type,
     file_size: file.size,
     description,
-    uploaded_by: await currentUserId(),
+    uploaded_by: (await supabase.auth.getUser()).data.user?.id,
   })
   if (docError) throw docError
 }
@@ -182,7 +181,7 @@ export async function uploadCandidateDisciplinaryDocument(
     mime_type: file.type,
     file_size: file.size,
     description: "Documento disciplinario subido durante la creación del candidato",
-    uploaded_by: await currentUserId(),
+    uploaded_by: (await supabase.auth.getUser()).data.user?.id,
   })
   if (docError) throw docError
 }

@@ -27,7 +27,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
 interface DeletePlatformUserRequest {
@@ -82,28 +82,14 @@ serve(async (req) => {
   )
 
   try {
-    // 1. Identidad del llamante (soporta sesión propia en PostgreSQL o Bearer JWT)
-    let callerId: string | null = null
-    const customSessionToken = req.headers.get("x-sitecorp-session")?.trim() || ""
-
-    if (customSessionToken) {
-      const { data: sessionValidation } = await adminClient.rpc("validate_user_session", {
-        p_session_token: customSessionToken,
-      })
-      const parsed = sessionValidation as { valid?: boolean; user_id?: string } | null
-      if (parsed?.valid && parsed.user_id) {
-        callerId = parsed.user_id
-      }
+    // 1. Identidad del llamante
+    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+    if (callerError || !callerData?.user) {
+      console.error("[delete-platform-user] invalid caller token", callerError)
+      return json({ error: "Unauthorized" }, 401)
     }
 
-    if (!callerId) {
-      const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
-      if (callerError || !callerData?.user) {
-        console.error("[delete-platform-user] invalid caller token", callerError)
-        return json({ error: "Unauthorized" }, 401)
-      }
-      callerId = callerData.user.id
-    }
+    const callerId = callerData.user.id
 
     // 2. Perfil activo
     const { data: callerProfile, error: callerProfileError } = await adminClient
@@ -117,20 +103,14 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
-    // 3. Sin cambio de contraseña pendiente (consulta user_credentials y user_password_lifecycle)
-    const { data: callerCreds } = await adminClient
-      .from("user_credentials")
-      .select("must_change_password")
-      .eq("user_id", callerId)
-      .maybeSingle()
-
+    // 3. Sin cambio de contraseña pendiente (misma barrera de servidor que el alta)
     const { data: callerLifecycle } = await adminClient
       .from("user_password_lifecycle")
       .select("must_change_password")
       .eq("user_id", callerId)
       .maybeSingle()
 
-    if (callerCreds?.must_change_password === true || callerLifecycle?.must_change_password === true) {
+    if (callerLifecycle?.must_change_password === true) {
       console.error("[delete-platform-user] caller has a pending password change", { callerId })
       return json({ error: "Forbidden: pending password change" }, 403)
     }
@@ -255,19 +235,15 @@ serve(async (req) => {
       }
     }
 
-    // 9. Borrado definitivo en PostgreSQL (`public.profiles` cascada a credenciales, sesiones y roles).
-    const { error: deleteProfileError } = await adminClient
-      .from("profiles")
-      .delete()
-      .eq("id", targetUserId)
+    // 9. Borrado definitivo. NO se escribe nada antes: si falla, la base queda intacta.
+    const { error: deleteError } = await adminClient.auth.admin.deleteUser(targetUserId)
 
-    if (deleteProfileError) {
-      const message = deleteProfileError.message ?? ""
-      const code = (deleteProfileError as { code?: string }).code ?? ""
-      console.error("[delete-platform-user] profile delete failed", { targetUserId, code, message })
+    if (deleteError) {
+      const message = deleteError.message ?? ""
+      console.error("[delete-platform-user] auth delete failed", { targetUserId, message })
 
       // Registros históricos que referencian al usuario: se conserva el historial.
-      if (code === "23503" || /foreign key|violates foreign key constraint|23503/i.test(message)) {
+      if (/foreign key|violates foreign key constraint|23503/i.test(message)) {
         return json(
           {
             error:
@@ -279,13 +255,6 @@ serve(async (req) => {
       }
 
       return json({ error: "No se pudo eliminar el usuario: " + message }, 500)
-    }
-
-    // Limpieza opcional y no bloqueante en auth.users si existiera el registro
-    try {
-      await adminClient.auth.admin.deleteUser(targetUserId)
-    } catch {
-      // Ignorar si auth.users está vacío o GoTrue no está activo
     }
 
     console.log("[delete-platform-user] user deleted", {

@@ -46,20 +46,11 @@ import {
   AlertDialogTitle,
 } from "@/shared/components/ui/alert-dialog"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/shared/components/ui/dropdown-menu"
-import {
   Check,
-  ChevronDown,
   Copy,
-  MoreHorizontal,
   Pencil,
   Plus,
+  Power,
   Trash2,
   UserMinus,
   UserCheck,
@@ -176,7 +167,6 @@ const PlatformUsers = () => {
           userId: editingUser.id,
           fullName: formData.full_name,
           username: formData.username,
-          email: formData.email,
         })
       } else {
         // El alta de usuarios de plataforma sigue pasando por la Edge Function del backend:
@@ -352,11 +342,7 @@ const PlatformUsers = () => {
   const rows = users.map((user) => ({
     full_name: user.full_name,
     username: user.username,
-    email: user.email && user.email.trim() !== "" ? (
-      <span className="text-ink">{user.email}</span>
-    ) : (
-      <span className="text-muted-foreground italic">Sin correo registrado</span>
-    ),
+    email: user.email,
     roles: user.roles.map((r) => r.name).join(", ") || "Sin rol",
     status: (
       <SiteCorpStatusBadge status={user.is_active ? "success" : "warning"}>
@@ -365,83 +351,66 @@ const PlatformUsers = () => {
     ),
     created_at: new Date(user.created_at ?? "").toLocaleDateString("es-ES"),
     actions: (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <SiteCorpButton size="sm" variant="outline" className="gap-1.5">
-            <MoreHorizontal className="h-4 w-4" />
-            <span>Acciones</span>
-            <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-          </SiteCorpButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel className="text-xs text-muted-foreground">
-            {user.full_name || user.username}
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={() => startEdit(user)}
-          >
-            <Pencil className="h-4 w-4 mr-2" />
-            <span>Editar</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={() => setAssigningRole(user)}
-          >
-            <Key className="h-4 w-4 mr-2" />
-            <span>Rol</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            onClick={() => {
-              setViewingPerms(user)
-              loadEffectivePermissions(user)
-            }}
-          >
-            <ShieldCheck className="h-4 w-4 mr-2" />
-            <span>Permisos</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            className="cursor-pointer"
-            disabled={isFounderRow(user)}
-            title={
-              isFounderRow(user)
-                ? FOUNDER_ACCOUNT_PROTECTED_MESSAGE
-                : user.is_active
-                  ? "Desactivar el usuario"
-                  : "Reactivar el usuario"
-            }
-            onClick={() => {
-              if (!isFounderRow(user)) {
-                void toggleActive(user)
-              }
-            }}
-          >
-            {user.is_active ? (
-              <>
-                <UserMinus className="h-4 w-4 mr-2" />
-                <span>Desactivar</span>
-              </>
-            ) : (
-              <>
-                <UserCheck className="h-4 w-4 mr-2" />
-                <span>Reactivar</span>
-              </>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="cursor-pointer text-sitecorp-danger focus:text-sitecorp-danger focus:bg-sitecorp-danger/10"
-            disabled={deletionBlockReason(user) !== null}
-            title={deletionBlockReason(user) ?? "Eliminar definitivamente el usuario"}
-            onClick={() => startDelete(user)}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            <span>Eliminar</span>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <div className="flex items-center gap-2">
+        <SiteCorpButton size="sm" variant="outline" onClick={() => startEdit(user)}>
+          <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
+        </SiteCorpButton>
+        <SiteCorpButton
+          size="sm"
+          variant="outline"
+          onClick={() => setAssigningRole(user)}
+        >
+          <Key className="h-3.5 w-3.5 mr-1" /> Rol
+        </SiteCorpButton>
+        <SiteCorpButton
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setViewingPerms(user)
+            loadEffectivePermissions(user)
+          }}
+        >
+          Permisos
+        </SiteCorpButton>
+        <SiteCorpButton
+          size="sm"
+          variant="outline"
+          onClick={() => toggleActive(user)}
+          // La cuenta fundadora no se desactiva: la base lo impide con un disparador y aquí
+          // se evita ofrecer una acción que el servidor va a rechazar.
+          disabled={isFounderRow(user)}
+          title={
+            isFounderRow(user)
+              ? FOUNDER_ACCOUNT_PROTECTED_MESSAGE
+              : user.is_active
+                ? "Desactivar el usuario"
+                : "Reactivar el usuario"
+          }
+        >
+          {user.is_active ? (
+            <>
+              <UserMinus className="h-3.5 w-3.5 mr-1" /> Desactivar
+            </>
+          ) : (
+            <>
+              <UserCheck className="h-3.5 w-3.5 mr-1" /> Reactivar
+            </>
+          )}
+        </SiteCorpButton>
+        {/* Acción DIFERENCIADA de la desactivación: irreversible y sólo para SuperAdmin.
+            La cuenta fundadora no se puede eliminar desde aquí para NADIE (tampoco para otro
+            SuperAdmin): la base lo impide igualmente con la restricción de su clave foránea. */}
+        <SiteCorpButton
+          size="sm"
+          variant="outline"
+          className="border-sitecorp-danger/40 text-sitecorp-danger hover:bg-sitecorp-danger/10"
+          onClick={() => startDelete(user)}
+          disabled={deletionBlockReason(user) !== null}
+          title={deletionBlockReason(user) ?? "Eliminar definitivamente el usuario"}
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-1" /> Eliminar
+        </SiteCorpButton>
+      </div>
     ),
   }))
 

@@ -304,15 +304,19 @@ export const RolesManager = ({
     return (
       <label
         key={permission.id}
-        className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-white p-3 text-sm transition-colors hover:border-sitecorp-primary/40"
+        className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-white p-3 text-sm transition-colors hover:border-sitecorp-primary/40"
       >
         <Checkbox
+          className="mt-0.5"
           checked={checked}
           disabled={permissionsLocked}
           onCheckedChange={() => togglePermission(permission.id)}
         />
         <span className="min-w-0">
           <span className="block font-medium text-ink">{permissionLabel(scope, permission)}</span>
+          <span className="mt-0.5 block font-mono text-xs text-muted-foreground">
+            {permission.code}
+          </span>
         </span>
       </label>
     )
@@ -648,9 +652,7 @@ export const RolesManager = ({
                           key={code}
                           className="inline-flex items-center rounded-lg border border-border bg-sitecorp-background px-3 py-1.5 text-xs font-medium text-ink"
                         >
-                          {permission
-                            ? permissionLabel(scope, permission)
-                            : permissionLabel(scope, { id: code, code, description: null })}
+                          {permission ? permissionLabel(scope, permission) : code}
                         </span>
                       )
                     })}

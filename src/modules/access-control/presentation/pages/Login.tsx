@@ -10,7 +10,7 @@ import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
 
 const Login = () => {
   const navigate = useNavigate()
-  const [identifier, setIdentifier] = React.useState("")
+  const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -21,9 +21,9 @@ const Login = () => {
     setError(null)
 
     try {
-      // El inicio de sesión lo resuelve el dominio de control de acceso (por correo o
-      // nombre de usuario contra public.user_credentials); el mensaje de error es el del servidor.
-      const signInError = await signIn(identifier, password)
+      // El inicio de sesión lo resuelve el dominio de control de acceso; el mensaje de
+      // error es el del servidor, tal como se mostraba antes.
+      const signInError = await signIn(email, password)
 
       if (signInError) {
         setError(signInError)
@@ -62,15 +62,12 @@ const Login = () => {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-ink">
-                Correo electrónico o nombre de usuario
-              </label>
+              <label className="text-sm font-medium text-ink">Email</label>
               <SiteCorpInput
-                type="text"
-                autoComplete="username"
-                placeholder="tu@email.com o nombre.usuario"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                type="email"
+                placeholder="tu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>

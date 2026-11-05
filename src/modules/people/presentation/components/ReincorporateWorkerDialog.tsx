@@ -55,7 +55,6 @@ import {
   reincorporateWorkerWithResolution,
 } from "@/modules/people/application/worker-transitions.commands"
 import {
-  OFFICIAL_SOURCES_OF_ORIGIN,
   requiresResolution,
   validateReincorporationInput,
 } from "@/modules/people/domain/rules"
@@ -102,7 +101,6 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
   const [worker, setWorker] = React.useState<WorkerIdentity | null>(null)
   const [positionId, setPositionId] = React.useState("")
   const [reincorporationDate, setReincorporationDate] = React.useState("")
-  const [sourceOfOrigin, setSourceOfOrigin] = React.useState("")
   const [contractTypeId, setContractTypeId] = React.useState("")
   const [contractStartDate, setContractStartDate] = React.useState("")
   const [contractEndDate, setContractEndDate] = React.useState("")
@@ -167,7 +165,6 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
     if (!open) return
     setPositionId("")
     setReincorporationDate("")
-    setSourceOfOrigin("")
     setContractTypeId("")
     setContractStartDate("")
     setContractEndDate("")
@@ -250,11 +247,6 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
       return
     }
 
-    if (!sourceOfOrigin.trim()) {
-      setError("Selecciona la fuente de procedencia del trabajador.")
-      return
-    }
-
     // §45: reincorporación directa hacia un Cargo Especialista Principal → RESOLUCIÓN.
     if (isPrincipalSpecialist) {
       if (!resolutionValues || !resolutionValues.valid) {
@@ -279,7 +271,6 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
           workerId,
           positionId,
           reincorporationDate,
-          sourceOfOrigin,
           resolution: {
             representativeAssignmentId: resolutionValues.representativeAssignmentId,
             resolutionDate: resolutionValues.resolutionDate,
@@ -320,7 +311,6 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
         workerId,
         positionId,
         reincorporationDate,
-        sourceOfOrigin,
         contractTypeId,
         contractStartDate,
         contractEndDate,
@@ -511,36 +501,20 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
             </div>
           )}
 
-          {/* 3. Fecha de reincorporación y Fuente de procedencia (aplica a ambos caminos) */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Fecha de reincorporación *</Label>
-              <SiteCorpInput
-                type="date"
-                value={reincorporationDate}
-                onChange={(e) => {
-                  setReincorporationDate(e.target.value)
-                  if (!contractStartDate) setContractStartDate(e.target.value)
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                Inicio del nuevo período laboral. Debe ser posterior al fin del período anterior.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label>Fuente de procedencia *</Label>
-              <SiteCorpSelect value={sourceOfOrigin} onValueChange={setSourceOfOrigin}>
-                <option value="">Seleccionar procedencia</option>
-                {OFFICIAL_SOURCES_OF_ORIGIN.map((item) => (
-                  <option key={item.code} value={item.name}>
-                    {item.name}
-                  </option>
-                ))}
-              </SiteCorpSelect>
-              <p className="text-xs text-muted-foreground">
-                Se registra en la nueva entrada del Registro de Altas y Bajas.
-              </p>
-            </div>
+          {/* 3. Fecha de reincorporación (aplica a ambos caminos) */}
+          <div className="space-y-2">
+            <Label>Fecha de reincorporación *</Label>
+            <SiteCorpInput
+              type="date"
+              value={reincorporationDate}
+              onChange={(e) => {
+                setReincorporationDate(e.target.value)
+                if (!contractStartDate) setContractStartDate(e.target.value)
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Inicio del nuevo período laboral. Debe ser posterior al fin del período anterior.
+            </p>
           </div>
 
           {isPrincipalSpecialist ? (
@@ -684,7 +658,6 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
               loading ||
               selectable.length === 0 ||
               !positionId ||
-              !sourceOfOrigin.trim() ||
               (isPrincipalSpecialist
                 ? !reincorporationDate || !resolutionValues || !resolutionValues.valid
                 : !contractTypeId ||

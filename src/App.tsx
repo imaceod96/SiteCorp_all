@@ -62,7 +62,7 @@ import EntitySettingsContractData from "@/modules/organization-structure/present
 import EntitySettingsDocumentTemplates from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplates"
 import EntitySettingsDocumentTemplateDetail from "@/modules/document-templates/presentation/pages/EntitySettingsDocumentTemplateDetail"
 import EntitySettingsInitialImport from "@/modules/organization-structure/presentation/pages/EntitySettingsInitialImport"
-import EntitySettingsAltasBajasRegistry from "@/modules/organization-structure/presentation/pages/EntitySettingsAltasBajasRegistry"
+import EntitySettingsEmploymentRegistry from "@/modules/organization-structure/presentation/pages/EntitySettingsEmploymentRegistry"
 import { UserManualPage } from "@/modules/user-manual"
 import NotFound from "@/app/pages/NotFound"
 
@@ -279,8 +279,9 @@ const AppRoutes = () => {
           <Route path="/entity/:entityId/documents/pending" element={<EntityPendingDocuments />} />
           <Route path="/entity/:entityId/settings" element={<EntitySettings />} />
           <Route path="/entity/:entityId/settings/staffing" element={<EntitySettingsStaffing />} />
-          <Route path="/entity/:entityId/settings/altas-bajas-registry" element={<EntitySettingsAltasBajasRegistry />} />
           <Route path="/entity/:entityId/settings/initial-import" element={<EntitySettingsInitialImport />} />
+          <Route path="/entity/:entityId/settings/altas-bajas" element={<EntitySettingsEmploymentRegistry />} />
+          <Route path="/entity/:entityId/settings/employment-registry" element={<EntitySettingsEmploymentRegistry />} />
           <Route path="/entity/:entityId/settings/users" element={<EntitySettingsUsers />} />
           <Route path="/entity/:entityId/settings/roles" element={<EntitySettingsRoles />} />
           <Route path="/entity/:entityId/settings/salary" element={<EntitySettingsSalary />} />

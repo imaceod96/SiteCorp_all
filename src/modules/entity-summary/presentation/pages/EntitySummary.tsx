@@ -18,6 +18,7 @@ import type {
 } from "@/modules/entity-summary"
 import { PendingInitialTrainingBanner } from "@/modules/training"
 import { PendingSstNotificationsBanner } from "@/modules/sst"
+import { PendingEmploymentRegistryBanner } from "@/modules/people"
 import { useEntityPlan } from "@/modules/entity-plans"
 import {
   Building2,
@@ -266,6 +267,9 @@ const VistaGeneral: React.FC<VistaGeneralProps> = ({
   return (
     <>
       {summary.scopeLoading && <SiteCorpLoading rows={2} />}
+
+      {/* AVISOS DE REGISTRO HISTÓRICO DE ALTAS Y BAJAS CON INFORMACIÓN PENDIENTE DE COMPLETAR */}
+      <PendingEmploymentRegistryBanner entityId={entityId} />
 
       {/* AVISOS DE CAPACITACIÓN INICIAL PENDIENTE POR CONTRATACIÓN (solo si el paquete está habilitado en el plan) */}
       {canAccessTrainingSst && (

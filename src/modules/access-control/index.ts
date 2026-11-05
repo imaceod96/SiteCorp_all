@@ -180,12 +180,6 @@ export {
   loadSessionUser,
 } from "./application/authentication.queries"
 export {
-  buildCustomSessionHeaders,
-  getCurrentAuthenticatedUser,
-  getCurrentAuthenticatedUserId,
-  getCustomSessionToken,
-} from "./infrastructure/authentication.repository"
-export {
   changeInitialPassword,
   changePassword,
   removeOwnAvatar,

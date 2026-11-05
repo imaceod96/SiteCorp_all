@@ -36,7 +36,6 @@ import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/componen
 // del módulo, igual que en su ubicación anterior.
 import { fetchPersonCatalogs } from "@/modules/people"
 import {
-  OFFICIAL_SOURCES_OF_ORIGIN,
   candidateRequiresSpecialty,
   validateWorkerPersonalData,
   validateWorkerRegistrationInput,
@@ -251,7 +250,6 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
         }
   )
   const [positionId, setPositionId] = React.useState<string>("")
-  const [sourceOfOrigin, setSourceOfOrigin] = React.useState<string>("")
   const [genders, setGenders] = React.useState<Catalog[]>([])
   const [maritalStatuses, setMaritalStatuses] = React.useState<Catalog[]>([])
   const [educationLevels, setEducationLevels] = React.useState<Catalog[]>([])
@@ -451,10 +449,6 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
         setFormError(registrationError)
         return
       }
-      if (!sourceOfOrigin.trim()) {
-        setFormError("Selecciona la fuente de procedencia del trabajador")
-        return
-      }
     }
 
     // UNICIDAD DE PERSONAS (§27–§33): un trabajador NUEVO no puede duplicar a una persona ya
@@ -534,7 +528,6 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
           },
           positionId,
           hireDate: form.hire_date,
-          sourceOfOrigin,
           contractTypeId: contractTypeId || null,
           contractStartDate: effectiveContractStart || null,
           contractEndDate: isDeterminedContract ? contractEndDate || null : null,
@@ -965,22 +958,10 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
               required
             />
           </div>
-          {isEditing ? (
+          {isEditing && (
             <div className="space-y-2">
               <Label htmlFor="worker-code">Código</Label>
               <SiteCorpInput id="worker-code" value={editingWorker!.code} disabled />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="worker-source-origin">Fuente de procedencia *</Label>
-              <SiteCorpSelect value={sourceOfOrigin} onValueChange={setSourceOfOrigin}>
-                <option value="">Seleccionar procedencia</option>
-                {OFFICIAL_SOURCES_OF_ORIGIN.map((item) => (
-                  <option key={item.code} value={item.name}>
-                    {item.name}
-                  </option>
-                ))}
-              </SiteCorpSelect>
             </div>
           )}
         </div>
@@ -1129,8 +1110,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
           disabled={
             submitting ||
             (!isEditing &&
-              (!sourceOfOrigin.trim() ||
-                !signatureDate ||
+              (!signatureDate ||
                 !signaturePlace.trim() ||
                 !paymentMethodId ||
                 hasInvalidComponent(components) ||

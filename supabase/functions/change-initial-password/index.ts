@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
 interface ChangeInitialPasswordRequest {
@@ -40,43 +40,60 @@ serve(async (req) => {
     return json({ error: "Method not allowed" }, 405)
   }
 
+  // A. La sesión se valida con el token del llamante.
+  const authHeader = req.headers.get("Authorization")
+  if (!authHeader?.startsWith("Bearer ")) {
+    return json({ error: "Unauthorized" }, 401)
+  }
+  const token = authHeader.replace("Bearer ", "")
+
   const adminClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     { auth: { persistSession: false } }
   )
 
+  // Cliente anónimo EFÍMERO, solo para verificar en servidor que la contraseña
+  // nueva realmente quedó aplicada (ver paso E2). No persiste sesión.
+  const anonClient = createClient(
+    Deno.env.get("SUPABASE_URL") ?? "",
+    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+    { auth: { persistSession: false, autoRefreshToken: false } }
+  )
+
   try {
-    // A. Verificar la identidad REAL del llamante mediante sesión nativa de PostgreSQL (`validate_user_session`).
-    let userId: string | null = null
-    let email: string | null = null
-    const customSessionToken =
-      req.headers.get("x-sitecorp-session")?.trim() ||
-      req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "").trim() ||
-      ""
-
-    if (customSessionToken) {
-      const { data: sessionValidation } = await adminClient.rpc("validate_user_session", {
-        p_session_token: customSessionToken,
-      })
-      const parsed = (
-        Array.isArray(sessionValidation) ? sessionValidation[0] : sessionValidation
-      ) as {
-        valid?: boolean
-        user_id?: string
-        email?: string
-      } | null
-      if (parsed?.valid && parsed.user_id) {
-        userId = parsed.user_id
-        email = parsed.email ?? null
-      }
-    }
-
-    if (!userId) {
+    // A. Verificar la identidad REAL del llamante (nunca se confía en el cuerpo).
+    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+    if (callerError || !callerData?.user) {
+      console.error("[change-initial-password] invalid caller token", callerError)
       return json({ error: "Unauthorized" }, 401)
     }
 
-    // B. Validar cuerpo y fortaleza de la nueva contraseña en servidor.
+    // B. El user_id procede EXCLUSIVAMENTE de la identidad verificada.
+    const userId = callerData.user.id
+
+    // C. Debe existir una fila con must_change_password = true (no se cambia «a ciegas»).
+    const { data: lifecycle, error: lifecycleError } = await adminClient
+      .from("user_password_lifecycle")
+      .select("must_change_password")
+      .eq("user_id", userId)
+      .maybeSingle()
+
+    if (lifecycleError) {
+      console.error("[change-initial-password] lifecycle read failed", lifecycleError)
+      return json({ error: "No se pudo verificar el estado de la contraseña." }, 500)
+    }
+    // Reintento tras un cambio YA confirmado: idempotente. No se vuelve a tocar la contraseña
+    // (evita repetir el cambio innecesariamente) y se responde éxito.
+    if (lifecycle && lifecycle.must_change_password === false) {
+      return json({ success: true }, 200)
+    }
+    // Legacy sin fila: no hay un cambio pendiente por esta vía.
+    if (!lifecycle) {
+      return json({ error: "No hay un cambio de contraseña pendiente." }, 409)
+    }
+
+    // D. Validación de la nueva contraseña en SERVIDOR.
     const body = (await req.json()) as ChangeInitialPasswordRequest
     const newPassword = body.new_password ?? ""
     const strengthError = passwordStrengthError(newPassword)
@@ -84,84 +101,68 @@ serve(async (req) => {
       return json({ error: strengthError }, 400)
     }
 
-    // C. Delegar preferentemente en `complete_initial_password_change` (nativa en PostgreSQL).
-    const { data: completeData, error: completeError } = await adminClient.rpc(
-      "complete_initial_password_change",
-      {
-        p_new_password: newPassword,
-        p_session_token: customSessionToken,
-      }
-    )
-
-    if (!completeError && completeData) {
-      const parsedResult = (
-        Array.isArray(completeData) ? completeData[0] : completeData
-      ) as { success?: boolean; error?: string } | null
-      if (parsedResult?.success === true) {
-        return json({ success: true }, 200)
-      }
-      if (parsedResult?.error) {
-        return json({ error: parsedResult.error }, 400)
-      }
-    }
-
-    // D. Respaldo directo con `update_user_password_credentials` en `public.user_credentials`.
-    const { data: credRow } = await adminClient
-      .from("user_credentials")
-      .select("email, must_change_password")
-      .eq("user_id", userId)
-      .maybeSingle()
-
-    if (!email && credRow?.email) {
-      email = credRow.email
-    }
-
-    const { error: customCredError } = await adminClient.rpc("update_user_password_credentials", {
-      p_user_id: userId,
-      p_new_password: newPassword,
+    // E. Actualizar la contraseña en Supabase Auth (Admin API). Único paso que toca la
+    //    credencial. Nunca se registra la contraseña en logs.
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+      password: newPassword,
     })
-
-    if (customCredError) {
-      console.error("[change-initial-password] update_user_password_credentials failed", customCredError)
-      return json({ error: customCredError.message || "No se pudo actualizar la contraseña." }, 400)
+    if (updateError) {
+      console.error("[change-initial-password] auth update failed", updateError)
+      return json({ error: "No se pudo actualizar la contraseña. Inténtalo de nuevo." }, 400)
     }
 
-    // E. Verificación en servidor con `authenticate_user_credentials` (`pgcrypto`).
+    // E2. VERIFICACIÓN EN SERVIDOR de que el cambio se aplicó de verdad: se intenta
+    //     iniciar sesión con la NUEVA contraseña usando un cliente anónimo efímero.
+    //     Si no inicia sesión, el cambio NO se da por válido y NO se confirma el
+    //     ciclo (el requisito permanece true). La prueba de cambio nunca proviene
+    //     del navegador ni de una afirmación del cliente.
+    const email = callerData.user.email
     if (email) {
-      const { data: pgVerifyData, error: pgVerifyError } = await adminClient.rpc(
-        "authenticate_user_credentials",
-        {
-          p_identifier: email,
-          p_password: newPassword,
-          p_user_agent: "change-initial-password-server-check",
-          p_ip_address: null,
-        }
-      )
-
-      if (!pgVerifyError && pgVerifyData) {
-        const pgResult = (
-          Array.isArray(pgVerifyData) ? pgVerifyData[0] : pgVerifyData
-        ) as {
-          authenticated?: boolean
-          session_token?: string
-        }
-        if (pgResult?.session_token) {
-          await adminClient.rpc("revoke_user_session", {
-            p_session_token: pgResult.session_token,
-          })
-        }
-        if (!pgResult?.authenticated) {
-          return json(
-            {
-              error: "No pudimos verificar el cambio de contraseña en la base de datos. Vuelve a intentarlo.",
-              needs_retry: true,
-            },
-            500
-          )
-        }
+      const { data: verifyData, error: verifyError } = await anonClient.auth.signInWithPassword({
+        email,
+        password: newPassword,
+      })
+      if (verifyError || !verifyData?.session) {
+        console.error("[change-initial-password] server-side verification failed", verifyError)
+        return json(
+          {
+            error: "No pudimos verificar el cambio de contraseña. Vuelve a intentarlo.",
+            needs_retry: true,
+          },
+          500
+        )
       }
+      // Cerrar la sesión efímera de verificación: no se deja ninguna sesión abierta.
+      try {
+        await anonClient.auth.signOut({ scope: "local" })
+      } catch (signOutError) {
+        console.warn("[change-initial-password] ephemeral sign-out failed", signOutError)
+      }
+    } else {
+      console.warn("[change-initial-password] user has no email; skipping sign-in verification")
     }
 
+    // F. Confirmar que Auth terminó sin error (aquí ya lo sabemos) y G. confirmar el ciclo de
+    //    vida con la RPC restringida a service_role vía PostgREST.
+    const { error: confirmError } = await adminClient.rpc("mark_password_changed", {
+      p_user_id: userId,
+    })
+    if (confirmError) {
+      // La contraseña YA cambió en Auth, pero el ciclo de vida no se pudo confirmar: NO se
+      // declara éxito. La RPC es idempotente y se puede reintentar; el requisito sigue activo.
+      console.error("[change-initial-password] lifecycle confirmation failed", confirmError)
+      return json(
+        {
+          error:
+            "Tu contraseña se actualizó, pero no pudimos confirmar el cambio. Vuelve a intentarlo para completarlo.",
+          needs_retry: true,
+        },
+        500
+      )
+    }
+
+    // H. Éxito SOLO tras Auth y RPC correctos. No se devuelve ningún secreto.
+    console.log("[change-initial-password] password changed and lifecycle confirmed", { userId })
     return json({ success: true }, 200)
   } catch (error) {
     console.error("[change-initial-password] unexpected error", error)

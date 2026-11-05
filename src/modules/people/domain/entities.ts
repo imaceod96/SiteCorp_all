@@ -440,7 +440,6 @@ export interface CandidateHireInput {
   candidateId: string
   positionId: string
   hireDate: string
-  sourceOfOrigin?: string | null
   notes: string
   contractTypeId: string
   contractStartDate: string
@@ -461,7 +460,6 @@ export interface CandidateHireWithResolutionInput {
   candidateId: string
   positionId: string
   hireDate: string
-  sourceOfOrigin?: string | null
   notes: string
   resolution: ResolutionFormalizationInput
 }
@@ -471,7 +469,6 @@ export interface WorkerReincorporationInput {
   workerId: string
   positionId: string
   reincorporationDate: string
-  sourceOfOrigin?: string | null
   contractTypeId: string
   contractStartDate: string
   contractEndDate: string
@@ -489,7 +486,6 @@ export interface WorkerReincorporationWithResolutionInput {
   workerId: string
   positionId: string
   reincorporationDate: string
-  sourceOfOrigin?: string | null
   resolution: ResolutionFormalizationInput
 }
 
@@ -528,10 +524,6 @@ export interface WorkerSeparationInput {
   workerId: string
   effectiveDate: string
   separationReasonId: string
-  /** Nombre del motivo de baja seleccionado en el catálogo. */
-  reasonName?: string | null
-  /** Texto libre obligatorio únicamente cuando el motivo seleccionado es «Otras». */
-  customReason?: string | null
   notes: string
   /**
    * Asignación afectada (`p_target_assignment_id`). Sólo se envía cuando el trabajador
@@ -1070,7 +1062,6 @@ export interface NewWorkerInput {
   }
   positionId: string
   hireDate: string
-  sourceOfOrigin?: string | null
   contractTypeId: string | null
   contractStartDate: string | null
   contractEndDate: string | null
@@ -1242,62 +1233,3 @@ export interface MigrationBatchHistory {
   linked: number
   pending: number
 }
-
-/* ------------------------------------------------------------------------- */
-/* Registro oficial de Altas y Bajas (Modelo b - Columnas 1 a 17)             */
-/* ------------------------------------------------------------------------- */
-
-/** Códigos de las 11 columnas de motivo de baja (columnas 7 a 17). */
-export type AltasBajasReasonColumnCode =
-  | "SALARIAL"
-  | "JUBILACION"
-  | "FALLECIMIENTO"
-  | "INVALIDEZ_TOTAL"
-  | "INVALIDEZ_PARCIAL"
-  | "PRIVACION_LIBERTAD"
-  | "PASO_FORMAS_NO_ESTATALES"
-  | "PROCESO_DISPONIBILIDAD"
-  | "SANCION_ADMINISTRATIVA"
-  | "SALIDA_PAIS"
-  | "OTRAS"
-
-/**
- * Entrada individual en el «b) Registro de Altas y Bajas».
- * Cada contratación inicial y cada reingreso generan una entrada propia.
- */
-export interface AltasBajasRegistryRow {
-  /** ID único de la entrada (período laboral). */
-  id: string
-  /** Columna 1: No. consecutivo (1, 2, 3...). */
-  sequenceNumber: number
-  workerId: string
-  workerCode: string | null
-  /** ID de la asignación inicial del período si ya está vinculado a un puesto. */
-  assignmentId: string | null
-  /** Columna 2: No. Carné y Nombre completo del trabajador. */
-  identification: string
-  fullName: string
-  /** Columna 3: Dirección particular del trabajador. */
-  address: string
-  /** Columna 4: Fecha y No. de alta. */
-  altaDate: string
-  altaNumber: string | null
-  altaDisplay: string
-  /** Columna 5: Fuente de procedencia. */
-  sourceOfOrigin: string | null
-  /** Indica si esta fila proviene de la migración inicial de trabajadores/candidatos. */
-  isInitialMigration: boolean
-  /** Indica si esta fila corresponde a un reingreso posterior a una baja previa. */
-  isReentryPeriod: boolean
-  /** Columna 6: Fecha y No. de baja (null si el período sigue activo). */
-  bajaDate: string | null
-  bajaNumber: string | null
-  bajaDisplay: string | null
-  /** Columnas 7 a 17: Código de la columna que lleva la marca «X» cuando hay baja. */
-  bajaReasonColumn: AltasBajasReasonColumnCode | null
-  /** Texto nominal o detalle personalizado del motivo de baja (especialmente útil en «Otras»). */
-  bajaReasonDetail: string | null
-  /** Estado del período laboral representado en esta fila. */
-  status: "ACTIVE" | "SEPARATED"
-}
-

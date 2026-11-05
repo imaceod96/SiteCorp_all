@@ -1263,11 +1263,7 @@ const WorkerDetail = () => {
                 <div>
                   <dt className="text-xs text-muted-foreground">Motivo</dt>
                   <dd className="text-sm font-medium text-ink">
-                    {lastBaja.separation_reason?.name?.trim().toLowerCase() === "otras" &&
-                    lastBaja.reason &&
-                    lastBaja.reason.trim().toLowerCase() !== "otras"
-                      ? `Otras: ${lastBaja.reason}`
-                      : lastBaja.reason || lastBaja.separation_reason?.name || "—"}
+                    {lastBaja.separation_reason?.name || lastBaja.reason || "—"}
                   </dd>
                 </div>
                 <div className="sm:col-span-2">
@@ -1749,11 +1745,9 @@ const WorkerDetail = () => {
                         </span>
                       )}
                     </div>
-                    {movement.reason &&
-                      movement.reason.trim().toLowerCase() !==
-                        movement.separation_reason?.name?.trim().toLowerCase() && (
-                        <p className="mt-0.5 text-xs text-muted-foreground">{movement.reason}</p>
-                      )}
+                    {movement.reason && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{movement.reason}</p>
+                    )}
                     {movement.notes && (
                       <p className="text-xs text-muted-foreground">{movement.notes}</p>
                     )}

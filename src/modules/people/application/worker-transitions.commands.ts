@@ -6,10 +6,6 @@ import {
   reincorporateWorkerRpc,
 } from "../infrastructure/worker-transitions.repository"
 import {
-  formatNotesWithSourceOfOrigin,
-  persistWorkerSourceOfOrigin,
-} from "../infrastructure/altas-bajas-registry.repository"
-import {
   ensureAddendumDocument,
   ensureContractDocument,
   ensureMovementDocument,
@@ -51,8 +47,6 @@ export async function registerWorkerSeparation(input: WorkerSeparationInput): Pr
     workerId: input.workerId,
     effectiveDate: input.effectiveDate,
     separationReasonId: input.separationReasonId,
-    reasonName: input.reasonName ?? null,
-    customReason: input.customReason ?? null,
     notes: input.notes,
     targetAssignmentId: input.targetAssignmentId ?? null,
   })
@@ -77,7 +71,7 @@ export async function reincorporateWorkerWithContract(
     contractTypeId: input.contractTypeId,
     contractStartDate: input.contractStartDate || input.reincorporationDate,
     contractEndDate: input.isDetermined ? input.contractEndDate || null : null,
-    notes: formatNotesWithSourceOfOrigin(null, input.sourceOfOrigin),
+    notes: null,
     representativeAssignmentId: input.representativeAssignmentId,
     signatureDate: input.signatureDate,
     signaturePlace: input.signaturePlace,
@@ -85,12 +79,6 @@ export async function reincorporateWorkerWithContract(
     compensationComponents: input.compensationComponents,
     paymentScheduleText: input.paymentScheduleText,
   })
-
-  await persistWorkerSourceOfOrigin(
-    result.workerId || input.workerId,
-    input.reincorporationDate,
-    input.sourceOfOrigin
-  )
 
   const documentWarning = result.contractId ? await ensureContractDocument(result.contractId) : null
   return { workerId: result.workerId, documentWarning }
@@ -107,7 +95,7 @@ export async function reincorporateWorkerWithResolution(
     contractTypeId: null,
     contractStartDate: null,
     contractEndDate: null,
-    notes: formatNotesWithSourceOfOrigin(null, input.sourceOfOrigin),
+    notes: null,
     representativeAssignmentId: input.resolution.representativeAssignmentId,
     signatureDate: null,
     signaturePlace: null,
@@ -116,12 +104,6 @@ export async function reincorporateWorkerWithResolution(
     paymentScheduleText: null,
     resolutionDate: input.resolution.resolutionDate,
   })
-
-  await persistWorkerSourceOfOrigin(
-    result.workerId || input.workerId,
-    input.reincorporationDate,
-    input.sourceOfOrigin
-  )
 
   const documentWarning = result.resolutionId
     ? await ensureResolutionDocument(result.resolutionId)

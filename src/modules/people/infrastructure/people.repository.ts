@@ -239,18 +239,10 @@ export async function fetchWorkersLastSeparation(
   }[]) || []).forEach((movement) => {
     if (separations[movement.worker_id]) return
     const embedded = movement.separation_reason
-    const catalogReason = Array.isArray(embedded) ? embedded[0]?.name : embedded?.name
-    const specificReason = movement.reason?.trim() || null
-    const isOtherCatalog =
-      catalogReason?.trim().toLowerCase() === "otras" ||
-      catalogReason?.trim().toLowerCase() === "otra"
+    const reason = Array.isArray(embedded) ? embedded[0]?.name : embedded?.name
     separations[movement.worker_id] = {
       effective_date: movement.effective_date,
-      reason: isOtherCatalog
-        ? specificReason && specificReason.toLowerCase() !== "otras"
-          ? `Otras: ${specificReason}`
-          : catalogReason || specificReason || null
-        : specificReason || catalogReason || null,
+      reason: reason || movement.reason || null,
     }
   })
 
