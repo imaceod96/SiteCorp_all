@@ -14,6 +14,7 @@ import {
   ICredentialRepository,
   UserCredential,
   ISessionRepository,
+  AtomicRotateResult,
   IPasswordHasher,
   ITokenService,
   ISecurityAuditService,
@@ -97,6 +98,37 @@ class InMemorySessionRepository implements ISessionRepository {
       }
     }
     this.refreshTokens.set(newToken.tokenHash, newToken);
+  }
+  async rotateRefreshTokenAtomic(
+    expectedOldTokenHash: string,
+    newRawTokenHash: string,
+    newTokenId: string,
+    now: Date = new Date()
+  ): Promise<AtomicRotateResult> {
+    const oldToken = this.refreshTokens.get(expectedOldTokenHash);
+    if (!oldToken) {
+      return { success: false, reason: "NOT_FOUND" };
+    }
+    if (oldToken.isRevoked) {
+      return { success: false, reason: "ALREADY_REVOKED", familyId: oldToken.familyId, session: null };
+    }
+    if (!oldToken.isValid(now)) {
+      return { success: false, reason: "EXPIRED", familyId: oldToken.familyId };
+    }
+    const session = this.sessions.get(oldToken.sessionId);
+    if (!session || !session.isValid(now)) {
+      return { success: false, reason: "SESSION_EXPIRED" };
+    }
+    const newToken = RefreshToken.create(
+      newTokenId,
+      oldToken.sessionId,
+      newRawTokenHash,
+      oldToken.familyId,
+      { now }
+    );
+    oldToken.revoke(newToken.id);
+    this.refreshTokens.set(newToken.tokenHash, newToken);
+    return { success: true, session, oldToken, newToken };
   }
   async revokeTokenFamily(familyId: string): Promise<void> {
     for (const t of this.refreshTokens.values()) {

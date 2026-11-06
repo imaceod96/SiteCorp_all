@@ -106,3 +106,60 @@ export class WeakPasswordError extends DomainError {
     super(`La contraseña no cumple las políticas de seguridad: ${reasons.join(", ")}`);
   }
 }
+
+export class InvalidCredentialsError extends DomainError {
+  public readonly code = "INVALID_CREDENTIALS";
+  constructor(message: string = "Credenciales de autenticación incorrectas.") {
+    super(message);
+  }
+}
+
+export class DuplicateEmailError extends DomainError {
+  public readonly code = "DUPLICATE_EMAIL";
+  constructor(email: string) {
+    super(`El correo electrónico '${email}' ya se encuentra registrado.`);
+  }
+}
+
+export class UnauthorizedError extends DomainError {
+  public readonly code = "UNAUTHORIZED";
+  constructor(message: string = "No se ha proporcionado una identidad autenticada válida.") {
+    super(message);
+  }
+}
+
+export class ForbiddenError extends DomainError {
+  public readonly code = "FORBIDDEN";
+  constructor(message: string = "El operador no cuenta con los permisos necesarios para realizar esta acción.") {
+    super(message);
+  }
+}
+
+export class TokenReuseDetectedError extends DomainError {
+  public readonly code = "TOKEN_REUSE_DETECTED";
+  constructor(public readonly familyId: string) {
+    super("Alerta de seguridad: se ha detectado el reuso de un token revocado. Sesión terminada.");
+  }
+}
+
+export class TokenExpiredError extends DomainError {
+  public readonly code = "TOKEN_EXPIRED";
+  constructor(message: string = "El token de autenticación ha expirado.") {
+    super(message);
+  }
+}
+
+export class TokenInvalidError extends DomainError {
+  public readonly code = "TOKEN_INVALID";
+  constructor(message: string = "El token de autenticación es inválido o no existe.") {
+    super(message);
+  }
+}
+
+export class SessionInvalidError extends DomainError {
+  public readonly code = "SESSION_INVALID";
+  constructor(message: string = "La sesión es inválida, ha sido revocada o ha caducado.") {
+    super(message);
+  }
+}
+

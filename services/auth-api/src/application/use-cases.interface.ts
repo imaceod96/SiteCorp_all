@@ -1,4 +1,5 @@
 import { AuthUser } from "../domain";
+import { AuthenticatedPrincipal } from "../interfaces";
 import {
   LoginDto,
   LoginResult,
@@ -27,9 +28,9 @@ export interface IChangePasswordUseCase {
 }
 
 export interface IAdminCreateUserUseCase {
-  execute(dto: AdminCreateUserDto): Promise<AuthUser>;
+  execute(dto: AdminCreateUserDto, operator?: AuthenticatedPrincipal): Promise<AuthUser>;
 }
 
 export interface IAdminUpdateStatusUseCase {
-  execute(dto: AdminUpdateStatusDto): Promise<AuthUser>;
+  execute(dto: AdminUpdateStatusDto, operator?: AuthenticatedPrincipal): Promise<AuthUser>;
 }
