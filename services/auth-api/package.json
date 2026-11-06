@@ -1,0 +1,20 @@
+{
+  "name": "@sitecorp/auth-api",
+  "version": "0.1.0",
+  "description": "Backend autogestionado e independiente de autenticación para SiteCorp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --config ./vitest.config.ts",
+    "lint": "eslint src tests"
+  },
+  "keywords": [
+    "sitecorp",
+    "auth",
+    "security"
+  ],
+  "author": "SiteCorp Security Architecture",
+  "license": "UNLICENSED"
+}
