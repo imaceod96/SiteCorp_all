@@ -82,7 +82,8 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
       password: validPassword,
     });
 
-    const tokenHash = tokenService.hashOpaqueToken(login.refreshToken);
+    expect(login.refreshToken).not.toBeNull();
+    const tokenHash = tokenService.hashOpaqueToken(login.refreshToken!);
     const storedToken = await sessionRepo.findRefreshTokenByHash(tokenHash);
     expect(storedToken).not.toBeNull();
 
@@ -94,7 +95,7 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
       id: storedSession!.id,
       userId: storedSession!.userId,
       ipAddress: storedSession!.ipAddress,
-      userAgent: storedSession!.userAgent,
+      userAgent: storedSession!.ipAddress,
       isRevoked: false,
       createdAt: new Date(Date.now() - 40 * 24 * 3600 * 1000),
       lastActivityAt: new Date(Date.now() - 40 * 24 * 3600 * 1000),
@@ -104,7 +105,7 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
 
     // Intentar refrescar con la sesión expirada debe ser rechazado
     await expect(
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken })
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! })
     ).rejects.toThrow(SessionInvalidError);
   });
 
@@ -116,11 +117,11 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
     });
 
     // Logout con el refresh token del cliente
-    await logoutUseCase.execute({ rawRefreshToken: login.refreshToken });
+    await logoutUseCase.execute({ rawRefreshToken: login.refreshToken! });
 
     // El token y la sesión quedan revocados
     await expect(
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken })
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! })
     ).rejects.toThrow();
 
     const allEvents = auditService.getAllEvents();
@@ -135,7 +136,7 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
     });
 
     const refreshResult1 = await refreshUseCase.execute({
-      rawRefreshToken: login.refreshToken,
+      rawRefreshToken: login.refreshToken!,
     });
 
     expect(refreshResult1.accessToken).toBeDefined();
@@ -143,7 +144,7 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
     expect(refreshResult1.newRefreshToken).not.toBe(login.refreshToken);
 
     // El token anterior fue revocado
-    const oldHash = tokenService.hashOpaqueToken(login.refreshToken);
+    const oldHash = tokenService.hashOpaqueToken(login.refreshToken!);
     const oldToken = await sessionRepo.findRefreshTokenByHash(oldHash);
     expect(oldToken?.isRevoked).toBe(true);
 
@@ -155,34 +156,71 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
     expect(refreshResult2.newRefreshToken).not.toBe(refreshResult1.newRefreshToken);
   });
 
-  // PRUEBA 13B: Rotación para usuario con cambio pendiente de contraseña mantiene rol restringido
-  it("13B. Rotación para usuario con cambio pendiente de contraseña: emite token con rol 'pending_password_change'", async () => {
+  // PRUEBA 13B: Usuario con cambio pendiente de contraseña no recibe refresh token ni puede rotar sesiones
+  it("13B. Usuario con cambio pendiente de contraseña: no recibe refresh token en login y rechaza rotación si pasa a estado pendiente", async () => {
+    // 1. Si inicia sesión ya estando en pending_password_change, no recibe refreshToken
     const user = await userRepo.findById(validUserId);
-    const userProps = {
-      id: user!.id,
-      email: user!.email,
-      status: "pending_password_change" as const,
-      mustChangePassword: true,
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      createdAt: user!.createdAt,
-      updatedAt: user!.updatedAt,
-      deletedAt: null,
-    };
-    await userRepo.update(AuthUser.reconstitute(userProps));
+    await userRepo.update(
+      AuthUser.reconstitute({
+        id: user!.id,
+        email: user!.email,
+        status: "pending_password_change",
+        mustChangePassword: true,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        createdAt: user!.createdAt,
+        updatedAt: user!.updatedAt,
+        deletedAt: null,
+      })
+    );
 
-    const login = await loginUseCase.execute({
+    const pendingLogin = await loginUseCase.execute({
       email: "sesion.test@sitecorp.cu",
       password: validPassword,
     });
-    expect(login.mustChangePassword).toBe(true);
-
-    const refreshResult = await refreshUseCase.execute({
-      rawRefreshToken: login.refreshToken,
-    });
-    const verified = await tokenService.verifyAccessToken(refreshResult.accessToken);
+    expect(pendingLogin.mustChangePassword).toBe(true);
+    expect(pendingLogin.refreshToken).toBeNull();
+    const verified = await tokenService.verifyAccessToken(pendingLogin.accessToken);
     expect(verified.role).toBe("pending_password_change");
     expect(verified.scope).toBe("auth:change_password");
+
+    // 2. Si un usuario activo tenía un refreshToken y posteriormente pasa a mustChangePassword=true, el refresh es denegado
+    await userRepo.update(
+      AuthUser.reconstitute({
+        id: user!.id,
+        email: user!.email,
+        status: "active",
+        mustChangePassword: false,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        createdAt: user!.createdAt,
+        updatedAt: user!.updatedAt,
+        deletedAt: null,
+      })
+    );
+    const activeLogin = await loginUseCase.execute({
+      email: "sesion.test@sitecorp.cu",
+      password: validPassword,
+    });
+    expect(activeLogin.refreshToken).not.toBeNull();
+
+    await userRepo.update(
+      AuthUser.reconstitute({
+        id: user!.id,
+        email: user!.email,
+        status: "pending_password_change",
+        mustChangePassword: true,
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        createdAt: user!.createdAt,
+        updatedAt: user!.updatedAt,
+        deletedAt: null,
+      })
+    );
+
+    await expect(
+      refreshUseCase.execute({ rawRefreshToken: activeLogin.refreshToken! })
+    ).rejects.toThrow(SessionInvalidError);
   });
 
   // PRUEBA 14: Reutilización de tokens revocados
@@ -194,12 +232,12 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
 
     // Rotación 1 legítima: emite Token B
     const rotation1 = await refreshUseCase.execute({
-      rawRefreshToken: login.refreshToken,
+      rawRefreshToken: login.refreshToken!,
     });
 
     // Intento de reuso malicioso: un atacante vuelve a presentar el Token A (login.refreshToken)
     await expect(
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken })
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! })
     ).rejects.toThrow(TokenReuseDetectedError);
 
     // Como consecuencia de la detección de reuso, toda la familia y la sesión quedan revocadas
@@ -221,11 +259,11 @@ describe("Application: Sessions, Refresh Tokens & Concurrency (Pruebas 11 - 15)"
 
     // Simular 5 peticiones simultáneas con el mismo token (ej. 5 pestañas abriéndose a la vez)
     const promises = [
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
     ];
 
     const results = await Promise.allSettled(promises);

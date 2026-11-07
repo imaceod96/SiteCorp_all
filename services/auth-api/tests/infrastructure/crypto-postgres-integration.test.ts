@@ -264,7 +264,8 @@ describe("Fase 4G.1 & 4G.1.1 — Integración End-to-End: Criptografía Real + V
     });
 
     expect(firstLogin.mustChangePassword).toBe(true);
-    expect(firstLogin.refreshToken).toMatch(/^sct_[A-Za-z0-9_-]{43}$/);
+    expect(firstLogin.refreshToken).toBeNull();
+    expect(firstLogin.refreshTokenExpiresAt).toBeNull();
 
     const firstTokenClaims = await tokenService.verifyAccessToken(
       firstLogin.accessToken
@@ -316,6 +317,8 @@ describe("Fase 4G.1 & 4G.1.1 — Integración End-to-End: Criptografía Real + V
       userAgent: "Mozilla/5.0",
     });
 
+    expect(secondLogin.refreshToken).toMatch(/^sct_[A-Za-z0-9_-]{43}$/);
+
     const secondTokenClaims = await tokenService.verifyAccessToken(
       secondLogin.accessToken
     );
@@ -325,7 +328,7 @@ describe("Fase 4G.1 & 4G.1.1 — Integración End-to-End: Criptografía Real + V
 
     // Rotación de Refresh Token CSPRNG: conserva el mismo `sid` de la sesión pero emite un nuevo `jti`
     const rotated = await refreshUseCase.execute({
-      rawRefreshToken: secondLogin.refreshToken,
+      rawRefreshToken: secondLogin.refreshToken!,
       ipAddress: "10.20.30.41",
       userAgent: "Mozilla/5.0",
     });
@@ -339,7 +342,7 @@ describe("Fase 4G.1 & 4G.1.1 — Integración End-to-End: Criptografía Real + V
     // Reutilizar el refresh token ya rotado dispara TokenReuseDetectedError y revoca la familia + sesión
     await expect(
       refreshUseCase.execute({
-        rawRefreshToken: secondLogin.refreshToken,
+        rawRefreshToken: secondLogin.refreshToken!,
         ipAddress: "10.20.30.99",
         userAgent: "Attacker-Client/1.0",
       })
@@ -354,7 +357,7 @@ describe("Fase 4G.1 & 4G.1.1 — Integración End-to-End: Criptografía Real + V
     const rawRefreshRows = await pool.query<{ token_hash: string }>(
       "SELECT token_hash FROM sitecorp_auth.refresh_tokens"
     );
-    expect(rawRefreshRows.rows.length).toBeGreaterThanOrEqual(3);
+    expect(rawRefreshRows.rows.length).toBeGreaterThanOrEqual(2);
     for (const row of rawRefreshRows.rows) {
       expect(row.token_hash).toMatch(/^[0-9a-f]{64}$/);
       expect(row.token_hash).not.toContain("sct_");
@@ -366,8 +369,7 @@ describe("Fase 4G.1 & 4G.1.1 — Integración End-to-End: Criptografía Real + V
     const serializedAudit = JSON.stringify(rawAuditRows.rows);
     expect(serializedAudit).not.toContain(tempPassword);
     expect(serializedAudit).not.toContain(newPassword);
-    expect(serializedAudit).not.toContain(firstLogin.refreshToken);
-    expect(serializedAudit).not.toContain(secondLogin.refreshToken);
+    expect(serializedAudit).not.toContain(secondLogin.refreshToken!);
     expect(serializedAudit).not.toContain(rotated.newRefreshToken);
     expect(pool.getActiveClientCount()).toBe(0);
   });

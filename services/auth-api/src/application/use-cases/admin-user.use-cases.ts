@@ -4,6 +4,7 @@ import {
   createUserId,
   createEmail,
   PasswordPolicy,
+  DuplicateEmailError,
   ForbiddenError,
   UserNotFoundError,
 } from "../../domain";
@@ -16,6 +17,7 @@ import {
   AuthenticatedPrincipal,
   IAuthorizationPolicyService,
   ITransactionManager,
+  IOperatorPermissionRepository,
 } from "../../interfaces";
 import {
   IAdminCreateUserUseCase,
@@ -100,12 +102,18 @@ export class AdminCreateUserUseCase implements IAdminCreateUserUseCase {
     const email = createEmail(dto.email);
     const userId = createUserId(randomUUID());
 
-    // 2. Definir contraseña inicial y validar política
+    // 2. Definir contraseña inicial y validar política ANTES de consultar BD o Argon2id
     const initialPassword =
       dto.initialPassword ?? `SiteCorp.${randomUUID().substring(0, 8)}!2026`;
     PasswordPolicy.assertValid(initialPassword);
 
-    // 3. Calcular hash Argon2id FUERA de la transacción SQL
+    // 3. Comprobación preliminar de unicidad de email antes de consumir Argon2id
+    const existingUser = await this.userRepo.findByEmail(email);
+    if (existingUser) {
+      throw new DuplicateEmailError(email);
+    }
+
+    // 4. Calcular hash Argon2id FUERA de la transacción SQL
     const hash = await this.passwordHasher.hash(initialPassword);
 
     const mustChange = dto.mustChangePassword ?? true;
@@ -115,7 +123,7 @@ export class AdminCreateUserUseCase implements IAdminCreateUserUseCase {
       now,
     });
 
-    // 4. Transacción ACID compartida: crear usuario, crear credencial e insertar auditoría
+    // 5. Transacción ACID compartida: crear usuario, crear credencial e insertar auditoría
     await this.executeInTx(async () => {
       await this.userRepo.save(user);
 
@@ -131,6 +139,8 @@ export class AdminCreateUserUseCase implements IAdminCreateUserUseCase {
       await this.auditService.recordEvent(
         SecurityEvent.create(randomUUID(), "USER_CREATED", {
           userId: user.id,
+          ipAddress: dto.ipAddress ?? null,
+          userAgent: dto.userAgent ?? null,
           metadata: {
             createdByOperatorId: verifiedOperator.userId,
             mustChangePassword: user.mustChangePassword,
@@ -150,7 +160,8 @@ export class AdminUpdateStatusUseCase implements IAdminUpdateStatusUseCase {
     private readonly sessionRepo: ISessionRepository,
     private readonly auditService: ISecurityAuditService,
     private readonly authPolicy: IAuthorizationPolicyService,
-    private readonly txManager?: ITransactionManager
+    private readonly txManager?: ITransactionManager,
+    private readonly permissionRepo?: IOperatorPermissionRepository
   ) {}
 
   private async executeInTx<T>(work: () => Promise<T>): Promise<T> {
@@ -196,14 +207,52 @@ export class AdminUpdateStatusUseCase implements IAdminUpdateStatusUseCase {
         throw new UserNotFoundError(dto.userId);
       }
 
+      // Prevención de escalación/neutralización de privilegios:
+      // Un operador que solo posee 'users.manage' NO puede suspender ni alterar la cuenta
+      // de un operador que posee 'security.admin' o 'security.manage'.
+      if (this.permissionRepo) {
+        const targetPermissions =
+          await this.permissionRepo.findActivePermissionsByUserId(user.id);
+        const targetIsSecurityAdmin =
+          targetPermissions.includes("security.admin");
+        const targetIsSecurityManager =
+          targetPermissions.includes("security.manage");
+        const operatorIsSecurityAdmin =
+          verifiedOperator.isPlatformAdmin === true ||
+          verifiedOperator.permissions.has("security.admin");
+        const operatorIsSecurityManager =
+          operatorIsSecurityAdmin ||
+          verifiedOperator.permissions.has("security.manage");
+
+        if (targetIsSecurityAdmin && !operatorIsSecurityAdmin) {
+          throw new ForbiddenError(
+            "Se requiere el permiso 'security.admin' para modificar el estado de un administrador de seguridad."
+          );
+        }
+        if (targetIsSecurityManager && !operatorIsSecurityManager) {
+          throw new ForbiddenError(
+            "Se requiere el permiso 'security.manage' o 'security.admin' para modificar el estado de un operador de seguridad."
+          );
+        }
+      }
+
       if (dto.status === "suspended") {
         user.suspend(now);
         await this.userRepo.update(user);
         await this.sessionRepo.revokeAllUserSessions(user.id);
+        if (this.permissionRepo) {
+          await this.permissionRepo.revokeAllUserPermissions(
+            user.id,
+            verifiedOperator.userId,
+            now
+          );
+        }
 
         await this.auditService.recordEvent(
           SecurityEvent.create(randomUUID(), "USER_SUSPENDED", {
             userId: user.id,
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
             metadata: { suspendedByOperatorId: verifiedOperator.userId },
             now,
           })
@@ -212,10 +261,19 @@ export class AdminUpdateStatusUseCase implements IAdminUpdateStatusUseCase {
         user.softDelete(now);
         await this.userRepo.update(user);
         await this.sessionRepo.revokeAllUserSessions(user.id);
+        if (this.permissionRepo) {
+          await this.permissionRepo.revokeAllUserPermissions(
+            user.id,
+            verifiedOperator.userId,
+            now
+          );
+        }
 
         await this.auditService.recordEvent(
           SecurityEvent.create(randomUUID(), "USER_DELETED", {
             userId: user.id,
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
             metadata: { deletedByOperatorId: verifiedOperator.userId },
             now,
           })
@@ -227,6 +285,8 @@ export class AdminUpdateStatusUseCase implements IAdminUpdateStatusUseCase {
         await this.auditService.recordEvent(
           SecurityEvent.create(randomUUID(), "USER_ACTIVATED", {
             userId: user.id,
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
             metadata: { activatedByOperatorId: verifiedOperator.userId },
             now,
           })

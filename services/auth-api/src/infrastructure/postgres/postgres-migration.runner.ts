@@ -98,6 +98,58 @@ export function loadInitialAuthSchemaMigration(
 }
 
 /**
+ * Carga el archivo de diseño SQL `0002_sitecorp_auth_operator_permissions.design.sql`
+ * para la tabla autoritativa de permisos de operadores administrativos.
+ *
+ * Bloquea su carga si `NODE_ENV === 'production'` o si el entorno objetivo es productivo.
+ */
+export function loadOperatorPermissionsMigration(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): MigrationDefinition {
+  const sourceFileName = "0002_sitecorp_auth_operator_permissions.design.sql";
+  if (isProtectedProductionTarget(options?.environment, options?.connectionHint)) {
+    throw new ProductionDesignMigrationForbiddenError(sourceFileName);
+  }
+
+  const filePath = resolve(
+    baseDir ?? process.cwd(),
+    `db/migrations/${sourceFileName}`
+  );
+  const rawSql = readFileSync(filePath, "utf8");
+
+  const innerSql = rawSql
+    .replace(/^\s*BEGIN\s*;/im, "")
+    .replace(/COMMIT\s*;\s*$/im, "")
+    .trim();
+
+  const checksumSha256 = computeMigrationChecksum(innerSql);
+
+  return {
+    version: "0002_sitecorp_auth_operator_permissions",
+    description:
+      "Authoritative persistent operator permissions table, constraints, and indexes",
+    sql: innerSql,
+    checksumSha256,
+    isDesignArtifact: true,
+    sourceFileName,
+  };
+}
+
+/**
+ * Carga la secuencia completa de migraciones de diseño de SiteCorp Auth (`0001` y `0002`).
+ */
+export function loadAllAuthSchemaMigrations(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): readonly MigrationDefinition[] {
+  return [
+    loadInitialAuthSchemaMigration(baseDir, options),
+    loadOperatorPermissionsMigration(baseDir, options),
+  ];
+}
+
+/**
  * Ejecutor de migraciones versionadas para el entorno aislado de SiteCorp Auth API.
  *
  * - Impide la ejecución automática de archivos `.design.sql` o `.rollback.design.sql` en producción.

@@ -147,8 +147,8 @@ describe("Application: LoginUseCase (Pruebas 4 - 10)", () => {
     expect(allEvents.some((e) => e.eventType === "LOGIN_FAILED" && e.metadata?.reason === "USER_DELETED_ATTEMPT")).toBe(true);
   });
 
-  // PRUEBA 8B: Emisión de token restringido si el usuario tiene cambio obligatorio de clave
-  it("8B. Usuario con cambio obligatorio de contraseña: emite access token restringido con role 'pending_password_change'", async () => {
+  // PRUEBA 8B: Emisión de token restringido sin refresh token si el usuario tiene cambio obligatorio de clave
+  it("8B. Usuario con cambio obligatorio de contraseña: emite access token restringido con role 'pending_password_change' y NO emite refresh token", async () => {
     const user = await userRepo.findById(validUserId);
     const userProps = {
       id: user!.id,
@@ -169,6 +169,9 @@ describe("Application: LoginUseCase (Pruebas 4 - 10)", () => {
     });
 
     expect(result.mustChangePassword).toBe(true);
+    expect(result.refreshToken).toBeNull();
+    expect(result.refreshTokenExpiresAt).toBeNull();
+    expect(result.sessionId).toMatch(/^sess_/);
     const decoded = await tokenService.verifyAccessToken(result.accessToken);
     expect(decoded.role).toBe("pending_password_change");
     expect(decoded.scope).toBe("auth:change_password");

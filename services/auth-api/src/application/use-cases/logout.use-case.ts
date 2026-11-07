@@ -34,6 +34,8 @@ export class LogoutUseCase implements ILogoutUseCase {
         await this.auditService.recordEvent(
           SecurityEvent.create(randomUUID(), "LOGOUT", {
             userId,
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
             metadata: { mode: "ALL_DEVICES" },
             now,
           })
@@ -41,6 +43,8 @@ export class LogoutUseCase implements ILogoutUseCase {
       });
       return;
     }
+
+    let revokedSessionIdFromToken: string | null = null;
 
     if (dto.rawRefreshToken) {
       const tokenHash = this.tokenService.hashOpaqueToken(dto.rawRefreshToken);
@@ -57,18 +61,20 @@ export class LogoutUseCase implements ILogoutUseCase {
         }
         await this.sessionRepo.revokeSession(token.sessionId);
         await this.sessionRepo.revokeTokenFamily(token.familyId);
+        revokedSessionIdFromToken = token.sessionId;
         await this.auditService.recordEvent(
           SecurityEvent.create(randomUUID(), "LOGOUT", {
             userId: session ? session.userId : (dto.userId ?? null),
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
             metadata: { sessionId: token.sessionId, familyId: token.familyId },
             now,
           })
         );
       });
-      return;
     }
 
-    if (dto.sessionId) {
+    if (dto.sessionId && dto.sessionId !== revokedSessionIdFromToken) {
       const sessionId = dto.sessionId;
       await this.executeInTx(async () => {
         const session = await this.sessionRepo.findSessionById(sessionId);
@@ -84,6 +90,8 @@ export class LogoutUseCase implements ILogoutUseCase {
         await this.auditService.recordEvent(
           SecurityEvent.create(randomUUID(), "LOGOUT", {
             userId: session.userId,
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
             metadata: { sessionId },
             now,
           })

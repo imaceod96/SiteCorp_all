@@ -99,16 +99,27 @@ export class RefreshSessionUseCase implements IRefreshSessionUseCase {
 
       user.ensureCanAuthenticate(now);
 
-      // Emitir nuevo access token (restringido si está pendiente de cambio de contraseña)
+      // Los usuarios con cambio obligatorio de contraseña pendiente no pueden poseer ni rotar
+      // refresh tokens persistentes (deben completar primero /change-password y reautenticarse).
       const isPendingPasswordChange =
         user.mustChangePassword || user.status === "pending_password_change";
+      if (isPendingPasswordChange) {
+        await this.sessionRepo.revokeSession(session.id);
+        return {
+          rotated: false as const,
+          failure: {
+            success: false as const,
+            reason: "SESSION_REVOKED" as const,
+          },
+        };
+      }
+
+      // Emitir nuevo access token con scope completo
       const signedAccess = await this.tokenService.signAccessToken({
         sub: user.id,
         email: user.email,
-        role: isPendingPasswordChange
-          ? "pending_password_change"
-          : "authenticated",
-        scope: isPendingPasswordChange ? "auth:change_password" : "api:full",
+        role: "authenticated",
+        scope: "api:full",
         sid: session.id,
       });
 
@@ -133,6 +144,9 @@ export class RefreshSessionUseCase implements IRefreshSessionUseCase {
           tokenType: "Bearer" as const,
           expiresInSeconds: signedAccess.expiresInSeconds,
           newRefreshToken: newOpaque.rawToken,
+          sessionId: session.id,
+          sessionExpiresAt: session.expiresAt,
+          refreshTokenExpiresAt: result.newToken.expiresAt,
         },
       };
     });

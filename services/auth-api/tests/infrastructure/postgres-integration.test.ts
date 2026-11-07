@@ -410,10 +410,10 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
 
     // Lanzar 4 solicitudes concurrentes de refresh con el mismo token inicial
     const concurrentRotations = await Promise.allSettled([
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
     ]);
 
     const succeeded = concurrentRotations.filter((r) => r.status === "fulfilled");
@@ -491,6 +491,7 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
       email: "cambio.pg@sitecorp.cu",
       password: initialPassword,
     });
+    expect(login.refreshToken).toBeNull();
 
     // 5.1 Simular fallo forzado en el último paso de una transacción multi-repositorio:
     //     Actualizar credencial + actualizar usuario + lanzar excepción -> debe hacer ROLLBACK de ambos
@@ -524,9 +525,8 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
     expect(credAfterCommit?.version).toBe(2);
 
     // La sesión previa quedó revocada en PostgreSQL
-    const oldTokenHash = tokenService.hashOpaqueToken(login.refreshToken);
-    const oldToken = await sessionRepo.findRefreshTokenByHash(oldTokenHash);
-    expect(oldToken?.isRevoked).toBe(true);
+    const oldSession = await sessionRepo.findSessionById(login.sessionId);
+    expect(oldSession?.isRevoked).toBe(true);
   });
 
   it("6. Transacción E, G y H: Creación administrativa, suspensión, baja lógica y revocación masiva en PostgreSQL", async () => {
@@ -552,16 +552,14 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
       email: "empleado.nuevo@sitecorp.cu",
       password: tempPassword,
     });
-    const tokenHash1 = tokenService.hashOpaqueToken(login1.refreshToken);
-    const token1BeforeLogout = await sessionRepo.findRefreshTokenByHash(tokenHash1);
-    expect(token1BeforeLogout).not.toBeNull();
+    expect(login1.refreshToken).toBeNull();
+    const session1BeforeLogout = await sessionRepo.findSessionById(login1.sessionId);
+    expect(session1BeforeLogout?.isRevoked).toBe(false);
     await logoutUseCase.execute({
-      sessionId: token1BeforeLogout!.sessionId,
+      sessionId: login1.sessionId,
       userId: createdUser.id,
     });
-    const session1AfterLogout = await sessionRepo.findSessionById(
-      token1BeforeLogout!.sessionId
-    );
+    const session1AfterLogout = await sessionRepo.findSessionById(login1.sessionId);
     expect(session1AfterLogout?.isRevoked).toBe(true);
 
     // Segunda sesión activa antes de suspensión administrativa
@@ -576,10 +574,9 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
       adminOperator
     );
 
-    // Intentar refrescar con el token previo falla porque la sesión fue revocada y el usuario está suspendido
-    await expect(
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken })
-    ).rejects.toThrow();
+    // Verificar que la segunda sesión fue revocada tras la suspensión administrativa
+    const session2AfterSuspend = await sessionRepo.findSessionById(login.sessionId);
+    expect(session2AfterSuspend?.isRevoked).toBe(true);
 
     // Intentar login lanza UserSuspendedError
     await expect(
@@ -709,10 +706,10 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
     );
 
     await expect(
-      failingRefreshUseCase.execute({ rawRefreshToken: login.refreshToken })
+      failingRefreshUseCase.execute({ rawRefreshToken: login.refreshToken! })
     ).rejects.toThrow("Fallo simulado del firmador JWT");
 
-    const originalTokenHash = tokenService.hashOpaqueToken(login.refreshToken);
+    const originalTokenHash = tokenService.hashOpaqueToken(login.refreshToken!);
     const tokenAfterFailedRefresh =
       await sessionRepo.findRefreshTokenByHash(originalTokenHash);
     expect(tokenAfterFailedRefresh?.isRevoked).toBe(false);
@@ -728,7 +725,7 @@ describe("PostgreSQL Real Engine Integration: Schema, ACID Transactions & Concur
         currentPassword: initialPassword,
         newPassword,
       }),
-      refreshUseCase.execute({ rawRefreshToken: login.refreshToken }),
+      refreshUseCase.execute({ rawRefreshToken: login.refreshToken! }),
     ]);
 
     expect(pwdOutcome.status).toBe("fulfilled");

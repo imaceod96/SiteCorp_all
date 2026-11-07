@@ -76,6 +76,8 @@ export class ChangePasswordUseCase implements IChangePasswordUseCase {
       await this.auditService.recordEvent(
         SecurityEvent.create(randomUUID(), "LOGIN_FAILED", {
           userId: user.id,
+          ipAddress: dto.ipAddress ?? null,
+          userAgent: dto.userAgent ?? null,
           metadata: {
             action: "CHANGE_PASSWORD_FAILED",
             reason: "CURRENT_PASSWORD_MISMATCH",
@@ -150,6 +152,8 @@ export class ChangePasswordUseCase implements IChangePasswordUseCase {
       await this.auditService.recordEvent(
         SecurityEvent.create(randomUUID(), "PASSWORD_CHANGED", {
           userId: lockedUser.id,
+          ipAddress: dto.ipAddress ?? null,
+          userAgent: dto.userAgent ?? null,
           metadata: { newCredentialVersion: nextVersion },
           now,
         })

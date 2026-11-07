@@ -9,3 +9,5 @@ export * from "./domain";
 export * from "./interfaces";
 export * from "./application";
 export * from "./infrastructure";
+export * from "./presentation/http";
+

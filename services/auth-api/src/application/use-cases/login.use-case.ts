@@ -203,15 +203,13 @@ export class LoginUseCase implements ILoginUseCase {
       throw new InvalidCredentialsError();
     }
 
-    // 7. Generar material de tokens y sesión
+    // 7. Generar identificador de sesión
     const sessionId = `sess_${randomUUID()}`;
-    const opaqueToken = this.tokenService.generateOpaqueToken();
-    const familyId = `fam_${randomUUID()}`;
-    const refreshTokenId = `rt_${randomUUID()}`;
 
     // 8. Transacción atómica: revalidar usuario y credencial bajo bloqueo, reiniciar intentos,
-    //    crear sesión, crear refresh token e insertar auditoría.
-    const authenticatedUser = await this.executeInTx(async () => {
+    //    crear sesión, crear refresh token (solo si NO requiere cambio obligatorio de clave)
+    //    e insertar auditoría.
+    const txResult = await this.executeInTx(async () => {
       const lockedUser = this.userRepo.findByIdForUpdate
         ? await this.userRepo.findByIdForUpdate(user.id)
         : await this.userRepo.findById(user.id);
@@ -235,21 +233,45 @@ export class LoginUseCase implements ILoginUseCase {
       lockedUser.resetFailedAttempts(now);
       await this.userRepo.update(lockedUser);
 
+      const isPendingChange =
+        lockedUser.mustChangePassword ||
+        lockedUser.status === "pending_password_change";
+
+      // Si el usuario tiene cambio obligatorio de contraseña pendiente, la sesión tiene
+      // vida corta (15 minutos, alineada al JWT temporal) para permitir verificar `sid`
+      // en /change-password y /logout sin emitir ni persistir ningún refresh token.
+      const sessionLifetimeMs = isPendingChange
+        ? 15 * 60 * 1000
+        : 30 * 24 * 60 * 60 * 1000;
+
       const session = AuthSession.create(sessionId, lockedUser.id, {
         ipAddress: dto.ipAddress ?? null,
         userAgent: dto.userAgent ?? null,
+        lifetimeMs: sessionLifetimeMs,
         now,
       });
       await this.sessionRepo.createSession(session);
 
-      const refreshToken = RefreshToken.create(
-        refreshTokenId,
-        session.id,
-        opaqueToken.tokenHash,
-        familyId,
-        { now }
-      );
-      await this.sessionRepo.createRefreshToken(refreshToken);
+      let rawRefreshToken: string | null = null;
+      let refreshTokenExpiresAt: Date | null = null;
+
+      if (!isPendingChange) {
+        const opaqueToken = this.tokenService.generateOpaqueToken();
+        const familyId = `fam_${randomUUID()}`;
+        const refreshTokenId = `rt_${randomUUID()}`;
+
+        const refreshToken = RefreshToken.create(
+          refreshTokenId,
+          session.id,
+          opaqueToken.tokenHash,
+          familyId,
+          { now }
+        );
+        await this.sessionRepo.createRefreshToken(refreshToken);
+
+        rawRefreshToken = opaqueToken.rawToken;
+        refreshTokenExpiresAt = refreshToken.expiresAt;
+      }
 
       await this.auditService.recordEvent(
         SecurityEvent.create(randomUUID(), "LOGIN_SUCCESS", {
@@ -259,25 +281,36 @@ export class LoginUseCase implements ILoginUseCase {
           metadata: {
             sessionId: session.id,
             mustChangePassword: lockedUser.mustChangePassword,
+            refreshTokenIssued: !isPendingChange,
           },
           now,
         })
       );
 
-      return lockedUser;
+      return {
+        authenticatedUser: lockedUser,
+        session,
+        rawRefreshToken,
+        refreshTokenExpiresAt,
+        isPendingPasswordChange: isPendingChange,
+      };
     });
 
     // 9. Emitir access token (restringido si está pendiente de cambio obligatorio de clave)
-    const isPendingPasswordChange =
-      authenticatedUser.mustChangePassword ||
-      authenticatedUser.status === "pending_password_change";
+    const {
+      authenticatedUser,
+      session,
+      rawRefreshToken,
+      refreshTokenExpiresAt,
+      isPendingPasswordChange,
+    } = txResult;
 
     const signedAccess = await this.tokenService.signAccessToken({
       sub: authenticatedUser.id,
       email: authenticatedUser.email,
       role: isPendingPasswordChange ? "pending_password_change" : "authenticated",
       scope: isPendingPasswordChange ? "auth:change_password" : "api:full",
-      sid: sessionId,
+      sid: session.id,
     });
 
     return {
@@ -285,8 +318,11 @@ export class LoginUseCase implements ILoginUseCase {
       accessToken: signedAccess.token,
       tokenType: "Bearer",
       expiresInSeconds: signedAccess.expiresInSeconds,
-      refreshToken: opaqueToken.rawToken,
-      mustChangePassword: authenticatedUser.mustChangePassword,
+      refreshToken: rawRefreshToken,
+      sessionId: session.id,
+      sessionExpiresAt: session.expiresAt,
+      refreshTokenExpiresAt,
+      mustChangePassword: isPendingPasswordChange,
     };
   }
 }

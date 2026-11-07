@@ -101,16 +101,16 @@ describe("Application: Password Change & Administrative Authorization (Pruebas 1
 
   // PRUEBA 16: Cambio de contraseña y revocación de sesiones
   it("16. Cambio de contraseña y revocación de sesiones: actualiza hash, quita restricción y revoca todas las sesiones previas", async () => {
-    // 1. Iniciar sesión para generar una sesión activa
+    // 1. Iniciar sesión para generar una sesión temporal activa (sin refresh token por estar pendiente de cambio)
     const login = await loginUseCase.execute({
       email: "cambio.clave@sitecorp.cu",
       password: initialPassword,
     });
     expect(login.mustChangePassword).toBe(true);
+    expect(login.refreshToken).toBeNull();
 
-    const tokenHash = tokenService.hashOpaqueToken(login.refreshToken);
-    const tokenBefore = await sessionRepo.findRefreshTokenByHash(tokenHash);
-    expect(tokenBefore?.isRevoked).toBe(false);
+    const sessionBefore = await sessionRepo.findSessionById(login.sessionId);
+    expect(sessionBefore?.isRevoked).toBe(false);
 
     // 2. Intentar cambiar con contraseña débil debe ser rechazado
     await expect(
@@ -144,15 +144,16 @@ describe("Application: Password Change & Administrative Authorization (Pruebas 1
     expect(user?.status).toBe("active");
 
     // Todas las sesiones previas del usuario fueron revocadas
-    const tokenAfter = await sessionRepo.findRefreshTokenByHash(tokenHash);
-    expect(tokenAfter?.isRevoked).toBe(true);
+    const sessionAfter = await sessionRepo.findSessionById(login.sessionId);
+    expect(sessionAfter?.isRevoked).toBe(true);
 
-    // Puede iniciar sesión con la nueva contraseña
+    // Puede iniciar sesión con la nueva contraseña y ahora sí recibe refreshToken
     const newLogin = await loginUseCase.execute({
       email: "cambio.clave@sitecorp.cu",
       password: newPassword,
     });
     expect(newLogin.accessToken).toBeDefined();
+    expect(newLogin.refreshToken).not.toBeNull();
     expect(newLogin.mustChangePassword).toBe(false);
   });
 
