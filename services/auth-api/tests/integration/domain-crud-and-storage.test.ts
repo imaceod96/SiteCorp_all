@@ -196,7 +196,7 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
       credentialRepo,
       domainRepo,
       storageService,
-      passwordHasher: new Argon2idPasswordHasher({ timeCost: 1, memoryCostKiB: 1024, parallelism: 1 }),
+      passwordHasher: new Argon2idPasswordHasher({ timeCost: 2, memoryCostKiB: 19456, parallelism: 1 }),
       authPolicy: new AuthorizationPolicyService(),
     });
   });

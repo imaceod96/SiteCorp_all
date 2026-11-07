@@ -215,7 +215,44 @@ export function loadDomainSchemaMigration(
 }
 
 /**
- * Carga la secuencia completa de migraciones de diseño de SiteCorp (`0001`, `0002`, `0003` y `0004`).
+ * Carga el archivo de diseño SQL `0005_sitecorp_extended_domain.design.sql`
+ * para el esquema extendido de salarios, prenóminas, SST, candidatos y plantillas.
+ */
+export function loadExtendedDomainSchemaMigration(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): MigrationDefinition {
+  const sourceFileName = "0005_sitecorp_extended_domain.design.sql";
+  if (isProtectedProductionTarget(options?.environment, options?.connectionHint)) {
+    throw new ProductionDesignMigrationForbiddenError(sourceFileName);
+  }
+
+  const filePath = resolve(
+    baseDir ?? process.cwd(),
+    `db/migrations/${sourceFileName}`
+  );
+  const rawSql = readFileSync(filePath, "utf8");
+
+  const innerSql = rawSql
+    .replace(/^\s*BEGIN\s*;/im, "")
+    .replace(/COMMIT\s*;\s*$/im, "")
+    .trim();
+
+  const checksumSha256 = computeMigrationChecksum(innerSql);
+
+  return {
+    version: "0005_sitecorp_extended_domain",
+    description:
+      "SiteCorp extended domain schema: salary scales, prenomina, SST, candidates, and document templates",
+    sql: innerSql,
+    checksumSha256,
+    isDesignArtifact: true,
+    sourceFileName,
+  };
+}
+
+/**
+ * Carga la secuencia completa de migraciones de diseño de SiteCorp (`0001` a `0005`).
  */
 export function loadAllAuthSchemaMigrations(
   baseDir?: string,
@@ -226,6 +263,7 @@ export function loadAllAuthSchemaMigrations(
     loadOperatorPermissionsMigration(baseDir, options),
     loadActivationTokensMigration(baseDir, options),
     loadDomainSchemaMigration(baseDir, options),
+    loadExtendedDomainSchemaMigration(baseDir, options),
   ];
 }
 
