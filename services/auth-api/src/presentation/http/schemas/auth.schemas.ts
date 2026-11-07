@@ -81,3 +81,50 @@ export const changePasswordBodySchema = Object.freeze({
     },
   },
 } as const);
+
+export interface ActivateRequestBody {
+  readonly token: string;
+  readonly newPassword: string;
+}
+
+export const activateBodySchema = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["token", "newPassword"],
+  properties: {
+    token: {
+      type: "string",
+      minLength: 16,
+      maxLength: 256,
+    },
+    newPassword: {
+      type: "string",
+      minLength: 12,
+      maxLength: 128,
+    },
+  },
+} as const);
+
+export interface ResetPasswordRequestBody {
+  readonly token: string;
+  readonly newPassword: string;
+}
+
+export const resetPasswordBodySchema = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["token", "newPassword"],
+  properties: {
+    token: {
+      type: "string",
+      minLength: 16,
+      maxLength: 256,
+    },
+    newPassword: {
+      type: "string",
+      minLength: 12,
+      maxLength: 128,
+    },
+  },
+} as const);
+

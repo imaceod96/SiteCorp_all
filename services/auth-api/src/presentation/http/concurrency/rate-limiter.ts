@@ -26,7 +26,9 @@ export type RateLimitOperation =
   | "logout"
   | "change_password"
   | "me"
-  | "admin";
+  | "admin"
+  | "activation"
+  | "reset_password";
 
 export type RateLimitDimension = "ip" | "account" | "user" | "token";
 

@@ -137,7 +137,46 @@ export function loadOperatorPermissionsMigration(
 }
 
 /**
- * Carga la secuencia completa de migraciones de diseño de SiteCorp Auth (`0001` y `0002`).
+ * Carga el archivo de diseño SQL `0003_sitecorp_auth_activation_tokens.design.sql`
+ * para la tabla de tokens de un solo uso de activación y multiinquilino.
+ *
+ * Bloquea su carga si `NODE_ENV === 'production'` o si el entorno objetivo es productivo.
+ */
+export function loadActivationTokensMigration(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): MigrationDefinition {
+  const sourceFileName = "0003_sitecorp_auth_activation_tokens.design.sql";
+  if (isProtectedProductionTarget(options?.environment, options?.connectionHint)) {
+    throw new ProductionDesignMigrationForbiddenError(sourceFileName);
+  }
+
+  const filePath = resolve(
+    baseDir ?? process.cwd(),
+    `db/migrations/${sourceFileName}`
+  );
+  const rawSql = readFileSync(filePath, "utf8");
+
+  const innerSql = rawSql
+    .replace(/^\s*BEGIN\s*;/im, "")
+    .replace(/COMMIT\s*;\s*$/im, "")
+    .trim();
+
+  const checksumSha256 = computeMigrationChecksum(innerSql);
+
+  return {
+    version: "0003_sitecorp_auth_activation_tokens",
+    description:
+      "Single-use activation and password reset tokens table and multi-tenant support",
+    sql: innerSql,
+    checksumSha256,
+    isDesignArtifact: true,
+    sourceFileName,
+  };
+}
+
+/**
+ * Carga la secuencia completa de migraciones de diseño de SiteCorp Auth (`0001`, `0002` y `0003`).
  */
 export function loadAllAuthSchemaMigrations(
   baseDir?: string,
@@ -146,6 +185,7 @@ export function loadAllAuthSchemaMigrations(
   return [
     loadInitialAuthSchemaMigration(baseDir, options),
     loadOperatorPermissionsMigration(baseDir, options),
+    loadActivationTokensMigration(baseDir, options),
   ];
 }
 

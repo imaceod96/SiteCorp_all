@@ -9,6 +9,10 @@ import {
   ChangePasswordDto,
   AdminCreateUserDto,
   AdminUpdateStatusDto,
+  GenerateActivationTokenDto,
+  GenerateActivationTokenResult,
+  ConsumeActivationTokenDto,
+  ConsumeActivationTokenResult,
 } from "./dto";
 
 export interface ILoginUseCase {
@@ -34,3 +38,15 @@ export interface IAdminCreateUserUseCase {
 export interface IAdminUpdateStatusUseCase {
   execute(dto: AdminUpdateStatusDto, operator?: AuthenticatedPrincipal): Promise<AuthUser>;
 }
+
+export interface IGenerateActivationTokenUseCase {
+  execute(
+    dto: GenerateActivationTokenDto,
+    operator?: AuthenticatedPrincipal
+  ): Promise<GenerateActivationTokenResult>;
+}
+
+export interface IConsumeActivationTokenUseCase {
+  execute(dto: ConsumeActivationTokenDto): Promise<ConsumeActivationTokenResult>;
+}
+

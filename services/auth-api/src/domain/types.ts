@@ -174,3 +174,10 @@ export class UserNotFoundError extends DomainError {
   }
 }
 
+export class ActivationTokenAlreadyUsedError extends DomainError {
+  public readonly code = "TOKEN_ALREADY_USED";
+  constructor(message: string = "El enlace o token de activación ya ha sido utilizado previamente.") {
+    super(message);
+  }
+}
+

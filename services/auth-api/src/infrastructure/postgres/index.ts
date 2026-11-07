@@ -5,3 +5,4 @@ export * from "./postgres-session.repository";
 export * from "./postgres-security-audit.service";
 export * from "./postgres-operator-permission.repository";
 export * from "./postgres-migration.runner";
+export * from "./postgres-activation-token.repository";

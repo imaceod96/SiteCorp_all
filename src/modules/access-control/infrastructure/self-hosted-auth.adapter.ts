@@ -474,6 +474,105 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
     }
   }
 
+  /**
+   * Activa una cuenta de usuario importada o migrada utilizando un token de un solo uso.
+   * No requiere que el usuario conozca una contraseña temporal previa.
+   */
+  async activateAccountWithToken(
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error: string | null; message?: string }> {
+    try {
+      const response = await this.fetch(`${this.baseUrl}/api/v1/auth/activate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          token: token.trim(),
+          newPassword,
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error:
+            json?.error?.message ??
+            (response.status === 400
+              ? "El enlace o token de activación es inválido o ya ha sido utilizado."
+              : response.status === 401
+              ? "El enlace de activación ha caducado. Solicita uno nuevo."
+              : "Error al activar la cuenta"),
+        }
+      }
+
+      return {
+        success: true,
+        error: null,
+        message: json?.data?.message ?? "Cuenta activada exitosamente.",
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Error de comunicación con el servicio de activación",
+      }
+    }
+  }
+
+  /**
+   * Restablece la contraseña de una cuenta utilizando un token de recuperación de un solo uso.
+   */
+  async resetPasswordWithToken(
+    token: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error: string | null; message?: string }> {
+    try {
+      const response = await this.fetch(`${this.baseUrl}/api/v1/auth/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          token: token.trim(),
+          newPassword,
+        }),
+      })
+
+      const json = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error:
+            json?.error?.message ??
+            (response.status === 400
+              ? "El enlace de recuperación es inválido o ya ha sido utilizado."
+              : response.status === 401
+              ? "El enlace de recuperación ha caducado. Solicita uno nuevo."
+              : "Error al restablecer la contraseña"),
+        }
+      }
+
+      return {
+        success: true,
+        error: null,
+        message: json?.data?.message ?? "Contraseña restablecida exitosamente.",
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Error de comunicación con el servicio de restablecimiento",
+      }
+    }
+  }
+
   subscribeToAuthChanges(callback: (event: AuthStateChangeEvent) => void): () => void {
     this.listeners.add(callback)
 

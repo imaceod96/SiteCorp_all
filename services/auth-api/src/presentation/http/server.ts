@@ -6,6 +6,8 @@ import {
   AdminCreateUserUseCase,
   AdminUpdateStatusUseCase,
   ChangePasswordUseCase,
+  ConsumeActivationTokenUseCase,
+  GenerateActivationTokenUseCase,
   LoginUseCase,
   LogoutUseCase,
   RefreshSessionUseCase,
@@ -228,6 +230,36 @@ export async function buildAuthHttpServer(
         )
       : undefined);
 
+  const generateActivationTokenUseCase =
+    deps.generateActivationTokenUseCase ??
+    (deps.activationTokenRepo && deps.auditService && deps.txManager
+      ? new GenerateActivationTokenUseCase(
+          deps.userRepo,
+          deps.activationTokenRepo,
+          deps.auditService,
+          deps.txManager
+        )
+      : undefined);
+
+  const consumeActivationTokenUseCase =
+    deps.consumeActivationTokenUseCase ??
+    (deps.credentialRepo &&
+    deps.activationTokenRepo &&
+    deps.sessionRepo &&
+    gatedPasswordHasher &&
+    deps.auditService &&
+    deps.txManager
+      ? new ConsumeActivationTokenUseCase(
+          deps.userRepo,
+          deps.credentialRepo,
+          deps.activationTokenRepo,
+          deps.sessionRepo,
+          gatedPasswordHasher,
+          deps.auditService,
+          deps.txManager
+        )
+      : undefined);
+
   // 3. Configurar logger Pino con redacción estricta de credenciales y secretos
   const loggerConfig = httpConfig.logging.enabled
     ? {
@@ -347,6 +379,7 @@ export async function buildAuthHttpServer(
     refreshSessionUseCase,
     logoutUseCase,
     changePasswordUseCase,
+    consumeActivationTokenUseCase,
     authPolicy,
     operatorPrincipalResolver,
     nowProvider,
@@ -361,6 +394,7 @@ export async function buildAuthHttpServer(
     rateLimiter,
     adminCreateUserUseCase,
     adminUpdateStatusUseCase,
+    generateActivationTokenUseCase,
     authPolicy,
     operatorPrincipalResolver,
     nowProvider,

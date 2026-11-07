@@ -126,7 +126,16 @@ export class PostgresUserRepository implements IUserRepository {
         `INSERT INTO sitecorp_auth.users (
            id, email, email_normalized, status, must_change_password,
            failed_login_attempts, locked_until, created_at, updated_at, deleted_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET
+           email = EXCLUDED.email,
+           email_normalized = EXCLUDED.email_normalized,
+           status = EXCLUDED.status,
+           must_change_password = EXCLUDED.must_change_password,
+           failed_login_attempts = EXCLUDED.failed_login_attempts,
+           locked_until = EXCLUDED.locked_until,
+           updated_at = EXCLUDED.updated_at,
+           deleted_at = EXCLUDED.deleted_at`,
         [
           user.id,
           user.email,

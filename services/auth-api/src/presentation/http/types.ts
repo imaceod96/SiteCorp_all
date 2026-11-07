@@ -5,6 +5,7 @@ import {
   AuthenticatedPrincipal,
   IAuthorizationPolicyService,
   ICredentialRepository,
+  IActivationTokenRepository,
   IOperatorPermissionRepository,
   IOperatorPrincipalResolver,
   IPasswordHasher,
@@ -18,6 +19,8 @@ import {
   IAdminCreateUserUseCase,
   IAdminUpdateStatusUseCase,
   IChangePasswordUseCase,
+  IConsumeActivationTokenUseCase,
+  IGenerateActivationTokenUseCase,
   ILoginUseCase,
   ILogoutUseCase,
   IRefreshSessionUseCase,
@@ -60,6 +63,7 @@ export interface AuthHttpServerDependencies {
   readonly sessionRepo: ISessionRepository;
   readonly credentialRepo?: ICredentialRepository;
   readonly operatorPermissionRepo?: IOperatorPermissionRepository;
+  readonly activationTokenRepo?: IActivationTokenRepository;
   readonly passwordHasher?: IPasswordHasher;
   readonly auditService?: ISecurityAuditService;
   readonly txManager?: ITransactionManager;
@@ -69,6 +73,8 @@ export interface AuthHttpServerDependencies {
   readonly changePasswordUseCase?: IChangePasswordUseCase;
   readonly adminCreateUserUseCase?: IAdminCreateUserUseCase;
   readonly adminUpdateStatusUseCase?: IAdminUpdateStatusUseCase;
+  readonly generateActivationTokenUseCase?: IGenerateActivationTokenUseCase;
+  readonly consumeActivationTokenUseCase?: IConsumeActivationTokenUseCase;
   readonly maxFailedLoginAttempts?: number;
   readonly lockDurationMs?: number;
   readonly authPolicy?: IAuthorizationPolicyService;

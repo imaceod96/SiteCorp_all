@@ -68,3 +68,42 @@ export const adminUpdateStatusBodySchema = Object.freeze({
     },
   },
 });
+
+export interface AdminGenerateActivationTokenRequestParams {
+  readonly id: string;
+}
+
+export interface AdminGenerateActivationTokenRequestBody {
+  readonly tokenType?: "activation" | "password_reset";
+  readonly expiresInHours?: number;
+}
+
+export const adminGenerateActivationTokenParamsSchema = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["id"],
+  properties: {
+    id: {
+      type: "string",
+      minLength: 36,
+      maxLength: 36,
+    },
+  },
+});
+
+export const adminGenerateActivationTokenBodySchema = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    tokenType: {
+      type: "string",
+      enum: ["activation", "password_reset"],
+    },
+    expiresInHours: {
+      type: "integer",
+      minimum: 1,
+      maximum: 168,
+    },
+  },
+});
+

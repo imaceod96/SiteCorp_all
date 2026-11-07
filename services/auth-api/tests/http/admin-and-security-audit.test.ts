@@ -235,6 +235,7 @@ describe("Fase 4G.2 FINAL — Modelo Autoritativo de Permisos, Endpoints Adminis
     expect(applied).toEqual([
       "0001_sitecorp_auth_schema",
       "0002_sitecorp_auth_operator_permissions",
+      "0003_sitecorp_auth_activation_tokens",
     ]);
 
     userRepo = new PostgresUserRepository(txManager);

@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
   AccountLockedError,
+  ActivationTokenAlreadyUsedError,
   DomainError,
   DuplicateEmailError,
   ForbiddenError,
@@ -209,7 +210,8 @@ export function mapErrorToHttpResponse(error: unknown): MappedHttpError {
   if (
     error instanceof SamePasswordError ||
     error instanceof InvalidEmailError ||
-    error instanceof InvalidUserIdError
+    error instanceof InvalidUserIdError ||
+    error instanceof ActivationTokenAlreadyUsedError
   ) {
     return {
       statusCode: 400,

@@ -10,6 +10,7 @@ import {
 import {
   IAdminCreateUserUseCase,
   IAdminUpdateStatusUseCase,
+  IGenerateActivationTokenUseCase,
 } from "../../../application";
 import { AuthHttpConfig } from "../../../infrastructure/config/http-config";
 import { createAuthGuardHook } from "../plugins/auth-guard";
@@ -18,6 +19,10 @@ import { emptyQuerySchema } from "../schemas/auth.schemas";
 import {
   adminCreateUserBodySchema,
   AdminCreateUserRequestBody,
+  adminGenerateActivationTokenBodySchema,
+  AdminGenerateActivationTokenRequestBody,
+  adminGenerateActivationTokenParamsSchema,
+  AdminGenerateActivationTokenRequestParams,
   adminUpdateStatusBodySchema,
   AdminUpdateStatusRequestBody,
   adminUpdateStatusParamsSchema,
@@ -32,6 +37,7 @@ export interface AdminRoutesDependencies {
   readonly rateLimiter: IRateLimiter;
   readonly adminCreateUserUseCase?: IAdminCreateUserUseCase;
   readonly adminUpdateStatusUseCase?: IAdminUpdateStatusUseCase;
+  readonly generateActivationTokenUseCase?: IGenerateActivationTokenUseCase;
   readonly authPolicy?: IAuthorizationPolicyService;
   readonly operatorPrincipalResolver?: IOperatorPrincipalResolver;
   readonly nowProvider?: () => Date;
@@ -96,6 +102,7 @@ export function registerAdminRoutes(
     userRepo,
     sessionRepo,
     rateLimiter,
+    generateActivationTokenUseCase,
   } = deps;
   const nowProvider = deps.nowProvider ?? (() => new Date());
 
@@ -281,4 +288,98 @@ export function registerAdminRoutes(
       }
     );
   }
+
+  // =========================================================================
+  // 3. POST /api/v1/auth/admin/users/:id/activation-token
+  // =========================================================================
+  if (generateActivationTokenUseCase) {
+    app.post<{
+      Params: AdminGenerateActivationTokenRequestParams;
+      Body: AdminGenerateActivationTokenRequestBody;
+    }>(
+      "/api/v1/auth/admin/users/:id/activation-token",
+      {
+        preHandler: [
+          createAuthGuardHook(
+            {
+              tokenService,
+              userRepo,
+              sessionRepo,
+              authPolicy: deps.authPolicy,
+              operatorPrincipalResolver: deps.operatorPrincipalResolver,
+              nowProvider,
+            },
+            {
+              allowPendingPasswordChange: false,
+              adminRequirement: { action: "manage_users" },
+            }
+          ),
+        ],
+        schema: {
+          params: adminGenerateActivationTokenParamsSchema,
+          body: adminGenerateActivationTokenBodySchema,
+          querystring: emptyQuerySchema,
+        },
+      },
+      async (req, reply) => {
+        const now = nowProvider();
+        const authContext = req.authContext!;
+
+        let targetUserId;
+        try {
+          targetUserId = createUserId(req.params.id);
+        } catch {
+          return reply.code(400).send({
+            statusCode: 400,
+            error: "Bad Request",
+            code: "INVALID_USER_ID",
+            message: "El parámetro de ruta 'id' debe ser un UUID v4 válido.",
+          });
+        }
+
+        await rateLimiter.consumeOrThrow({
+          operation: "admin",
+          dimension: "ip",
+          rawIdentifier: req.ip,
+          rule: httpConfig.rateLimit.adminByIp,
+          now,
+        });
+        await rateLimiter.consumeOrThrow({
+          operation: "admin",
+          dimension: "user",
+          rawIdentifier: authContext.user.id,
+          rule: httpConfig.rateLimit.adminByUser,
+          now,
+        });
+
+        const tokenResult = await generateActivationTokenUseCase.execute(
+          {
+            userId: targetUserId,
+            tokenType: req.body.tokenType ?? "activation",
+            expiresInHours: req.body.expiresInHours ?? 24,
+            ipAddress: req.ip,
+            userAgent: sanitizeUserAgent(req.headers["user-agent"]),
+          },
+          authContext.operator
+        );
+
+        return reply.code(201).send(
+          buildSuccessEnvelope(
+            {
+              token: {
+                tokenId: tokenResult.tokenId,
+                userId: tokenResult.userId,
+                rawToken: tokenResult.rawToken,
+                tokenType: tokenResult.tokenType,
+                expiresAt: tokenResult.expiresAt.toISOString(),
+              },
+            },
+            req,
+            now
+          )
+        );
+      }
+    );
+  }
 }
+

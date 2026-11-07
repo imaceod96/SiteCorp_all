@@ -19,6 +19,7 @@ import {
 } from "../../../interfaces";
 import {
   IChangePasswordUseCase,
+  IConsumeActivationTokenUseCase,
   ILoginUseCase,
   ILogoutUseCase,
   IRefreshSessionUseCase,
@@ -34,6 +35,8 @@ import {
 import { createAuthGuardHook, extractBearerToken } from "../plugins/auth-guard";
 import { IRateLimiter } from "../concurrency/rate-limiter";
 import {
+  ActivateRequestBody,
+  activateBodySchema,
   ChangePasswordRequestBody,
   changePasswordBodySchema,
   emptyQuerySchema,
@@ -43,6 +46,8 @@ import {
   logoutBodySchema,
   RefreshRequestBody,
   refreshBodySchema,
+  ResetPasswordRequestBody,
+  resetPasswordBodySchema,
 } from "../schemas/auth.schemas";
 
 export interface AuthRoutesDependencies {
@@ -57,6 +62,7 @@ export interface AuthRoutesDependencies {
   readonly refreshSessionUseCase?: IRefreshSessionUseCase;
   readonly logoutUseCase?: ILogoutUseCase;
   readonly changePasswordUseCase?: IChangePasswordUseCase;
+  readonly consumeActivationTokenUseCase?: IConsumeActivationTokenUseCase;
   readonly authPolicy?: IAuthorizationPolicyService;
   readonly operatorPrincipalResolver?: IOperatorPrincipalResolver;
   readonly nowProvider?: () => Date;
@@ -157,6 +163,7 @@ export function registerAuthRoutes(
     cookieService,
     csrfTokenService,
     rateLimiter,
+    consumeActivationTokenUseCase,
   } = deps;
   const nowProvider = deps.nowProvider ?? (() => new Date());
 
@@ -788,4 +795,117 @@ export function registerAuthRoutes(
       );
     }
   );
+
+  // =========================================================================
+  // ENDPOINT: POST /api/v1/auth/activate (Activación con token de un solo uso)
+  // =========================================================================
+  app.post<{ Body: ActivateRequestBody }>(
+    "/api/v1/auth/activate",
+    {
+      schema: {
+        body: activateBodySchema,
+        querystring: emptyQuerySchema,
+      },
+    },
+    async (req, reply) => {
+      const now = nowProvider();
+
+      // 1. Rate limiting por IP
+      await rateLimiter.consumeOrThrow({
+        operation: "activation",
+        dimension: "ip",
+        rawIdentifier: req.ip,
+        rule: httpConfig.rateLimit.loginByIp,
+        now,
+      });
+
+      if (!consumeActivationTokenUseCase) {
+        return reply.code(501).send({
+          statusCode: 501,
+          error: "Not Implemented",
+          code: "ACTIVATION_NOT_CONFIGURED",
+          message: "El servicio de activación de cuentas no está configurado.",
+        });
+      }
+
+      const result = await consumeActivationTokenUseCase.execute({
+        rawToken: req.body.token,
+        newPassword: req.body.newPassword,
+        tokenType: "activation",
+        ipAddress: req.ip,
+        userAgent: sanitizeUserAgent(req.headers["user-agent"]),
+      });
+
+      return reply.code(200).send(
+        buildSuccessEnvelope(
+          {
+            activated: true,
+            userId: result.userId,
+            email: result.email,
+            status: result.status,
+            message: "Cuenta activada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.",
+          },
+          req,
+          now
+        )
+      );
+    }
+  );
+
+  // =========================================================================
+  // ENDPOINT: POST /api/v1/auth/reset-password (Restablecimiento con token)
+  // =========================================================================
+  app.post<{ Body: ResetPasswordRequestBody }>(
+    "/api/v1/auth/reset-password",
+    {
+      schema: {
+        body: resetPasswordBodySchema,
+        querystring: emptyQuerySchema,
+      },
+    },
+    async (req, reply) => {
+      const now = nowProvider();
+
+      // 1. Rate limiting por IP
+      await rateLimiter.consumeOrThrow({
+        operation: "reset_password",
+        dimension: "ip",
+        rawIdentifier: req.ip,
+        rule: httpConfig.rateLimit.loginByIp,
+        now,
+      });
+
+      if (!consumeActivationTokenUseCase) {
+        return reply.code(501).send({
+          statusCode: 501,
+          error: "Not Implemented",
+          code: "PASSWORD_RESET_NOT_CONFIGURED",
+          message: "El servicio de restablecimiento de contraseña no está configurado.",
+        });
+      }
+
+      const result = await consumeActivationTokenUseCase.execute({
+        rawToken: req.body.token,
+        newPassword: req.body.newPassword,
+        tokenType: "password_reset",
+        ipAddress: req.ip,
+        userAgent: sanitizeUserAgent(req.headers["user-agent"]),
+      });
+
+      return reply.code(200).send(
+        buildSuccessEnvelope(
+          {
+            reset: true,
+            userId: result.userId,
+            email: result.email,
+            status: result.status,
+            message: "Contraseña actualizada exitosamente. Ya puedes iniciar sesión con tu nueva contraseña.",
+          },
+          req,
+          now
+        )
+      );
+    }
+  );
 }
+

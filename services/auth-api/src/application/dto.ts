@@ -67,3 +67,36 @@ export interface AdminUpdateStatusDto {
   readonly userAgent?: string | null;
 }
 
+export interface GenerateActivationTokenDto {
+  readonly userId: UserId;
+  readonly tokenType?: "activation" | "password_reset";
+  readonly expiresInHours?: number;
+  readonly createdBy?: UserId | null;
+  readonly ipAddress?: string | null;
+  readonly userAgent?: string | null;
+}
+
+export interface GenerateActivationTokenResult {
+  readonly tokenId: string;
+  readonly userId: UserId;
+  readonly rawToken: string;
+  readonly tokenType: "activation" | "password_reset";
+  readonly expiresAt: Date;
+}
+
+export interface ConsumeActivationTokenDto {
+  readonly rawToken: string;
+  readonly newPassword: string;
+  readonly tokenType?: "activation" | "password_reset";
+  readonly ipAddress?: string | null;
+  readonly userAgent?: string | null;
+}
+
+export interface ConsumeActivationTokenResult {
+  readonly success: boolean;
+  readonly userId: UserId;
+  readonly email: string;
+  readonly status: string;
+}
+
+
