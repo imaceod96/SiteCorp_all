@@ -4,6 +4,9 @@ export interface AccessTokenPayload {
   readonly sub: UserId;
   readonly email: string;
   readonly role: string;
+  readonly scope?: string;
+  readonly sid?: string;
+  readonly jti?: string;
   readonly iss?: string;
   readonly aud?: string;
   readonly iat?: number;

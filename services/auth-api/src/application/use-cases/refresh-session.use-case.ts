@@ -109,6 +109,7 @@ export class RefreshSessionUseCase implements IRefreshSessionUseCase {
           ? "pending_password_change"
           : "authenticated",
         scope: isPendingPasswordChange ? "auth:change_password" : "api:full",
+        sid: session.id,
       });
 
       // Registrar auditoría de rotación exitosa en la misma transacción

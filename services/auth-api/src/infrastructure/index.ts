@@ -7,4 +7,5 @@ export * from "./testing/fake-password-hasher";
 export * from "./testing/fake-token.service";
 export * from "./testing/mock-authorization.service";
 export * from "./postgres";
-
+export * from "./config";
+export * from "./crypto";

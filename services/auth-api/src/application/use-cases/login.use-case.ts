@@ -20,8 +20,14 @@ import { ILoginUseCase } from "../use-cases.interface";
 import { LoginDto, LoginResult } from "../dto";
 import { randomUUID } from "node:crypto";
 
+/**
+ * Hash Argon2id v=19 real, válido y verificable (m=19456 KiB, t=2, p=1, sal CSPRNG de 16 bytes,
+ * digest de 32 bytes), utilizado para ejecutar un cómputo real de Argon2id cuando el usuario no
+ * existe, está eliminado o suspendido, mitigando diferencias macroscópicas de temporización
+ * tanto con Argon2idPasswordHasher como con FakePasswordHasher.
+ */
 const DUMMY_HASH =
-  "$fake_argon2id$v=19$0000000000000000000000000000000000000000000000000000000000000000";
+  "$argon2id$v=19$m=19456,t=2,p=1$29RXI0hXtMDRMmbe3/7zdg$OvdMWPHapeufQQ7Uqsz2aYDyzKplvPMt3iAN8/1b/5w";
 
 export class LoginUseCase implements ILoginUseCase {
   constructor(
@@ -271,6 +277,7 @@ export class LoginUseCase implements ILoginUseCase {
       email: authenticatedUser.email,
       role: isPendingPasswordChange ? "pending_password_change" : "authenticated",
       scope: isPendingPasswordChange ? "auth:change_password" : "api:full",
+      sid: sessionId,
     });
 
     return {
