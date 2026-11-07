@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest"
 import {
   AuthProviderFactory,
   createAuthenticationProvider,
+  createDefaultAuthenticationProvider,
   type AuthProviderConfig,
 } from "../infrastructure/auth-provider.factory"
 import { SupabaseAuthAdapter, type SupabaseAuthClientLike } from "../infrastructure/supabase-auth.adapter"
+import { SelfHostedAuthAdapter } from "../infrastructure/self-hosted-auth.adapter"
 import type { IAuthenticationProvider } from "../domain/auth-provider.contracts"
 
 function createMockSupabaseClient(): SupabaseAuthClientLike {
@@ -65,26 +67,22 @@ describe("AuthProviderFactory (Fase 3A)", () => {
     })
   })
 
-  describe("2. Rechazo estricto de proveedores no implementados", () => {
-    it("lanza un error explícito cuando se solicita el proveedor 'self_hosted'", () => {
-      expect(() => {
-        AuthProviderFactory.create({
-          type: "self_hosted",
-          baseUrl: "http://localhost:9999",
-        })
-      }).toThrowError(/El proveedor de autenticación 'self_hosted' aún no está disponible/)
+  describe("2. Selección del proveedor self_hosted propio y valor por defecto", () => {
+    it("crea una instancia de SelfHostedAuthAdapter cuando se especifica type: 'self_hosted'", () => {
+      const provider = AuthProviderFactory.create({
+        type: "self_hosted",
+        baseUrl: "http://localhost:4010",
+      })
+
+      expect(provider).toBeInstanceOf(SelfHostedAuthAdapter)
+      expect(typeof provider.signInWithPassword).toBe("function")
+      expect(typeof provider.refreshToken).toBe("function")
+      expect(typeof provider.updatePassword).toBe("function")
     })
 
-    it("no activa ningún fallback silencioso a Supabase si se solicita 'self_hosted'", () => {
-      let createdProvider: IAuthenticationProvider | null = null
-
-      try {
-        createdProvider = AuthProviderFactory.create({ type: "self_hosted" })
-      } catch {
-        // Error esperado
-      }
-
-      expect(createdProvider).toBeNull()
+    it("resuelve Supabase como proveedor predeterminado del sistema", () => {
+      const defaultProvider = createDefaultAuthenticationProvider()
+      expect(defaultProvider).toBeInstanceOf(SupabaseAuthAdapter)
     })
   })
 

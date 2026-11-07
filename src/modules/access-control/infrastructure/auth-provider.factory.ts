@@ -3,6 +3,11 @@ import {
   SupabaseAuthAdapter,
   type SupabaseAuthClientLike,
 } from "./supabase-auth.adapter"
+import {
+  SelfHostedAuthAdapter,
+  type SelfHostedAuthAdapterOptions,
+  type StorageLike,
+} from "./self-hosted-auth.adapter"
 
 /**
  * Identificadores de los tipos de proveedores de autenticación admitidos en la arquitectura.
@@ -22,13 +27,10 @@ export interface SupabaseProviderConfig {
 }
 
 /**
- * Configuración reservada para el futuro proveedor de autenticación autogestionado.
- * Arquitectónicamente definida para admitir endpoint o servicio nativo,
- * pero no implementada en esta fase.
+ * Configuración para el proveedor de autenticación propio autogestionado (Fastify/Node.js).
  */
-export interface SelfHostedProviderConfig {
+export interface SelfHostedProviderConfig extends SelfHostedAuthAdapterOptions {
   type: "self_hosted"
-  baseUrl?: string
 }
 
 /**
@@ -40,20 +42,19 @@ export type AuthProviderConfig = SupabaseProviderConfig | SelfHostedProviderConf
  * Factoría desacoplada para la resolución de instancias de IAuthenticationProvider.
  *
  * REGLAS DE ARQUITECTURA:
- * 1. Selección explícita: el proveedor se resuelve exclusivamente mediante la configuración
- *    recibida por parámetro. No consulta variables de entorno globales ni deduce opciones en segundo plano.
+ * 1. Selección explícita: el proveedor se resuelve mediante la configuración recibida.
  * 2. Cero fallback silencioso: si se especifica un tipo no soportado o inválido, la factoría
  *    lanza un error explícito inmediatamente.
- * 3. Aislamiento total: la factoría es una función pura / clase estática sin estado global ni
- *    efectos secundarios al ser importada.
- * 4. Desconexión del flujo activo: no está conectada a AuthProvider.tsx ni a la UI de SiteCorp.
+ * 3. Aislamiento total: la factoría es una función pura / clase estática sin efectos secundarios.
+ * 4. Supabase por defecto: si no se especifica explícitamente 'self_hosted', la aplicación
+ *    conserva Supabase como proveedor primario e inalterado.
  */
 export class AuthProviderFactory {
   /**
    * Crea y devuelve una instancia de IAuthenticationProvider según la configuración especificada.
    *
    * @param config Configuración tipada del proveedor.
-   * @throws Error si la configuración es inválida, el proveedor no existe o aún no está implementado.
+   * @throws Error si la configuración es inválida o el proveedor no existe.
    */
   static create(config: AuthProviderConfig): IAuthenticationProvider {
     if (!config || typeof config !== "object" || !("type" in config)) {
@@ -67,9 +68,7 @@ export class AuthProviderFactory {
         return new SupabaseAuthAdapter(config.client)
 
       case "self_hosted":
-        throw new Error(
-          "El proveedor de autenticación 'self_hosted' aún no está disponible ni implementado en esta versión de SiteCorp."
-        )
+        return new SelfHostedAuthAdapter(config)
 
       default: {
         const unknownType = (config as { type: string }).type
@@ -79,6 +78,29 @@ export class AuthProviderFactory {
       }
     }
   }
+
+  /**
+   * Obtiene la configuración predeterminada del sistema.
+   * Mantiene 'supabase' como proveedor predeterminado a menos que se configure explícitamente 'self_hosted'.
+   */
+  static getDefaultConfig(): AuthProviderConfig {
+    const configuredProvider =
+      typeof import.meta !== "undefined" && import.meta.env?.VITE_AUTH_PROVIDER
+        ? String(import.meta.env.VITE_AUTH_PROVIDER).trim().toLowerCase()
+        : "supabase"
+
+    if (configuredProvider === "self_hosted") {
+      return {
+        type: "self_hosted",
+        baseUrl:
+          typeof import.meta !== "undefined" && import.meta.env?.VITE_AUTH_API_URL
+            ? String(import.meta.env.VITE_AUTH_API_URL).trim()
+            : undefined,
+      }
+    }
+
+    return { type: "supabase" }
+  }
 }
 
 /**
@@ -87,3 +109,12 @@ export class AuthProviderFactory {
 export function createAuthenticationProvider(config: AuthProviderConfig): IAuthenticationProvider {
   return AuthProviderFactory.create(config)
 }
+
+/**
+ * Factoría que resuelve el proveedor predeterminado configurado en el sistema (por defecto: Supabase).
+ */
+export function createDefaultAuthenticationProvider(): IAuthenticationProvider {
+  return AuthProviderFactory.create(AuthProviderFactory.getDefaultConfig())
+}
+
+export type { StorageLike }
