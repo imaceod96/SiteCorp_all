@@ -35,6 +35,8 @@ import { registerErrorHandlers } from "./plugins/error-handler";
 import { registerHealthRoutes } from "./routes/health.routes";
 import { registerAuthRoutes } from "./routes/auth.routes";
 import { registerAdminRoutes } from "./routes/admin.routes";
+import { registerDomainRoutes } from "./routes/domain.routes";
+import { registerStorageRoutes } from "./routes/storage.routes";
 import { AuthHttpServerDependencies } from "./types";
 
 /**
@@ -400,7 +402,36 @@ export async function buildAuthHttpServer(
     nowProvider,
   });
 
-  // 12. Cierre ordenado de recursos al invocar `await app.close()`
+  // 12. Registrar endpoints de dominio si domainRepo está disponible (/api/v1/domain/*)
+  if (deps.domainRepo) {
+    registerDomainRoutes(app, {
+      httpConfig,
+      tokenService: deps.tokenService,
+      userRepo: deps.userRepo,
+      sessionRepo: deps.sessionRepo,
+      domainRepo: deps.domainRepo,
+      rateLimiter,
+      authPolicy,
+      operatorPrincipalResolver,
+      nowProvider,
+    });
+  }
+
+  // 13. Registrar endpoints de storage si storageService está disponible (/api/v1/storage/*)
+  if (deps.storageService) {
+    registerStorageRoutes(app, {
+      httpConfig,
+      tokenService: deps.tokenService,
+      userRepo: deps.userRepo,
+      sessionRepo: deps.sessionRepo,
+      storageService: deps.storageService,
+      authPolicy,
+      operatorPrincipalResolver,
+      nowProvider,
+    });
+  }
+
+  // 14. Cierre ordenado de recursos al invocar `await app.close()`
   app.addHook("onClose", async () => {
     shuttingDown = true;
     argon2Gate.shutdown();

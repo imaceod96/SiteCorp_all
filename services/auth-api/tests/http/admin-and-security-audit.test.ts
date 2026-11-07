@@ -236,6 +236,7 @@ describe("Fase 4G.2 FINAL — Modelo Autoritativo de Permisos, Endpoints Adminis
       "0001_sitecorp_auth_schema",
       "0002_sitecorp_auth_operator_permissions",
       "0003_sitecorp_auth_activation_tokens",
+      "0004_sitecorp_domain_schema",
     ]);
 
     userRepo = new PostgresUserRepository(txManager);

@@ -176,7 +176,46 @@ export function loadActivationTokensMigration(
 }
 
 /**
- * Carga la secuencia completa de migraciones de diseño de SiteCorp Auth (`0001`, `0002` y `0003`).
+ * Carga el archivo de diseño SQL `0004_sitecorp_domain_schema.design.sql`
+ * para el esquema completo de dominio, trabajadores, contratos, vacantes y Storage.
+ *
+ * Bloquea su carga si `NODE_ENV === 'production'` o si el entorno objetivo es productivo.
+ */
+export function loadDomainSchemaMigration(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): MigrationDefinition {
+  const sourceFileName = "0004_sitecorp_domain_schema.design.sql";
+  if (isProtectedProductionTarget(options?.environment, options?.connectionHint)) {
+    throw new ProductionDesignMigrationForbiddenError(sourceFileName);
+  }
+
+  const filePath = resolve(
+    baseDir ?? process.cwd(),
+    `db/migrations/${sourceFileName}`
+  );
+  const rawSql = readFileSync(filePath, "utf8");
+
+  const innerSql = rawSql
+    .replace(/^\s*BEGIN\s*;/im, "")
+    .replace(/COMMIT\s*;\s*$/im, "")
+    .trim();
+
+  const checksumSha256 = computeMigrationChecksum(innerSql);
+
+  return {
+    version: "0004_sitecorp_domain_schema",
+    description:
+      "SiteCorp autonomous domain schema: company clients, org entities, workers, contracts, vacations, audit and storage",
+    sql: innerSql,
+    checksumSha256,
+    isDesignArtifact: true,
+    sourceFileName,
+  };
+}
+
+/**
+ * Carga la secuencia completa de migraciones de diseño de SiteCorp (`0001`, `0002`, `0003` y `0004`).
  */
 export function loadAllAuthSchemaMigrations(
   baseDir?: string,
@@ -186,6 +225,7 @@ export function loadAllAuthSchemaMigrations(
     loadInitialAuthSchemaMigration(baseDir, options),
     loadOperatorPermissionsMigration(baseDir, options),
     loadActivationTokensMigration(baseDir, options),
+    loadDomainSchemaMigration(baseDir, options),
   ];
 }
 
