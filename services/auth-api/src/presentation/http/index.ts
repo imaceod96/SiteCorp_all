@@ -12,3 +12,4 @@ export * from "./schemas/admin.schemas";
 export * from "./routes/health.routes";
 export * from "./routes/auth.routes";
 export * from "./routes/admin.routes";
+export * from "./entrypoint";

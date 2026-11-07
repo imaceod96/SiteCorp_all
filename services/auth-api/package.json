@@ -8,7 +8,11 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json",
     "test": "vitest run --config ./vitest.config.ts",
-    "lint": "eslint src tests"
+    "lint": "eslint src tests",
+    "start": "node dist/presentation/http/entrypoint.js",
+    "dev": "tsx src/presentation/http/entrypoint.ts",
+    "db:migrate": "tsx src/cli/migrate.ts",
+    "admin:bootstrap": "tsx src/cli/bootstrap-admin.ts"
   },
   "keywords": [
     "sitecorp",
