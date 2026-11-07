@@ -1,7 +1,10 @@
 import { SecurityEvent, SecurityEventProps, UserId } from "../../domain";
 import { ISecurityAuditService } from "../../interfaces";
+import { SnapshotableRepository } from "./in-memory-transaction.manager";
 
-export class InMemorySecurityAuditService implements ISecurityAuditService {
+export class InMemorySecurityAuditService
+  implements ISecurityAuditService, SnapshotableRepository
+{
   private readonly events: SecurityEventProps[] = [];
 
   private clone(event: SecurityEvent): SecurityEventProps {
@@ -47,7 +50,24 @@ export class InMemorySecurityAuditService implements ISecurityAuditService {
     );
   }
 
+  createSnapshot(): unknown {
+    return this.events.map((e) => ({
+      ...e,
+      metadata: e.metadata ? Object.freeze({ ...e.metadata }) : null,
+      createdAt: new Date(e.createdAt.getTime()),
+    }));
+  }
+
+  restoreSnapshot(snapshot: unknown): void {
+    const saved = snapshot as SecurityEventProps[];
+    this.events.length = 0;
+    for (const item of saved) {
+      this.events.push(item);
+    }
+  }
+
   clear(): void {
     this.events.length = 0;
   }
 }
+

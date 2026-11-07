@@ -10,6 +10,7 @@ import {
   ISessionRepository,
   IPasswordHasher,
   ISecurityAuditService,
+  ITransactionManager,
 } from "../../interfaces";
 import { IChangePasswordUseCase } from "../use-cases.interface";
 import { ChangePasswordDto } from "../dto";
@@ -22,14 +23,31 @@ export class SamePasswordError extends DomainError {
   }
 }
 
+export class ConcurrentCredentialModificationError extends DomainError {
+  public readonly code = "CONCURRENT_CREDENTIAL_MODIFICATION";
+  constructor() {
+    super(
+      "La credencial fue modificada concurrentemente por otra operación. Por favor, inicie sesión nuevamente."
+    );
+  }
+}
+
 export class ChangePasswordUseCase implements IChangePasswordUseCase {
   constructor(
     private readonly userRepo: IUserRepository,
     private readonly credentialRepo: ICredentialRepository,
     private readonly sessionRepo: ISessionRepository,
     private readonly passwordHasher: IPasswordHasher,
-    private readonly auditService: ISecurityAuditService
+    private readonly auditService: ISecurityAuditService,
+    private readonly txManager?: ITransactionManager
   ) {}
+
+  private async executeInTx<T>(work: () => Promise<T>): Promise<T> {
+    if (this.txManager) {
+      return this.txManager.runInTransaction(() => work());
+    }
+    return work();
+  }
 
   async execute(dto: ChangePasswordDto): Promise<void> {
     const now = new Date();
@@ -37,14 +55,14 @@ export class ChangePasswordUseCase implements IChangePasswordUseCase {
     // 1. Validar política estricta de la nueva contraseña
     PasswordPolicy.assertValid(dto.newPassword);
 
-    // 2. Verificar existencia y estado del usuario
+    // 2. Verificar existencia y estado inicial del usuario (lectura fuera de transacción)
     const user = await this.userRepo.findById(dto.userId);
     if (!user) {
       throw new InvalidCredentialsError();
     }
     user.ensureCanAuthenticate(now);
 
-    // 3. Buscar credenciales actuales y verificar contraseña actual
+    // 3. Buscar credenciales actuales y verificar contraseña actual FUERA de la transacción SQL
     const credential = await this.credentialRepo.findByUserId(user.id);
     if (!credential) {
       throw new InvalidCredentialsError();
@@ -58,7 +76,10 @@ export class ChangePasswordUseCase implements IChangePasswordUseCase {
       await this.auditService.recordEvent(
         SecurityEvent.create(randomUUID(), "LOGIN_FAILED", {
           userId: user.id,
-          metadata: { action: "CHANGE_PASSWORD_FAILED", reason: "CURRENT_PASSWORD_MISMATCH" },
+          metadata: {
+            action: "CHANGE_PASSWORD_FAILED",
+            reason: "CURRENT_PASSWORD_MISMATCH",
+          },
           now,
         })
       );
@@ -74,31 +95,65 @@ export class ChangePasswordUseCase implements IChangePasswordUseCase {
       throw new SamePasswordError();
     }
 
-    // 5. Hashear nueva contraseña y actualizar credencial
+    // 5. Hashear nueva contraseña FUERA de la transacción SQL (Argon2id CPU-bound)
     const newHash = await this.passwordHasher.hash(dto.newPassword);
-    await this.credentialRepo.update({
-      id: credential.id,
-      userId: user.id,
-      algorithm: this.passwordHasher.algorithm,
-      passwordHash: newHash,
-      version: credential.version + 1,
-      createdAt: now,
+
+    // 6. Transacción ACID compartida:
+    //    Nivel 1 (`users`) -> Nivel 2 (`user_credentials`) -> Nivel 3 y 4 (`sessions` y `refresh_tokens`) -> Nivel 5 (`audit`)
+    await this.executeInTx(async () => {
+      // 6.1 Revalidar usuario bajo bloqueo (Nivel 1)
+      const lockedUser = this.userRepo.findByIdForUpdate
+        ? await this.userRepo.findByIdForUpdate(user.id)
+        : await this.userRepo.findById(user.id);
+
+      if (
+        !lockedUser ||
+        lockedUser.status === "deleted" ||
+        lockedUser.deletedAt !== null
+      ) {
+        throw new InvalidCredentialsError();
+      }
+      lockedUser.ensureCanAuthenticate(now);
+
+      // 6.2 Revalidar credencial y versión bajo bloqueo (Nivel 2)
+      const lockedCred = this.credentialRepo.findByUserIdForUpdate
+        ? await this.credentialRepo.findByUserIdForUpdate(lockedUser.id)
+        : await this.credentialRepo.findByUserId(lockedUser.id);
+
+      if (!lockedCred) {
+        throw new InvalidCredentialsError();
+      }
+      if (lockedCred.version !== credential.version) {
+        throw new ConcurrentCredentialModificationError();
+      }
+
+      const nextVersion = lockedCred.version + 1;
+
+      // 6.3 Actualizar credencial
+      await this.credentialRepo.update({
+        id: lockedCred.id,
+        userId: lockedUser.id,
+        algorithm: this.passwordHasher.algorithm,
+        passwordHash: newHash,
+        version: nextVersion,
+        createdAt: now,
+      });
+
+      // 6.4 Actualizar usuario (limpia mustChangePassword y status pending_password_change)
+      lockedUser.markPasswordChanged(now);
+      await this.userRepo.update(lockedUser);
+
+      // 6.5 Revocar todas las sesiones y refresh tokens previos del usuario (Nivel 3 y Nivel 4)
+      await this.sessionRepo.revokeAllUserSessions(lockedUser.id);
+
+      // 6.6 Registrar auditoría de seguridad (Nivel 5)
+      await this.auditService.recordEvent(
+        SecurityEvent.create(randomUUID(), "PASSWORD_CHANGED", {
+          userId: lockedUser.id,
+          metadata: { newCredentialVersion: nextVersion },
+          now,
+        })
+      );
     });
-
-    // 6. Actualizar usuario (limpia mustChangePassword y status pending_password_change)
-    user.markPasswordChanged(now);
-    await this.userRepo.update(user);
-
-    // 7. Revocar todas las sesiones previas del usuario por seguridad
-    await this.sessionRepo.revokeAllUserSessions(user.id);
-
-    // 8. Registrar auditoría de seguridad
-    await this.auditService.recordEvent(
-      SecurityEvent.create(randomUUID(), "PASSWORD_CHANGED", {
-        userId: user.id,
-        metadata: { newCredentialVersion: credential.version + 1 },
-        now,
-      })
-    );
   }
 }

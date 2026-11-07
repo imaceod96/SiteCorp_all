@@ -5,6 +5,8 @@ export interface AuthenticatedPrincipal {
   readonly email: Email;
   readonly permissions: ReadonlySet<string>;
   readonly isPlatformAdmin?: boolean;
+  readonly mustChangePassword?: boolean;
+  readonly role?: string;
 }
 
 export interface IAuthorizationPolicyService {

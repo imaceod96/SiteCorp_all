@@ -10,6 +10,44 @@ export interface SecurityEventProps {
   createdAt: Date;
 }
 
+const SENSITIVE_METADATA_KEY_PATTERN =
+  /password|passwd|secret|token_hash|tokenhash|raw_?refresh_?token|refresh_?token|access_?token|authorization|cookie|private_?key|credential/i;
+
+export function sanitizeAuditMetadata(
+  input: Readonly<Record<string, unknown>> | null | undefined,
+  depth: number = 0
+): Readonly<Record<string, unknown>> | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+  if (depth > 4) {
+    return Object.freeze({});
+  }
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (
+      SENSITIVE_METADATA_KEY_PATTERN.test(key) &&
+      key !== "attemptedTokenHashPrefix"
+    ) {
+      sanitized[key] = "[REDACTED]";
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      !(value instanceof Date)
+    ) {
+      sanitized[key] = sanitizeAuditMetadata(
+        value as Record<string, unknown>,
+        depth + 1
+      );
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return Object.freeze(sanitized);
+}
+
 export class SecurityEvent {
   public readonly id: string;
   public readonly userId: UserId | null;
@@ -46,12 +84,15 @@ export class SecurityEvent {
       userId: options.userId ?? null,
       ipAddress: options.ipAddress ?? null,
       userAgent: options.userAgent ?? null,
-      metadata: options.metadata ? Object.freeze({ ...options.metadata }) : null,
+      metadata: options.metadata ? sanitizeAuditMetadata(options.metadata) : null,
       createdAt: options.now ?? new Date(),
     });
   }
 
   public static reconstitute(props: SecurityEventProps): SecurityEvent {
-    return new SecurityEvent(props);
+    return new SecurityEvent({
+      ...props,
+      metadata: props.metadata ? sanitizeAuditMetadata(props.metadata) : null,
+    });
   }
 }

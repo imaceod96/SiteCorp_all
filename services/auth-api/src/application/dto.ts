@@ -50,5 +50,6 @@ export interface AdminCreateUserDto {
 
 export interface AdminUpdateStatusDto {
   readonly userId: UserId;
-  readonly status: "active" | "suspended";
+  readonly status: "active" | "suspended" | "deleted";
 }
+

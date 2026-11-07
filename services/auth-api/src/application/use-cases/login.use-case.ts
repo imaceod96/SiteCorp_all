@@ -5,6 +5,7 @@ import {
   createEmail,
   isValidEmail,
   InvalidCredentialsError,
+  AccountLockedError,
 } from "../../domain";
 import {
   IUserRepository,
@@ -13,12 +14,14 @@ import {
   IPasswordHasher,
   ITokenService,
   ISecurityAuditService,
+  ITransactionManager,
 } from "../../interfaces";
 import { ILoginUseCase } from "../use-cases.interface";
 import { LoginDto, LoginResult } from "../dto";
 import { randomUUID } from "node:crypto";
 
-const DUMMY_HASH = "$fake_argon2id$v=19$0000000000000000000000000000000000000000000000000000000000000000";
+const DUMMY_HASH =
+  "$fake_argon2id$v=19$0000000000000000000000000000000000000000000000000000000000000000";
 
 export class LoginUseCase implements ILoginUseCase {
   constructor(
@@ -29,8 +32,16 @@ export class LoginUseCase implements ILoginUseCase {
     private readonly tokenService: ITokenService,
     private readonly auditService: ISecurityAuditService,
     private readonly maxFailedAttempts: number = 5,
-    private readonly lockDurationMs: number = 15 * 60 * 1000
+    private readonly lockDurationMs: number = 15 * 60 * 1000,
+    private readonly txManager?: ITransactionManager
   ) {}
+
+  private async executeInTx<T>(work: () => Promise<T>): Promise<T> {
+    if (this.txManager) {
+      return this.txManager.runInTransaction(() => work());
+    }
+    return work();
+  }
 
   async execute(dto: LoginDto): Promise<LoginResult> {
     const now = new Date();
@@ -72,7 +83,10 @@ export class LoginUseCase implements ILoginUseCase {
       throw new InvalidCredentialsError();
     }
 
-    // 4. Verificar estado de la cuenta (bloqueada, suspendida)
+    // 4. Verificar estado de la cuenta (bloqueada, suspendida) homogeneizando tiempo de respuesta
+    if (user.status === "suspended" || user.isLocked(now)) {
+      await this.passwordHasher.verify(dto.password, DUMMY_HASH);
+    }
     user.ensureCanAuthenticate(now);
 
     // 5. Buscar credenciales
@@ -82,90 +96,190 @@ export class LoginUseCase implements ILoginUseCase {
       throw new InvalidCredentialsError();
     }
 
-    // 6. Verificar contraseña
-    const isPasswordValid = await this.passwordHasher.verify(dto.password, credential.passwordHash);
+    // 6. Verificar contraseña FUERA de la transacción SQL (operación CPU-bound de Argon2id)
+    const isPasswordValid = await this.passwordHasher.verify(
+      dto.password,
+      credential.passwordHash
+    );
 
     if (!isPasswordValid) {
-      user.registerFailedAttempt(this.maxFailedAttempts, this.lockDurationMs, now);
-      await this.userRepo.update(user);
+      // Incremento atómico de intentos fallidos y auditoría dentro de una misma transacción
+      const failureOutcome = await this.executeInTx(async () => {
+        if (this.userRepo.incrementFailedAttemptsAtomic) {
+          const atomicRes = await this.userRepo.incrementFailedAttemptsAtomic(
+            user.id,
+            this.maxFailedAttempts,
+            this.lockDurationMs,
+            now
+          );
+          const isNowLocked =
+            atomicRes.lockedUntil !== null &&
+            atomicRes.lockedUntil.getTime() > now.getTime();
 
-      await this.auditService.recordEvent(
-        SecurityEvent.create(randomUUID(), "LOGIN_FAILED", {
-          userId: user.id,
-          ipAddress: dto.ipAddress ?? null,
-          userAgent: dto.userAgent ?? null,
-          metadata: {
-            reason: "INVALID_PASSWORD",
-            failedAttempts: user.failedLoginAttempts,
-            isLocked: user.isLocked(now),
-          },
-          now,
-        })
-      );
+          await this.auditService.recordEvent(
+            SecurityEvent.create(randomUUID(), "LOGIN_FAILED", {
+              userId: user.id,
+              ipAddress: dto.ipAddress ?? null,
+              userAgent: dto.userAgent ?? null,
+              metadata: {
+                reason: "INVALID_PASSWORD",
+                failedAttempts: atomicRes.failedLoginAttempts,
+                isLocked: isNowLocked,
+              },
+              now,
+            })
+          );
 
-      // Si este intento activó el bloqueo, lanzar excepción de cuenta bloqueada
-      if (user.isLocked(now) && user.lockedUntil) {
-        user.ensureCanAuthenticate(now);
+          if (isNowLocked && atomicRes.failedLoginAttempts >= this.maxFailedAttempts) {
+            await this.auditService.recordEvent(
+              SecurityEvent.create(randomUUID(), "ACCOUNT_LOCKED", {
+                userId: user.id,
+                ipAddress: dto.ipAddress ?? null,
+                userAgent: dto.userAgent ?? null,
+                metadata: {
+                  failedAttempts: atomicRes.failedLoginAttempts,
+                  lockedUntil: atomicRes.lockedUntil?.toISOString() ?? null,
+                },
+                now,
+              })
+            );
+          }
+
+          return {
+            isLocked: isNowLocked,
+            lockedUntil: atomicRes.lockedUntil,
+          };
+        }
+
+        user.registerFailedAttempt(this.maxFailedAttempts, this.lockDurationMs, now);
+        await this.userRepo.update(user);
+        const isNowLocked = user.isLocked(now);
+
+        await this.auditService.recordEvent(
+          SecurityEvent.create(randomUUID(), "LOGIN_FAILED", {
+            userId: user.id,
+            ipAddress: dto.ipAddress ?? null,
+            userAgent: dto.userAgent ?? null,
+            metadata: {
+              reason: "INVALID_PASSWORD",
+              failedAttempts: user.failedLoginAttempts,
+              isLocked: isNowLocked,
+            },
+            now,
+          })
+        );
+
+        if (isNowLocked && user.failedLoginAttempts >= this.maxFailedAttempts) {
+          await this.auditService.recordEvent(
+            SecurityEvent.create(randomUUID(), "ACCOUNT_LOCKED", {
+              userId: user.id,
+              ipAddress: dto.ipAddress ?? null,
+              userAgent: dto.userAgent ?? null,
+              metadata: {
+                failedAttempts: user.failedLoginAttempts,
+                lockedUntil: user.lockedUntil?.toISOString() ?? null,
+              },
+              now,
+            })
+          );
+        }
+
+        return {
+          isLocked: isNowLocked,
+          lockedUntil: user.lockedUntil,
+        };
+      });
+
+      if (failureOutcome.isLocked && failureOutcome.lockedUntil) {
+        throw new AccountLockedError(failureOutcome.lockedUntil);
       }
 
       throw new InvalidCredentialsError();
     }
 
-    // 7. Login exitoso: restablecer intentos fallidos
-    user.resetFailedAttempts(now);
-    await this.userRepo.update(user);
-
-    // 8. Crear sesión
+    // 7. Generar material de tokens y sesión
     const sessionId = `sess_${randomUUID()}`;
-    const session = AuthSession.create(sessionId, user.id, {
-      ipAddress: dto.ipAddress ?? null,
-      userAgent: dto.userAgent ?? null,
-      now,
-    });
-    await this.sessionRepo.createSession(session);
-
-    // 9. Generar refresh token opaco y familia
     const opaqueToken = this.tokenService.generateOpaqueToken();
     const familyId = `fam_${randomUUID()}`;
-    const refreshToken = RefreshToken.create(
-      `rt_${randomUUID()}`,
-      session.id,
-      opaqueToken.tokenHash,
-      familyId,
-      { now }
-    );
-    await this.sessionRepo.createRefreshToken(refreshToken);
+    const refreshTokenId = `rt_${randomUUID()}`;
 
-    // 10. Emitir access token (restringido si está pendiente de cambio obligatorio de clave)
-    const isPendingPasswordChange = user.mustChangePassword || user.status === "pending_password_change";
+    // 8. Transacción atómica: revalidar usuario y credencial bajo bloqueo, reiniciar intentos,
+    //    crear sesión, crear refresh token e insertar auditoría.
+    const authenticatedUser = await this.executeInTx(async () => {
+      const lockedUser = this.userRepo.findByIdForUpdate
+        ? await this.userRepo.findByIdForUpdate(user.id)
+        : await this.userRepo.findById(user.id);
+
+      if (!lockedUser || lockedUser.status === "deleted" || lockedUser.deletedAt !== null) {
+        throw new InvalidCredentialsError();
+      }
+
+      // Revalidar que la cuenta no fue suspendida ni bloqueada mientras se calculaba Argon2id
+      lockedUser.ensureCanAuthenticate(now);
+
+      // Revalidar que la versión de credencial no cambió concurrentemente durante el login
+      const currentCred = this.credentialRepo.findByUserIdForUpdate
+        ? await this.credentialRepo.findByUserIdForUpdate(lockedUser.id)
+        : await this.credentialRepo.findByUserId(lockedUser.id);
+
+      if (!currentCred || currentCred.version !== credential.version) {
+        throw new InvalidCredentialsError();
+      }
+
+      lockedUser.resetFailedAttempts(now);
+      await this.userRepo.update(lockedUser);
+
+      const session = AuthSession.create(sessionId, lockedUser.id, {
+        ipAddress: dto.ipAddress ?? null,
+        userAgent: dto.userAgent ?? null,
+        now,
+      });
+      await this.sessionRepo.createSession(session);
+
+      const refreshToken = RefreshToken.create(
+        refreshTokenId,
+        session.id,
+        opaqueToken.tokenHash,
+        familyId,
+        { now }
+      );
+      await this.sessionRepo.createRefreshToken(refreshToken);
+
+      await this.auditService.recordEvent(
+        SecurityEvent.create(randomUUID(), "LOGIN_SUCCESS", {
+          userId: lockedUser.id,
+          ipAddress: dto.ipAddress ?? null,
+          userAgent: dto.userAgent ?? null,
+          metadata: {
+            sessionId: session.id,
+            mustChangePassword: lockedUser.mustChangePassword,
+          },
+          now,
+        })
+      );
+
+      return lockedUser;
+    });
+
+    // 9. Emitir access token (restringido si está pendiente de cambio obligatorio de clave)
+    const isPendingPasswordChange =
+      authenticatedUser.mustChangePassword ||
+      authenticatedUser.status === "pending_password_change";
+
     const signedAccess = await this.tokenService.signAccessToken({
-      sub: user.id,
-      email: user.email,
+      sub: authenticatedUser.id,
+      email: authenticatedUser.email,
       role: isPendingPasswordChange ? "pending_password_change" : "authenticated",
       scope: isPendingPasswordChange ? "auth:change_password" : "api:full",
     });
 
-    // 11. Registrar auditoría de éxito
-    await this.auditService.recordEvent(
-      SecurityEvent.create(randomUUID(), "LOGIN_SUCCESS", {
-        userId: user.id,
-        ipAddress: dto.ipAddress ?? null,
-        userAgent: dto.userAgent ?? null,
-        metadata: {
-          sessionId: session.id,
-          mustChangePassword: user.mustChangePassword,
-        },
-        now,
-      })
-    );
-
     return {
-      user,
+      user: authenticatedUser,
       accessToken: signedAccess.token,
       tokenType: "Bearer",
       expiresInSeconds: signedAccess.expiresInSeconds,
       refreshToken: opaqueToken.rawToken,
-      mustChangePassword: user.mustChangePassword,
+      mustChangePassword: authenticatedUser.mustChangePassword,
     };
   }
 }

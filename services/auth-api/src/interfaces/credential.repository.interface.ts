@@ -12,6 +12,8 @@ export interface UserCredential {
 export interface ICredentialRepository {
   save(credential: UserCredential): Promise<void>;
   findByUserId(userId: UserId): Promise<UserCredential | null>;
+  findByUserIdForUpdate?(userId: UserId): Promise<UserCredential | null>;
   update(credential: UserCredential): Promise<void>;
   deleteByUserId(userId: UserId): Promise<void>;
 }
+

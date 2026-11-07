@@ -5,9 +5,10 @@ import {
   UserId,
   DuplicateEmailError,
 } from "../../domain";
-import { IUserRepository } from "../../interfaces";
+import { IUserRepository, IncrementFailedAttemptResult } from "../../interfaces";
+import { SnapshotableRepository } from "./in-memory-transaction.manager";
 
-export class InMemoryUserRepository implements IUserRepository {
+export class InMemoryUserRepository implements IUserRepository, SnapshotableRepository {
   private readonly usersById = new Map<string, AuthUserProps>();
   private readonly userIdByNormalizedEmail = new Map<string, string>();
 
@@ -35,6 +36,10 @@ export class InMemoryUserRepository implements IUserRepository {
       updatedAt: new Date(props.updatedAt.getTime()),
       deletedAt: props.deletedAt ? new Date(props.deletedAt.getTime()) : null,
     });
+  }
+
+  async findByIdForUpdate(id: UserId): Promise<AuthUser | null> {
+    return this.findById(id);
   }
 
   async findByEmail(email: Email): Promise<AuthUser | null> {
@@ -69,7 +74,6 @@ export class InMemoryUserRepository implements IUserRepository {
       throw new DuplicateEmailError(user.email);
     }
 
-    // Si el email cambió, limpiar el índice anterior
     const oldEmail = existing.email.trim().toLowerCase();
     if (oldEmail !== normalizedEmail) {
       this.userIdByNormalizedEmail.delete(oldEmail);
@@ -80,6 +84,33 @@ export class InMemoryUserRepository implements IUserRepository {
     this.userIdByNormalizedEmail.set(normalizedEmail, user.id);
   }
 
+  async incrementFailedAttemptsAtomic(
+    id: UserId,
+    maxAttempts: number,
+    lockDurationMs: number,
+    now: Date = new Date()
+  ): Promise<IncrementFailedAttemptResult> {
+    const existing = this.usersById.get(id);
+    if (!existing) {
+      throw new Error(`Usuario con ID '${id}' no encontrado.`);
+    }
+    const nextAttempts = existing.failedLoginAttempts + 1;
+    const nextLockedUntil =
+      nextAttempts >= maxAttempts
+        ? new Date(now.getTime() + lockDurationMs)
+        : existing.lockedUntil;
+
+    existing.failedLoginAttempts = nextAttempts;
+    existing.lockedUntil = nextLockedUntil ? new Date(nextLockedUntil.getTime()) : null;
+    existing.updatedAt = new Date(now.getTime());
+
+    return {
+      failedLoginAttempts: existing.failedLoginAttempts,
+      lockedUntil: existing.lockedUntil ? new Date(existing.lockedUntil.getTime()) : null,
+      updatedAt: new Date(existing.updatedAt.getTime()),
+    };
+  }
+
   async delete(id: UserId): Promise<void> {
     const existing = this.usersById.get(id);
     if (existing) {
@@ -88,9 +119,41 @@ export class InMemoryUserRepository implements IUserRepository {
     }
   }
 
-  // Utilidad de pruebas para vaciar el estado
+  createSnapshot(): unknown {
+    const users = new Map<string, AuthUserProps>();
+    for (const [k, v] of this.usersById.entries()) {
+      users.set(k, {
+        ...v,
+        lockedUntil: v.lockedUntil ? new Date(v.lockedUntil.getTime()) : null,
+        createdAt: new Date(v.createdAt.getTime()),
+        updatedAt: new Date(v.updatedAt.getTime()),
+        deletedAt: v.deletedAt ? new Date(v.deletedAt.getTime()) : null,
+      });
+    }
+    return {
+      users,
+      emails: new Map(this.userIdByNormalizedEmail),
+    };
+  }
+
+  restoreSnapshot(snapshot: unknown): void {
+    const state = snapshot as {
+      users: Map<string, AuthUserProps>;
+      emails: Map<string, string>;
+    };
+    this.usersById.clear();
+    this.userIdByNormalizedEmail.clear();
+    for (const [k, v] of state.users.entries()) {
+      this.usersById.set(k, v);
+    }
+    for (const [k, v] of state.emails.entries()) {
+      this.userIdByNormalizedEmail.set(k, v);
+    }
+  }
+
   clear(): void {
     this.usersById.clear();
     this.userIdByNormalizedEmail.clear();
   }
 }
+

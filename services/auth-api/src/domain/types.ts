@@ -163,3 +163,14 @@ export class SessionInvalidError extends DomainError {
   }
 }
 
+export class UserNotFoundError extends DomainError {
+  public readonly code = "USER_NOT_FOUND";
+  constructor(userId?: string) {
+    super(
+      userId
+        ? `El usuario con identificador '${userId}' no existe.`
+        : "El usuario solicitado no existe."
+    );
+  }
+}
+

@@ -12,6 +12,7 @@ import {
   InMemoryCredentialRepository,
   InMemorySessionRepository,
   InMemorySecurityAuditService,
+  InMemoryTransactionManager,
 } from "../../src/infrastructure";
 
 describe("Infrastructure: In-Memory Repositories (Pruebas 1, 2, 3)", () => {
@@ -128,5 +129,45 @@ describe("Infrastructure: In-Memory Repositories (Pruebas 1, 2, 3)", () => {
     const events = await auditService.findRecentByUserId(userId);
     expect(events).toHaveLength(1);
     expect(events[0]?.eventType).toBe("LOGIN_SUCCESS");
+  });
+
+  it("InMemoryTransactionManager revierte atómicamente todos los repositorios registrados ante un fallo intermedio", async () => {
+    const txManager = new InMemoryTransactionManager([
+      userRepo,
+      credRepo,
+      sessionRepo,
+      auditService,
+    ]);
+
+    const userId = createUserId("550e8400-e29b-41d4-a716-446655440009");
+    const email = createEmail("tx.rollback@sitecorp.cu");
+    const now = new Date("2026-11-06T11:00:00Z");
+
+    await userRepo.save(AuthUser.create(userId, email, { now }));
+
+    await expect(
+      txManager.runInTransaction(async () => {
+        const u = await userRepo.findById(userId);
+        u!.suspend();
+        await userRepo.update(u!);
+
+        await credRepo.save({
+          id: "cred_tx_1",
+          userId,
+          algorithm: "argon2id",
+          passwordHash: "hash_temp",
+          version: 1,
+          createdAt: now,
+        });
+
+        throw new Error("Fallo intermedio en transacción en memoria");
+      })
+    ).rejects.toThrow("Fallo intermedio en transacción en memoria");
+
+    // Tanto el usuario como la credencial deben haber vuelto al estado previo a la transacción
+    const restoredUser = await userRepo.findById(userId);
+    expect(restoredUser?.status).toBe("active");
+    const restoredCred = await credRepo.findByUserId(userId);
+    expect(restoredCred).toBeNull();
   });
 });

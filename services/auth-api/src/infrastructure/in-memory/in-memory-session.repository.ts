@@ -9,8 +9,9 @@ import {
   ISessionRepository,
   AtomicRotateResult,
 } from "../../interfaces";
+import { SnapshotableRepository } from "./in-memory-transaction.manager";
 
-export class InMemorySessionRepository implements ISessionRepository {
+export class InMemorySessionRepository implements ISessionRepository, SnapshotableRepository {
   private readonly sessionsById = new Map<string, AuthSessionProps>();
   private readonly refreshTokensByHash = new Map<string, RefreshTokenProps>();
   private readonly refreshTokensById = new Map<string, RefreshTokenProps>();
@@ -230,6 +231,54 @@ export class InMemorySessionRepository implements ISessionRepository {
     }
   }
 
+  createSnapshot(): unknown {
+    const sessions = new Map<string, AuthSessionProps>();
+    for (const [k, v] of this.sessionsById.entries()) {
+      sessions.set(k, {
+        ...v,
+        createdAt: new Date(v.createdAt.getTime()),
+        lastActivityAt: new Date(v.lastActivityAt.getTime()),
+        expiresAt: new Date(v.expiresAt.getTime()),
+      });
+    }
+    const tokensById = new Map<string, RefreshTokenProps>();
+    for (const [k, v] of this.refreshTokensById.entries()) {
+      tokensById.set(k, {
+        ...v,
+        createdAt: new Date(v.createdAt.getTime()),
+        expiresAt: new Date(v.expiresAt.getTime()),
+      });
+    }
+    return { sessions, tokensById };
+  }
+
+  restoreSnapshot(snapshot: unknown): void {
+    const state = snapshot as {
+      sessions: Map<string, AuthSessionProps>;
+      tokensById: Map<string, RefreshTokenProps>;
+    };
+    this.clear();
+    for (const [k, v] of state.sessions.entries()) {
+      this.sessionsById.set(k, v);
+      let userSet = this.sessionIdsByUserId.get(v.userId);
+      if (!userSet) {
+        userSet = new Set<string>();
+        this.sessionIdsByUserId.set(v.userId, userSet);
+      }
+      userSet.add(v.id);
+    }
+    for (const [k, v] of state.tokensById.entries()) {
+      this.refreshTokensById.set(k, v);
+      this.refreshTokensByHash.set(v.tokenHash, v);
+      let famSet = this.tokenIdsByFamily.get(v.familyId);
+      if (!famSet) {
+        famSet = new Set<string>();
+        this.tokenIdsByFamily.set(v.familyId, famSet);
+      }
+      famSet.add(v.id);
+    }
+  }
+
   clear(): void {
     this.sessionsById.clear();
     this.refreshTokensByHash.clear();
@@ -238,3 +287,4 @@ export class InMemorySessionRepository implements ISessionRepository {
     this.sessionIdsByUserId.clear();
   }
 }
+

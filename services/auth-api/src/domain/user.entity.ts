@@ -129,7 +129,12 @@ export class AuthUser {
     lockDurationMs: number = 15 * 60 * 1000,
     now: Date = new Date()
   ): void {
-    this._failedLoginAttempts += 1;
+    if (this._lockedUntil && this._lockedUntil.getTime() <= now.getTime()) {
+      this._failedLoginAttempts = 1;
+      this._lockedUntil = null;
+    } else {
+      this._failedLoginAttempts += 1;
+    }
     this._updatedAt = now;
 
     if (this._failedLoginAttempts >= maxAttempts) {
