@@ -335,7 +335,7 @@ export async function buildAuthHttpServer(
       callback(null, false);
     },
     credentials: true,
-    methods: ["GET", "POST", "PATCH", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Authorization",
       "Content-Type",
@@ -425,6 +425,7 @@ export async function buildAuthHttpServer(
       userRepo: deps.userRepo,
       sessionRepo: deps.sessionRepo,
       storageService: deps.storageService,
+      domainRepo: deps.domainRepo,
       authPolicy,
       operatorPrincipalResolver,
       nowProvider,

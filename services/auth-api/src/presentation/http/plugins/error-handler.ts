@@ -250,7 +250,10 @@ export function mapErrorToHttpResponse(error: unknown): MappedHttpError {
     };
   }
 
-  if (error instanceof UserNotFoundError) {
+  if (
+    error instanceof UserNotFoundError ||
+    (error instanceof DomainError && error.code === "RESOURCE_NOT_FOUND")
+  ) {
     return {
       statusCode: 404,
       code: error.code,

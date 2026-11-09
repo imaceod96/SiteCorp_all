@@ -27,8 +27,17 @@ import {
   PostgresUserRepository,
   validateHttpConfig,
 } from "../../src/infrastructure";
-import { PostgresDomainRepository } from "../../src/infrastructure/postgres/postgres-domain.repository";
-import { LocalFileStorageService, PathTraversalError, InvalidMimeTypeError } from "../../src/infrastructure/storage/local-file-storage.service";
+import {
+  ALL_TENANT_PERMISSIONS,
+  PostgresDomainRepository,
+  TenantPermission,
+} from "../../src/infrastructure/postgres/postgres-domain.repository";
+import {
+  LocalFileStorageService,
+  PathTraversalError,
+  InvalidMimeTypeError,
+  StorageAccessForbiddenError,
+} from "../../src/infrastructure/storage/local-file-storage.service";
 import {
   buildAuthHttpServer,
   BuiltAuthHttpServer,
@@ -128,7 +137,7 @@ class EmbeddedPostgresPoolAdapter implements PgPoolLike {
   }
 }
 
-describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain APIs", () => {
+describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Company Authorization & Storage Isolation", () => {
   let pglite: PGlite;
   let poolAdapter: EmbeddedPostgresPoolAdapter;
   let txManager: PostgresTransactionManager;
@@ -141,16 +150,81 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
   let tokenService: JoseTokenService;
   let testStorageDir: string;
 
+  async function createAuthenticatedTestUser(
+    emailStr: string,
+    options?: {
+      isPlatformAdmin?: boolean;
+      memberships?: Array<{
+        companyClientId: string;
+        roleCode: string;
+        permissions: readonly TenantPermission[];
+      }>;
+    }
+  ): Promise<{ user: AuthUser; accessToken: string }> {
+    const userId = createUserId(randomUUID());
+    const user = AuthUser.reconstitute({
+      id: userId,
+      email: createEmail(emailStr),
+      status: "active",
+      mustChangePassword: false,
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await userRepo.save(user);
+
+    if (options?.isPlatformAdmin) {
+      await txManager.query(
+        `INSERT INTO sitecorp_auth.operator_permissions (id, user_id, permission)
+         VALUES ($1, $2, 'security.admin')
+         ON CONFLICT DO NOTHING`,
+        [`op_${randomUUID()}`, userId]
+      );
+    }
+
+    if (options?.memberships) {
+      for (const m of options.memberships) {
+        await domainRepo.grantCompanyMembership({
+          companyClientId: m.companyClientId,
+          userId,
+          roleCode: m.roleCode,
+          permissions: m.permissions,
+          grantedBy: null,
+          allowBootstrapNullGranter: true,
+        });
+      }
+    }
+
+    const sessionId = `sess_${randomUUID()}`;
+    const session = AuthSession.create(sessionId, userId, {
+      ipAddress: "127.0.0.1",
+      userAgent: "IntegrationTest",
+    });
+    await sessionRepo.createSession(session);
+
+    const { token: accessToken } = await tokenService.signAccessToken({
+      sub: user.id,
+      email: user.email,
+      sid: session.id,
+      scope: "api:full",
+      role: "authenticated",
+      mustChangePassword: false,
+    });
+
+    return { user, accessToken };
+  }
+
   beforeAll(async () => {
     pglite = new PGlite();
     poolAdapter = new EmbeddedPostgresPoolAdapter(pglite);
     txManager = new PostgresTransactionManager(poolAdapter);
 
-    // Configurar directorio de pruebas para Storage
     testStorageDir = join(process.cwd(), "tmp_test_storage_" + Date.now());
     mkdirSync(testStorageDir, { recursive: true });
 
-    // Aplicar la secuencia de migraciones 0001, 0002, 0003, 0004
+    // Aplicar migraciones 0001..0005
     const migrationRunner = new PostgresMigrationRunner(txManager, txManager, {
       environment: "test",
     });
@@ -196,7 +270,11 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
       credentialRepo,
       domainRepo,
       storageService,
-      passwordHasher: new Argon2idPasswordHasher({ timeCost: 2, memoryCostKiB: 19456, parallelism: 1 }),
+      passwordHasher: new Argon2idPasswordHasher({
+        timeCost: 2,
+        memoryCostKiB: 19456,
+        parallelism: 1,
+      }),
       authPolicy: new AuthorizationPolicyService(),
     });
   });
@@ -211,8 +289,8 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
     rmSync(testStorageDir, { recursive: true, force: true });
   });
 
-  describe("1. Multi-Tenant Domain Schema & Isolation", () => {
-    it("crea empresas independientes y garantiza aislamiento estricto de trabajadores", async () => {
+  describe("1. Multi-Tenant Domain Schema & SQL Trigger Isolation", () => {
+    it("crea empresas independientes y garantiza aislamiento estricto de trabajadores y triggers SQL", async () => {
       const companyA = await domainRepo.createCompanyClient({
         code: "COMP_A",
         name: "Empresa Alfa S.A.",
@@ -250,9 +328,18 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
       // Verificación de aislamiento horizontal
       const crossFetch = await domainRepo.getWorkerById(companyA.id, workerB1.id);
       expect(crossFetch).toBeNull();
+
+      // Verificación de trigger SQL anti-cruce de empresa en public.employment_contracts
+      await expect(
+        txManager.query(
+          `INSERT INTO public.employment_contracts (company_client_id, worker_id, start_date, base_salary)
+           VALUES ($1, $2, '2026-01-01', 100000)`,
+          [companyA.id, workerB1.id]
+        )
+      ).rejects.toThrow(/CROSS_TENANT_VIOLATION/);
     });
 
-    it("gestiona contratos y ledger de vacaciones de forma atómica", async () => {
+    it("gestiona contratos y ledger de vacaciones de forma atómica y concurrente", async () => {
       const company = await domainRepo.createCompanyClient({
         code: "COMP_VAC",
         name: "Vacation Test Corp",
@@ -275,36 +362,73 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
       expect(contract.id).toBeDefined();
       expect(contract.status).toBe("active");
 
-      // Transacción de devengo de vacaciones (+15 días)
+      // Devengo inicial (+20 días)
       const vacAfterAccrual = await domainRepo.recordVacationMovement({
         companyClientId: company.id,
         workerId: worker.id,
         year: 2026,
         movementType: "ACCRUAL",
-        days: 15,
+        days: 20,
         notes: "Devengo anual",
       });
 
-      expect(Number(vacAfterAccrual.daysAccrued)).toBe(15);
-      expect(Number(vacAfterAccrual.balance)).toBe(15);
+      expect(Number(vacAfterAccrual.daysAccrued)).toBe(20);
+      expect(Number(vacAfterAccrual.balance)).toBe(20);
 
-      // Consumo de 5 días de vacaciones
-      const vacAfterTaken = await domainRepo.recordVacationMovement({
-        companyClientId: company.id,
-        workerId: worker.id,
-        year: 2026,
-        movementType: "TAKEN",
-        days: 5,
-        notes: "Vacaciones de verano",
-      });
+      // Movimientos concurrentes: 4 consumos simultáneos de 2.5 días = 10 días tomados
+      await Promise.all([
+        domainRepo.recordVacationMovement({
+          companyClientId: company.id,
+          workerId: worker.id,
+          year: 2026,
+          movementType: "TAKEN",
+          days: 2.5,
+          notes: "Concurrencia 1",
+        }),
+        domainRepo.recordVacationMovement({
+          companyClientId: company.id,
+          workerId: worker.id,
+          year: 2026,
+          movementType: "TAKEN",
+          days: 2.5,
+          notes: "Concurrencia 2",
+        }),
+        domainRepo.recordVacationMovement({
+          companyClientId: company.id,
+          workerId: worker.id,
+          year: 2026,
+          movementType: "TAKEN",
+          days: 2.5,
+          notes: "Concurrencia 3",
+        }),
+        domainRepo.recordVacationMovement({
+          companyClientId: company.id,
+          workerId: worker.id,
+          year: 2026,
+          movementType: "TAKEN",
+          days: 2.5,
+          notes: "Concurrencia 4",
+        }),
+      ]);
 
-      expect(Number(vacAfterTaken.daysTaken)).toBe(5);
-      expect(Number(vacAfterTaken.balance)).toBe(10);
+      const finalVacations = await domainRepo.listVacationsByCompany(company.id, worker.id);
+      expect(finalVacations.length).toBe(1);
+      expect(Number(finalVacations[0]!.daysTaken)).toBe(10);
+      expect(Number(finalVacations[0]!.balance)).toBe(10);
     });
   });
 
-  describe("2. Self-Hosted Storage & Path Traversal Protections", () => {
-    it("sube, descarga y elimina un objeto con verificación SHA-256", async () => {
+  describe("2. Self-Hosted Storage & Cross-Tenant Overwrite Protections", () => {
+    it("sube, descarga y elimina un objeto con verificación SHA-256 y bloquea sobreescritura cruzada", async () => {
+      const companyA = await domainRepo.createCompanyClient({
+        code: "STOR_COMP_A",
+        name: "Storage Alfa",
+      });
+      const companyB = await domainRepo.createCompanyClient({
+        code: "STOR_COMP_B",
+        name: "Storage Beta",
+      });
+
       const buffer = Buffer.from("Contenido de prueba para documento PDF de SiteCorp", "utf8");
 
       const uploaded = await storageService.uploadFile({
@@ -312,13 +436,28 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
         objectName: "contrato_firmado.pdf",
         contentBuffer: buffer,
         mimeType: "application/pdf",
+        companyClientId: companyA.id,
       });
 
       expect(uploaded.objectName).toBe("contrato_firmado.pdf");
       expect(uploaded.sha256Checksum).toBeDefined();
 
+      // Intento de sobreescritura desde Empresa B sobre el mismo path es bloqueado
+      await expect(
+        storageService.uploadFile({
+          bucketId: "documents",
+          objectName: "contrato_firmado.pdf",
+          contentBuffer: Buffer.from("Intento malicioso de Empresa B"),
+          mimeType: "application/pdf",
+          companyClientId: companyB.id,
+        })
+      ).rejects.toThrow(StorageAccessForbiddenError);
+
       // Descarga e integridad SHA-256
-      const { record, contentBuffer } = await storageService.downloadFile("documents", "contrato_firmado.pdf");
+      const { record, contentBuffer } = await storageService.downloadFile(
+        "documents",
+        "contrato_firmado.pdf"
+      );
       expect(record.id).toBe(uploaded.id);
       expect(contentBuffer.toString("utf8")).toBe(buffer.toString("utf8"));
 
@@ -328,7 +467,6 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
     });
 
     it("bloquea intentos de Path Traversal y tipos MIME no permitidos", async () => {
-      // Path traversal
       await expect(
         storageService.uploadFile({
           bucketId: "documents",
@@ -338,7 +476,6 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
         })
       ).rejects.toThrow(PathTraversalError);
 
-      // MIME no permitido en 'avatars' (solo png, jpeg, webp)
       await expect(
         storageService.uploadFile({
           bucketId: "avatars",
@@ -350,51 +487,274 @@ describe("FASE 4G.6 — Autonomous Domain Schema, Multi-Tenant Storage & Domain 
     });
   });
 
-  describe("3. HTTP Endpoints for Domain & Storage", () => {
-    it("permite listar empresas mediante el endpoint de dominio autenticado", async () => {
-      // Crear un usuario autenticado de prueba
-      const userId = createUserId(randomUUID());
-      const user = AuthUser.reconstitute({
-        id: userId,
-        email: createEmail("domain_admin@sitecorp.com"),
-        status: "active",
-        mustChangePassword: false,
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        deletedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+  describe("3. Multi-Company HTTP Authorization & Negative Isolation Tests (Empresa A vs Empresa B)", () => {
+    it("aplica denegación por defecto y aísla completamente Empresa A de Empresa B en dominio y Storage", async () => {
+      const tenantA = await domainRepo.createCompanyClient({
+        code: "TENANT_ALPHA",
+        name: "Alpha Holdings S.A.",
       });
-      await userRepo.save(user);
-
-      const sessionId = `sess_${randomUUID()}`;
-      const session = AuthSession.create(sessionId, userId, {
-        ipAddress: "127.0.0.1",
-        userAgent: "IntegrationTest",
-      });
-      await sessionRepo.createSession(session);
-
-      const { token: accessToken } = await tokenService.signAccessToken({
-        sub: user.id,
-        email: user.email,
-        sid: session.id,
-        scope: "api:full",
-        role: "authenticated",
-        mustChangePassword: false,
+      const tenantB = await domainRepo.createCompanyClient({
+        code: "TENANT_BETA",
+        name: "Beta Logistics S.A.",
       });
 
-      const response = await serverInstance.app.inject({
+      // 1. Usuario autenticado sin ninguna membresía (denegación por defecto -> 403 FORBIDDEN)
+      const unprivileged = await createAuthenticatedTestUser("unprivileged@sitecorp.com");
+
+      const listNoMembershipRes = await serverInstance.app.inject({
         method: "GET",
         url: "/api/v1/domain/companies",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-        },
+        headers: { authorization: `Bearer ${unprivileged.accessToken}` },
+      });
+      expect(listNoMembershipRes.statusCode).toBe(403);
+
+      const createCompanyForbiddenRes = await serverInstance.app.inject({
+        method: "POST",
+        url: "/api/v1/domain/companies",
+        headers: { authorization: `Bearer ${unprivileged.accessToken}` },
+        payload: { code: "HACK_CO", name: "Unauthorized Co" },
+      });
+      expect(createCompanyForbiddenRes.statusCode).toBe(403);
+
+      // 2. Usuarios de Empresa A (admin y viewer) y Empresa B (admin)
+      const userAlphaAdmin = await createAuthenticatedTestUser("admin_alpha@sitecorp.com", {
+        memberships: [
+          {
+            companyClientId: tenantA.id,
+            roleCode: "company_admin",
+            permissions: ALL_TENANT_PERMISSIONS,
+          },
+        ],
+      });
+      const userAlphaViewer = await createAuthenticatedTestUser("viewer_alpha@sitecorp.com", {
+        memberships: [
+          {
+            companyClientId: tenantA.id,
+            roleCode: "viewer",
+            permissions: ["companies.view", "workers.view", "contracts.view", "documents.view"],
+          },
+        ],
+      });
+      const userBetaAdmin = await createAuthenticatedTestUser("admin_beta@sitecorp.com", {
+        memberships: [
+          {
+            companyClientId: tenantB.id,
+            roleCode: "company_admin",
+            permissions: ALL_TENANT_PERMISSIONS,
+          },
+        ],
+      });
+      const platformAdmin = await createAuthenticatedTestUser("superadmin@sitecorp.com", {
+        isPlatformAdmin: true,
       });
 
-      expect(response.statusCode).toBe(200);
-      const payload = JSON.parse(response.payload);
-      expect(payload.data.companies).toBeDefined();
-      expect(Array.isArray(payload.data.companies)).toBe(true);
+      // 3. Listado de empresas devuelve exclusivamente las empresas autorizadas
+      const alphaCompaniesRes = await serverInstance.app.inject({
+        method: "GET",
+        url: "/api/v1/domain/companies",
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+      });
+      expect(alphaCompaniesRes.statusCode).toBe(200);
+      const alphaCompanies = JSON.parse(alphaCompaniesRes.payload).data.companies;
+      expect(alphaCompanies.length).toBe(1);
+      expect(alphaCompanies[0].id).toBe(tenantA.id);
+
+      // Superadmin sí ve todas las empresas y puede crear nuevas
+      const superCompaniesRes = await serverInstance.app.inject({
+        method: "GET",
+        url: "/api/v1/domain/companies",
+        headers: { authorization: `Bearer ${platformAdmin.accessToken}` },
+      });
+      expect(superCompaniesRes.statusCode).toBe(200);
+      expect(
+        JSON.parse(superCompaniesRes.payload).data.companies.length
+      ).toBeGreaterThanOrEqual(2);
+
+      // 4. Crear trabajadores y entidades en Empresa A y Empresa B
+      const createWorkerAlphaRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantA.id}/workers`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+        payload: {
+          identificationNumber: "90010111111",
+          firstName: "Elena",
+          lastName: "Alpha",
+        },
+      });
+      expect(createWorkerAlphaRes.statusCode).toBe(201);
+      const workerAlpha = JSON.parse(createWorkerAlphaRes.payload).data.worker;
+
+      const createWorkerBetaRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantB.id}/workers`,
+        headers: { authorization: `Bearer ${userBetaAdmin.accessToken}` },
+        payload: {
+          identificationNumber: "90020222222",
+          firstName: "Roberto",
+          lastName: "Beta",
+        },
+      });
+      expect(createWorkerBetaRes.statusCode).toBe(201);
+      const workerBeta = JSON.parse(createWorkerBetaRes.payload).data.worker;
+
+      const createEntityBetaRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantB.id}/entities`,
+        headers: { authorization: `Bearer ${userBetaAdmin.accessToken}` },
+        payload: {
+          code: "ENT_BETA_1",
+          name: "Planta Beta",
+          entityType: "branch",
+        },
+      });
+      expect(createEntityBetaRes.statusCode).toBe(201);
+      const entityBeta = JSON.parse(createEntityBetaRes.payload).data.entity;
+
+      // 5. Pruebas negativas de aislamiento entre Empresa A y Empresa B:
+      // 5a. Usuario de Empresa A intenta enumerar trabajadores de Empresa B -> 403
+      const enumBetaWorkersRes = await serverInstance.app.inject({
+        method: "GET",
+        url: `/api/v1/domain/companies/${tenantB.id}/workers`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+      });
+      expect(enumBetaWorkersRes.statusCode).toBe(403);
+
+      // 5b. Usuario de Empresa A intenta crear trabajador en Empresa B -> 403
+      const writeBetaWorkerRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantB.id}/workers`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+        payload: {
+          identificationNumber: "99999999999",
+          firstName: "Intruso",
+          lastName: "Alpha",
+        },
+      });
+      expect(writeBetaWorkerRes.statusCode).toBe(403);
+
+      // 5c. Usuario de Empresa A intenta leer/modificar/eliminar el UUID de trabajador de Empresa B bajo su ruta de Empresa A -> 404 (no revela ni modifica)
+      const readForeignWorkerUuidRes = await serverInstance.app.inject({
+        method: "GET",
+        url: `/api/v1/domain/companies/${tenantA.id}/workers/${workerBeta.id}`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+      });
+      expect(readForeignWorkerUuidRes.statusCode).toBe(404);
+
+      const patchForeignWorkerUuidRes = await serverInstance.app.inject({
+        method: "PATCH",
+        url: `/api/v1/domain/companies/${tenantA.id}/workers/${workerBeta.id}`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+        payload: { firstName: "Pwned" },
+      });
+      expect(patchForeignWorkerUuidRes.statusCode).toBe(404);
+
+      const deleteForeignWorkerUuidRes = await serverInstance.app.inject({
+        method: "DELETE",
+        url: `/api/v1/domain/companies/${tenantA.id}/workers/${workerBeta.id}`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+      });
+      expect(deleteForeignWorkerUuidRes.statusCode).toBe(404);
+
+      // 5d. Usuario de Empresa A intenta inyectar workerBeta.id o entityBeta.id al crear un contrato en Empresa A -> 403 FORBIDDEN
+      const crossTenantContractWorkerRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantA.id}/contracts`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+        payload: {
+          workerId: workerBeta.id,
+          startDate: "2026-02-01",
+          baseSalary: 120000,
+        },
+      });
+      expect(crossTenantContractWorkerRes.statusCode).toBe(403);
+
+      const crossTenantContractEntityRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantA.id}/contracts`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+        payload: {
+          workerId: workerAlpha.id,
+          organizationEntityId: entityBeta.id,
+          startDate: "2026-02-01",
+          baseSalary: 120000,
+        },
+      });
+      expect(crossTenantContractEntityRes.statusCode).toBe(403);
+
+      // 5e. Control granular de permisos intra-empresa: viewer puede leer pero NO escribir
+      const viewerReadRes = await serverInstance.app.inject({
+        method: "GET",
+        url: `/api/v1/domain/companies/${tenantA.id}/workers`,
+        headers: { authorization: `Bearer ${userAlphaViewer.accessToken}` },
+      });
+      expect(viewerReadRes.statusCode).toBe(200);
+
+      const viewerWriteRes = await serverInstance.app.inject({
+        method: "POST",
+        url: `/api/v1/domain/companies/${tenantA.id}/workers`,
+        headers: { authorization: `Bearer ${userAlphaViewer.accessToken}` },
+        payload: {
+          identificationNumber: "88888888888",
+          firstName: "NoPerm",
+          lastName: "Viewer",
+        },
+      });
+      expect(viewerWriteRes.statusCode).toBe(403);
+
+      // 6. Pruebas negativas de Storage entre Empresa A y Empresa B
+      const uploadBetaRes = await serverInstance.app.inject({
+        method: "POST",
+        url: "/api/v1/storage/upload",
+        headers: { authorization: `Bearer ${userBetaAdmin.accessToken}` },
+        payload: {
+          bucketId: "worker_documents",
+          objectName: `${tenantB.id}/nomina_confidencial_beta.pdf`,
+          contentBase64: Buffer.from("Secreto Empresarial Beta").toString("base64"),
+          mimeType: "application/pdf",
+          companyClientId: tenantB.id,
+        },
+      });
+      expect(uploadBetaRes.statusCode).toBe(201);
+
+      // 6a. Usuario de Empresa A intenta subir un archivo declarando companyClientId de Empresa B -> 403
+      const uploadSpoofTenantRes = await serverInstance.app.inject({
+        method: "POST",
+        url: "/api/v1/storage/upload",
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+        payload: {
+          bucketId: "worker_documents",
+          objectName: `${tenantB.id}/spoof.pdf`,
+          contentBase64: Buffer.from("Spoof").toString("base64"),
+          mimeType: "application/pdf",
+          companyClientId: tenantB.id,
+        },
+      });
+      expect(uploadSpoofTenantRes.statusCode).toBe(403);
+
+      // 6b. Usuario de Empresa A intenta descargar el archivo confidencial de Empresa B -> 403
+      const downloadCrossTenantRes = await serverInstance.app.inject({
+        method: "GET",
+        url: `/api/v1/storage/objects/worker_documents/${tenantB.id}/nomina_confidencial_beta.pdf`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+      });
+      expect(downloadCrossTenantRes.statusCode).toBe(403);
+
+      // 6c. Usuario de Empresa A intenta eliminar el archivo confidencial de Empresa B -> 403
+      const deleteCrossTenantRes = await serverInstance.app.inject({
+        method: "DELETE",
+        url: `/api/v1/storage/objects/worker_documents/${tenantB.id}/nomina_confidencial_beta.pdf`,
+        headers: { authorization: `Bearer ${userAlphaAdmin.accessToken}` },
+      });
+      expect(deleteCrossTenantRes.statusCode).toBe(403);
+
+      // 6d. Usuario de Empresa B sí puede descargar su propio archivo -> 200
+      const downloadOwnTenantRes = await serverInstance.app.inject({
+        method: "GET",
+        url: `/api/v1/storage/objects/worker_documents/${tenantB.id}/nomina_confidencial_beta.pdf`,
+        headers: { authorization: `Bearer ${userBetaAdmin.accessToken}` },
+      });
+      expect(downloadOwnTenantRes.statusCode).toBe(200);
+      expect(downloadOwnTenantRes.payload).toBe("Secreto Empresarial Beta");
     });
   });
 });

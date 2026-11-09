@@ -6,6 +6,7 @@ import type {
   AuthSignInResult,
   AuthStateChangeEvent,
   AuthUpdatePasswordInput,
+  AuthUpdatePasswordResult,
   AuthUserIdentity,
   IAuthenticationProvider,
 } from "../domain/auth-provider.contracts"
@@ -113,18 +114,26 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
   private pendingActivationPassword: string | null = null
 
   constructor(options: SelfHostedAuthAdapterOptions = {}) {
-    const defaultBaseUrl =
-      typeof window !== "undefined" && (window as unknown as { __SITECORP_AUTH_URL__?: string }).__SITECORP_AUTH_URL__
-        ? (window as unknown as { __SITECORP_AUTH_URL__?: string }).__SITECORP_AUTH_URL__!
-        : "http://127.0.0.1:4010"
+    const win = (
+      globalThis as unknown as {
+        window?: { __SITECORP_AUTH_URL__?: string; sessionStorage?: StorageLike }
+      }
+    ).window
+    const defaultBaseUrl = win?.__SITECORP_AUTH_URL__
+      ? win.__SITECORP_AUTH_URL__
+      : "http://127.0.0.1:4010"
 
     this.baseUrl = (options.baseUrl ?? defaultBaseUrl).replace(/\/+$/, "")
-    this.fetch = options.fetchFn ?? (typeof fetch !== "undefined" ? fetch.bind(globalThis) : (undefined as unknown as typeof fetch))
+    this.fetch =
+      options.fetchFn ??
+      (typeof fetch !== "undefined"
+        ? fetch.bind(globalThis)
+        : (undefined as unknown as typeof fetch))
 
     if (options.storage) {
       this.storage = options.storage
-    } else if (typeof window !== "undefined" && window.sessionStorage) {
-      this.storage = window.sessionStorage
+    } else if (win?.sessionStorage) {
+      this.storage = win.sessionStorage
     } else {
       this.storage = new MemoryStorage()
     }
@@ -221,7 +230,7 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         }),
       })
 
-      const json = await response.json().catch(() => null)
+      const json = (await response.json().catch(() => null)) as Record<string, any> | null
 
       if (!response.ok) {
         const errorMessage =
@@ -314,12 +323,17 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
 
   async refreshToken(): Promise<AuthSession | null> {
     try {
+      const headers: Record<string, string> = {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      }
+      if (this.currentCsrfToken) {
+        headers["x-csrf-token"] = this.currentCsrfToken
+      }
+
       const response = await this.fetch(`${this.baseUrl}/api/v1/auth/refresh`, {
         method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
+        headers,
         credentials: "include",
         body: JSON.stringify({}),
       })
@@ -336,16 +350,41 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
       }
 
       const refreshData = (await response.json()) as ApiRefreshResponse
-      if (!refreshData?.data?.accessToken || !refreshData?.data?.user) {
+      if (!refreshData?.data?.accessToken) {
         return null
       }
 
       const { accessToken, expiresInSeconds, csrfToken, user } = refreshData.data
 
+      let resolvedIdentity: AuthUserIdentity | null = user
+        ? this.mapUserResponseToIdentity(user)
+        : this.currentSession?.user ?? null
+
+      if (!resolvedIdentity) {
+        const meRes = await this.fetch(`${this.baseUrl}/api/v1/auth/me`, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          credentials: "include",
+        }).catch(() => null)
+        if (meRes && meRes.ok) {
+          const meJson = (await meRes.json().catch(() => null)) as ApiMeResponse | null
+          if (meJson?.data?.user) {
+            resolvedIdentity = this.mapUserResponseToIdentity(meJson.data.user)
+          }
+        }
+      }
+
+      if (!resolvedIdentity) {
+        return null
+      }
+
       const session: AuthSession = {
         accessToken,
         expiresAt: expiresInSeconds ? Math.floor(Date.now() / 1000) + expiresInSeconds : undefined,
-        user: this.mapUserResponseToIdentity(user),
+        user: resolvedIdentity,
       }
 
       this.persistSession(session, csrfToken)
@@ -401,7 +440,7 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         }),
       })
 
-      const json = await response.json().catch(() => null)
+      const json = (await response.json().catch(() => null)) as Record<string, any> | null
 
       if (!response.ok) {
         const errorMsg =
@@ -496,7 +535,7 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         }),
       })
 
-      const json = await response.json().catch(() => null)
+      const json = (await response.json().catch(() => null)) as Record<string, any> | null
 
       if (!response.ok) {
         return {
@@ -545,7 +584,7 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         }),
       })
 
-      const json = await response.json().catch(() => null)
+      const json = (await response.json().catch(() => null)) as Record<string, any> | null
 
       if (!response.ok) {
         return {
