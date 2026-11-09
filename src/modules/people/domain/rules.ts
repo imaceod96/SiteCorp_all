@@ -623,6 +623,8 @@ export interface SeparationValidationInput {
   effectiveDate: string
   currentPositionStartDate: string | null
   separationReasonId: string
+  isOtherReason?: boolean
+  otherReasonText?: string
 }
 
 export function validateSeparationInput(input: SeparationValidationInput): string | null {
@@ -631,6 +633,9 @@ export function validateSeparationInput(input: SeparationValidationInput): strin
     return "La fecha de baja no puede ser anterior al inicio del puesto actual."
   }
   if (!input.separationReasonId) return "Selecciona un motivo de baja."
+  if (input.isOtherReason && !(input.otherReasonText ?? "").trim()) {
+    return 'Debe especificar el motivo de baja cuando selecciona la causa "Otro".'
+  }
   return null
 }
 

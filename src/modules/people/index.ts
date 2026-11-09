@@ -430,3 +430,61 @@ export type { WorkerMigrationFileErrorCode } from "./infrastructure/worker-migra
 export type { TenureResult } from "./domain/tenure.rules"
 
 export { calculateTenure, calculateAge, ageRange } from "./domain/tenure.rules"
+
+/* Registro Histórico de Altas y Bajas (períodos laborales de la entidad y exportación 17 columnas) */
+export type {
+  EmploymentPeriodOriginType,
+  EmploymentPeriodStatus,
+  ReasonValidationStatus,
+  EmploymentPeriodRow,
+  OfficialSeparationColumnKey,
+  OfficialSeparationColumnDef,
+  OfficialSeparationResolution,
+  EmploymentPeriodIncompleteSummary,
+  EmploymentRegistrySummary,
+  PeriodStatusFilter,
+  PeriodOriginFilter,
+  PeriodSortOrder,
+  EmploymentRegistryFilterState,
+} from "./domain/employment-registry.rules"
+
+export {
+  OFFICIAL_SEPARATION_CAUSE_COLUMNS,
+  EMPLOYMENT_REGISTRY_OFFICIAL_HEADERS,
+  resolveOfficialSeparationColumn,
+  formatPeriodOriginLabel,
+  formatCargoAndCategory,
+  formatDateDisplay,
+  isEmploymentPeriodIncomplete,
+  computeEmploymentRegistryIncompleteSummary,
+  computeEmploymentRegistrySummary,
+  filterAndSortEmploymentPeriods,
+} from "./domain/employment-registry.rules"
+
+export type { EntityEmploymentRegistryView } from "./application/employment-registry.queries"
+export {
+  loadEntityEmploymentRegistryView,
+  loadEntityEmploymentRegistryIncompleteSummary,
+} from "./application/employment-registry.queries"
+
+export type {
+  UpdatePeriodHireNumberInput,
+  UpdatePeriodSeparationNumberInput,
+  UpdatePeriodSourceOriginInput,
+} from "./application/employment-registry.commands"
+export {
+  updateEmploymentPeriodHireNumber,
+  updateEmploymentPeriodSeparationNumber,
+  updateEmploymentPeriodSourceOrigin,
+} from "./application/employment-registry.commands"
+
+export { EMPLOYMENT_REGISTRY_CHANGED_EVENT } from "./infrastructure/employment-registry.repository"
+
+export type { EmploymentRegistryWorkbookMeta } from "./infrastructure/employment-registry.workbook"
+export {
+  buildEmploymentRegistryWorkbookBlob,
+  downloadEmploymentRegistryWorkbook,
+} from "./infrastructure/employment-registry.workbook"
+
+export { PendingEmploymentRegistryBanner } from "./presentation/components/PendingEmploymentRegistryBanner"
+

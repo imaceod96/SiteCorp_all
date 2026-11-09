@@ -43,15 +43,26 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
   const [loading, setLoading] = React.useState(false)
   const [effectiveDate, setEffectiveDate] = React.useState("")
   const [reasonId, setReasonId] = React.useState("")
+  const [otherReasonText, setOtherReasonText] = React.useState("")
   const [notes, setNotes] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const queryClient = useQueryClient()
 
+  const selectedReason = React.useMemo(
+    () => reasons.find((r) => r.id === reasonId) ?? null,
+    [reasons, reasonId]
+  )
+  const isOtherReason = React.useMemo(
+    () => selectedReason?.name.trim().toLowerCase() === "otro",
+    [selectedReason]
+  )
+
   React.useEffect(() => {
     if (!open) return
     setEffectiveDate("")
     setReasonId("")
+    setOtherReasonText("")
     setNotes("")
     setError(null)
     setLoading(true)
@@ -72,11 +83,19 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
       effectiveDate,
       currentPositionStartDate: current.startDate,
       separationReasonId: reasonId,
+      isOtherReason,
+      otherReasonText,
     })
     if (invalid) {
       setError(invalid)
       return
     }
+
+    const effectiveNotes = isOtherReason
+      ? notes.trim()
+        ? `${otherReasonText.trim()} — ${notes.trim()}`
+        : otherReasonText.trim()
+      : notes
 
     setSubmitting(true)
     try {
@@ -85,7 +104,7 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
         workerId,
         effectiveDate,
         separationReasonId: reasonId,
-        notes,
+        notes: effectiveNotes,
         // Pluriempleo: con dos contratos vigentes se identifica la asignación afectada.
         targetAssignmentId: current.targetAssignmentId ?? null,
       })
@@ -102,6 +121,8 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
         friendly = "El trabajador ya no está activo."
       } else if (/anterior al inicio/i.test(msg)) {
         friendly = "La fecha de baja no puede ser anterior al inicio del puesto actual."
+      } else if (/especificar el motivo/i.test(msg)) {
+        friendly = 'Debe especificar el motivo de baja cuando selecciona la causa "Otro".'
       } else if (/motivo/i.test(msg)) {
         friendly = "Selecciona un motivo de baja válido."
       } else if (/no tiene un puesto actual/i.test(msg)) {
@@ -197,6 +218,18 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
               ))}
             </SiteCorpSelect>
           </div>
+
+          {isOtherReason && (
+            <div className="space-y-2">
+              <Label>Especificar motivo de baja *</Label>
+              <SiteCorpInput
+                type="text"
+                value={otherReasonText}
+                onChange={(e) => setOtherReasonText(e.target.value)}
+                placeholder="Describa la causa específica de la baja"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Observaciones</Label>
