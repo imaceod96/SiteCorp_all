@@ -33,6 +33,8 @@ import {
 export interface ResolutionFormValues {
   resolutionDate: string
   representativeAssignmentId: string | null
+  representativeName: string | null
+  representativeTitle: string | null
   workContent: string | null
   workContentChanged: boolean
   municipality: string | null

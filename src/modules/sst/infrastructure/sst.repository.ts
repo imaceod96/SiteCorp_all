@@ -1299,6 +1299,7 @@ export async function ensureSstAssignmentNotification(input: {
   positionId?: string | null
   effectiveDate?: string | null
   triggerType: SstNotificationTriggerType
+  sourceId?: string | null
 }): Promise<void> {
   if (!input.workerId) return
 

@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -53,7 +54,7 @@
     "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "lucide-react": "^0.462.0",
-    "next-themes": "^0.3.0",
+    "next-themes": "^0.4.4",
     "nitro": "3.0.260903-beta",
     "react": "^19.2.3",
     "react-day-picker": "^9.13.0",
@@ -65,7 +66,7 @@
     "sonner": "^1.5.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
-    "vaul": "^0.9.3",
+    "vaul": "^1.1.2",
     "zod": "^3.25.0"
   },
   "devDependencies": {

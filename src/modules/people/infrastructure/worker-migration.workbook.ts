@@ -17,9 +17,15 @@ import type { Workbook, Cell, Row, Worksheet } from "exceljs"
  */
 
 /** Tipado mínimo del bundle ExcelJS usado por esta exportación (solo `Workbook`). */
+type ExcelJSWorkbook = Omit<Workbook, "xlsx"> & {
+  xlsx: Omit<Workbook["xlsx"], "load"> & {
+    load(buffer: ArrayBuffer | Uint8Array): Promise<Workbook>
+  }
+}
+
 type ExcelJSModule = {
-  Workbook: typeof Workbook
-  default?: { Workbook: typeof Workbook }
+  Workbook: new () => ExcelJSWorkbook
+  default?: { Workbook: new () => ExcelJSWorkbook }
 }
 
 /**
@@ -43,8 +49,8 @@ let excelJsBundlePromise: Promise<ExcelJSModule> | null = null
 async function loadExcelJS(): Promise<ExcelJSModule> {
   if (globalScope.ExcelJS) return globalScope.ExcelJS
   if (typeof document === "undefined") {
-    const mod = await import("exceljs")
-    return ((mod as any).default ?? mod) as unknown as ExcelJSModule
+    const mod: ExcelJSModule = await import("exceljs")
+    return mod.default ?? mod
   }
   if (!excelJsBundlePromise) {
     excelJsBundlePromise = new Promise<ExcelJSModule>((resolve, reject) => {

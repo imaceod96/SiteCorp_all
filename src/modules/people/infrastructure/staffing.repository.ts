@@ -31,6 +31,8 @@ interface RawJobRow {
   id: string
   name: string
   hierarchy_order?: number
+  is_active?: boolean
+  area_id?: string | null
   is_cuadro?: boolean
   is_principal_specialist?: boolean
   area:
@@ -50,13 +52,14 @@ interface RawPositionRow {
   code?: string | null
   position_order?: number
   is_active: boolean
-  authorized_quantity: number
-  work_location: string | null
-  daily_hours: number | null
-  weekly_hours: number | null
-  monthly_hours: number | null
-  break_minutes: number | null
-  schedule_notes: string | null
+  job_id?: string | null
+  authorized_quantity?: number
+  work_location?: string | null
+  daily_hours?: number | null
+  weekly_hours?: number | null
+  monthly_hours?: number | null
+  break_minutes?: number | null
+  schedule_notes?: string | null
   job: RawJobRow | RawJobRow[] | null
 }
 
@@ -73,13 +76,13 @@ const toStaffingPosition = (row: RawPositionRow): StaffingPosition => {
     name: row.name,
     code: row.code,
     is_active: row.is_active,
-    authorized_quantity: row.authorized_quantity,
-    work_location: row.work_location,
-    daily_hours: row.daily_hours,
-    weekly_hours: row.weekly_hours,
-    monthly_hours: row.monthly_hours,
-    break_minutes: row.break_minutes,
-    schedule_notes: row.schedule_notes,
+    authorized_quantity: row.authorized_quantity ?? 0,
+    work_location: row.work_location ?? null,
+    daily_hours: row.daily_hours ?? null,
+    weekly_hours: row.weekly_hours ?? null,
+    monthly_hours: row.monthly_hours ?? null,
+    break_minutes: row.break_minutes ?? null,
+    schedule_notes: row.schedule_notes ?? null,
     job: job
       ? {
           id: job.id,

@@ -984,12 +984,14 @@ async function syncDiscoveredPlatformEvents(
         })),
         { onConflict: "id", ignoreDuplicates: true }
       )
-      .then(() => {
-        // Sincronizado con Supabase
-      })
-      .catch(() => {
-        // Ignorar errores de red en backfill
-      })
+      .then(
+        () => {
+          // Sincronizado con Supabase
+        },
+        () => {
+          // Ignorar errores de red en backfill
+        }
+      )
   }
 
   const mergedEvents = Array.from(byId.values()).sort(

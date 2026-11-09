@@ -46,10 +46,12 @@ import {
   loadEntityPlanHistory,
   loadSiteCorpAccounts,
   updateEntityPlan,
-  type EntityPlan,
-  type EntityPlanHistoryRecord,
-  type SiteCorpAccountEntityOption,
 } from "../../application/entity-plans.service"
+import type {
+  EntityPlan,
+  EntityPlanHistoryRecord,
+  SiteCorpAccountEntityOption,
+} from "../../domain/entities"
 import {
   PLAN_COMBINATION_BADGE_VARIANTS,
   PLAN_COMBINATION_LABELS,

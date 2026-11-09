@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 interface SiteCorpSelectProps extends React.ComponentPropsWithoutRef<typeof Select> {
   label?: string
   error?: string
+  placeholder?: string
   className?: string
 }
 
@@ -23,7 +24,7 @@ const EMPTY_SELECT_VALUE = "__empty_val__"
 const SiteCorpSelect = React.forwardRef<
   React.ElementRef<typeof SelectTrigger>,
   SiteCorpSelectProps
->(({ label, error, children, className, name, value, defaultValue, onValueChange, required, ...props }, ref) => {
+>(({ label, error, placeholder: placeholderProp, children, className, name, value, defaultValue, onValueChange, required, ...props }, ref) => {
   const isControlled = value !== undefined
   const [uncontrolledValue, setUncontrolledValue] = React.useState<string>(() =>
     defaultValue === undefined || defaultValue === null ? "" : String(defaultValue)
@@ -47,7 +48,7 @@ const SiteCorpSelect = React.forwardRef<
   // Radix forbids SelectItems with an empty string value, so options with
   // value="" use EMPTY_SELECT_VALUE when optional (allowing the user to clear
   // the selection) and set the placeholder text.
-  let placeholder = "Seleccionar..."
+  let placeholder = placeholderProp ?? "Seleccionar..."
   const items = React.Children.map(children, (child) => {
     if (React.isValidElement(child) && child.type === "option") {
       const optionProps = child.props as {
