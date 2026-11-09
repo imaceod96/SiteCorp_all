@@ -4,7 +4,7 @@ import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
-import { Users, Shield, Scale, FileText, Network, ClipboardList, FileType2, Briefcase, FileSpreadsheet, BookOpen } from "lucide-react"
+import { Users, Shield, Scale, FileText, Network, ClipboardList, FileType2, Briefcase, FileSpreadsheet, BookOpen, ArrowUpDown } from "lucide-react"
 
 interface SettingsItem {
   title: string
@@ -39,44 +39,44 @@ const EntitySettings = () => {
         permissions: ["roles.manage"],
       },
       {
-              title: "Escala salarial",
-              description: "Consulta o gestiona la escala salarial empresarial de esta entidad.",
-              icon: Scale,
-              href: `/entity/${currentEntity?.id}/settings/salary`,
-              permissions: ["salary.view", "salary.manage"],
-            },
-            {
-              title: "Escala de pago de antigüedad",
-              description: "Configura los tramos de pago por antigüedad de esta entidad.",
-              icon: Briefcase,
-              href: `/entity/${currentEntity?.id}/settings/tenure-scale`,
-              permissions: ["tenure_scale.view", "tenure_scale.manage"],
-            },
-            {
-              title: "Configuración de plantilla",
-              description:
-                "Configura las áreas, cargos y puestos que conforman la estructura de plantilla de la entidad.",
-              icon: Network,
-              href: `/entity/${currentEntity?.id}/settings/staffing`,
-              permissions: ["staffing.view", "staffing.manage"],
-            },
-            {
-              title: "Registro de Altas y Bajas",
-              description:
-                "Registro oficial automático de contrataciones, reingresos y bajas laborales con descarga en formato Excel.",
-              icon: FileSpreadsheet,
-              href: `/entity/${currentEntity?.id}/settings/altas-bajas-registry`,
-              permissions: ["workers.view", "workers.manage", "organization.view", "organization.manage"],
-            },
-            {
-              title: "Carga inicial de trabajadores",
-              description: "Descarga la plantilla Excel, valida filas y carga trabajadores históricos.",
-              icon: FileSpreadsheet,
-              href: `/entity/${currentEntity?.id}/settings/initial-import`,
-              permissions: ["workers.manage"],
-            },
-            {
-              title: "Datos contractuales",
+        title: "Escala salarial",
+        description: "Consulta o gestiona la escala salarial empresarial de esta entidad.",
+        icon: Scale,
+        href: `/entity/${currentEntity?.id}/settings/salary`,
+        permissions: ["salary.view", "salary.manage"],
+      },
+      {
+        title: "Escala de pago de antigüedad",
+        description: "Configura los tramos de pago por antigüedad de esta entidad.",
+        icon: Briefcase,
+        href: `/entity/${currentEntity?.id}/settings/tenure-scale`,
+        permissions: ["tenure_scale.view", "tenure_scale.manage"],
+      },
+      {
+        title: "Configuración de plantilla",
+        description:
+          "Configura las áreas, cargos y puestos que conforman la estructura de plantilla de la entidad.",
+        icon: Network,
+        href: `/entity/${currentEntity?.id}/settings/staffing`,
+        permissions: ["staffing.view", "staffing.manage"],
+      },
+      {
+        title: "Carga inicial de trabajadores",
+        description: "Descarga la plantilla Excel, valida filas y carga trabajadores históricos.",
+        icon: FileSpreadsheet,
+        href: `/entity/${currentEntity?.id}/settings/initial-import`,
+        permissions: ["workers.manage"],
+      },
+      {
+        title: "Altas y Bajas",
+        description:
+          "Registro histórico centralizado de altas, bajas definitivas y reincorporaciones laborales, y exportación al modelo oficial.",
+        icon: ArrowUpDown,
+        href: `/entity/${currentEntity?.id}/settings/altas-bajas`,
+        permissions: ["workers.view", "workers.manage"],
+      },
+      {
+        title: "Datos contractuales",
         description:
           "Datos contractuales de la entidad y representantes autorizados para la formalización de contratos.",
         icon: ClipboardList,

@@ -23,7 +23,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
 const DOCUMENTS_BUCKET = "documents"
@@ -135,60 +135,29 @@ serve(async (req) => {
     auth: { persistSession: false },
   })
 
-  const customSessionToken = req.headers.get("x-sitecorp-session")?.trim() || ""
-
   // Cliente que actúa como el usuario: la autorización la aplica la base de datos.
   const userClient = createClient(supabaseUrl, anonKey, {
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(customSessionToken ? { "x-sitecorp-session": customSessionToken } : {}),
-      },
-    },
+    global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   })
 
   try {
-    let callerId: string | null = null
-
-    if (customSessionToken) {
-      const { data: sessionValidation } = await adminClient.rpc("validate_user_session", {
-        p_session_token: customSessionToken,
-      })
-      const parsed = (
-        Array.isArray(sessionValidation) ? sessionValidation[0] : sessionValidation
-      ) as { valid?: boolean; user_id?: string } | null
-      if (parsed?.valid && parsed.user_id) {
-        callerId = parsed.user_id
-      }
-    }
-
-    if (!callerId) {
-      const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
-      if (callerError || !callerData?.user) {
-        console.error("[delete-workspace] invalid caller token", callerError)
-        return json({ error: "Unauthorized" }, 401)
-      }
-      callerId = callerData.user.id
+    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+    if (callerError || !callerData?.user) {
+      console.error("[delete-workspace] invalid caller token", callerError)
+      return json({ error: "Unauthorized" }, 401)
     }
 
     // Barrera de servidor: un usuario con cambio de contraseña pendiente no puede ejecutar
     // operaciones destructivas, aunque la RPC de borrado sea SECURITY DEFINER.
-    const { data: callerCreds } = await adminClient
-      .from("user_credentials")
-      .select("must_change_password")
-      .eq("user_id", callerId)
-      .maybeSingle()
-
     const { data: callerLifecycle } = await adminClient
       .from("user_password_lifecycle")
       .select("must_change_password")
-      .eq("user_id", callerId)
+      .eq("user_id", callerData.user.id)
       .maybeSingle()
-
-    if (callerCreds?.must_change_password === true || callerLifecycle?.must_change_password === true) {
+    if (callerLifecycle?.must_change_password === true) {
       console.error("[delete-workspace] caller has a pending password change", {
-        callerId,
+        callerId: callerData.user.id,
       })
       return json({ error: "Forbidden: pending password change" }, 403)
     }

@@ -77,8 +77,6 @@ export interface RegisterSeparationRpcPayload {
   workerId: string
   effectiveDate: string
   separationReasonId: string
-  reasonName?: string | null
-  customReason?: string | null
   notes: string | null
   /** Asignación afectada (pluriempleo). `null` = comportamiento actual. */
   targetAssignmentId?: string | null
@@ -239,119 +237,23 @@ export async function reincorporateWorkerRpc(
   }
 }
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-const normalizeTextKey = (value: string): string =>
-  value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toLowerCase()
-
-/**
- * Resuelve un UUID activo de `worker_separation_reasons` cuando el usuario selecciona
- * una opción antes de ejecutar la migración SQL en la base de datos.
- */
-async function resolveDatabaseSeparationReasonId(
-  separationReasonId: string,
-  reasonName?: string | null
-): Promise<string> {
-  if (UUID_PATTERN.test(separationReasonId)) {
-    return separationReasonId
-  }
-
-  const { data: activeRows, error } = await supabase
-    .from("worker_separation_reasons")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("sort_order")
-
-  if (error) throw error
-  const rows = (activeRows as { id: string; name: string }[] | null) || []
-  if (rows.length === 0) {
-    throw new Error("No existen motivos de baja activos en la base de datos.")
-  }
-
-  if (reasonName) {
-    const targetKey = normalizeTextKey(reasonName)
-    const exactMatch = rows.find((r) => normalizeTextKey(r.name) === targetKey)
-    if (exactMatch) return exactMatch.id
-  }
-
-  const otherFallback = rows.find((r) => {
-    const key = normalizeTextKey(r.name)
-    return key.includes("otr") || key.includes("baja")
-  })
-  return (otherFallback ?? rows[0]).id
-}
-
 /** Baja: cierra la asignación y el contrato vigentes y deja al trabajador inactivo. */
 export async function registerWorkerSeparationRpc(
   payload: RegisterSeparationRpcPayload
 ): Promise<void> {
-  const resolvedReasonId = await resolveDatabaseSeparationReasonId(
-    payload.separationReasonId,
-    payload.reasonName
-  )
-
-  const customReasonText = toNullableText(payload.customReason)
-  const reasonLabel = customReasonText ?? toNullableText(payload.reasonName)
-  const notesText = toNullableText(payload.notes)
-
-  const baseParams = withTarget(
+  const params = withTarget(
     {
       p_worker_id: payload.workerId,
       p_effective_date: payload.effectiveDate,
-      p_separation_reason_id: resolvedReasonId,
-      p_notes: notesText,
+      p_separation_reason_id: payload.separationReasonId,
+      p_notes: toNullableText(payload.notes),
     },
     "p_target_assignment_id",
     payload.targetAssignmentId
   )
 
-  // Intenta primero la firma con `p_custom_reason` (migración 20261111_01).
-  if (reasonLabel) {
-    const { error: extendedError } = await supabase.rpc("register_worker_separation", {
-      ...baseParams,
-      p_custom_reason: reasonLabel,
-    })
-
-    if (!extendedError) return
-
-    const errMsg = `${extendedError.code ?? ""} ${extendedError.message ?? ""}`.toLowerCase()
-    const isSignatureMismatch =
-      extendedError.code === "PGRST202" ||
-      errMsg.includes("p_custom_reason") ||
-      errMsg.includes("could not find the function")
-
-    if (!isSignatureMismatch) {
-      throw extendedError
-    }
-  }
-
-  // Fallback compatible con la firma previa (antes de aplicar la migración 20261111_01 en BD)
-  const fallbackNotes =
-    customReasonText && notesText
-      ? `Motivo (Otras): ${customReasonText} · ${notesText}`
-      : customReasonText
-        ? `Motivo (Otras): ${customReasonText}`
-        : notesText
-
-  const { error } = await supabase.rpc("register_worker_separation", {
-    ...baseParams,
-    p_notes: fallbackNotes,
-  })
+  const { error } = await supabase.rpc("register_worker_separation", params)
   if (error) throw error
-
-  // Si el motivo nominal difiere del nombre antiguo en BD, intenta actualizar `reason` en el movimiento recién creado
-  if (reasonLabel) {
-    await supabase
-      .from("worker_employment_movements")
-      .update({ reason: reasonLabel })
-      .eq("worker_id", payload.workerId)
-      .eq("movement_type", "BAJA")
-      .eq("effective_date", payload.effectiveDate)
-  }
 }
 
 /** Cambio de tipo de contrato: cierra el vigente y crea uno nuevo con sus condiciones. */

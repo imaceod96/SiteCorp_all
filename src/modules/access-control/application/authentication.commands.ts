@@ -23,12 +23,9 @@ import {
  * configuración de autenticación (proveedores, redirecciones, plantillas) no se toca.
  */
 
-/**
- * Inicio de sesión por correo electrónico o nombre de usuario (`username`).
- * Devuelve el mensaje de error del backend o `null` si se abrió sesión.
- */
-export async function signIn(identifier: string, password: string): Promise<string | null> {
-  return signInWithPassword(identifier, password)
+/** Inicio de sesión: devuelve el mensaje de error del backend o `null` si se abrió sesión. */
+export async function signIn(email: string, password: string): Promise<string | null> {
+  return signInWithPassword(email, password)
 }
 
 /** Cierre de la sesión actual. */

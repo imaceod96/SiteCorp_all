@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase"
-import { currentUserId } from "./expediente-storage"
 
 /**
  * Persistencia de metadatos de la Bolsa Global de Candidatos (`area_id` y postulación
@@ -169,7 +168,7 @@ export async function saveCandidateAreaMeta(
       .like("info_text", `${AREA_META_PREFIX}%`)
 
     if (normalizedAreaId) {
-      const userId = await currentUserId()
+      const userId = (await supabase.auth.getUser()).data.user?.id ?? null
       await supabase.from("candidate_additional_info").insert({
         candidate_id: candidateId,
         organization_entity_id: organizationEntityId,
@@ -211,7 +210,7 @@ export async function saveCandidateEntitiesMeta(
       .eq("candidate_id", candidateId)
       .like("info_text", `${ENTITIES_META_PREFIX}%`)
 
-    const userId = await currentUserId()
+    const userId = (await supabase.auth.getUser()).data.user?.id ?? null
     await supabase.from("candidate_additional_info").insert({
       candidate_id: candidateId,
       organization_entity_id: organizationEntityId,

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-sitecorp-session",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
 interface CreateSitecorpUserRequest {
@@ -128,28 +128,14 @@ serve(async (req) => {
   )
 
   try {
-    // 1. Verify caller identity (supports custom session token via validate_user_session RPC or Bearer JWT)
-    let callerId: string | null = null
-    const customSessionToken = req.headers.get("x-sitecorp-session")?.trim() || ""
-
-    if (customSessionToken) {
-      const { data: sessionValidation } = await adminClient.rpc("validate_user_session", {
-        p_session_token: customSessionToken,
-      })
-      const parsed = sessionValidation as { valid?: boolean; user_id?: string } | null
-      if (parsed?.valid && parsed.user_id) {
-        callerId = parsed.user_id
-      }
+    // 1. Verify caller identity
+    const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
+    if (callerError || !callerData?.user) {
+      console.error("[create-sitecorp-user] invalid caller token", callerError)
+      return json({ error: "Unauthorized" }, 401)
     }
 
-    if (!callerId) {
-      const { data: callerData, error: callerError } = await adminClient.auth.getUser(token)
-      if (callerError || !callerData?.user) {
-        console.error("[create-sitecorp-user] invalid caller token", callerError)
-        return json({ error: "Unauthorized" }, 401)
-      }
-      callerId = callerData.user.id
-    }
+    const callerId = callerData.user.id
 
     // 2. Verify caller has an active platform profile
     const { data: callerProfile, error: callerProfileError } = await adminClient
@@ -163,20 +149,14 @@ serve(async (req) => {
       return json({ error: "Forbidden: inactive platform administrator" }, 403)
     }
 
-    // El llamante NO puede tener un cambio de contraseña pendiente (consulta user_credentials y user_password_lifecycle)
-    const { data: callerCreds } = await adminClient
-      .from("user_credentials")
-      .select("must_change_password")
-      .eq("user_id", callerId)
-      .maybeSingle()
-
+    // El llamante NO puede tener un cambio de contraseña pendiente (barrera de servidor, no
+    // solo de interfaz): un administrador con cambio obligatorio no puede crear usuarios.
     const { data: callerLifecycle } = await adminClient
       .from("user_password_lifecycle")
       .select("must_change_password")
       .eq("user_id", callerId)
       .maybeSingle()
-
-    if (callerCreds?.must_change_password === true || callerLifecycle?.must_change_password === true) {
+    if (callerLifecycle?.must_change_password === true) {
       console.error("[create-sitecorp-user] caller has a pending password change", { callerId })
       return json({ error: "Forbidden: pending password change" }, 403)
     }
@@ -318,28 +298,39 @@ serve(async (req) => {
       return json({ error: "Ya existe un usuario con ese nombre." }, 409)
     }
 
-    // Check if email already exists in public.user_credentials (if table exists)
-    const { data: existingCredEmail } = await adminClient
-      .from("user_credentials")
-      .select("user_id")
-      .ilike("email", email)
-      .maybeSingle()
+    // 5. Generate the initial password (server-side, cryptographically secure).
+    const password = generateInitialPassword()
 
-    if (existingCredEmail) {
-      return json({ error: "Ya existe un usuario con este correo." }, 409)
+    // Create auth user via Admin API with email_confirm: true for development
+    // Duplicate email detection is handled by admin.createUser error response
+    const { data: newUser, error: createUserError } = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        username,
+      },
+    })
+
+    if (createUserError || !newUser?.user) {
+      console.error("[create-sitecorp-user] auth user creation failed", createUserError)
+      const message = createUserError?.message ?? "No se pudo crear el usuario."
+      const normalized = message.toLowerCase()
+      if (normalized.includes("already") || normalized.includes("registered") || normalized.includes("exists")) {
+        return json({ error: "Ya existe un usuario con este correo." }, 409)
+      }
+      return json({ error: message }, 500)
     }
 
-    // 5. Generate the initial password (server-side, cryptographically secure) and UUID.
-    const password = generateInitialPassword()
-    const userId = crypto.randomUUID()
+    const userId = newUser.user.id
 
-    // Create profile record directly in PostgreSQL
+    // Create profile record
     const { error: profileError } = await adminClient.from("profiles").upsert(
       {
         id: userId,
         full_name: fullName,
         username,
-        email,
         is_active: isActive,
       },
       { onConflict: "id" }
@@ -347,25 +338,32 @@ serve(async (req) => {
 
     if (profileError) {
       console.error("[create-sitecorp-user] profile creation failed", profileError)
+      // Try to clean up the auth user
+      try {
+        await adminClient.auth.admin.deleteUser(userId)
+      } catch (cleanupError) {
+        console.error("[create-sitecorp-user] rollback delete failed", cleanupError)
+      }
       return json({ error: "Error al crear el perfil: " + profileError.message }, 500)
     }
 
-    // 6. Persistir credenciales propias en `public.user_credentials` y `public.user_password_lifecycle` con hash bcrypt (pgcrypto RPC)
-    const { error: credentialsRpcError } = await adminClient.rpc("upsert_user_credentials", {
-      p_user_id: userId,
-      p_email: email,
-      p_plain_password: password,
-      p_must_change_password: true,
-    })
-
-    if (credentialsRpcError) {
-      console.error("[create-sitecorp-user] upsert_user_credentials failed", credentialsRpcError)
-      await adminClient.from("profiles").delete().eq("id", userId)
-      return json({ error: "No se pudieron registrar las credenciales del usuario: " + credentialsRpcError.message }, 500)
-    }
-
     // Assign platform role
-    const { error: roleAssignError } = await adminClient.from("platform_user_roles").insert({
+    //   · Rol SuperAdmin → se asigna con la IDENTIDAD DEL LLAMANTE (su propio token), para
+    //     que la base reconozca a la cuenta fundadora y el disparador autorice la operación.
+    //     La service role NO puede otorgar el SuperAdmin.
+    //   · Resto de roles → como hasta ahora, con el cliente de servicio.
+    const roleClient = isSuperAdminRole
+      ? createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+          {
+            auth: { persistSession: false },
+            global: { headers: { Authorization: authHeader } },
+          }
+        )
+      : adminClient
+
+    const { error: roleAssignError } = await roleClient.from("platform_user_roles").insert({
       user_id: userId,
       platform_role_id: platformRoleId,
       assigned_by: callerId,
@@ -373,8 +371,58 @@ serve(async (req) => {
 
     if (roleAssignError) {
       console.error("[create-sitecorp-user] platform role assignment failed", roleAssignError)
-      await adminClient.from("profiles").delete().eq("id", userId)
+      // Try to clean up the profile and auth user
+      try {
+        await adminClient.from("profiles").delete().eq("id", userId)
+        await adminClient.auth.admin.deleteUser(userId)
+      } catch (cleanupError) {
+        console.error("[create-sitecorp-user] rollback failed", cleanupError)
+      }
       return json({ error: "Error al asignar el rol de plataforma: " + roleAssignError.message }, 500)
+    }
+
+    // 6. Initialize the password lifecycle (born with must_change_password = true).
+    //    Operación privilegiada: se invoca con el cliente service_role vía PostgREST, que es
+    //    la ÚNICA vía autorizada (las RPC están restringidas a service_role en la base).
+    const { error: lifecycleError } = await adminClient.rpc("initialize_password_lifecycle", {
+      p_user_id: userId,
+    })
+
+    if (lifecycleError) {
+      console.error("[create-sitecorp-user] password lifecycle init failed", lifecycleError)
+      // Compensación: revertir el alta para no dejar una cuenta con contraseña temporal sin
+      // ciclo de vida. Se comprueba el resultado y, si la reversión falla, se informa del
+      // estado inconsistente sin ocultarlo.
+      let compensationFailed = false
+
+      const { error: profileDeleteError } = await adminClient
+        .from("profiles")
+        .delete()
+        .eq("id", userId)
+      if (profileDeleteError) {
+        console.error("[create-sitecorp-user] rollback profile delete failed", profileDeleteError)
+        compensationFailed = true
+      }
+
+      const { error: userDeleteError } = await adminClient.auth.admin.deleteUser(userId)
+      if (userDeleteError) {
+        console.error("[create-sitecorp-user] rollback auth user delete failed", userDeleteError)
+        compensationFailed = true
+      }
+
+      if (compensationFailed) {
+        return json(
+          {
+            error:
+              "No se pudo inicializar el ciclo de vida de la contraseña y la reversión del alta no se completó. El usuario puede haber quedado en un estado inconsistente; revísalo antes de reintentar.",
+            inconsistent_state: true,
+            user_id: userId,
+          },
+          500
+        )
+      }
+
+      return json({ error: "No se pudo inicializar la contraseña inicial. El alta se revirtió." }, 500)
     }
 
     console.log("[create-sitecorp-user] user created successfully", {

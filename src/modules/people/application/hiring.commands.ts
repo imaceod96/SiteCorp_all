@@ -1,9 +1,5 @@
 import { hireCandidateRpc } from "../infrastructure/worker-transitions.repository"
 import {
-  formatNotesWithSourceOfOrigin,
-  persistWorkerSourceOfOrigin,
-} from "../infrastructure/altas-bajas-registry.repository"
-import {
   ensureContractDocument,
   ensureMovementDocument,
   ensureResolutionDocument,
@@ -57,7 +53,7 @@ export async function hireCandidateWithContract(
     contractTypeId: input.specialDocumentRole ? null : input.contractTypeId,
     contractStartDate: input.contractStartDate || input.hireDate,
     contractEndDate: input.isDetermined ? input.contractEndDate || null : null,
-    notes: formatNotesWithSourceOfOrigin(input.notes, input.sourceOfOrigin),
+    notes: input.notes,
     representativeAssignmentId: input.representativeAssignmentId,
     signatureDate: input.signatureDate,
     signaturePlace: input.signaturePlace,
@@ -65,8 +61,6 @@ export async function hireCandidateWithContract(
     compensationComponents: input.compensationComponents,
     paymentScheduleText: input.paymentScheduleText,
   })
-
-  await persistWorkerSourceOfOrigin(result.workerId, input.hireDate, input.sourceOfOrigin)
 
   // Para Cargos Cuadro / Especialista Principal no se genera contrato ni documento.
   const documentWarning =
@@ -90,7 +84,7 @@ export async function hireCandidateWithResolution(
     contractTypeId: null,
     contractStartDate: null,
     contractEndDate: null,
-    notes: formatNotesWithSourceOfOrigin(input.notes, input.sourceOfOrigin),
+    notes: input.notes,
     representativeAssignmentId: input.resolution.representativeAssignmentId,
     signatureDate: null,
     signaturePlace: null,
@@ -99,8 +93,6 @@ export async function hireCandidateWithResolution(
     paymentScheduleText: null,
     resolutionDate: input.resolution.resolutionDate,
   })
-
-  await persistWorkerSourceOfOrigin(result.workerId, input.hireDate, input.sourceOfOrigin)
 
   const documentWarning = result.resolutionId
     ? await ensureResolutionDocument(result.resolutionId)

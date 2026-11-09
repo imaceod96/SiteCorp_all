@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase"
 import { rpcName, tableName } from "@/integrations/supabase/schema-target"
-import { buildCustomSessionHeaders } from "@/modules/access-control"
 import type {
   CompanyClientDeletionResult,
   CompanyClientDeletionSummary,
@@ -151,7 +150,6 @@ export async function invokeDeleteCompanyClient(
 ): Promise<CompanyClientDeleteInvocation> {
   const { data, error } = await supabase.functions.invoke("delete-workspace", {
     body: { tenant_id: companyClientId, confirmation_name: confirmationName },
-    headers: buildCustomSessionHeaders(),
   })
 
   if (!error) {

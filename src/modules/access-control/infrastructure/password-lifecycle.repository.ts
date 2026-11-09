@@ -1,18 +1,17 @@
 import { supabase } from "@/lib/supabase"
-import { getStoredSessionUserMetadata } from "./authentication.repository"
 import type { PasswordLifecycleRead } from "../domain/password.rules"
 
 /**
  * Control de acceso — Repositorio del CICLO DE VIDA DE CONTRASEÑA (infraestructura).
  *
- * Lee el estado de cambio obligatorio de contraseña desde `public.user_password_lifecycle`
- * y/o desde los metadatos verificados por PostgreSQL (`validate_user_session` /
- * `authenticate_user_credentials`, que consultan `public.user_credentials.must_change_password`
- * y `public.user_password_lifecycle.must_change_password`).
+ * Único punto que LEE `public.user_password_lifecycle` desde el cliente. La ESCRITURA de ese
+ * estado NUNCA ocurre aquí: la realizan exclusivamente las RPC restringidas a `service_role`
+ * (`initialize_password_lifecycle` / `mark_password_changed`) desde el servidor.
+ *
+ * RLS permite al titular leer su propia fila; la ausencia de fila es un usuario legacy.
+ * Un error de lectura se PROPAGA como `status: "error"` (NUNCA como «sin cambio»).
  */
 export async function selectOwnPasswordLifecycle(userId: string): Promise<PasswordLifecycleRead> {
-  const sessionMeta = getStoredSessionUserMetadata()
-
   try {
     const { data, error } = await supabase
       .from("user_password_lifecycle")
@@ -20,20 +19,10 @@ export async function selectOwnPasswordLifecycle(userId: string): Promise<Passwo
       .eq("user_id", userId)
       .maybeSingle()
 
-    if (!error && data) {
-      return { status: "record", mustChange: Boolean(data.must_change_password) }
-    }
-
-    if (sessionMeta && sessionMeta.userId === userId) {
-      return { status: "record", mustChange: Boolean(sessionMeta.mustChangePassword) }
-    }
-
     if (error) return { status: "error" }
-    return { status: "none" }
+    if (!data) return { status: "none" }
+    return { status: "record", mustChange: Boolean(data.must_change_password) }
   } catch {
-    if (sessionMeta && sessionMeta.userId === userId) {
-      return { status: "record", mustChange: Boolean(sessionMeta.mustChangePassword) }
-    }
     return { status: "error" }
   }
 }
