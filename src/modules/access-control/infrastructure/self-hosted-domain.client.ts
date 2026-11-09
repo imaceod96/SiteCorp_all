@@ -629,4 +629,369 @@ export class SelfHostedDomainClient {
     )
     return data.auditEvents
   }
+
+  // =========================================================================
+  // 9. Cuadros y Reservas (Fase 4G.7)
+  // =========================================================================
+  async createCadreReserve(
+    companyId: string,
+    input: {
+      workerId: string
+      targetPositionId: string
+      reserveCategory?: "TITULAR" | "RESERVA_INMEDIATA" | "RESERVA_PERSPECTIVA" | "CANTERA"
+      readinessLevel?: "LISTO" | "EN_PREPARACION" | "INICIAL"
+      designatedDate?: string
+      expirationDate?: string | null
+      notes?: string | null
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ reserve: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/cadre-reserves`,
+      { method: "POST", body: input }
+    )
+    return data.reserve
+  }
+
+  async listCadreReserves(companyId: string): Promise<Array<Record<string, unknown>>> {
+    const data = await this.requestJson<{ reserves: Array<Record<string, unknown>> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/cadre-reserves`,
+      { method: "GET" }
+    )
+    return data.reserves
+  }
+
+  async createCadreEvaluation(
+    companyId: string,
+    input: {
+      workerId: string
+      positionId?: string | null
+      evaluationPeriod: string
+      evaluationDate?: string
+      overallRating: "SUPERIOR" | "SATISFACTORIO" | "REGULAR" | "DEFICIENTE"
+      score?: number | null
+      strengths?: string | null
+      recommendations?: string | null
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ evaluation: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/cadre-evaluations`,
+      { method: "POST", body: input }
+    )
+    return data.evaluation
+  }
+
+  async createCadreMovement(
+    companyId: string,
+    input: {
+      workerId: string
+      fromPositionId?: string | null
+      toPositionId?: string | null
+      movementKind: "PROMOCION" | "ROTACION" | "DEMOCION" | "LIBERACION" | "DESIGNACION_DIRECTA"
+      effectiveDate?: string
+      resolutionNumber?: string | null
+      notes?: string | null
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ movement: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/cadre-movements`,
+      { method: "POST", body: input }
+    )
+    return data.movement
+  }
+
+  // =========================================================================
+  // 10. Plantillas Documentales Avanzadas y Generación (Fase 4G.7)
+  // =========================================================================
+  async createDocumentTemplate(
+    companyId: string,
+    input: {
+      code: string
+      name: string
+      category?: string
+      contentHtml?: string
+    }
+  ): Promise<{
+    template: Record<string, unknown>
+    initialVersion: Record<string, unknown>
+  }> {
+    return this.requestJson<{
+      template: Record<string, unknown>
+      initialVersion: Record<string, unknown>
+    }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/document-templates`,
+      { method: "POST", body: input }
+    )
+  }
+
+  async createTemplateVariable(
+    companyId: string,
+    templateId: string,
+    input: {
+      variableKey: string
+      label: string
+      dataType?: "TEXT" | "NUMBER" | "DATE" | "CURRENCY" | "BOOLEAN"
+      isRequired?: boolean
+      defaultValue?: string | null
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ variable: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/document-templates/${encodeURIComponent(templateId)}/variables`,
+      { method: "POST", body: input }
+    )
+    return data.variable
+  }
+
+  async createTemplateSection(
+    companyId: string,
+    templateId: string,
+    input: {
+      sectionCode: string
+      title: string
+      contentTemplate: string
+      sortOrder?: number
+      isOptional?: boolean
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ section: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/document-templates/${encodeURIComponent(templateId)}/sections`,
+      { method: "POST", body: input }
+    )
+    return data.section
+  }
+
+  async generateDocument(
+    companyId: string,
+    input: {
+      templateId: string
+      workerId?: string | null
+      contractId?: string | null
+      documentTitle: string
+      variables: Record<string, string | number | boolean | null>
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ generatedDocument: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/generated-documents`,
+      { method: "POST", body: input }
+    )
+    return data.generatedDocument
+  }
+
+  // =========================================================================
+  // 11. Invitaciones y Notificaciones (Fase 4G.7)
+  // =========================================================================
+  async createCompanyInvitation(
+    companyId: string,
+    input: {
+      invitedEmail: string
+      roleCode?: string
+      expiresInHours?: number
+    }
+  ): Promise<{
+    invitation: Record<string, unknown>
+    emailDelivery: Record<string, unknown> | null
+  }> {
+    return this.requestJson<{
+      invitation: Record<string, unknown>
+      emailDelivery: Record<string, unknown> | null
+    }>(`/api/v1/domain/companies/${encodeURIComponent(companyId)}/invitations`, {
+      method: "POST",
+      body: input,
+    })
+  }
+
+  async listCompanyInvitations(companyId: string): Promise<Array<Record<string, unknown>>> {
+    const data = await this.requestJson<{ invitations: Array<Record<string, unknown>> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/invitations`,
+      { method: "GET" }
+    )
+    return data.invitations
+  }
+
+  // =========================================================================
+  // 12. Nómina y Prenómina Avanzada (Fase 4G.7)
+  // =========================================================================
+  async createPrenominaPeriod(
+    companyId: string,
+    input: {
+      organizationEntityId?: string | null
+      periodYear: number
+      periodMonth: number
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ period: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/prenomina-periods`,
+      { method: "POST", body: input }
+    )
+    return data.period
+  }
+
+  async upsertPrenominaWorkerEntry(
+    companyId: string,
+    periodId: string,
+    input: {
+      workerId: string
+      workedDays: number
+      workedHours?: number
+      overtimeHours?: number
+      baseAmount: number
+      bonusAmount?: number
+      deductionAmount?: number
+      notes?: string | null
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ entry: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/prenomina-periods/${encodeURIComponent(periodId)}/entries`,
+      { method: "POST", body: input }
+    )
+    return data.entry
+  }
+
+  async createSalaryBonus(
+    companyId: string,
+    input: {
+      workerId: string
+      prenominaPeriodId?: string | null
+      bonusType?: "ANTIGUEDAD" | "MAESTRIA_DOCTORADO" | "RESULTADOS" | "CONDICIONES_LABORALES" | "ESTIMULO" | "OTRO"
+      concept: string
+      amount: number
+      effectiveDate?: string
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ bonus: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/salary-bonuses`,
+      { method: "POST", body: input }
+    )
+    return data.bonus
+  }
+
+  async createSalaryDeduction(
+    companyId: string,
+    input: {
+      workerId: string
+      prenominaPeriodId?: string | null
+      deductionType?: "SEGURIDAD_SOCIAL" | "IMPUESTO_INGRESOS" | "AUSENCIA" | "RETENCION_JUDICIAL" | "ANTICIPO" | "OTRO"
+      concept: string
+      amount: number
+      effectiveDate?: string
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ deduction: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/salary-deductions`,
+      { method: "POST", body: input }
+    )
+    return data.deduction
+  }
+
+  async closePrenominaPeriod(
+    companyId: string,
+    periodId: string,
+    notes?: string
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ closure: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/prenomina-periods/${encodeURIComponent(periodId)}/close`,
+      { method: "POST", body: { notes } }
+    )
+    return data.closure
+  }
+
+  // =========================================================================
+  // 13. Capacitación, SST, Comisiones y Disciplina (Fase 4G.7)
+  // =========================================================================
+  async createTrainingCourse(
+    companyId: string,
+    input: {
+      code: string
+      title: string
+      provider?: string | null
+      modality?: "PRESENCIAL" | "VIRTUAL" | "MIXTA"
+      durationHours: number
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ course: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/training-courses`,
+      { method: "POST", body: input }
+    )
+    return data.course
+  }
+
+  async recordWorkerTraining(
+    companyId: string,
+    input: {
+      workerId: string
+      courseId: string
+      startDate: string
+      endDate?: string | null
+      status?: "MATRICULADO" | "EN_CURSO" | "APROBADO" | "DESAPROBADO" | "BAJA"
+      grade?: number | null
+      certificateNumber?: string | null
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ training: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/worker-trainings`,
+      { method: "POST", body: input }
+    )
+    return data.training
+  }
+
+  async createEvaluationCommittee(
+    companyId: string,
+    input: {
+      organizationEntityId?: string | null
+      name: string
+      resolutionNumber: string
+      constitutedDate?: string
+      members?: ReadonlyArray<{ workerId: string; role: string }>
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ committee: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/evaluation-committees`,
+      { method: "POST", body: input }
+    )
+    return data.committee
+  }
+
+  async recordDisciplinaryMeasure(
+    companyId: string,
+    input: {
+      workerId: string
+      organizationEntityId?: string | null
+      measureType:
+        | "AMONESTACION_PUBLICA"
+        | "MULTA"
+        | "SUSPENSION_VINCULO"
+        | "TRASLADO_PROVISIONAL"
+        | "TRASLADO_DEFINITIVO"
+        | "SEPARACION_DEFINITIVA"
+      resolutionNumber: string
+      reason: string
+    }
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ measure: Record<string, unknown> }>(
+      `/api/v1/domain/companies/${encodeURIComponent(companyId)}/disciplinary-measures`,
+      { method: "POST", body: input }
+    )
+    return data.measure
+  }
+
+  async invokeAutonomousRpc(
+    rpcName: string,
+    args: Record<string, unknown> = {}
+  ): Promise<unknown> {
+    const data = await this.requestJson<{ result: unknown }>(
+      `/api/v1/domain/rpc/${encodeURIComponent(rpcName)}`,
+      { method: "POST", body: args }
+    )
+    return data.result
+  }
+
+  async invokeAutonomousEdgeFunction(
+    functionName: string,
+    body: Record<string, unknown> = {}
+  ): Promise<Record<string, unknown>> {
+    const data = await this.requestJson<{ result: Record<string, unknown> }>(
+      `/api/v1/domain/functions/${encodeURIComponent(functionName)}`,
+      { method: "POST", body }
+    )
+    return data.result
+  }
 }

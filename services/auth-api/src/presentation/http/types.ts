@@ -84,7 +84,9 @@ export interface AuthHttpServerDependencies {
   readonly argon2Gate?: Argon2ConcurrencyGate;
   readonly rateLimiter?: IRateLimiter;
   readonly domainRepo?: import("../../infrastructure/postgres/postgres-domain.repository").PostgresDomainRepository;
+  readonly submodulesRepo?: import("../../infrastructure/postgres/postgres-submodules.repository").PostgresSubmodulesRepository;
   readonly storageService?: import("../../infrastructure/storage/local-file-storage.service").LocalFileStorageService;
+  readonly emailService?: import("../../interfaces").ITransactionalEmailService;
   /** Sonda inyectable para verificar conectividad a PostgreSQL en `/health/ready` */
   readonly databaseReadinessCheck?: ReadinessProbe;
   /** Sonda inyectable para verificar disponibilidad del subsistema criptográfico en `/health/ready` */

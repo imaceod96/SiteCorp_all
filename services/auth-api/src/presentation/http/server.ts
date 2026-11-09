@@ -36,7 +36,9 @@ import { registerHealthRoutes } from "./routes/health.routes";
 import { registerAuthRoutes } from "./routes/auth.routes";
 import { registerAdminRoutes } from "./routes/admin.routes";
 import { registerDomainRoutes } from "./routes/domain.routes";
+import { registerSubmodulesRoutes } from "./routes/submodules.routes";
 import { registerStorageRoutes } from "./routes/storage.routes";
+import { PostgresSubmodulesRepository } from "../../infrastructure/postgres/postgres-submodules.repository";
 import { AuthHttpServerDependencies } from "./types";
 
 /**
@@ -56,6 +58,9 @@ export const PINO_REDACT_PATHS: readonly string[] = Object.freeze([
   "refreshToken",
   "rawRefreshToken",
   "newRefreshToken",
+  "rawToken",
+  "rawInvitationToken",
+  "smtpPassword",
   "tokenHash",
   "accessToken",
   "csrfSecret",
@@ -84,6 +89,9 @@ export const PINO_REDACT_PATHS: readonly string[] = Object.freeze([
   "*.refreshToken",
   "*.rawRefreshToken",
   "*.newRefreshToken",
+  "*.rawToken",
+  "*.rawInvitationToken",
+  "*.smtpPassword",
   "*.tokenHash",
   "*.accessToken",
   "*.csrfSecret",
@@ -381,7 +389,9 @@ export async function buildAuthHttpServer(
     refreshSessionUseCase,
     logoutUseCase,
     changePasswordUseCase,
+    generateActivationTokenUseCase,
     consumeActivationTokenUseCase,
+    emailService: deps.emailService,
     authPolicy,
     operatorPrincipalResolver,
     nowProvider,
@@ -397,12 +407,13 @@ export async function buildAuthHttpServer(
     adminCreateUserUseCase,
     adminUpdateStatusUseCase,
     generateActivationTokenUseCase,
+    emailService: deps.emailService,
     authPolicy,
     operatorPrincipalResolver,
     nowProvider,
   });
 
-  // 12. Registrar endpoints de dominio si domainRepo está disponible (/api/v1/domain/*)
+  // 12. Registrar endpoints de dominio y submódulos si domainRepo está disponible (/api/v1/domain/*)
   if (deps.domainRepo) {
     registerDomainRoutes(app, {
       httpConfig,
@@ -411,6 +422,27 @@ export async function buildAuthHttpServer(
       sessionRepo: deps.sessionRepo,
       domainRepo: deps.domainRepo,
       rateLimiter,
+      authPolicy,
+      operatorPrincipalResolver,
+      nowProvider,
+    });
+
+    const resolvedSubmodulesRepo =
+      deps.submodulesRepo ??
+      new PostgresSubmodulesRepository(
+        deps.domainRepo.getDatabaseClient(),
+        deps.domainRepo
+      );
+
+    registerSubmodulesRoutes(app, {
+      httpConfig,
+      tokenService: deps.tokenService,
+      userRepo: deps.userRepo,
+      sessionRepo: deps.sessionRepo,
+      domainRepo: deps.domainRepo,
+      submodulesRepo: resolvedSubmodulesRepo,
+      rateLimiter,
+      emailService: deps.emailService,
       authPolicy,
       operatorPrincipalResolver,
       nowProvider,

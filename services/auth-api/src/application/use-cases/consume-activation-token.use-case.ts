@@ -95,14 +95,25 @@ export class ConsumeActivationTokenUseCase implements IConsumeActivationTokenUse
       const currentCred = await this.credRepo.findByUserId(user.id);
       const newVersion = currentCred ? currentCred.version + 1 : 1;
 
-      await this.credRepo.save({
-        id: currentCred?.id ?? randomUUID(),
-        userId: user.id,
-        algorithm: this.passwordHasher.algorithm,
-        passwordHash: newPasswordHash,
-        version: newVersion,
-        createdAt: now,
-      });
+      if (currentCred) {
+        await this.credRepo.update({
+          id: currentCred.id,
+          userId: user.id,
+          algorithm: this.passwordHasher.algorithm,
+          passwordHash: newPasswordHash,
+          version: newVersion,
+          createdAt: now,
+        });
+      } else {
+        await this.credRepo.save({
+          id: randomUUID(),
+          userId: user.id,
+          algorithm: this.passwordHasher.algorithm,
+          passwordHash: newPasswordHash,
+          version: newVersion,
+          createdAt: now,
+        });
+      }
 
       // C. Actualizar estado del usuario
       user.markPasswordChanged(now);

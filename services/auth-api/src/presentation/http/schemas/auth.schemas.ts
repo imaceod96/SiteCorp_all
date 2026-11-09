@@ -128,3 +128,20 @@ export const resetPasswordBodySchema = Object.freeze({
   },
 } as const);
 
+export interface RecoverPasswordRequestBody {
+  readonly email: string;
+}
+
+export const recoverPasswordBodySchema = Object.freeze({
+  type: "object",
+  additionalProperties: false,
+  required: ["email"],
+  properties: {
+    email: {
+      type: "string",
+      minLength: 3,
+      maxLength: 254,
+    },
+  },
+} as const);
+

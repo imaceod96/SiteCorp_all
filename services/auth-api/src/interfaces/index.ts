@@ -7,4 +7,5 @@ export * from "./security-audit.service.interface";
 export * from "./authorization.interface";
 export * from "./transaction.interface";
 export * from "./activation-token.repository.interface";
+export * from "./email.service.interface";
 

@@ -252,7 +252,69 @@ export function loadExtendedDomainSchemaMigration(
 }
 
 /**
- * Carga la secuencia completa de migraciones de diseño de SiteCorp (`0001` a `0005`).
+ * Carga el archivo de diseño SQL `0006_sitecorp_complete_submodules.design.sql`
+ * para completar las 24 tablas pendientes y todos los catálogos/submódulos de SiteCorp.
+ */
+export function loadCompleteSubmodulesMigration(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): MigrationDefinition {
+  const sourceFileName = "0006_sitecorp_complete_submodules.design.sql";
+  if (isProtectedProductionTarget(options?.environment, options?.connectionHint)) {
+    throw new ProductionDesignMigrationForbiddenError(sourceFileName);
+  }
+
+  const filePath = resolve(
+    baseDir ?? process.cwd(),
+    `db/migrations/${sourceFileName}`
+  );
+  const rawSql = readFileSync(filePath, "utf8");
+
+  const innerSql = rawSql
+    .replace(/^\s*BEGIN\s*;/im, "")
+    .replace(/COMMIT\s*;\s*$/im, "")
+    .trim();
+
+  const checksumSha256 = computeMigrationChecksum(innerSql);
+
+  return {
+    version: "0006_sitecorp_complete_submodules",
+    description:
+      "SiteCorp complete submodules schema: 24 pending domain tables and all frontend catalog/submodule tables with multi-tenant triggers",
+    sql: innerSql,
+    checksumSha256,
+    isDesignArtifact: true,
+    sourceFileName,
+  };
+}
+
+/**
+ * Carga el script SQL de rollback `0006_sitecorp_complete_submodules.rollback.design.sql`
+ * para pruebas de reversibilidad en entorno aislado.
+ */
+export function loadCompleteSubmodulesRollbackSql(
+  baseDir?: string,
+  options?: { environment?: string; connectionHint?: string }
+): string {
+  const sourceFileName = "0006_sitecorp_complete_submodules.rollback.design.sql";
+  if (isProtectedProductionTarget(options?.environment, options?.connectionHint)) {
+    throw new ProductionDesignMigrationForbiddenError(sourceFileName);
+  }
+
+  const filePath = resolve(
+    baseDir ?? process.cwd(),
+    `db/migrations/${sourceFileName}`
+  );
+  const rawSql = readFileSync(filePath, "utf8");
+
+  return rawSql
+    .replace(/^\s*BEGIN\s*;/im, "")
+    .replace(/COMMIT\s*;\s*$/im, "")
+    .trim();
+}
+
+/**
+ * Carga la secuencia completa de migraciones de diseño de SiteCorp (`0001` a `0006`).
  */
 export function loadAllAuthSchemaMigrations(
   baseDir?: string,
@@ -264,6 +326,7 @@ export function loadAllAuthSchemaMigrations(
     loadActivationTokensMigration(baseDir, options),
     loadDomainSchemaMigration(baseDir, options),
     loadExtendedDomainSchemaMigration(baseDir, options),
+    loadCompleteSubmodulesMigration(baseDir, options),
   ];
 }
 

@@ -5,6 +5,7 @@ import {
   IOperatorPrincipalResolver,
   ISessionRepository,
   ITokenService,
+  ITransactionalEmailService,
   IUserRepository,
 } from "../../../interfaces";
 import {
@@ -38,6 +39,7 @@ export interface AdminRoutesDependencies {
   readonly adminCreateUserUseCase?: IAdminCreateUserUseCase;
   readonly adminUpdateStatusUseCase?: IAdminUpdateStatusUseCase;
   readonly generateActivationTokenUseCase?: IGenerateActivationTokenUseCase;
+  readonly emailService?: ITransactionalEmailService;
   readonly authPolicy?: IAuthorizationPolicyService;
   readonly operatorPrincipalResolver?: IOperatorPrincipalResolver;
   readonly nowProvider?: () => Date;
@@ -363,6 +365,38 @@ export function registerAdminRoutes(
           authContext.operator
         );
 
+        let emailDelivery: {
+          readonly sent: boolean;
+          readonly messageId: string;
+          readonly category: string;
+          readonly transportMode: string;
+        } | null = null;
+
+        if (deps.emailService) {
+          const targetUser = await userRepo.findById(targetUserId);
+          if (targetUser) {
+            const receipt =
+              tokenResult.tokenType === "password_reset"
+                ? await deps.emailService.sendPasswordRecoveryEmail({
+                    toEmail: targetUser.email,
+                    rawToken: tokenResult.rawToken,
+                    expiresAt: tokenResult.expiresAt,
+                  })
+                : await deps.emailService.sendActivationEmail({
+                    toEmail: targetUser.email,
+                    rawToken: tokenResult.rawToken,
+                    expiresAt: tokenResult.expiresAt,
+                  });
+
+            emailDelivery = {
+              sent: receipt.accepted,
+              messageId: receipt.messageId,
+              category: receipt.category,
+              transportMode: receipt.transportMode,
+            };
+          }
+        }
+
         return reply.code(201).send(
           buildSuccessEnvelope(
             {
@@ -373,6 +407,7 @@ export function registerAdminRoutes(
                 tokenType: tokenResult.tokenType,
                 expiresAt: tokenResult.expiresAt.toISOString(),
               },
+              ...(emailDelivery ? { emailDelivery } : {}),
             },
             req,
             now

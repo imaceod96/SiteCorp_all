@@ -238,6 +238,10 @@ function isTransactionManager(
 export class PostgresDomainRepository {
   constructor(private readonly db: IDatabaseClient) {}
 
+  public getDatabaseClient(): IDatabaseClient {
+    return this.db;
+  }
+
   private async runInTxIfNeeded<T>(work: () => Promise<T>): Promise<T> {
     if (this.db.isInTransaction()) {
       return work();

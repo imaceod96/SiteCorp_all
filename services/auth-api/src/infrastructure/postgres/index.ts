@@ -7,4 +7,5 @@ export * from "./postgres-operator-permission.repository";
 export * from "./postgres-migration.runner";
 export * from "./postgres-activation-token.repository";
 export * from "./postgres-domain.repository";
+export * from "./postgres-submodules.repository";
 

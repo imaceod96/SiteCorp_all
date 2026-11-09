@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import {
+  createEmail,
   AuthUser,
   ForbiddenError,
   SessionInvalidError,
@@ -15,11 +16,13 @@ import {
   IOperatorPrincipalResolver,
   ISessionRepository,
   ITokenService,
+  ITransactionalEmailService,
   IUserRepository,
 } from "../../../interfaces";
 import {
   IChangePasswordUseCase,
   IConsumeActivationTokenUseCase,
+  IGenerateActivationTokenUseCase,
   ILoginUseCase,
   ILogoutUseCase,
   IRefreshSessionUseCase,
@@ -44,6 +47,8 @@ import {
   loginBodySchema,
   LogoutRequestBody,
   logoutBodySchema,
+  RecoverPasswordRequestBody,
+  recoverPasswordBodySchema,
   RefreshRequestBody,
   refreshBodySchema,
   ResetPasswordRequestBody,
@@ -62,7 +67,9 @@ export interface AuthRoutesDependencies {
   readonly refreshSessionUseCase?: IRefreshSessionUseCase;
   readonly logoutUseCase?: ILogoutUseCase;
   readonly changePasswordUseCase?: IChangePasswordUseCase;
+  readonly generateActivationTokenUseCase?: IGenerateActivationTokenUseCase;
   readonly consumeActivationTokenUseCase?: IConsumeActivationTokenUseCase;
+  readonly emailService?: ITransactionalEmailService;
   readonly authPolicy?: IAuthorizationPolicyService;
   readonly operatorPrincipalResolver?: IOperatorPrincipalResolver;
   readonly nowProvider?: () => Date;
@@ -907,5 +914,90 @@ export function registerAuthRoutes(
       );
     }
   );
+
+  // =========================================================================
+  // ENDPOINT: POST /api/v1/auth/recover-password (Solicitud de recuperación por correo SMTP)
+  // =========================================================================
+  app.post<{ Body: RecoverPasswordRequestBody }>(
+    "/api/v1/auth/recover-password",
+    {
+      schema: {
+        body: recoverPasswordBodySchema,
+        querystring: emptyQuerySchema,
+      },
+    },
+    async (req, reply) => {
+      const now = nowProvider();
+      const normalizedEmail = req.body.email.trim().toLowerCase();
+
+      // 1. Rate limiting dual (IP + cuenta)
+      await rateLimiter.consumeOrThrow({
+        operation: "reset_password",
+        dimension: "ip",
+        rawIdentifier: req.ip,
+        rule: httpConfig.rateLimit.loginByIp,
+        now,
+      });
+      await rateLimiter.consumeOrThrow({
+        operation: "reset_password",
+        dimension: "account",
+        rawIdentifier: normalizedEmail,
+        rule: httpConfig.rateLimit.loginByAccount,
+        now,
+      });
+
+      if (!deps.generateActivationTokenUseCase || !deps.emailService) {
+        return reply.code(501).send({
+          statusCode: 501,
+          error: "Not Implemented",
+          code: "PASSWORD_RECOVERY_NOT_CONFIGURED",
+          message:
+            "El servicio transaccional de recuperación de contraseña por correo no está configurado.",
+        });
+      }
+
+      // 2. Buscar usuario sin revelar en la respuesta HTTP si la cuenta existe o no
+      let targetUser: AuthUser | null = null;
+      try {
+        targetUser = await userRepo.findByEmail(createEmail(normalizedEmail));
+      } catch {
+        targetUser = null;
+      }
+
+      if (
+        targetUser &&
+        targetUser.status !== "deleted" &&
+        targetUser.status !== "suspended"
+      ) {
+        const tokenResult = await deps.generateActivationTokenUseCase.execute({
+          userId: targetUser.id,
+          tokenType: "password_reset",
+          expiresInHours: 2,
+          ipAddress: req.ip,
+          userAgent: sanitizeUserAgent(req.headers["user-agent"]),
+        });
+
+        await deps.emailService.sendPasswordRecoveryEmail({
+          toEmail: targetUser.email,
+          rawToken: tokenResult.rawToken,
+          expiresAt: tokenResult.expiresAt,
+        });
+      }
+
+      // 3. Respuesta uniforme anti-enumeración (nunca expone el token en claro)
+      return reply.code(200).send(
+        buildSuccessEnvelope(
+          {
+            recoveryRequested: true,
+            message:
+              "Si el correo electrónico corresponde a una cuenta activa, se ha enviado un enlace de un solo uso para restablecer la contraseña.",
+          },
+          req,
+          now
+        )
+      );
+    }
+  );
 }
+
 
