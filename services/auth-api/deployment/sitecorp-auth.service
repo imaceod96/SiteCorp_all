@@ -1,0 +1,53 @@
+[Unit]
+Description=SiteCorp Auth API — Backend Autónomo de Autenticación y Autorización
+Documentation=https://github.com/imaceod96/SiteCorp_all/tree/inicio-de-sesion-en-backend/services/auth-api
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=sitecorp
+Group=sitecorp
+WorkingDirectory=/opt/sitecorp/services/auth-api
+EnvironmentFile=/etc/sitecorp/auth-api.env
+ExecStart=/usr/bin/node /opt/sitecorp/services/auth-api/dist/presentation/http/entrypoint.js
+Restart=always
+RestartSec=5s
+
+# -----------------------------------------------------------------------------
+# Endurecimiento y Confinamiento de Seguridad del Proceso (systemd sandbox)
+# -----------------------------------------------------------------------------
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+PrivateTmp=true
+PrivateDevices=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# Restricción de espacio de nombres y capacidades
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Límites de Recursos para VPS de Prestaciones Limitadas (1-2 vCPU, 1-2 GB RAM)
+MemoryMax=512M
+MemoryHigh=400M
+CPUQuota=150%
+TasksMax=128
+
+# Descriptores de archivo y límites de sockets
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Redirección de Logs hacia journald estructurado
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sitecorp-auth
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,37 @@
+{
+  "name": "@sitecorp/auth-api",
+  "version": "0.1.0",
+  "description": "Backend autogestionado e independiente de autenticación para SiteCorp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --config ./vitest.config.ts",
+    "lint": "eslint src tests",
+    "start": "node dist/presentation/http/entrypoint.js",
+    "dev": "tsx src/presentation/http/entrypoint.ts",
+    "db:migrate": "tsx src/cli/migrate.ts",
+    "admin:bootstrap": "tsx src/cli/bootstrap-admin.ts"
+  },
+  "keywords": [
+    "sitecorp",
+    "auth",
+    "security"
+  ],
+  "author": "SiteCorp Security Architecture",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/cors": "^10.1.0",
+    "@fastify/helmet": "^13.2.0",
+    "@node-rs/argon2": "^2.2.2",
+    "fastify": "^5.12.8",
+    "jose": "^6.2.15",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@types/pg": "^8.23.1"
+  }
+}

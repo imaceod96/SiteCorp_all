@@ -233,3 +233,24 @@ export {
   setClientMembershipActive,
   updateClientUser,
 } from "./application/client-access.commands"
+
+/* Cliente autónomo de dominio y Storage (modo self_hosted) */
+export {
+  SelfHostedDomainClient,
+  SelfHostedDomainHttpError,
+} from "./infrastructure/self-hosted-domain.client"
+export type {
+  AutonomousAuditEntry,
+  AutonomousBucketId,
+  AutonomousCompanyClient,
+  AutonomousContract,
+  AutonomousLaborMovement,
+  AutonomousOrganizationEntity,
+  AutonomousPosition,
+  AutonomousStorageObject,
+  AutonomousTenantPermission,
+  AutonomousUserAccessOverview,
+  AutonomousVacationBalance,
+  AutonomousWorker,
+  SelfHostedDomainClientOptions,
+} from "./infrastructure/self-hosted-domain.client"
