@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu"
-import { ChevronUp, KeyRound, LogOut, User as UserIcon } from "lucide-react"
+import { ChevronUp, ExternalLink, HelpCircle, KeyRound, LogOut, User as UserIcon } from "lucide-react"
 
 interface SidebarUserMenuProps {
   /**
@@ -121,6 +121,19 @@ export function SidebarUserMenu({ accountPath = null, className }: SidebarUserMe
             <DropdownMenuSeparator />
           </>
         ) : null}
+        <DropdownMenuItem asChild>
+          <a
+            href="https://help.sitecorp.cu"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full cursor-pointer items-center"
+          >
+            <HelpCircle className="mr-2 h-4 w-4 text-[#F49D37]" />
+            <span className="flex-1">Centro de Ayuda</span>
+            <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           Cerrar sesión
