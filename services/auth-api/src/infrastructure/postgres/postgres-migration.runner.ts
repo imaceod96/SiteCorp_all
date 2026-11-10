@@ -1,7 +1,23 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { IDatabaseClient, ITransactionManager } from "../../interfaces";
+
+function resolveMigrationFilePath(
+  baseDir: string | undefined,
+  sourceFileName: string
+): string {
+  const root = baseDir ?? process.cwd();
+  const direct = resolve(root, `db/migrations/${sourceFileName}`);
+  if (existsSync(direct)) {
+    return direct;
+  }
+  const nested = resolve(root, `services/auth-api/db/migrations/${sourceFileName}`);
+  if (existsSync(nested)) {
+    return nested;
+  }
+  return direct;
+}
 
 export interface MigrationDefinition {
   readonly version: string;
@@ -74,10 +90,7 @@ export function loadInitialAuthSchemaMigration(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   const innerSql = rawSql
@@ -112,10 +125,7 @@ export function loadOperatorPermissionsMigration(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   const innerSql = rawSql
@@ -151,10 +161,7 @@ export function loadActivationTokensMigration(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   const innerSql = rawSql
@@ -190,10 +197,7 @@ export function loadDomainSchemaMigration(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   const innerSql = rawSql
@@ -227,10 +231,7 @@ export function loadExtendedDomainSchemaMigration(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   const innerSql = rawSql
@@ -264,10 +265,7 @@ export function loadCompleteSubmodulesMigration(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   const innerSql = rawSql
@@ -301,10 +299,7 @@ export function loadCompleteSubmodulesRollbackSql(
     throw new ProductionDesignMigrationForbiddenError(sourceFileName);
   }
 
-  const filePath = resolve(
-    baseDir ?? process.cwd(),
-    `db/migrations/${sourceFileName}`
-  );
+  const filePath = resolveMigrationFilePath(baseDir, sourceFileName);
   const rawSql = readFileSync(filePath, "utf8");
 
   return rawSql

@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  postgres16:
+    image: postgres:16.15-bookworm
+    container_name: sitecorp-postgres16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sitecorp}
+      POSTGRES_USER: ${POSTGRES_USER:-sitecorp_migrator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD en el entorno}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - sitecorp_pg16_data:/var/lib/postgresql/data
+      - ./postgres16-least-privilege.sql:/docker-entrypoint-initdb.d/10-least-privilege.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-sitecorp_migrator} -d $${POSTGRES_DB:-sitecorp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  sitecorp-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: sitecorp-autonomous-api
+    restart: unless-stopped
+    depends_on:
+      postgres16:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 4010
+      DATABASE_URL: ${DATABASE_URL:?Defina DATABASE_URL con el rol sitecorp_app_runtime}
+      STORAGE_BASE_DIR: /var/lib/sitecorp/storage
+    ports:
+      - "127.0.0.1:4010:4010"
+    volumes:
+      - sitecorp_storage_data:/var/lib/sitecorp/storage
+
+volumes:
+  sitecorp_pg16_data:
+  sitecorp_storage_data:

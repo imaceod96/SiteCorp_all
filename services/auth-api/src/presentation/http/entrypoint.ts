@@ -5,14 +5,20 @@ import {
   JoseTokenService,
   loadCryptoConfigFromEnv,
   loadHttpConfigFromEnv,
+  LocalFileStorageService,
   PgPoolClientLike,
   PgPoolLike,
+  PostgresActivationTokenRepository,
   PostgresCredentialRepository,
+  PostgresDomainRepository,
   PostgresOperatorPermissionRepository,
   PostgresSecurityAuditService,
   PostgresSessionRepository,
+  PostgresSubmodulesRepository,
   PostgresTransactionManager,
   PostgresUserRepository,
+  SmtpTransactionalEmailService,
+  loadSmtpConfigFromEnv,
 } from "../../infrastructure";
 import {
   AuthorizationPolicyService,
@@ -38,6 +44,22 @@ export interface RunningStandaloneServer {
   readonly stop: () => Promise<void>;
 }
 
+function normalizePgQueryResult<TRow extends QueryResultRow>(
+  res: pg.QueryResult<TRow> | pg.QueryResult<TRow>[]
+): { rows: TRow[]; rowCount: number | null } {
+  if (Array.isArray(res)) {
+    const last = res[res.length - 1];
+    return {
+      rows: last?.rows ?? [],
+      rowCount: last?.rowCount ?? (last?.rows ? last.rows.length : 0),
+    };
+  }
+  return {
+    rows: res?.rows ?? [],
+    rowCount: res?.rowCount ?? (res?.rows ? res.rows.length : 0),
+  };
+}
+
 export class PgPoolAdapter implements PgPoolLike {
   constructor(private readonly pool: pg.Pool) {}
 
@@ -48,14 +70,14 @@ export class PgPoolAdapter implements PgPoolLike {
         text: string,
         values?: readonly unknown[]
       ) => {
-        const res = await client.query<TRow>(text, values ? [...values] : undefined);
-        return {
-          rows: res.rows,
-          rowCount: res.rowCount,
-        };
+        const res =
+          values && values.length > 0
+            ? await client.query<TRow>(text, [...values])
+            : await client.query<TRow>(text);
+        return normalizePgQueryResult(res);
       },
-      release: () => {
-        client.release();
+      release: (err?: Error | boolean) => {
+        client.release(err);
       },
     };
   }
@@ -64,11 +86,11 @@ export class PgPoolAdapter implements PgPoolLike {
     text: string,
     values?: readonly unknown[]
   ) {
-    const res = await this.pool.query<TRow>(text, values ? [...values] : undefined);
-    return {
-      rows: res.rows,
-      rowCount: res.rowCount,
-    };
+    const res =
+      values && values.length > 0
+        ? await this.pool.query<TRow>(text, [...values])
+        : await this.pool.query<TRow>(text);
+    return normalizePgQueryResult(res);
   }
 
   async end(): Promise<void> {
@@ -78,7 +100,7 @@ export class PgPoolAdapter implements PgPoolLike {
 
 /**
  * Factoría que inicializa y conecta todas las dependencias del backend autónomo
- * de autenticación (PostgreSQL, Criptografía Argon2id y Ed25519, Fastify v5).
+ * de autenticación y dominio (PostgreSQL, Criptografía Argon2id y Ed25519, Storage, SMTP, Fastify v5).
  */
 export async function createStandaloneAuthApp(
   options: StandaloneServerOptions = {}
@@ -109,15 +131,30 @@ export async function createStandaloneAuthApp(
     pool = new PgPoolAdapter(rawPgPool);
   }
 
-  // 3. Inicializar repositorios transaccionales
+  // 3. Inicializar repositorios transaccionales y de dominio
   const txManager = new PostgresTransactionManager(pool);
   const userRepo = new PostgresUserRepository(txManager);
   const credentialRepo = new PostgresCredentialRepository(txManager);
   const sessionRepo = new PostgresSessionRepository(txManager, txManager);
+  const activationTokenRepo = new PostgresActivationTokenRepository(txManager);
   const auditService = new PostgresSecurityAuditService(txManager);
   const permissionRepo = new PostgresOperatorPermissionRepository(txManager);
+  const domainRepo = new PostgresDomainRepository(txManager);
+  const submodulesRepo = new PostgresSubmodulesRepository(txManager, domainRepo);
 
-  // 4. Adaptadores criptográficos y autorización autoritativa
+  // 4. Storage local autónomo y correo transaccional SMTP (si está configurado)
+  const storageRootDir =
+    env.STORAGE_LOCAL_ROOT_DIR?.trim() ||
+    env.STORAGE_BASE_DIR?.trim() ||
+    "/tmp/sitecorp-autonomous-storage";
+  const storageService = new LocalFileStorageService(txManager, storageRootDir);
+
+  const smtpConfig = loadSmtpConfigFromEnv(env);
+  const emailService = smtpConfig
+    ? new SmtpTransactionalEmailService(smtpConfig)
+    : undefined;
+
+  // 5. Adaptadores criptográficos y autorización autoritativa
   const passwordHasher = new Argon2idPasswordHasher(cryptoConfig.argon2id);
   const tokenService = new JoseTokenService(cryptoConfig.jwt);
   const authPolicy = new AuthorizationPolicyService();
@@ -125,7 +162,7 @@ export async function createStandaloneAuthApp(
     permissionRepo
   );
 
-  // 5. Sondas de preparación (/health/ready)
+  // 6. Sondas de preparación (/health/ready)
   const databaseReadinessCheck = async (): Promise<boolean> => {
     try {
       const res = await pool.query<{ ok: number }>("SELECT 1 AS ok");
@@ -142,14 +179,19 @@ export async function createStandaloneAuthApp(
     );
   };
 
-  // 6. Construir servidor Fastify v5
+  // 7. Construir servidor Fastify v5
   const server = await buildAuthHttpServer({
     httpConfig,
     tokenService,
     userRepo,
     sessionRepo,
     credentialRepo,
+    activationTokenRepo,
     operatorPermissionRepo: permissionRepo,
+    domainRepo,
+    submodulesRepo,
+    storageService,
+    emailService,
     passwordHasher,
     auditService,
     txManager,

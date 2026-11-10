@@ -85,6 +85,27 @@ export function configureSelfHostedRuntimeBridge(options: {
 const baseFetch =
   typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : undefined
 
+function readHeaderValue(
+  headers: RequestInit["headers"],
+  targetName: string
+): string | null {
+  if (!headers) return null
+  const lower = targetName.toLowerCase()
+  if (typeof Headers !== "undefined" && headers instanceof Headers) {
+    return headers.get(targetName) ?? headers.get(lower)
+  }
+  if (Array.isArray(headers)) {
+    for (const [k, v] of headers) {
+      if (k.toLowerCase() === lower) return v
+    }
+    return null
+  }
+  for (const [k, v] of Object.entries(headers as Record<string, string>)) {
+    if (k.toLowerCase() === lower) return v
+  }
+  return null
+}
+
 async function routeSupabaseRequestToAutonomousBackend(
   rawUrl: string,
   init?: RequestInit
@@ -109,24 +130,28 @@ async function routeSupabaseRequestToAutonomousBackend(
     authHeaders.Authorization = `Bearer ${token}`
   }
 
-  let parsedBody: Record<string, unknown> = {}
+  let parsedBody: unknown = {}
   if (typeof init?.body === "string" && init.body.trim().length > 0) {
     try {
-      parsedBody = JSON.parse(init.body) as Record<string, unknown>
+      parsedBody = JSON.parse(init.body)
     } catch {
       parsedBody = {}
     }
   }
 
-  // 1. Llamadas RPC: /rest/v1/rpc/<rpcName> -> /api/v1/domain/rpc/<rpcName>
+  // 1. Llamadas RPC: /rest/v1/rpc/<rpcName> -> /api/v1/submodules/rpc/<rpcName>
   if (pathname.startsWith("/rest/v1/rpc/")) {
-    const rpcName = pathname.slice("/rest/v1/rpc/".length)
+    const rpcName = decodeURIComponent(pathname.slice("/rest/v1/rpc/".length))
+    const bodyObj =
+      parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)
+        ? (parsedBody as Record<string, unknown>)
+        : {}
     const rpcBody = {
       ...(activeCompanyId ? { p_company_client_id: activeCompanyId } : {}),
-      ...parsedBody,
+      ...bodyObj,
     }
     const resp = await effectiveFetch(
-      `${baseUrl}/api/v1/domain/rpc/${encodeURIComponent(rpcName)}`,
+      `${baseUrl}/api/v1/submodules/rpc/${encodeURIComponent(rpcName)}`,
       {
         method: "POST",
         headers: authHeaders,
@@ -149,15 +174,19 @@ async function routeSupabaseRequestToAutonomousBackend(
     })
   }
 
-  // 2. Llamadas Edge Functions: /functions/v1/<fnName> -> /api/v1/domain/functions/<fnName>
+  // 2. Llamadas Edge Functions: /functions/v1/<fnName> -> /api/v1/submodules/edge/<fnName>
   if (pathname.startsWith("/functions/v1/")) {
-    const fnName = pathname.slice("/functions/v1/".length)
+    const fnName = decodeURIComponent(pathname.slice("/functions/v1/".length))
+    const bodyObj =
+      parsedBody && typeof parsedBody === "object" && !Array.isArray(parsedBody)
+        ? (parsedBody as Record<string, unknown>)
+        : {}
     const fnBody = {
       ...(activeCompanyId ? { companyClientId: activeCompanyId } : {}),
-      ...parsedBody,
+      ...bodyObj,
     }
     const resp = await effectiveFetch(
-      `${baseUrl}/api/v1/domain/functions/${encodeURIComponent(fnName)}`,
+      `${baseUrl}/api/v1/submodules/edge/${encodeURIComponent(fnName)}`,
       {
         method: "POST",
         headers: authHeaders,
@@ -180,43 +209,114 @@ async function routeSupabaseRequestToAutonomousBackend(
     })
   }
 
-  // 3. Consultas de tablas PostgREST: /rest/v1/<tableName> -> /api/v1/domain/rest/<tableName>
+  // 3. Consultas de tablas PostgREST: /rest/v1/<tableName> -> /api/v1/submodules/query/<tableName>
   if (pathname.startsWith("/rest/v1/")) {
-    const tableName = pathname.slice("/rest/v1/".length)
+    const tableName = decodeURIComponent(pathname.slice("/rest/v1/".length))
     const filters: Record<string, string> = {}
+    const orderBy: Array<{ column: string; direction: "asc" | "desc" }> = []
     let explicitCompanyId: string | null = activeCompanyId ?? null
+    let limit: number | undefined
+    let offset: number | undefined
+    let onConflict: string | null = null
 
-    for (const [k, v] of parsedUrl.searchParams.entries()) {
-      if (k === "select" || k === "order" || k === "limit" || k === "offset") {
-        continue
-      }
-      if (v.startsWith("eq.")) {
-        const cleanVal = v.slice(3)
-        filters[k] = cleanVal
-        if (k === "company_client_id" || k === "client_id") {
-          explicitCompanyId = cleanVal
+    const preferHeader = readHeaderValue(init?.headers, "Prefer") ?? ""
+    const acceptHeader = readHeaderValue(init?.headers, "Accept") ?? ""
+    const rangeHeader =
+      readHeaderValue(init?.headers, "Range") ??
+      parsedUrl.searchParams.get("range")
+
+    const countExact = preferHeader.toLowerCase().includes("count=exact")
+    const isUpsertHeader = preferHeader
+      .toLowerCase()
+      .includes("resolution=merge-duplicates")
+    const wantsSingleObject = acceptHeader
+      .toLowerCase()
+      .includes("application/vnd.pgrst.object+json")
+
+    if (rangeHeader) {
+      const m = rangeHeader.match(/(\d+)\s*-\s*(\d+)/)
+      if (m) {
+        const from = Number(m[1])
+        const to = Number(m[2])
+        if (Number.isInteger(from) && Number.isInteger(to) && to >= from) {
+          offset = from
+          limit = Math.min(500, to - from + 1)
         }
       }
     }
 
+    for (const [k, v] of parsedUrl.searchParams.entries()) {
+      if (k === "select" || k === "columns") {
+        // Si select solicita joins embebidos no soportados (ej. otra_tabla(...)), fallar explícitamente
+        if (v.includes("(") && v.includes(")")) {
+          return new Response(
+            JSON.stringify({
+              message: `La pasarela autónoma no soporta relaciones embebidas de PostgREST ('${v}'). Utilice consultas explícitas o endpoints de dominio.`,
+              code: "UNSUPPORTED_POSTGREST_FEATURE",
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          )
+        }
+        continue
+      }
+      if (k === "order") {
+        for (const part of v.split(",")) {
+          const segments = part.trim().split(".")
+          const col = segments[0]?.trim()
+          const dir = segments[1]?.trim().toLowerCase() === "desc" ? "desc" : "asc"
+          if (col) {
+            orderBy.push({ column: col, direction: dir })
+          }
+        }
+        continue
+      }
+      if (k === "limit") {
+        limit = Number(v)
+        continue
+      }
+      if (k === "offset") {
+        offset = Number(v)
+        continue
+      }
+      if (k === "on_conflict") {
+        onConflict = v
+        continue
+      }
+
+      filters[k] = v
+      if (
+        (k === "company_client_id" || k === "client_id") &&
+        v.startsWith("eq.")
+      ) {
+        explicitCompanyId = v.slice(3)
+      }
+    }
+
     const op =
-      method === "GET"
+      method === "GET" || method === "HEAD"
         ? "select"
         : method === "DELETE"
           ? "delete"
-          : method === "PATCH"
+          : method === "PATCH" || method === "PUT"
             ? "update"
-            : "insert"
+            : isUpsertHeader || onConflict
+              ? "upsert"
+              : "insert"
 
     const resp = await effectiveFetch(
-      `${baseUrl}/api/v1/domain/rest/${encodeURIComponent(tableName)}`,
+      `${baseUrl}/api/v1/submodules/query/${encodeURIComponent(tableName)}`,
       {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
           operation: op,
-          companyClientId: explicitCompanyId ?? "",
+          companyClientId: explicitCompanyId,
           filters,
+          orderBy: orderBy.length > 0 ? orderBy : undefined,
+          limit,
+          offset,
+          countExact,
+          onConflict,
           payload: parsedBody,
         }),
       }
@@ -225,15 +325,53 @@ async function routeSupabaseRequestToAutonomousBackend(
     if (!resp.ok) {
       return new Response(
         JSON.stringify({
-          message: json?.error?.message ?? json?.message ?? "Acceso denegado en tabla autónoma",
+          message:
+            json?.error?.message ??
+            json?.message ??
+            "Acceso denegado o consulta inválida en tabla autónoma",
           code: json?.error?.code ?? "AUTONOMOUS_REST_ERROR",
         }),
         { status: resp.status, headers: { "Content-Type": "application/json" } }
       )
     }
-    return new Response(JSON.stringify(json?.data?.rows ?? []), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+
+    const rows: unknown[] = Array.isArray(json?.data?.rows) ? json.data.rows : []
+    const totalCount: number =
+      typeof json?.data?.totalCount === "number"
+        ? json.data.totalCount
+        : rows.length
+
+    const responseHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+    }
+    if (countExact) {
+      const start = offset ?? 0
+      const end = rows.length > 0 ? start + rows.length - 1 : start
+      responseHeaders["Content-Range"] =
+        rows.length > 0 ? `${start}-${end}/${totalCount}` : `*/${totalCount}`
+    }
+
+    if (wantsSingleObject) {
+      if (rows.length !== 1) {
+        return new Response(
+          JSON.stringify({
+            code: "PGRST116",
+            details: `The result contains ${rows.length} rows`,
+            hint: null,
+            message: "JSON object requested, multiple (or no) rows returned",
+          }),
+          { status: 406, headers: responseHeaders }
+        )
+      }
+      return new Response(JSON.stringify(rows[0]), {
+        status: 200,
+        headers: responseHeaders,
+      })
+    }
+
+    return new Response(JSON.stringify(rows), {
+      status: method === "POST" ? 201 : 200,
+      headers: responseHeaders,
     })
   }
 

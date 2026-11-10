@@ -11,3 +11,4 @@ export * from "./postgres";
 export * from "./config";
 export * from "./crypto";
 export * from "./email";
+export * from "./storage/local-file-storage.service";

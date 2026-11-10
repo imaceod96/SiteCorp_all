@@ -1224,71 +1224,173 @@ export function registerSubmodulesRoutes(
 
   // =========================================================================
   // 7. PASARELA AUTÓNOMA DE RPCs, EDGE FUNCTIONS Y TABLAS PARA SELF-HOSTED
+  //    Rutas canónicas:
+  //      - POST /api/v1/submodules/rpc/:rpcName   (y alias /api/v1/domain/rpc/:rpcName)
+  //      - POST /api/v1/submodules/edge/:functionName (y alias /api/v1/domain/functions/:functionName)
+  //      - POST /api/v1/submodules/query/:table   (y alias /api/v1/domain/rest/:tableName)
   // =========================================================================
 
-  app.post<{
-    Params: { rpcName: string };
-    Body: Record<string, unknown>;
-  }>(
-    "/api/v1/domain/rpc/:rpcName",
-    { preHandler: [authGuard] },
-    async (req, reply) => {
-      const now = nowProvider();
-      const userId = getAuthenticatedUserId(req);
+  const handleRpcGateway = async (
+    req: FastifyRequest<{
+      Params: { rpcName: string };
+      Body: Record<string, unknown>;
+    }>,
+    reply: import("fastify").FastifyReply
+  ) => {
+    const now = nowProvider();
+    const userId = getAuthenticatedUserId(req);
+    try {
       const result = await submodulesRepo.executeAutonomousRpc({
         userId,
         rpcName: req.params.rpcName,
         args: (req.body as Record<string, unknown>) ?? {},
       });
       return reply.code(200).send(buildEnvelope({ result }, req, now));
+    } catch (err: any) {
+      if (
+        err?.code === "INVALID_GATEWAY_PARAMETER" ||
+        err?.code === "UNSUPPORTED_POSTGREST_FEATURE"
+      ) {
+        return reply.code(400).send({
+          error: {
+            code: err.code,
+            message: err.message,
+          },
+          meta: { requestId: req.id, timestamp: now.toISOString() },
+        });
+      }
+      throw err;
     }
+  };
+
+  app.post<{ Params: { rpcName: string }; Body: Record<string, unknown> }>(
+    "/api/v1/submodules/rpc/:rpcName",
+    { preHandler: [authGuard] },
+    handleRpcGateway
+  );
+  app.post<{ Params: { rpcName: string }; Body: Record<string, unknown> }>(
+    "/api/v1/domain/rpc/:rpcName",
+    { preHandler: [authGuard] },
+    handleRpcGateway
   );
 
-  app.post<{
-    Params: { functionName: string };
-    Body: Record<string, unknown>;
-  }>(
-    "/api/v1/domain/functions/:functionName",
-    { preHandler: [authGuard] },
-    async (req, reply) => {
-      const now = nowProvider();
-      const userId = getAuthenticatedUserId(req);
+  const handleEdgeGateway = async (
+    req: FastifyRequest<{
+      Params: { functionName: string };
+      Body: Record<string, unknown>;
+    }>,
+    reply: import("fastify").FastifyReply
+  ) => {
+    const now = nowProvider();
+    const userId = getAuthenticatedUserId(req);
+    try {
       const result = await submodulesRepo.executeAutonomousEdgeFunction({
         userId,
         functionName: req.params.functionName,
         body: (req.body as Record<string, unknown>) ?? {},
       });
       return reply.code(200).send(buildEnvelope({ result }, req, now));
+    } catch (err: any) {
+      if (
+        err?.code === "INVALID_GATEWAY_PARAMETER" ||
+        err?.code === "UNSUPPORTED_POSTGREST_FEATURE"
+      ) {
+        return reply.code(400).send({
+          error: {
+            code: err.code,
+            message: err.message,
+          },
+          meta: { requestId: req.id, timestamp: now.toISOString() },
+        });
+      }
+      throw err;
     }
+  };
+
+  app.post<{ Params: { functionName: string }; Body: Record<string, unknown> }>(
+    "/api/v1/submodules/edge/:functionName",
+    { preHandler: [authGuard] },
+    handleEdgeGateway
+  );
+  app.post<{ Params: { functionName: string }; Body: Record<string, unknown> }>(
+    "/api/v1/domain/functions/:functionName",
+    { preHandler: [authGuard] },
+    handleEdgeGateway
   );
 
-  app.post<{
-    Params: { tableName: string };
-    Body: {
-      operation?: "select" | "insert" | "update" | "delete";
-      companyClientId: string;
-      filters?: Record<string, string | number | boolean>;
-      payload?: Record<string, unknown>;
-    };
-  }>(
-    "/api/v1/domain/rest/:tableName",
-    { preHandler: [authGuard] },
-    async (req, reply) => {
-      const now = nowProvider();
-      const userId = getAuthenticatedUserId(req);
-      const companyClientId = assertValidUuid(
-        req.body?.companyClientId,
-        "companyClientId"
-      );
-      const rows = await submodulesRepo.executeAutonomousTableOperation({
+  type TableGatewayBody = {
+    operation?: "select" | "insert" | "upsert" | "update" | "delete";
+    companyClientId?: string | null;
+    filters?: Record<string, string | number | boolean>;
+    predicates?: readonly import("../../../infrastructure/postgres/postgres-submodules.repository").GatewayFilterPredicate[];
+    orderBy?: readonly import("../../../infrastructure/postgres/postgres-submodules.repository").GatewayOrderBySpec[];
+    limit?: number;
+    offset?: number;
+    countExact?: boolean;
+    onConflict?: string | null;
+    payload?: Record<string, unknown> | readonly Record<string, unknown>[];
+  };
+
+  const handleTableGateway = async (
+    req: FastifyRequest<{
+      Params: { table?: string; tableName?: string };
+      Body: TableGatewayBody;
+    }>,
+    reply: import("fastify").FastifyReply
+  ) => {
+    const now = nowProvider();
+    const userId = getAuthenticatedUserId(req);
+    const tableName = String(req.params.table ?? req.params.tableName ?? "");
+    const rawCompanyId = req.body?.companyClientId;
+    const companyClientId =
+      typeof rawCompanyId === "string" && rawCompanyId.trim().length > 0
+        ? assertValidUuid(rawCompanyId, "companyClientId")
+        : null;
+
+    try {
+      const out = await submodulesRepo.executeAutonomousTableOperationWithMeta({
         userId,
-        tableName: req.params.tableName,
+        tableName,
         operation: req.body?.operation ?? "select",
         companyClientId,
         filters: req.body?.filters,
+        predicates: req.body?.predicates,
+        orderBy: req.body?.orderBy,
+        limit: req.body?.limit,
+        offset: req.body?.offset,
+        countExact: req.body?.countExact,
+        onConflict: req.body?.onConflict,
         payload: req.body?.payload,
       });
-      return reply.code(200).send(buildEnvelope({ rows }, req, now));
+      return reply
+        .code(200)
+        .send(buildEnvelope({ rows: out.rows, totalCount: out.totalCount }, req, now));
+    } catch (err: any) {
+      if (
+        err?.code === "INVALID_GATEWAY_PARAMETER" ||
+        err?.code === "UNSUPPORTED_POSTGREST_FEATURE"
+      ) {
+        return reply.code(400).send({
+          error: {
+            code: err.code,
+            message: err.message,
+          },
+          meta: { requestId: req.id, timestamp: now.toISOString() },
+        });
+      }
+      throw err;
     }
+  };
+
+  app.post<{ Params: { table?: string; tableName?: string }; Body: TableGatewayBody }>(
+    "/api/v1/submodules/query/:table",
+    { preHandler: [authGuard] },
+    handleTableGateway
+  );
+  app.post<{ Params: { table?: string; tableName?: string }; Body: TableGatewayBody }>(
+    "/api/v1/domain/rest/:tableName",
+    { preHandler: [authGuard] },
+    handleTableGateway
   );
 }
+

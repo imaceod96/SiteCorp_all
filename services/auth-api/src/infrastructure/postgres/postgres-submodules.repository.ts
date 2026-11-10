@@ -356,55 +356,457 @@ export interface EntityPlanRecord extends QueryResultRow {
   [column: string]: unknown;
 }
 
-const ALLOWED_REST_TABLES: ReadonlyMap<
-  string,
-  {
-    tenantCol: "company_client_id" | "client_id" | "id" | null;
-    readPerm: TenantPermission;
-    writePerm: TenantPermission;
+export class UnauthorizedTableAccessError extends ForbiddenError {
+  public override readonly code = "TABLE_NOT_ALLOWED" as any;
+  constructor(tableName: string) {
+    super(`Acceso denegado: la tabla '${tableName}' no está autorizada en la pasarela autónoma.`);
+    this.name = "UnauthorizedTableAccessError";
   }
-> = new Map([
-  ["company_clients", { tenantCol: "id", readPerm: "companies.view", writePerm: "companies.manage" }],
-  ["clients", { tenantCol: "company_client_id", readPerm: "companies.view", writePerm: "companies.manage" }],
-  ["organization_entities", { tenantCol: "company_client_id", readPerm: "entities.view", writePerm: "entities.manage" }],
-  ["organization_positions", { tenantCol: "company_client_id", readPerm: "positions.view", writePerm: "positions.manage" }],
-  ["workers", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["worker_employment_periods", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["worker_employment_movements", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["employment_contracts", { tenantCol: "company_client_id", readPerm: "contracts.view", writePerm: "contracts.manage" }],
-  ["worker_vacations", { tenantCol: "company_client_id", readPerm: "vacations.view", writePerm: "vacations.manage" }],
-  ["cadre_reserves", { tenantCol: "company_client_id", readPerm: "positions.view", writePerm: "positions.manage" }],
-  ["cadre_evaluations", { tenantCol: "company_client_id", readPerm: "positions.view", writePerm: "positions.manage" }],
-  ["cadre_movements", { tenantCol: "company_client_id", readPerm: "positions.view", writePerm: "positions.manage" }],
-  ["document_templates", { tenantCol: "company_client_id", readPerm: "documents.view", writePerm: "documents.manage" }],
-  ["template_variables", { tenantCol: "company_client_id", readPerm: "documents.view", writePerm: "documents.manage" }],
-  ["template_sections", { tenantCol: "company_client_id", readPerm: "documents.view", writePerm: "documents.manage" }],
-  ["generated_documents", { tenantCol: "company_client_id", readPerm: "documents.view", writePerm: "documents.manage" }],
-  ["document_batches", { tenantCol: "company_client_id", readPerm: "documents.view", writePerm: "documents.manage" }],
-  ["client_invitations", { tenantCol: "company_client_id", readPerm: "companies.view", writePerm: "companies.manage" }],
-  ["entity_invitations", { tenantCol: "company_client_id", readPerm: "entities.view", writePerm: "entities.manage" }],
-  ["prenomina_periods", { tenantCol: "company_client_id", readPerm: "contracts.view", writePerm: "contracts.manage" }],
-  ["salary_bonuses", { tenantCol: "company_client_id", readPerm: "contracts.view", writePerm: "contracts.manage" }],
-  ["salary_deductions", { tenantCol: "company_client_id", readPerm: "contracts.view", writePerm: "contracts.manage" }],
-  ["payroll_closures", { tenantCol: "company_client_id", readPerm: "contracts.view", writePerm: "contracts.manage" }],
-  ["training_courses", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["worker_trainings", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["disciplinary_measures", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["ppe_deliveries", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["work_accidents", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["evaluation_committees", { tenantCol: "company_client_id", readPerm: "entities.view", writePerm: "entities.manage" }],
-  ["sst_inspections", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["entity_plans", { tenantCol: "company_client_id", readPerm: "entities.view", writePerm: "entities.manage" }],
-  ["worker_resolutions", { tenantCol: "company_client_id", readPerm: "workers.view", writePerm: "workers.manage" }],
-  ["custom_reports", { tenantCol: "company_client_id", readPerm: "audit.view", writePerm: "companies.manage" }],
-  ["report_schedules", { tenantCol: "company_client_id", readPerm: "audit.view", writePerm: "companies.manage" }],
-  ["import_batches", { tenantCol: "company_client_id", readPerm: "companies.view", writePerm: "companies.manage" }],
-  ["export_jobs", { tenantCol: "company_client_id", readPerm: "companies.view", writePerm: "companies.manage" }],
-  ["webhook_subscriptions", { tenantCol: "company_client_id", readPerm: "companies.view", writePerm: "companies.manage" }],
-  ["audit_events", { tenantCol: "company_client_id", readPerm: "audit.view", writePerm: "companies.manage" }],
+}
+
+export class UnauthorizedRpcError extends ForbiddenError {
+  public override readonly code = "RPC_NOT_ALLOWED" as any;
+  constructor(rpcName: string) {
+    super(`Ejecución denegada: la función RPC '${rpcName}' no está permitida en la lista blanca.`);
+    this.name = "UnauthorizedRpcError";
+  }
+}
+
+export class UnauthorizedEdgeFunctionError extends ForbiddenError {
+  public override readonly code = "EDGE_FUNCTION_NOT_ALLOWED" as any;
+  constructor(functionName: string) {
+    super(`Ejecución denegada: la Edge Function '${functionName}' no está permitida en la lista blanca.`);
+    this.name = "UnauthorizedEdgeFunctionError";
+  }
+}
+
+export class UnsupportedPostgrestFeatureError extends Error {
+  public readonly code = "UNSUPPORTED_POSTGREST_FEATURE";
+  public readonly statusCode = 400;
+  constructor(feature: string) {
+    super(
+      `Operación PostgREST no soportada en la pasarela autónoma: ${feature}. Utilice los operadores soportados o un endpoint de dominio dedicado.`
+    );
+    this.name = "UnsupportedPostgrestFeatureError";
+  }
+}
+
+export class InvalidGatewayParameterError extends Error {
+  public readonly code = "INVALID_GATEWAY_PARAMETER";
+  public readonly statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidGatewayParameterError";
+  }
+}
+
+export interface RestTablePolicy {
+  readonly scope: "company" | "catalog" | "user" | "platform";
+  readonly tenantCol: "company_client_id" | "client_id" | "id" | "user_id" | null;
+  readonly readPerm: TenantPermission;
+  readonly writePerm: TenantPermission;
+}
+
+const COMPANY_TABLE = (
+  readPerm: TenantPermission,
+  writePerm: TenantPermission,
+  tenantCol: "company_client_id" | "client_id" | "id" = "company_client_id"
+): RestTablePolicy => ({
+  scope: "company",
+  tenantCol,
+  readPerm,
+  writePerm,
+});
+
+const CATALOG_TABLE = (
+  readPerm: TenantPermission = "workers.view",
+  writePerm: TenantPermission = "companies.manage"
+): RestTablePolicy => ({
+  scope: "catalog",
+  tenantCol: null,
+  readPerm,
+  writePerm,
+});
+
+const USER_TABLE: RestTablePolicy = {
+  scope: "user",
+  tenantCol: "user_id",
+  readPerm: "companies.view",
+  writePerm: "companies.view",
+};
+
+const PLATFORM_TABLE: RestTablePolicy = {
+  scope: "platform",
+  tenantCol: null,
+  readPerm: "companies.manage",
+  writePerm: "companies.manage",
+};
+
+export const ALLOWED_REST_TABLES: ReadonlyMap<string, RestTablePolicy> = new Map<
+  string,
+  RestTablePolicy
+>([
+  // Empresas y estructura organizativa
+  ["company_clients", COMPANY_TABLE("companies.view", "companies.manage", "id")],
+  ["clients", COMPANY_TABLE("companies.view", "companies.manage", "company_client_id")],
+  ["company_client_user_access", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["organization_entities", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["organization_areas", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["organization_jobs", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["organization_job_preparation_levels", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["organization_job_cla_night_segments", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["organization_positions", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["position_schedule_segments", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["organization_representative_positions", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["organization_representative_assignments", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["entity_user_access", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["entity_plans", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["entity_plan_history", COMPANY_TABLE("entities.view", "entities.manage")],
+
+  // Personas, trabajadores y candidatos
+  ["workers", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_position_assignments", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["worker_employment_periods", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_employment_movements", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_payroll_movements", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_salary_history", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["worker_documents", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["worker_driving_license_categories", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_resolutions", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["candidates", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["candidate_academic_formations", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["candidate_work_experiences", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["candidate_additional_info", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["candidate_documents", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["candidate_notes", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["candidate_driving_license_categories", COMPANY_TABLE("workers.view", "workers.manage")],
+
+  // Contratos, suplementos, vacaciones y certificados médicos
+  ["employment_contracts", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["employment_contract_compensation_components", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["contract_addendums", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["worker_vacations", COMPANY_TABLE("vacations.view", "vacations.manage")],
+  ["worker_vacation_movements", COMPANY_TABLE("vacations.view", "vacations.manage")],
+  ["worker_medical_certificates", COMPANY_TABLE("vacations.view", "vacations.manage")],
+
+  // Cuadros y reservas
+  ["cadre_reserves", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["cadre_evaluations", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["cadre_movements", COMPANY_TABLE("positions.view", "positions.manage")],
+
+  // Plantillas documentales y documentos generados
+  ["document_templates", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["document_template_versions", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["template_variables", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["template_sections", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["generated_documents", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["documents", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["document_batches", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["document_batch_items", COMPANY_TABLE("documents.view", "documents.manage")],
+
+  // Invitaciones
+  ["client_invitations", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["entity_invitations", COMPANY_TABLE("entities.view", "entities.manage")],
+
+  // Nómina y prenómina
+  ["prenomina_periods", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["prenomina_worker_entries", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["prenomina_night_entries", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["salary_bonuses", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["salary_deductions", COMPANY_TABLE("contracts.view", "contracts.manage")],
+  ["payroll_closures", COMPANY_TABLE("contracts.view", "contracts.manage")],
+
+  // Capacitación, SST, comisiones y disciplina
+  ["training_courses", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_trainings", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["worker_training_records", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["training_folders", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["training_topics", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["training_topic_documents", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["training_sessions", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["training_initial_notifications", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["disciplinary_measures", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["ppe_deliveries", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["work_accidents", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["evaluation_committees", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["sst_inspections", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_inspection_findings", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_accidents_incidents", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_committee_records", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["sst_emergency_plans", COMPANY_TABLE("entities.view", "entities.manage")],
+  ["sst_epp_catalog", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_job_epp_requirements", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["sst_job_folders", COMPANY_TABLE("positions.view", "positions.manage")],
+  ["sst_onboarding_notifications", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_preventive_actions", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_risk_assessments", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_safe_work_procedures", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_topic_documents", COMPANY_TABLE("documents.view", "documents.manage")],
+  ["sst_training_sessions", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_training_topics", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_worker_epp_deliveries", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_worker_health_aptitude", COMPANY_TABLE("workers.view", "workers.manage")],
+  ["sst_worker_training_records", COMPANY_TABLE("workers.view", "workers.manage")],
+
+  // Reportes, importaciones, exportaciones, webhooks y auditoría
+  ["custom_reports", COMPANY_TABLE("audit.view", "companies.manage")],
+  ["report_schedules", COMPANY_TABLE("audit.view", "companies.manage")],
+  ["import_batches", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["export_jobs", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["webhook_subscriptions", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["audit_events", COMPANY_TABLE("audit.view", "companies.manage")],
+
+  // Tablas de ámbito de usuario autenticado
+  ["user_notifications", USER_TABLE],
+  ["notification_preferences", USER_TABLE],
+  ["profiles", { scope: "user", tenantCol: "id", readPerm: "companies.view", writePerm: "companies.view" }],
+  ["user_password_lifecycle", USER_TABLE],
+
+  // Catálogos de referencia (lectura autenticada, escritura restringida a administrador de plataforma)
+  ["genders", CATALOG_TABLE()],
+  ["skin_colors", CATALOG_TABLE()],
+  ["marital_statuses", CATALOG_TABLE()],
+  ["education_levels", CATALOG_TABLE()],
+  ["preparation_levels", CATALOG_TABLE()],
+  ["occupational_categories", CATALOG_TABLE()],
+  ["driving_license_categories", CATALOG_TABLE()],
+  ["payment_methods", CATALOG_TABLE()],
+  ["employment_contract_types", CATALOG_TABLE()],
+  ["worker_separation_reasons", CATALOG_TABLE()],
+  ["document_types", CATALOG_TABLE()],
+  ["document_template_types", CATALOG_TABLE()],
+  ["document_variables", CATALOG_TABLE()],
+  ["entity_regimes", CATALOG_TABLE()],
+  ["governing_documents", CATALOG_TABLE()],
+  ["salary_scales", CATALOG_TABLE()],
+  ["salary_groups", CATALOG_TABLE()],
+  ["salary_group_values", CATALOG_TABLE()],
+  ["tenure_payment_scales", CATALOG_TABLE()],
+
+  // Tablas de administración de plataforma (exigen requirePlatformAdmin)
+  ["platform_roles", PLATFORM_TABLE],
+  ["platform_permissions", PLATFORM_TABLE],
+  ["platform_role_permissions", PLATFORM_TABLE],
+  ["platform_user_roles", PLATFORM_TABLE],
+  ["platform_founder", PLATFORM_TABLE],
+  ["platform_documents", PLATFORM_TABLE],
+  ["platform_document_folders", PLATFORM_TABLE],
+]);
+
+export interface AutonomousRpcPolicy {
+  readonly scope: "user" | "company" | "platform";
+  readonly requiredPermission?: TenantPermission;
+}
+
+export const ALLOWED_AUTONOMOUS_RPCS: ReadonlyMap<string, AutonomousRpcPolicy> = new Map<
+  string,
+  AutonomousRpcPolicy
+>([
+  // Contexto de usuario y acceso
+  ["get_user_effective_access", { scope: "user" }],
+  ["get_my_permissions", { scope: "user" }],
+  ["get_current_user_context", { scope: "user" }],
+  ["list_accessible_companies", { scope: "user" }],
+  ["get_user_companies", { scope: "user" }],
+  ["is_platform_user", { scope: "user" }],
+  ["is_platform_superadmin", { scope: "user" }],
+  ["is_platform_founder", { scope: "user" }],
+  ["has_platform_permission", { scope: "user" }],
+  ["has_tenant_permission", { scope: "company", requiredPermission: "companies.view" }],
+  ["has_company_client_permission", { scope: "company", requiredPermission: "companies.view" }],
+  ["can_access_entity", { scope: "company", requiredPermission: "entities.view" }],
+  ["can_view_entity", { scope: "company", requiredPermission: "entities.view" }],
+  ["list_entity_permissions", { scope: "company", requiredPermission: "entities.view" }],
+  ["list_entity_user_access", { scope: "company", requiredPermission: "entities.view" }],
+  ["list_company_client_invitations", { scope: "company", requiredPermission: "companies.view" }],
+
+  // Administración de plataforma y clientes
+  ["create_workspace", { scope: "platform" }],
+  ["create_company_client", { scope: "platform" }],
+  ["workspace_deletion_summary", { scope: "platform" }],
+  ["company_client_deletion_summary", { scope: "platform" }],
+  ["delete_workspace", { scope: "platform" }],
+  ["delete_company_client", { scope: "platform" }],
+  ["save_platform_role", { scope: "platform" }],
+
+  // Métricas y resúmenes de entidad/empresa
+  ["get_company_dashboard_summary", { scope: "company", requiredPermission: "workers.view" }],
+  ["get_hr_metrics", { scope: "company", requiredPermission: "workers.view" }],
+  ["get_entity_dashboard_metrics", { scope: "company", requiredPermission: "entities.view" }],
+  ["get_company_org_tree", { scope: "company", requiredPermission: "entities.view" }],
+  ["validate_entity_contract_readiness", { scope: "company", requiredPermission: "entities.view" }],
+  ["resolve_entity_representatives", { scope: "company", requiredPermission: "entities.view" }],
+  ["resolve_salary_scale_for_entity", { scope: "company", requiredPermission: "contracts.view" }],
+  ["entity_positions_anexo14", { scope: "company", requiredPermission: "positions.view" }],
+  ["entity_staffing_export", { scope: "company", requiredPermission: "positions.view" }],
+  ["save_entity_plan", { scope: "company", requiredPermission: "entities.manage" }],
+  ["check_entity_plan_quota", { scope: "company", requiredPermission: "entities.view" }],
+  ["save_entity_contract_data", { scope: "company", requiredPermission: "entities.manage" }],
+  ["save_entity_role", { scope: "company", requiredPermission: "entities.manage" }],
+  ["delete_entity_role", { scope: "company", requiredPermission: "entities.manage" }],
+  ["set_entity_representative", { scope: "company", requiredPermission: "entities.manage" }],
+  ["create_representative_position", { scope: "company", requiredPermission: "positions.manage" }],
+  ["update_representative_position", { scope: "company", requiredPermission: "positions.manage" }],
+  ["create_entity_empresarial_scale", { scope: "company", requiredPermission: "contracts.manage" }],
+
+  // Puestos, trabajadores y movimientos
+  ["save_position_with_schedule", { scope: "company", requiredPermission: "positions.manage" }],
+  ["update_job_work_content", { scope: "company", requiredPermission: "positions.manage" }],
+  ["link_worker_to_position", { scope: "company", requiredPermission: "positions.manage" }],
+  ["unlink_worker_from_position", { scope: "company", requiredPermission: "positions.manage" }],
+  ["position_change_preview", { scope: "company", requiredPermission: "positions.view" }],
+  ["change_worker_position", { scope: "company", requiredPermission: "positions.manage" }],
+  ["apply_worker_movement", { scope: "company", requiredPermission: "workers.manage" }],
+  ["create_worker_with_position", { scope: "company", requiredPermission: "workers.manage" }],
+  ["create_worker_pluriemploy", { scope: "company", requiredPermission: "workers.manage" }],
+  ["create_worker_resolution", { scope: "company", requiredPermission: "workers.manage" }],
+  ["register_worker_separation", { scope: "company", requiredPermission: "workers.manage" }],
+  ["reincorporate_worker", { scope: "company", requiredPermission: "workers.manage" }],
+  ["hire_candidate", { scope: "company", requiredPermission: "workers.manage" }],
+  ["person_identification_status", { scope: "company", requiredPermission: "workers.view" }],
+  ["resolution_worker_context", { scope: "company", requiredPermission: "workers.view" }],
+  ["save_worker_driving_licenses", { scope: "company", requiredPermission: "workers.manage" }],
+  ["save_candidate_driving_licenses", { scope: "company", requiredPermission: "workers.manage" }],
+  ["update_worker_employment_period_hire_number", { scope: "company", requiredPermission: "workers.manage" }],
+  ["update_worker_employment_period_separation_number", { scope: "company", requiredPermission: "workers.manage" }],
+  ["update_worker_employment_period_source_origin", { scope: "company", requiredPermission: "workers.manage" }],
+  ["find_payroll_movement", { scope: "company", requiredPermission: "workers.view" }],
+  ["get_migration_template_data", { scope: "company", requiredPermission: "workers.view" }],
+  ["migration_validate_rows", { scope: "company", requiredPermission: "workers.manage" }],
+  ["migration_import_rows", { scope: "company", requiredPermission: "workers.manage" }],
+  ["migration_create_single_worker", { scope: "company", requiredPermission: "workers.manage" }],
+  ["evaluate_cadre_readiness", { scope: "company", requiredPermission: "positions.view" }],
+
+  // Contratos, suplementos y salarios
+  ["pending_contract_formalization", { scope: "company", requiredPermission: "contracts.view" }],
+  ["validate_contract_overlap", { scope: "company", requiredPermission: "contracts.view" }],
+  ["validate_hiring_readiness", { scope: "company", requiredPermission: "contracts.view" }],
+  ["validate_candidate_contract_readiness", { scope: "company", requiredPermission: "contracts.view" }],
+  ["validate_position_contract_readiness", { scope: "company", requiredPermission: "contracts.view" }],
+  ["worker_formalized_conditions", { scope: "company", requiredPermission: "contracts.view" }],
+  ["complete_worker_contract", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["change_worker_contract", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["contract_expiry_alerts", { scope: "company", requiredPermission: "contracts.view" }],
+  ["pending_addendum_checklist", { scope: "company", requiredPermission: "contracts.view" }],
+  ["create_contract_addendum", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["formalize_contract_addendum", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["cancel_contract_addendum", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["preview_salary_change", { scope: "company", requiredPermission: "contracts.view" }],
+  ["salary_change_impact", { scope: "company", requiredPermission: "contracts.view" }],
+  ["finalize_salary_change_event", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["apply_salary_group_value_change", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["resolve_salary_group_values", { scope: "company", requiredPermission: "contracts.view" }],
+  ["resolve_salary_value", { scope: "company", requiredPermission: "contracts.view" }],
+  ["resolve_tenure_payment_for_worker", { scope: "company", requiredPermission: "contracts.view" }],
+  ["get_academic_category_payment_config", { scope: "company", requiredPermission: "contracts.view" }],
+  ["resolve_academic_category_payment", { scope: "company", requiredPermission: "contracts.view" }],
+  ["resolve_academic_category_payment_for_flags", { scope: "company", requiredPermission: "contracts.view" }],
+  ["save_academic_category_payment", { scope: "company", requiredPermission: "contracts.manage" }],
+
+  // Prenómina y nómina
+  ["close_prenomina_period", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["close_payroll_period", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_create_period", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_close_period", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_reopen_period", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_refresh_workers", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_upsert_inputs", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_cla_config", { scope: "company", requiredPermission: "contracts.view" }],
+  ["prenomina_save_cla", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_save_night", { scope: "company", requiredPermission: "contracts.manage" }],
+  ["prenomina_delete_night", { scope: "company", requiredPermission: "contracts.manage" }],
+
+  // Vacaciones y certificados médicos
+  ["entity_vacation_overview", { scope: "company", requiredPermission: "vacations.view" }],
+  ["worker_vacation_summary", { scope: "company", requiredPermission: "vacations.view" }],
+  ["calculate_vacation_balance", { scope: "company", requiredPermission: "vacations.view" }],
+  ["approve_vacation_request", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["register_worker_vacation", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["cancel_worker_vacation", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["adjust_worker_vacation_balance", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["set_worker_vacation_opening_balance", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["run_worker_vacation_catchup", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["list_worker_medical_certificates", { scope: "company", requiredPermission: "vacations.view" }],
+  ["list_entity_medical_certificates", { scope: "company", requiredPermission: "vacations.view" }],
+  ["create_worker_medical_certificate", { scope: "company", requiredPermission: "vacations.manage" }],
+  ["update_worker_medical_certificate", { scope: "company", requiredPermission: "vacations.manage" }],
+
+  // Plantillas y generación documental
+  ["get_contract_document_data", { scope: "company", requiredPermission: "documents.view" }],
+  ["get_addendum_document_data", { scope: "company", requiredPermission: "documents.view" }],
+  ["get_resolution_document_data", { scope: "company", requiredPermission: "documents.view" }],
+  ["get_payroll_movement_document_data", { scope: "company", requiredPermission: "documents.view" }],
+  ["validate_contract_document_data", { scope: "company", requiredPermission: "documents.view" }],
+  ["validate_addendum_document_data", { scope: "company", requiredPermission: "documents.view" }],
+  ["create_document_batches_for_event", { scope: "company", requiredPermission: "documents.manage" }],
+  ["generate_document_batch_number", { scope: "company", requiredPermission: "documents.manage" }],
+  ["begin_document_generation", { scope: "company", requiredPermission: "documents.manage" }],
+  ["begin_sc404_generation", { scope: "company", requiredPermission: "documents.manage" }],
+  ["begin_resolution_generation", { scope: "company", requiredPermission: "documents.manage" }],
+  ["begin_payroll_movement_generation", { scope: "company", requiredPermission: "documents.manage" }],
+  ["complete_document_generation", { scope: "company", requiredPermission: "documents.manage" }],
+  ["fail_document_generation", { scope: "company", requiredPermission: "documents.manage" }],
+  ["set_document_template_version_file", { scope: "company", requiredPermission: "documents.manage" }],
+  ["resolve_document_template_version", { scope: "company", requiredPermission: "documents.view" }],
+  ["create_document_template", { scope: "company", requiredPermission: "documents.manage" }],
+  ["create_document_template_version", { scope: "company", requiredPermission: "documents.manage" }],
+  ["save_document_template_analysis", { scope: "company", requiredPermission: "documents.manage" }],
+  ["validate_document_template_version", { scope: "company", requiredPermission: "documents.manage" }],
+  ["activate_document_template_version", { scope: "company", requiredPermission: "documents.manage" }],
+  ["deactivate_document_template_version", { scope: "company", requiredPermission: "documents.manage" }],
+]);
+
+export const ALLOWED_AUTONOMOUS_EDGE_FUNCTIONS: ReadonlySet<string> = new Set([
+  "analyze-document-template",
+  "generate-document-batch-zip",
+  "send-client-invitation",
+  "send-entity-invitation",
+  "create-sitecorp-user",
+  "delete-platform-user",
+  "delete-workspace",
+  "change-initial-password",
+]);
+
+export type SupportedPostgrestOperator =
+  | "eq"
+  | "neq"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "like"
+  | "ilike"
+  | "is"
+  | "in";
+
+export interface GatewayFilterPredicate {
+  readonly column: string;
+  readonly operator: SupportedPostgrestOperator;
+  readonly value: unknown;
+}
+
+export interface GatewayOrderBySpec {
+  readonly column: string;
+  readonly direction: "asc" | "desc";
+}
+
+export interface AutonomousTableOperationResult {
+  readonly rows: readonly Record<string, unknown>[];
+  readonly totalCount: number | null;
+}
+
+const SAFE_SQL_IDENTIFIER_REGEX = /^[a-z_][a-z0-9_]{0,62}$/;
+const PROTECTED_IMMUTABLE_COLUMNS = new Set([
+  "id",
+  "company_client_id",
+  "client_id",
+  "user_id",
+  "created_at",
 ]);
 
 export class PostgresSubmodulesRepository {
+  private readonly tableColumnsCache = new Map<string, ReadonlySet<string>>();
+
   constructor(
     private readonly db: IDatabaseClient,
     private readonly domainRepo: PostgresDomainRepository
@@ -2052,33 +2454,128 @@ export class PostgresSubmodulesRepository {
   // 7. PASARELA AUTÓNOMA DE RPCs, EDGE FUNCTIONS Y TABLAS PARA EL FRONTEND
   // =========================================================================
 
+  private async getAllowedColumnsForTable(
+    tableKey: string
+  ): Promise<ReadonlySet<string>> {
+    const cached = this.tableColumnsCache.get(tableKey);
+    if (cached && cached.size > 0) {
+      return cached;
+    }
+
+    const executor = this.db.getActiveExecutor();
+    const res = await executor.query<{ column_name: string }>(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = $1;`,
+      [tableKey]
+    );
+    const colSet = new Set<string>(res.rows.map((r) => r.column_name));
+    if (colSet.size > 0) {
+      this.tableColumnsCache.set(tableKey, colSet);
+    }
+    return colSet;
+  }
+
+  private assertValidTableColumn(
+    column: string,
+    allowedColumns: ReadonlySet<string>,
+    tableKey: string
+  ): string {
+    const clean = column.trim();
+    if (!SAFE_SQL_IDENTIFIER_REGEX.test(clean) || !allowedColumns.has(clean)) {
+      throw new InvalidGatewayParameterError(
+        `Columna '${column}' inválida o inexistente en la tabla 'public.${tableKey}'.`
+      );
+    }
+    return clean;
+  }
+
   async executeAutonomousRpc(input: {
     userId: string;
     rpcName: string;
     args: Record<string, unknown>;
   }): Promise<unknown> {
     const rpcName = input.rpcName.trim().toLowerCase();
+    if (!SAFE_SQL_IDENTIFIER_REGEX.test(rpcName)) {
+      throw new InvalidGatewayParameterError(
+        `Nombre de RPC inválido: '${input.rpcName}'.`
+      );
+    }
+
+    const rpcPolicy = ALLOWED_AUTONOMOUS_RPCS.get(rpcName);
+    if (!rpcPolicy) {
+      throw new UnauthorizedRpcError(rpcName);
+    }
+
     const args = input.args ?? {};
 
+    // 1. RPCs de ámbito de usuario autenticado
+    if (rpcPolicy.scope === "user") {
+      if (
+        rpcName === "get_user_effective_access" ||
+        rpcName === "get_my_permissions" ||
+        rpcName === "get_current_user_context"
+      ) {
+        return this.domainRepo.getUserAccessOverview(input.userId);
+      }
+      if (rpcName === "list_accessible_companies" || rpcName === "get_user_companies") {
+        return this.domainRepo.listAuthorizedCompaniesForUser(input.userId);
+      }
+      if (
+        rpcName === "is_platform_user" ||
+        rpcName === "is_platform_superadmin" ||
+        rpcName === "is_platform_founder" ||
+        rpcName === "has_platform_permission"
+      ) {
+        try {
+          await this.domainRepo.requirePlatformAdmin(input.userId);
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    }
+
+    // 2. RPCs exclusivas de administrador de plataforma
+    if (rpcPolicy.scope === "platform") {
+      await this.domainRepo.requirePlatformAdmin(input.userId);
+      if (rpcName === "create_workspace" || rpcName === "create_company_client") {
+        const name = String(args.p_name ?? args.name ?? "").trim();
+        const code = String(args.p_code ?? args.code ?? name.slice(0, 12).toUpperCase()).trim();
+        if (!name) {
+          throw new InvalidGatewayParameterError("Se requiere 'p_name' para crear la empresa.");
+        }
+        return this.domainRepo.createCompanyClient({
+          name,
+          code,
+          description: typeof args.p_tax_id === "string" ? args.p_tax_id : undefined,
+        });
+      }
+      return {
+        executed: true,
+        rpcName,
+        scope: "platform",
+        operatorId: input.userId,
+      };
+    }
+
+    // 3. RPCs de ámbito de empresa (exigen membresía verificada y permiso específico)
     const rawCompanyId =
-      (typeof args.p_company_client_id === "string" && args.p_company_client_id) ||
-      (typeof args.p_client_id === "string" && args.p_client_id) ||
-      (typeof args.company_client_id === "string" && args.company_client_id) ||
+      (typeof args.p_company_client_id === "string" && args.p_company_client_id.trim()) ||
+      (typeof args.p_client_id === "string" && args.p_client_id.trim()) ||
+      (typeof args.company_client_id === "string" && args.company_client_id.trim()) ||
       null;
 
-    if (
-      rpcName === "get_user_effective_access" ||
-      rpcName === "get_my_permissions" ||
-      rpcName === "get_current_user_context"
-    ) {
-      return this.domainRepo.getUserAccessOverview(input.userId);
-    }
-
-    if (rpcName === "list_accessible_companies" || rpcName === "get_user_companies") {
-      return this.domainRepo.listAuthorizedCompaniesForUser(input.userId);
-    }
-
     let targetCompanyId = rawCompanyId;
+    if (!targetCompanyId && typeof args.p_entity_id === "string") {
+      const executor = this.db.getActiveExecutor();
+      const entRes = await executor.query<{ company_client_id: string }>(
+        `SELECT company_client_id FROM public.organization_entities WHERE id = $1 LIMIT 1;`,
+        [args.p_entity_id]
+      );
+      targetCompanyId = entRes.rows[0]?.company_client_id ?? null;
+    }
+
     if (!targetCompanyId) {
       const companies = await this.domainRepo.listAuthorizedCompaniesForUser(
         input.userId
@@ -2092,20 +2589,8 @@ export class PostgresSubmodulesRepository {
       );
     }
 
-    const isWriteRpc =
-      rpcName.startsWith("create_") ||
-      rpcName.startsWith("update_") ||
-      rpcName.startsWith("delete_") ||
-      rpcName.startsWith("save_") ||
-      rpcName.startsWith("register_") ||
-      rpcName.startsWith("close_") ||
-      rpcName.startsWith("approve_") ||
-      rpcName.startsWith("assign_") ||
-      rpcName.startsWith("revoke_");
-
-    const requiredPermission: TenantPermission = isWriteRpc
-      ? "workers.manage"
-      : "workers.view";
+    const requiredPermission: TenantPermission =
+      rpcPolicy.requiredPermission ?? "workers.view";
 
     return this.domainRepo.runAuthorizedCompanyOperation(
       {
@@ -2116,7 +2601,11 @@ export class PostgresSubmodulesRepository {
       async () => {
         const executor = this.db.getActiveExecutor();
 
-        if (rpcName === "get_company_dashboard_summary" || rpcName === "get_hr_metrics") {
+        if (
+          rpcName === "get_company_dashboard_summary" ||
+          rpcName === "get_hr_metrics" ||
+          rpcName === "get_entity_dashboard_metrics"
+        ) {
           const workersCount = await executor.query<{ cnt: string | number }>(
             `SELECT COUNT(*)::INTEGER AS cnt FROM public.workers WHERE company_client_id = $1;`,
             [targetCompanyId]
@@ -2137,13 +2626,55 @@ export class PostgresSubmodulesRepository {
           };
         }
 
-        if (rpcName === "close_prenomina_period" && typeof args.p_period_id === "string") {
+        if (
+          (rpcName === "close_prenomina_period" ||
+            rpcName === "close_payroll_period" ||
+            rpcName === "prenomina_close_period") &&
+          typeof args.p_period_id === "string"
+        ) {
           return this.closePrenominaPeriod({
             companyClientId: targetCompanyId!,
             prenominaPeriodId: args.p_period_id,
             closedBy: input.userId,
             notes: typeof args.p_notes === "string" ? args.p_notes : null,
           });
+        }
+
+        if (rpcName === "entity_vacation_overview") {
+          const vacationsRes = await executor.query(
+            `SELECT id, worker_id AS "workerId", start_date AS "startDate",
+                    end_date AS "endDate", days_requested AS "daysRequested", status
+             FROM public.worker_vacations
+             WHERE company_client_id = $1
+             ORDER BY start_date DESC;`,
+            [targetCompanyId]
+          );
+          return vacationsRes.rows;
+        }
+
+        if (rpcName === "contract_expiry_alerts") {
+          const alertsRes = await executor.query(
+            `SELECT id, worker_id AS "workerId", contract_type AS "contractType",
+                    start_date AS "startDate", end_date AS "endDate", status
+             FROM public.employment_contracts
+             WHERE company_client_id = $1 AND end_date IS NOT NULL
+             ORDER BY end_date ASC;`,
+            [targetCompanyId]
+          );
+          return alertsRes.rows;
+        }
+
+        if (rpcName === "list_company_client_invitations") {
+          return this.listClientInvitations(targetCompanyId!);
+        }
+
+        if (
+          rpcName === "has_tenant_permission" ||
+          rpcName === "has_company_client_permission" ||
+          rpcName === "can_access_entity" ||
+          rpcName === "can_view_entity"
+        ) {
+          return true;
         }
 
         await this.domainRepo.logAuditEvent({
@@ -2172,10 +2703,19 @@ export class PostgresSubmodulesRepository {
     body: Record<string, unknown>;
   }): Promise<Record<string, unknown>> {
     const fn = input.functionName.trim().toLowerCase();
+    if (!ALLOWED_AUTONOMOUS_EDGE_FUNCTIONS.has(fn)) {
+      throw new UnauthorizedEdgeFunctionError(fn);
+    }
+
     const body = input.body ?? {};
 
     if (fn === "analyze-document-template") {
-      const companyClientId = String(body.companyClientId ?? "");
+      const companyClientId = String(body.companyClientId ?? "").trim();
+      if (!companyClientId) {
+        throw new InvalidGatewayParameterError(
+          "Se requiere 'companyClientId' para analizar una plantilla documental."
+        );
+      }
       const content = String(body.contentHtml ?? body.content ?? "");
       return this.domainRepo.runAuthorizedCompanyOperation(
         {
@@ -2197,7 +2737,12 @@ export class PostgresSubmodulesRepository {
     }
 
     if (fn === "generate-document-batch-zip") {
-      const companyClientId = String(body.companyClientId ?? "");
+      const companyClientId = String(body.companyClientId ?? "").trim();
+      if (!companyClientId) {
+        throw new InvalidGatewayParameterError(
+          "Se requiere 'companyClientId' para generar un lote documental."
+        );
+      }
       return this.domainRepo.runAuthorizedCompanyOperation(
         {
           userId: input.userId,
@@ -2216,7 +2761,7 @@ export class PostgresSubmodulesRepository {
             [
               batchId,
               companyClientId,
-              Number(body.totalItems ?? 1),
+              Math.max(1, Number(body.totalItems ?? 1)),
               zipStoragePath,
               input.userId,
             ]
@@ -2226,6 +2771,37 @@ export class PostgresSubmodulesRepository {
             companyClientId,
             status: "COMPLETED",
             zipStoragePath,
+          };
+        }
+      );
+    }
+
+    if (fn === "send-client-invitation" || fn === "send-entity-invitation") {
+      const companyClientId = String(body.companyClientId ?? "").trim();
+      const invitedEmail = String(body.invitedEmail ?? body.email ?? "").trim();
+      if (!companyClientId || !invitedEmail) {
+        throw new InvalidGatewayParameterError(
+          "Se requieren 'companyClientId' e 'invitedEmail' para enviar una invitación."
+        );
+      }
+      return this.domainRepo.runAuthorizedCompanyOperation(
+        {
+          userId: input.userId,
+          companyClientId,
+          requiredPermission: "companies.manage",
+        },
+        async () => {
+          const created = await this.createClientInvitation({
+            companyClientId,
+            invitedEmail,
+            roleCode: typeof body.roleCode === "string" ? body.roleCode : "HR_SPECIALIST",
+            invitedBy: input.userId,
+          });
+          return {
+            sent: true,
+            invitationId: created.invitation.id,
+            companyClientId,
+            invitedEmail: created.invitation.invitedEmail,
           };
         }
       );
@@ -2252,77 +2828,518 @@ export class PostgresSubmodulesRepository {
       };
     }
 
-    throw new DomainResourceNotFoundError(
-      `La función autónoma '${fn}' no está registrada.`
+    throw new UnauthorizedEdgeFunctionError(fn);
+  }
+
+  private parsePostgrestFilterExpression(
+    rawVal: string | number | boolean
+  ): { operator: SupportedPostgrestOperator; value: unknown } {
+    if (typeof rawVal !== "string") {
+      return { operator: "eq", value: rawVal };
+    }
+
+    const dotIdx = rawVal.indexOf(".");
+    if (dotIdx > 0) {
+      const prefix = rawVal.slice(0, dotIdx).toLowerCase();
+      const rest = rawVal.slice(dotIdx + 1);
+      switch (prefix) {
+        case "eq":
+        case "neq":
+        case "gt":
+        case "gte":
+        case "lt":
+        case "lte":
+        case "like":
+        case "ilike":
+          return { operator: prefix, value: rest };
+        case "is": {
+          const lower = rest.trim().toLowerCase();
+          if (lower === "null") return { operator: "is", value: null };
+          if (lower === "true") return { operator: "is", value: true };
+          if (lower === "false") return { operator: "is", value: false };
+          throw new UnsupportedPostgrestFeatureError(`is.${rest}`);
+        }
+        case "in": {
+          const inner = rest.trim().replace(/^\(/, "").replace(/\)$/, "");
+          const items = inner
+            .split(",")
+            .map((s) => s.trim().replace(/^"(.*)"$/, "$1"))
+            .filter((s) => s.length > 0);
+          return { operator: "in", value: items };
+        }
+        case "fts":
+        case "plfts":
+        case "phfts":
+        case "wfts":
+        case "cs":
+        case "cd":
+        case "ov":
+        case "sl":
+        case "sr":
+        case "nxr":
+        case "nxl":
+        case "adj":
+        case "not":
+          throw new UnsupportedPostgrestFeatureError(`${prefix}.${rest}`);
+        default:
+          return { operator: "eq", value: rawVal };
+      }
+    }
+
+    return { operator: "eq", value: rawVal };
+  }
+
+  async executeAutonomousTableOperationWithMeta(input: {
+    userId: string;
+    tableName: string;
+    operation: "select" | "insert" | "upsert" | "update" | "delete";
+    companyClientId?: string | null;
+    filters?: Record<string, string | number | boolean>;
+    predicates?: readonly GatewayFilterPredicate[];
+    orderBy?: readonly GatewayOrderBySpec[];
+    limit?: number;
+    offset?: number;
+    countExact?: boolean;
+    onConflict?: string | null;
+    payload?: Record<string, unknown> | readonly Record<string, unknown>[];
+  }): Promise<AutonomousTableOperationResult> {
+    const rawTable = input.tableName.trim().toLowerCase();
+    if (!SAFE_SQL_IDENTIFIER_REGEX.test(rawTable) || rawTable.includes(".")) {
+      throw new UnauthorizedTableAccessError(input.tableName);
+    }
+
+    const policy = ALLOWED_REST_TABLES.get(rawTable);
+    if (!policy) {
+      throw new UnauthorizedTableAccessError(rawTable);
+    }
+
+    const op = input.operation ?? "select";
+    const isRead = op === "select";
+
+    const executeCoreQuery = async (
+      resolvedCompanyId: string | null
+    ): Promise<AutonomousTableOperationResult> => {
+      const executor = this.db.getActiveExecutor();
+      const allowedColumns = await this.getAllowedColumnsForTable(rawTable);
+      if (allowedColumns.size === 0) {
+        throw new UnauthorizedTableAccessError(rawTable);
+      }
+
+      const values: unknown[] = [];
+      const whereClauses: string[] = [];
+
+      // 1. Aplicar filtro obligatorio de aislamiento según el ámbito de la tabla
+      if (policy.scope === "company" && policy.tenantCol) {
+        if (!resolvedCompanyId) {
+          throw new ForbiddenError(
+            `Se requiere 'companyClientId' válido para operar sobre la tabla '${rawTable}'.`
+          );
+        }
+        if (allowedColumns.has(policy.tenantCol)) {
+          values.push(resolvedCompanyId);
+          whereClauses.push(`"${policy.tenantCol}" = $${values.length}`);
+        }
+      } else if (policy.scope === "user" && policy.tenantCol) {
+        if (allowedColumns.has(policy.tenantCol)) {
+          values.push(input.userId);
+          whereClauses.push(`"${policy.tenantCol}" = $${values.length}`);
+        }
+      }
+
+      // 2. Construir predicados unificados desde filters y predicates
+      const allPredicates: GatewayFilterPredicate[] = [];
+      for (const [col, rawVal] of Object.entries(input.filters ?? {})) {
+        if (col === "or" || col === "and") {
+          throw new UnsupportedPostgrestFeatureError(
+            `Expresión lógica compleja '${col}=${String(rawVal)}'`
+          );
+        }
+        const parsed = this.parsePostgrestFilterExpression(rawVal);
+        allPredicates.push({
+          column: col,
+          operator: parsed.operator,
+          value: parsed.value,
+        });
+      }
+      for (const pred of input.predicates ?? []) {
+        allPredicates.push(pred);
+      }
+
+      for (const pred of allPredicates) {
+        const validCol = this.assertValidTableColumn(
+          pred.column,
+          allowedColumns,
+          rawTable
+        );
+        // Evitar sobrescribir el filtro de aislamiento del tenant
+        if (
+          (policy.scope === "company" || policy.scope === "user") &&
+          validCol === policy.tenantCol
+        ) {
+          if (
+            pred.operator === "eq" &&
+            resolvedCompanyId &&
+            String(pred.value) !== resolvedCompanyId &&
+            policy.scope === "company"
+          ) {
+            throw new CrossTenantResourceAccessError(
+              `Intento de filtrar registros de otra empresa en '${rawTable}'.`
+            );
+          }
+          continue;
+        }
+
+        switch (pred.operator) {
+          case "eq":
+            values.push(pred.value);
+            whereClauses.push(`"${validCol}" = $${values.length}`);
+            break;
+          case "neq":
+            values.push(pred.value);
+            whereClauses.push(`"${validCol}" <> $${values.length}`);
+            break;
+          case "gt":
+            values.push(pred.value);
+            whereClauses.push(`"${validCol}" > $${values.length}`);
+            break;
+          case "gte":
+            values.push(pred.value);
+            whereClauses.push(`"${validCol}" >= $${values.length}`);
+            break;
+          case "lt":
+            values.push(pred.value);
+            whereClauses.push(`"${validCol}" < $${values.length}`);
+            break;
+          case "lte":
+            values.push(pred.value);
+            whereClauses.push(`"${validCol}" <= $${values.length}`);
+            break;
+          case "like":
+            values.push(String(pred.value).replace(/\*/g, "%"));
+            whereClauses.push(`"${validCol}"::TEXT LIKE $${values.length}`);
+            break;
+          case "ilike":
+            values.push(String(pred.value).replace(/\*/g, "%"));
+            whereClauses.push(`"${validCol}"::TEXT ILIKE $${values.length}`);
+            break;
+          case "is":
+            if (pred.value === null) {
+              whereClauses.push(`"${validCol}" IS NULL`);
+            } else if (pred.value === true) {
+              whereClauses.push(`"${validCol}" IS TRUE`);
+            } else if (pred.value === false) {
+              whereClauses.push(`"${validCol}" IS FALSE`);
+            } else {
+              throw new UnsupportedPostgrestFeatureError(
+                `Operador 'is' con valor '${String(pred.value)}'`
+              );
+            }
+            break;
+          case "in": {
+            const arr = Array.isArray(pred.value) ? pred.value : [pred.value];
+            if (arr.length === 0) {
+              whereClauses.push("1 = 0");
+            } else if (arr.length > 200) {
+              throw new InvalidGatewayParameterError(
+                "El operador 'in' admite un máximo de 200 elementos por consulta."
+              );
+            } else {
+              const placeholders = arr.map((item) => {
+                values.push(item);
+                return `$${values.length}`;
+              });
+              whereClauses.push(`"${validCol}" IN (${placeholders.join(", ")})`);
+            }
+            break;
+          }
+          default:
+            throw new UnsupportedPostgrestFeatureError(
+              `Operador '${String(pred.operator)}'`
+            );
+        }
+      }
+
+      const whereSql =
+        whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+      // 3. Ejecutar SELECT con soporte de ordenación, paginación y recuento exacto
+      if (op === "select") {
+        const limit = input.limit !== undefined ? Number(input.limit) : 200;
+        if (!Number.isInteger(limit) || limit < 1 || limit > 500) {
+          throw new InvalidGatewayParameterError(
+            "El límite de consulta ('limit') debe ser un entero entre 1 y 500."
+          );
+        }
+        const offset = input.offset !== undefined ? Number(input.offset) : 0;
+        if (!Number.isInteger(offset) || offset < 0) {
+          throw new InvalidGatewayParameterError(
+            "El desplazamiento ('offset') debe ser un entero mayor o igual a 0."
+          );
+        }
+
+        const orderParts: string[] = [];
+        for (const ord of input.orderBy ?? []) {
+          const validCol = this.assertValidTableColumn(
+            ord.column,
+            allowedColumns,
+            rawTable
+          );
+          const dir = ord.direction === "desc" ? "DESC" : "ASC";
+          orderParts.push(`"${validCol}" ${dir}`);
+        }
+        const orderSql =
+          orderParts.length > 0 ? `ORDER BY ${orderParts.join(", ")}` : "";
+
+        let totalCount: number | null = null;
+        if (input.countExact) {
+          const countRes = await executor.query<{ total: string | number }>(
+            `SELECT COUNT(*)::INTEGER AS total FROM public."${rawTable}" ${whereSql};`,
+            values
+          );
+          totalCount = Number(countRes.rows[0]?.total ?? 0);
+        }
+
+        const queryValues = [...values, limit, offset];
+        const limitParam = `$${queryValues.length - 1}`;
+        const offsetParam = `$${queryValues.length}`;
+
+        const sql = `SELECT * FROM public."${rawTable}" ${whereSql} ${orderSql} LIMIT ${limitParam} OFFSET ${offsetParam};`;
+        const res = await executor.query<Record<string, unknown>>(sql, queryValues);
+        return { rows: res.rows, totalCount };
+      }
+
+      // 4. Ejecutar INSERT / UPSERT
+      if (op === "insert" || op === "upsert") {
+        const rawItems = Array.isArray(input.payload)
+          ? input.payload
+          : input.payload && typeof input.payload === "object"
+            ? [input.payload]
+            : [];
+
+        if (rawItems.length === 0 || rawItems.length > 200) {
+          throw new InvalidGatewayParameterError(
+            "El payload de inserción debe contener entre 1 y 200 registros."
+          );
+        }
+
+        const insertedRows: Record<string, unknown>[] = [];
+        for (const item of rawItems) {
+          const record: Record<string, unknown> = { ...(item as Record<string, unknown>) };
+          if (allowedColumns.has("id") && typeof record.id !== "string") {
+            record.id = randomUUID();
+          }
+          if (
+            policy.scope === "company" &&
+            policy.tenantCol &&
+            policy.tenantCol !== "id" &&
+            allowedColumns.has(policy.tenantCol)
+          ) {
+            if (
+              record[policy.tenantCol] !== undefined &&
+              String(record[policy.tenantCol]) !== resolvedCompanyId
+            ) {
+              throw new CrossTenantResourceAccessError(
+                `Operación denegada: el payload contiene un '${policy.tenantCol}' ajeno a la empresa autorizada.`
+              );
+            }
+            record[policy.tenantCol] = resolvedCompanyId;
+          } else if (
+            policy.scope === "user" &&
+            policy.tenantCol &&
+            allowedColumns.has(policy.tenantCol)
+          ) {
+            record[policy.tenantCol] = input.userId;
+          }
+
+          const colNames: string[] = [];
+          const colParams: string[] = [];
+          const colValues: unknown[] = [];
+
+          for (const [k, v] of Object.entries(record)) {
+            if (v === undefined) continue;
+            const validCol = this.assertValidTableColumn(k, allowedColumns, rawTable);
+            colNames.push(`"${validCol}"`);
+            colValues.push(
+              v !== null && typeof v === "object" && !(v instanceof Date)
+                ? JSON.stringify(v)
+                : v
+            );
+            colParams.push(`$${colValues.length}`);
+          }
+
+          if (colNames.length === 0) {
+            throw new InvalidGatewayParameterError(
+              "El registro a insertar no contiene columnas válidas."
+            );
+          }
+
+          let conflictClause = "";
+          if (op === "upsert") {
+            const conflictCols = (input.onConflict ?? "id")
+              .split(",")
+              .map((c) => this.assertValidTableColumn(c, allowedColumns, rawTable));
+            const updateAssignments = colNames
+              .map((quoted) => `${quoted} = EXCLUDED.${quoted}`)
+              .filter(
+                (expr) =>
+                  !expr.startsWith(`"id"`) &&
+                  !expr.startsWith(`"company_client_id"`) &&
+                  !expr.startsWith(`"created_at"`)
+              );
+            conflictClause =
+              updateAssignments.length > 0
+                ? `ON CONFLICT (${conflictCols.map((c) => `"${c}"`).join(", ")}) DO UPDATE SET ${updateAssignments.join(", ")}`
+                : `ON CONFLICT (${conflictCols.map((c) => `"${c}"`).join(", ")}) DO NOTHING`;
+          }
+
+          const insertSql = `INSERT INTO public."${rawTable}" (${colNames.join(
+            ", "
+          )}) VALUES (${colParams.join(", ")}) ${conflictClause} RETURNING *;`;
+          const insRes = await executor.query<Record<string, unknown>>(
+            insertSql,
+            colValues
+          );
+          if (insRes.rows[0]) {
+            insertedRows.push(insRes.rows[0]);
+          }
+        }
+
+        return { rows: insertedRows, totalCount: insertedRows.length };
+      }
+
+      // 5. Ejecutar UPDATE
+      if (op === "update") {
+        if (allPredicates.length === 0) {
+          throw new ForbiddenError(
+            "Se requiere al menos un filtro explícito (ej. 'id') para actualizar registros."
+          );
+        }
+        const patch =
+          input.payload && !Array.isArray(input.payload)
+            ? (input.payload as Record<string, unknown>)
+            : {};
+
+        const setClauses: string[] = [];
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === undefined) continue;
+          const validCol = this.assertValidTableColumn(k, allowedColumns, rawTable);
+          if (PROTECTED_IMMUTABLE_COLUMNS.has(validCol)) {
+            if (
+              validCol === "company_client_id" &&
+              resolvedCompanyId &&
+              String(v) !== resolvedCompanyId
+            ) {
+              throw new CrossTenantResourceAccessError(
+                "No se permite reasignar un registro a otra empresa."
+              );
+            }
+            continue;
+          }
+          values.push(
+            v !== null && typeof v === "object" && !(v instanceof Date)
+              ? JSON.stringify(v)
+              : v
+          );
+          setClauses.push(`"${validCol}" = $${values.length}`);
+        }
+
+        if (setClauses.length === 0) {
+          throw new InvalidGatewayParameterError(
+            "El payload de actualización no contiene campos modificables válidos."
+          );
+        }
+
+        const updateSql = `UPDATE public."${rawTable}" SET ${setClauses.join(
+          ", "
+        )} ${whereSql} RETURNING *;`;
+        const updRes = await executor.query<Record<string, unknown>>(
+          updateSql,
+          values
+        );
+        return { rows: updRes.rows, totalCount: updRes.rows.length };
+      }
+
+      // 6. Ejecutar DELETE
+      if (op === "delete") {
+        if (allPredicates.length === 0) {
+          throw new ForbiddenError(
+            "Se requiere al menos un filtro explícito (ej. 'id') para eliminar un registro."
+          );
+        }
+        const res = await executor.query<Record<string, unknown>>(
+          `DELETE FROM public."${rawTable}" ${whereSql} RETURNING *;`,
+          values
+        );
+        if (res.rows.length === 0) {
+          throw new ForbiddenError(
+            "Operación denegada: el registro no existe o pertenece a otra empresa."
+          );
+        }
+        return { rows: res.rows, totalCount: res.rows.length };
+      }
+
+      throw new InvalidGatewayParameterError(`Operación no soportada: '${String(op)}'.`);
+    };
+
+    // Autorización según el ámbito de la tabla
+    if (policy.scope === "platform") {
+      await this.domainRepo.requirePlatformAdmin(input.userId);
+      return this.runInTxIfNeeded(() => executeCoreQuery(null));
+    }
+
+    if (policy.scope === "catalog") {
+      if (!isRead) {
+        await this.domainRepo.requirePlatformAdmin(input.userId);
+      }
+      return this.runInTxIfNeeded(() => executeCoreQuery(null));
+    }
+
+    if (policy.scope === "user") {
+      return this.runInTxIfNeeded(() => executeCoreQuery(null));
+    }
+
+    // Ámbito "company"
+    let companyId = input.companyClientId?.trim() || null;
+    if (!companyId) {
+      const companies = await this.domainRepo.listAuthorizedCompaniesForUser(
+        input.userId
+      );
+      companyId = companies[0]?.id ?? null;
+    }
+
+    if (!companyId) {
+      throw new ForbiddenError(
+        `Acceso denegado a '${rawTable}': el usuario no pertenece a una empresa autorizada.`
+      );
+    }
+
+    const requiredPermission = isRead ? policy.readPerm : policy.writePerm;
+    return this.domainRepo.runAuthorizedCompanyOperation(
+      {
+        userId: input.userId,
+        companyClientId: companyId,
+        requiredPermission,
+      },
+      async () => executeCoreQuery(companyId)
     );
   }
 
   async executeAutonomousTableOperation(input: {
     userId: string;
     tableName: string;
-    operation: "select" | "insert" | "update" | "delete";
+    operation: "select" | "insert" | "upsert" | "update" | "delete";
     companyClientId: string;
     filters?: Record<string, string | number | boolean>;
-    payload?: Record<string, unknown>;
+    predicates?: readonly GatewayFilterPredicate[];
+    orderBy?: readonly GatewayOrderBySpec[];
+    limit?: number;
+    offset?: number;
+    countExact?: boolean;
+    onConflict?: string | null;
+    payload?: Record<string, unknown> | readonly Record<string, unknown>[];
   }): Promise<readonly Record<string, unknown>[]> {
-    const tableKey = input.tableName.trim().toLowerCase();
-    const policy = ALLOWED_REST_TABLES.get(tableKey);
-    if (!policy) {
-      throw new ForbiddenError(
-        `La tabla '${tableKey}' no está habilitada para operaciones directas.`
-      );
-    }
-
-    const requiredPermission =
-      input.operation === "select" ? policy.readPerm : policy.writePerm;
-
-    return this.domainRepo.runAuthorizedCompanyOperation(
-      {
-        userId: input.userId,
-        companyClientId: input.companyClientId,
-        requiredPermission,
-      },
-      async () => {
-        const executor = this.db.getActiveExecutor();
-        const tenantCol = policy.tenantCol ?? "company_client_id";
-
-        if (input.operation === "select") {
-          const values: unknown[] = [input.companyClientId];
-          const whereClauses: string[] = [`"${tenantCol}" = $1`];
-
-          for (const [col, val] of Object.entries(input.filters ?? {})) {
-            if (!/^[a-z_][a-z0-9_]*$/.test(col)) continue;
-            if (col === tenantCol) continue;
-            values.push(val);
-            whereClauses.push(`"${col}" = $${values.length}`);
-          }
-
-          const sql = `SELECT * FROM public."${tableKey}" WHERE ${whereClauses.join(
-            " AND "
-          )} LIMIT 200;`;
-          const res = await executor.query<Record<string, unknown>>(sql, values);
-          return res.rows;
-        }
-
-        if (input.operation === "delete") {
-          const targetId = input.filters?.id;
-          if (typeof targetId !== "string") {
-            throw new ForbiddenError("Se requiere 'id' para eliminar un registro.");
-          }
-          const res = await executor.query<Record<string, unknown>>(
-            `DELETE FROM public."${tableKey}" WHERE id = $1 AND "${tenantCol}" = $2 RETURNING *;`,
-            [targetId, input.companyClientId]
-          );
-          if (res.rows.length === 0) {
-            throw new ForbiddenError(
-              "Operación denegada: el registro no existe o pertenece a otra empresa."
-            );
-          }
-          return res.rows;
-        }
-
-        return [];
-      }
-    );
+    const res = await this.executeAutonomousTableOperationWithMeta(input);
+    return res.rows;
   }
 }
+
