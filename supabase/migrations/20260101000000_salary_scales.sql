@@ -28,12 +28,12 @@ CREATE TABLE IF NOT EXISTS public.salary_scales (
 );
 
 -- One active global PRESUPUESTADA scale
-CREATE UNIQUE INDEX salary_scales_presupuestada_global_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS salary_scales_presupuestada_global_unique 
 ON public.salary_scales (scope_type, regime_id) 
 WHERE scope_type = 'PRESUPUESTADA_GLOBAL' AND is_active = true;
 
 -- One active Empresarial scale per entity
-CREATE UNIQUE INDEX salary_scales_empresarial_entity_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS salary_scales_empresarial_entity_unique 
 ON public.salary_scales (organization_entity_id) 
 WHERE scope_type = 'EMPRESARIAL_ENTITY' AND is_active = true;
 
@@ -41,9 +41,16 @@ ALTER TABLE public.salary_scales ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.salary_scales TO service_role;
 GRANT SELECT ON TABLE public.salary_scales TO authenticated;
 
+DROP POLICY IF EXISTS "salary_scales_select" ON public.salary_scales;
 CREATE POLICY "salary_scales_select" ON public.salary_scales FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "salary_scales_manage" ON public.salary_scales;
 CREATE POLICY "salary_scales_manage" ON public.salary_scales FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "salary_scales_update" ON public.salary_scales;
 CREATE POLICY "salary_scales_update" ON public.salary_scales FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "salary_scales_delete" ON public.salary_scales;
 CREATE POLICY "salary_scales_delete" ON public.salary_scales FOR DELETE TO authenticated USING (true);
 
 -- ============================================================
@@ -59,16 +66,23 @@ CREATE TABLE IF NOT EXISTS public.salary_groups (
   updated_at timestamp with time zone DEFAULT now()
 );
 
-CREATE UNIQUE INDEX salary_groups_scale_sequence_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS salary_groups_scale_sequence_unique 
 ON public.salary_groups (salary_scale_id, sequence_number);
 
 ALTER TABLE public.salary_groups ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.salary_groups TO service_role;
 GRANT SELECT ON TABLE public.salary_groups TO authenticated;
 
+DROP POLICY IF EXISTS "salary_groups_select" ON public.salary_groups;
 CREATE POLICY "salary_groups_select" ON public.salary_groups FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "salary_groups_manage" ON public.salary_groups;
 CREATE POLICY "salary_groups_manage" ON public.salary_groups FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "salary_groups_update" ON public.salary_groups;
 CREATE POLICY "salary_groups_update" ON public.salary_groups FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "salary_groups_delete" ON public.salary_groups;
 CREATE POLICY "salary_groups_delete" ON public.salary_groups FOR DELETE TO authenticated USING (true);
 
 -- ============================================================
@@ -87,20 +101,27 @@ CREATE TABLE IF NOT EXISTS public.salary_group_values (
   updated_at timestamp with time zone DEFAULT now()
 );
 
-CREATE UNIQUE INDEX salary_group_values_active_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS salary_group_values_active_unique 
 ON public.salary_group_values (salary_group_id) 
 WHERE is_active = true;
 
-CREATE UNIQUE INDEX salary_group_values_effective_unique 
+CREATE UNIQUE INDEX IF NOT EXISTS salary_group_values_effective_unique 
 ON public.salary_group_values (salary_group_id, effective_from);
 
 ALTER TABLE public.salary_group_values ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.salary_group_values TO service_role;
 GRANT SELECT ON TABLE public.salary_group_values TO authenticated;
 
+DROP POLICY IF EXISTS "salary_group_values_select" ON public.salary_group_values;
 CREATE POLICY "salary_group_values_select" ON public.salary_group_values FOR SELECT TO authenticated USING (true);
+
+DROP POLICY IF EXISTS "salary_group_values_manage" ON public.salary_group_values;
 CREATE POLICY "salary_group_values_manage" ON public.salary_group_values FOR INSERT TO authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "salary_group_values_update" ON public.salary_group_values;
 CREATE POLICY "salary_group_values_update" ON public.salary_group_values FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "salary_group_values_delete" ON public.salary_group_values;
 CREATE POLICY "salary_group_values_delete" ON public.salary_group_values FOR DELETE TO authenticated USING (true);
 
 -- ============================================================
