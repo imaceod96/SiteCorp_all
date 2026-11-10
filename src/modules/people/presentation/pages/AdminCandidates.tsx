@@ -417,7 +417,7 @@ export default function AdminCandidates() {
         description="Gestión centralizada del talento humano postulado en todas las entidades de la plataforma"
       />
 
-      {error && <SiteCorpAlert type="error">{error}</SiteCorpAlert>}
+      {error && <SiteCorpAlert type="danger">{error}</SiteCorpAlert>}
       {actionSuccess && <SiteCorpAlert type="success">{actionSuccess}</SiteCorpAlert>}
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border shadow-sm">
@@ -678,7 +678,7 @@ export default function AdminCandidates() {
                 . Si desmarcas todas, permanecerá únicamente en la Bolsa Global:
               </p>
 
-              {assignError && <SiteCorpAlert type="error">{assignError}</SiteCorpAlert>}
+              {assignError && <SiteCorpAlert type="danger">{assignError}</SiteCorpAlert>}
 
               <div className="space-y-2 max-h-60 overflow-y-auto border border-border rounded-lg p-3">
                 {entities.map((ent) => {

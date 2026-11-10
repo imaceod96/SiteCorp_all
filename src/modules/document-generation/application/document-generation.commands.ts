@@ -142,7 +142,7 @@ const runGeneration = async (
   }
 
   // 5) Subir el documento final (Word o Excel, según la plantilla) al expediente.
-  const outputBlob = new Blob([rendered.bytes], { type: outputMimeType })
+  const outputBlob = new Blob([new Uint8Array(rendered.bytes)], { type: outputMimeType })
   try {
     await uploadGeneratedObject(reservation.storage_path, outputBlob, outputMimeType)
   } catch (err) {

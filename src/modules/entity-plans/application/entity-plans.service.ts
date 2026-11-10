@@ -3,6 +3,11 @@ import type {
   EntityPlanHistoryRecord,
   SiteCorpAccountEntityOption,
 } from "../domain/entities"
+export type {
+  EntityPlan,
+  EntityPlanHistoryRecord,
+  SiteCorpAccountEntityOption,
+} from "../domain/entities"
 import { isModuleEnabledInPlan } from "../domain/plan.rules"
 import {
   getEntityPlanFromDb,

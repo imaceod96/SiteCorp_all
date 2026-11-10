@@ -101,7 +101,7 @@ const PlatformAdminLayout = React.forwardRef<
   const gestionContainsActive = gestionRoutes.some((route) =>
     location.pathname.startsWith(route)
   )
-  const [gestionOpen, setGestionOpen] = React.useState(gestionContainsActive || true)
+  const [gestionOpen, setGestionOpen] = React.useState<boolean>(gestionContainsActive || true)
 
   React.useEffect(() => {
     if (gestionContainsActive) setGestionOpen(true)

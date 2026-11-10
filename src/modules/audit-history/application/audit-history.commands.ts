@@ -1,9 +1,9 @@
 import type {
   AuditEvent,
-  AuditModule,
   AuditResult,
   AuditScope,
 } from "../domain/entities"
+import type { AuditModule } from "../domain/rules"
 import {
   insertAuditEvent,
   exportStoredAuditEvents,

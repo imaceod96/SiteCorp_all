@@ -1,8 +1,6 @@
 import * as React from "react"
-import {
-  loadEntityPlan,
-  type EntityPlan,
-} from "../../application/entity-plans.service"
+import { loadEntityPlan } from "../../application/entity-plans.service"
+import type { EntityPlan } from "../../domain/entities"
 import { isModuleEnabledInPlan } from "../../domain/plan.rules"
 import { SITECORP_PLAN_CHANGED_EVENT } from "../../infrastructure/entity-plans.repository"
 
