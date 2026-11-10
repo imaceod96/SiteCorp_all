@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { loadSessionUser } from "@/modules/access-control"
 import { selectColumn, selectQuery } from "@/integrations/supabase/schema-target"
 import type {
   EntityMedicalCertificatesResult,
@@ -90,7 +91,7 @@ async function uploadCertificateDocument(workerId: string, file: File): Promise<
       file_size: file.size,
       storage_path: storagePath,
       source: "MANUAL",
-      uploaded_by: (await supabase.auth.getUser()).data.user?.id || null,
+      uploaded_by: (await loadSessionUser())?.id || null,
     })
     .select("id")
     .single()
@@ -142,7 +143,7 @@ export async function createMedicalCertificate(params: {
   }
 
   // Obtener el usuario actual para created_by
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await loadSessionUser()
   const createdBy = user?.id
 
   const { data, error } = await supabase.rpc("create_worker_medical_certificate", {

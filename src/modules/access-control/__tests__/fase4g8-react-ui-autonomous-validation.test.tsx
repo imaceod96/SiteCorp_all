@@ -213,4 +213,90 @@ describe("Fase 4G.8 · Pruebas de Interfaz React y Puente Frontend sobre Pasarel
     expect(html).toContain("Estado RPC: plan_saved:2026")
     expect(html).toContain("UNSUPPORTED_POSTGREST_FEATURE")
   })
+
+  it("ejecuta signIn, loadSessionUser y signOut en modo self_hosted sin invocar /auth/v1/token de Supabase Cloud mientras mantiene activo el bloqueo estricto", async () => {
+    const { signIn, signOut, loadSessionUser } = await import("../index")
+    const { resetSharedSelfHostedAuthAdapter, getSharedSelfHostedAuthAdapter } =
+      await import("../infrastructure/self-hosted-auth.adapter")
+
+    resetSharedSelfHostedAuthAdapter()
+    const authRequests: Array<{ url: string; method: string }> = []
+
+    const authFetch: typeof fetch = async (input, init) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url
+      const method = init?.method ?? "GET"
+      authRequests.push({ url, method })
+
+      if (url.endsWith("/api/v1/auth/login") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            data: {
+              accessToken: "jwt-self-hosted-ui-token",
+              tokenType: "Bearer",
+              expiresIn: 900,
+              mustChangePassword: false,
+              user: {
+                id: "99999999-8888-4777-8666-555555555555",
+                email: "admin@sitecorp.local",
+                status: "active",
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      }
+
+      if (url.endsWith("/api/v1/auth/logout") && method === "POST") {
+        return new Response(
+          JSON.stringify({ data: { revoked: true } }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      }
+
+      return new Response(JSON.stringify({ error: { code: "NOT_FOUND" } }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    const memoryStore = new Map<string, string>()
+    getSharedSelfHostedAuthAdapter({
+      baseUrl: "http://127.0.0.1:4010",
+      fetchImpl: authFetch,
+      storage: {
+        getItem: (k) => memoryStore.get(k) ?? null,
+        setItem: (k, v) => memoryStore.set(k, v),
+        removeItem: (k) => memoryStore.delete(k),
+      },
+    })
+
+    const loginErr = await signIn("admin@sitecorp.local", "MacDocker!2026#Secure99")
+    expect(loginErr).toBeNull()
+
+    const sessionUser = await loadSessionUser()
+    expect(sessionUser).toMatchObject({
+      id: "99999999-8888-4777-8666-555555555555",
+      email: "admin@sitecorp.local",
+    })
+
+    // Verificar que el bloqueo estricto en src/lib/supabase.ts sigue activo si alguien intenta llamar directo a supabase.auth.signInWithPassword
+    const directSupabaseRes = await supabase.auth.signInWithPassword({
+      email: "admin@sitecorp.local",
+      password: "MacDocker!2026#Secure99",
+    })
+    expect(directSupabaseRes.error).not.toBeNull()
+    expect(directSupabaseRes.error?.message).toContain(
+      "Bloqueo estricto en modo self_hosted"
+    )
+
+    await signOut()
+    expect(await loadSessionUser()).toBeNull()
+    expect(authRequests.some((r) => r.url.includes("supabase.co"))).toBe(false)
+    resetSharedSelfHostedAuthAdapter()
+  })
 })

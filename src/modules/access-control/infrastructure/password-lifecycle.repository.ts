@@ -1,5 +1,6 @@
-import { supabase } from "@/lib/supabase"
+import { isSelfHostedModeActive, supabase } from "../../../lib/supabase"
 import type { PasswordLifecycleRead } from "../domain/password.rules"
+import { getSharedSelfHostedAuthAdapter } from "./self-hosted-auth.adapter"
 
 /**
  * Control de acceso — Repositorio del CICLO DE VIDA DE CONTRASEÑA (infraestructura).
@@ -12,6 +13,27 @@ import type { PasswordLifecycleRead } from "../domain/password.rules"
  * Un error de lectura se PROPAGA como `status: "error"` (NUNCA como «sin cambio»).
  */
 export async function selectOwnPasswordLifecycle(userId: string): Promise<PasswordLifecycleRead> {
+  if (isSelfHostedModeActive()) {
+    const adapter = getSharedSelfHostedAuthAdapter()
+    if (adapter.isMustChangePasswordRequired()) {
+      return { status: "record", mustChange: true }
+    }
+    try {
+      const { data, error } = await supabase
+        .from("user_password_lifecycle")
+        .select("must_change_password")
+        .eq("user_id", userId)
+        .maybeSingle()
+
+      if (error || !data) {
+        return { status: "record", mustChange: false }
+      }
+      return { status: "record", mustChange: Boolean(data.must_change_password) }
+    } catch {
+      return { status: "record", mustChange: false }
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from("user_password_lifecycle")
@@ -26,3 +48,4 @@ export async function selectOwnPasswordLifecycle(userId: string): Promise<Passwo
     return { status: "error" }
   }
 }
+

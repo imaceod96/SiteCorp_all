@@ -1,4 +1,5 @@
 import { supabase, type SupabaseMutationInterceptPayload } from "@/lib/supabase"
+import { loadSessionUser } from "@/modules/access-control"
 import type {
   AuditEntityOption,
   AuditEvent,
@@ -290,8 +291,7 @@ async function resolveCurrentActor(): Promise<{
     return cachedActor
   }
   try {
-    const { data: sessionData } = await supabase.auth.getSession()
-    const user = sessionData?.session?.user
+    const user = await loadSessionUser()
     if (!user) {
       return { userId: null, fullName: "Administrador", username: "admin" }
     }

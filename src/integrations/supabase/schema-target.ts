@@ -1,4 +1,19 @@
-import { supabase } from "@/lib/supabase"
+import { supabase } from "../../lib/supabase"
+
+function isSelfHostedActive(): boolean {
+  const globalProvider = (globalThis as { __SITECORP_AUTH_PROVIDER__?: string })
+    .__SITECORP_AUTH_PROVIDER__
+  if (globalProvider) {
+    return globalProvider === "self_hosted"
+  }
+  const envProvider =
+    (typeof import.meta !== "undefined"
+      ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+          ?.VITE_AUTH_PROVIDER
+      : undefined) ||
+    (typeof process !== "undefined" ? process.env?.VITE_AUTH_PROVIDER : undefined)
+  return String(envProvider ?? "").trim().toLowerCase() === "self_hosted"
+}
 
 /**
  * Company Client — FRONTERA ÚNICA DE NOMENCLATURA FÍSICA.
@@ -105,13 +120,15 @@ export const COMPANY_CLIENT_NAMES: SchemaNames = {
   },
 }
 
-let activeTarget: SchemaTarget = "legacy"
+let activeTarget: SchemaTarget = isSelfHostedActive() ? "company_client" : "legacy"
+let hasTestTargetOverride = false
 
 export function currentSchemaTarget(): SchemaTarget {
-  return activeTarget
+  if (hasTestTargetOverride) return activeTarget
+  return isSelfHostedActive() ? "company_client" : activeTarget
 }
 
-export function schemaNames(target: SchemaTarget = activeTarget): SchemaNames {
+export function schemaNames(target: SchemaTarget = currentSchemaTarget()): SchemaNames {
   return target === "company_client" ? COMPANY_CLIENT_NAMES : LEGACY_NAMES
 }
 
@@ -176,7 +193,11 @@ export type SchemaTargetSetting = SchemaTarget | "auto"
 
 /** Ajuste explícito por entorno; si no es válido, se usa `auto`. */
 export function schemaTargetSetting(): SchemaTargetSetting {
-  const raw = String(import.meta.env.VITE_SCHEMA_TARGET ?? "auto")
+  const metaEnv =
+    typeof import.meta !== "undefined"
+      ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      : undefined
+  const raw = String(metaEnv?.VITE_SCHEMA_TARGET ?? "auto")
     .trim()
     .toLowerCase()
   return raw === "legacy" || raw === "company_client" ? raw : "auto"
@@ -209,6 +230,8 @@ async function tableIsKnown(name: string): Promise<boolean | null> {
 }
 
 async function detectSchemaTarget(): Promise<SchemaTarget> {
+  if (isSelfHostedActive()) return "company_client"
+
   const setting = schemaTargetSetting()
   if (setting !== "auto") return setting
 
@@ -244,5 +267,6 @@ export function initSchemaTarget(): Promise<SchemaTarget> {
 
 /** Solo para pruebas: fija el estado sin consultar la base de datos. */
 export function __setSchemaTargetForTests(target: SchemaTarget): void {
+  hasTestTargetOverride = true
   activeTarget = target
 }

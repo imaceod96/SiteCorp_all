@@ -1,9 +1,10 @@
-import { supabase } from "@/lib/supabase"
+import { isSelfHostedModeActive, supabase } from "../../../lib/supabase"
 import type {
   AuthProfileRecord,
   ProfileAccountInput,
   UpdatePlatformUserInput,
 } from "../domain/entities"
+import { getSharedSelfHostedAuthAdapter } from "./self-hosted-auth.adapter"
 
 /**
  * Control de acceso — Repositorio de PERFILES (infraestructura).
@@ -19,6 +20,33 @@ import type {
 
 /** Perfil de la sesión: fila completa de `profiles`. Sin fila devuelve `null`. */
 export async function selectUserProfileById(userId: string): Promise<AuthProfileRecord | null> {
+  if (isSelfHostedModeActive()) {
+    const adapter = getSharedSelfHostedAuthAdapter()
+    if (!adapter.isMustChangePasswordRequired()) {
+      const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle()
+      if (data) {
+        return data as AuthProfileRecord
+      }
+    }
+
+    const session = await adapter.getSession()
+    if (session?.user && session.user.id === userId) {
+      const email = session.user.email ?? "usuario@sitecorp.local"
+      const localPart = email.split("@")[0] || email
+      const nowIso = session.user.createdAt ?? new Date().toISOString()
+      return {
+        id: userId,
+        username: localPart,
+        full_name: localPart,
+        avatar_url: null,
+        is_active: true,
+        created_at: nowIso,
+        updated_at: nowIso,
+      }
+    }
+    return null
+  }
+
   const { data } = await supabase.from("profiles").select("*").eq("id", userId).single()
   return (data as AuthProfileRecord | null) || null
 }

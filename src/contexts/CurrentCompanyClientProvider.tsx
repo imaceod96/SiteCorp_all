@@ -4,6 +4,7 @@ import {
   type CompanyClientSummary,
 } from "@/contexts/CurrentCompanyClientContext"
 import { useAuth } from "@/contexts/AuthContext"
+import { configureSelfHostedRuntimeBridge, isSelfHostedModeActive } from "@/lib/supabase"
 
 /**
  * ÚNICA fuente de verdad del cliente activo.
@@ -11,7 +12,7 @@ import { useAuth } from "@/contexts/AuthContext"
  * Sustituye a `CurrentTenantProvider` conservando EXACTAMENTE el mismo
  * comportamiento: estado en memoria, sin persistencia, con el mismo
  * establecimiento, cambio y limpieza. No concede permisos: la autorización real
- * sigue siendo RLS + las RPC de Supabase.
+ * sigue siendo RLS + las RPC de Supabase o el backend autónomo.
  *
  * ÁMBITO DE SESIÓN: el cliente activo pertenece a UNA sesión. Al cerrar sesión o al entrar
  * otro usuario (mismo navegador, misma pestaña) este estado se limpia, de modo que ninguna
@@ -39,6 +40,16 @@ export const CurrentCompanyClientProvider: React.FC<{ children: React.ReactNode 
     setCurrentCompanyClient(null)
   }, [activeUserId])
 
+  // En modo self_hosted, sincronizar el identificador de empresa activa con el puente de datos.
+  React.useEffect(() => {
+    if (isSelfHostedModeActive()) {
+      configureSelfHostedRuntimeBridge({
+        provider: "self_hosted",
+        activeCompanyId: currentCompanyClient?.id ?? null,
+      })
+    }
+  }, [currentCompanyClient?.id])
+
   return (
     <CurrentCompanyClientContext.Provider
       value={{
@@ -51,3 +62,4 @@ export const CurrentCompanyClientProvider: React.FC<{ children: React.ReactNode 
     </CurrentCompanyClientContext.Provider>
   )
 }
+

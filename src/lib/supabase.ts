@@ -53,11 +53,42 @@ export function isSelfHostedModeActive(): boolean {
 }
 
 export function resolveAutonomousApiBaseUrl(): string {
-  if (globalThis.__SITECORP_AUTH_API_URL__) {
+  if (globalThis.__SITECORP_AUTH_API_URL__ !== undefined) {
     return globalThis.__SITECORP_AUTH_API_URL__.replace(/\/+$/, "")
   }
-  const envUrl = readViteEnvVar("VITE_AUTH_API_URL") || "http://127.0.0.1:4010"
-  return String(envUrl).trim().replace(/\/+$/, "")
+  const rawEnvUrl = readViteEnvVar("VITE_AUTH_API_URL")
+  const envUrl = rawEnvUrl !== undefined ? String(rawEnvUrl).trim() : undefined
+
+  // En navegador real (sin customFetch de pruebas), si el usuario abre http://localhost:3000
+  // (donde Vite o el contenedor frontend sirve el proxy same-origin /api -> auth-api:4010),
+  // utilizar el mismo origen del navegador garantiza cookies SameSite y cero problemas CORS.
+  if (
+    typeof window !== "undefined" &&
+    window.location?.origin &&
+    !globalThis.__SITECORP_CUSTOM_FETCH__
+  ) {
+    const forceDirect =
+      String(readViteEnvVar("VITE_FORCE_DIRECT_API_ORIGIN") ?? "")
+        .trim()
+        .toLowerCase() === "true"
+    if (!forceDirect) {
+      if (
+        !envUrl ||
+        envUrl === "/" ||
+        envUrl.toLowerCase() === "same-origin" ||
+        envUrl === "http://127.0.0.1:4010" ||
+        envUrl === "http://localhost:4010"
+      ) {
+        return window.location.origin.replace(/\/+$/, "")
+      }
+    }
+  }
+
+  if (envUrl === "" || envUrl === "/" || envUrl?.toLowerCase() === "same-origin") {
+    return "http://127.0.0.1:4010"
+  }
+
+  return (envUrl || "http://127.0.0.1:4010").replace(/\/+$/, "")
 }
 
 export function configureSelfHostedRuntimeBridge(options: {
@@ -104,6 +135,53 @@ function readHeaderValue(
     if (k.toLowerCase() === lower) return v
   }
   return null
+}
+
+async function bodyInitToBase64(
+  body: BodyInit | null | undefined
+): Promise<{ base64: string; mimeType: string }> {
+  if (!body) {
+    return { base64: "", mimeType: "application/octet-stream" }
+  }
+  if (typeof Blob !== "undefined" && body instanceof Blob) {
+    const buf = await body.arrayBuffer()
+    const bytes = new Uint8Array(buf)
+    let binary = ""
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]!)
+    }
+    const base64 =
+      typeof btoa === "function"
+        ? btoa(binary)
+        : Buffer.from(buf).toString("base64")
+    return {
+      base64,
+      mimeType: body.type || "application/octet-stream",
+    }
+  }
+  if (typeof body === "string") {
+    const base64 =
+      typeof btoa === "function"
+        ? btoa(unescape(encodeURIComponent(body)))
+        : Buffer.from(body, "utf8").toString("base64")
+    return { base64, mimeType: "text/plain" }
+  }
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+    const bytes =
+      body instanceof ArrayBuffer
+        ? new Uint8Array(body)
+        : new Uint8Array(body.buffer, body.byteOffset, body.byteLength)
+    let binary = ""
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]!)
+    }
+    const base64 =
+      typeof btoa === "function"
+        ? btoa(binary)
+        : Buffer.from(bytes).toString("base64")
+    return { base64, mimeType: "application/octet-stream" }
+  }
+  return { base64: "", mimeType: "application/octet-stream" }
 }
 
 async function routeSupabaseRequestToAutonomousBackend(
@@ -373,6 +451,106 @@ async function routeSupabaseRequestToAutonomousBackend(
       status: method === "POST" ? 201 : 200,
       headers: responseHeaders,
     })
+  }
+
+  // 4. Almacenamiento Autónomo: /storage/v1/object/* -> /api/v1/storage/*
+  if (pathname.startsWith("/storage/v1/object/")) {
+    const subPath = pathname.slice("/storage/v1/object/".length)
+
+    // 4.1 URL firmada / lectura autenticada: POST /storage/v1/object/sign/<bucket>/<path>
+    if (subPath.startsWith("sign/")) {
+      const signTarget = subPath.slice("sign/".length)
+      const slashIdx = signTarget.indexOf("/")
+      const bucketId = slashIdx > 0 ? decodeURIComponent(signTarget.slice(0, slashIdx)) : signTarget
+      const objectPath = slashIdx > 0 ? decodeURIComponent(signTarget.slice(slashIdx + 1)) : ""
+      return new Response(
+        JSON.stringify({
+          signedURL: `/object/${encodeURIComponent(bucketId)}/${objectPath}`,
+          signedUrl: `${baseUrl}/api/v1/storage/objects/${encodeURIComponent(bucketId)}/${objectPath}`,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    const cleanSub = subPath.startsWith("authenticated/")
+      ? subPath.slice("authenticated/".length)
+      : subPath.startsWith("public/")
+        ? subPath.slice("public/".length)
+        : subPath
+
+    const slashIdx = cleanSub.indexOf("/")
+    const bucketId =
+      slashIdx > 0 ? decodeURIComponent(cleanSub.slice(0, slashIdx)) : decodeURIComponent(cleanSub)
+    const objectPath = slashIdx > 0 ? decodeURIComponent(cleanSub.slice(slashIdx + 1)) : ""
+
+    // 4.2 Eliminación de objetos: DELETE /storage/v1/object/<bucket> con { prefixes: [...] }
+    if (method === "DELETE" && !objectPath) {
+      const prefixes = Array.isArray((parsedBody as any)?.prefixes)
+        ? ((parsedBody as any).prefixes as string[])
+        : []
+      for (const prefix of prefixes) {
+        await effectiveFetch(
+          `${baseUrl}/api/v1/storage/objects/${encodeURIComponent(bucketId)}/${prefix}`,
+          {
+            method: "DELETE",
+            headers: authHeaders,
+          }
+        )
+      }
+      return new Response(JSON.stringify(prefixes.map((name) => ({ name }))), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // 4.3 Subida de objeto: POST o PUT /storage/v1/object/<bucket>/<objectPath>
+    if ((method === "POST" || method === "PUT") && objectPath) {
+      const { base64, mimeType: detectedMime } = await bodyInitToBase64(init?.body)
+      const headerMime = readHeaderValue(init?.headers, "Content-Type")
+      const mimeType =
+        headerMime && !headerMime.includes("multipart/form-data")
+          ? headerMime
+          : detectedMime
+      const resp = await effectiveFetch(`${baseUrl}/api/v1/storage/upload`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          bucketId,
+          objectName: objectPath,
+          contentBase64: base64,
+          mimeType,
+          ...(activeCompanyId ? { companyClientId: activeCompanyId } : {}),
+        }),
+      })
+      const json = (await resp.json().catch(() => null)) as Record<string, any> | null
+      if (!resp.ok) {
+        return new Response(
+          JSON.stringify({
+            message: json?.message ?? json?.error?.message ?? "Error al subir archivo a Storage autónomo",
+            error: json?.error ?? "StorageUploadError",
+          }),
+          { status: resp.status, headers: { "Content-Type": "application/json" } }
+        )
+      }
+      return new Response(
+        JSON.stringify({
+          Key: `${bucketId}/${objectPath}`,
+          Id: json?.data?.object?.id ?? objectPath,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    }
+
+    // 4.4 Descarga de objeto: GET /storage/v1/object/<bucket>/<objectPath>
+    if (method === "GET" && objectPath) {
+      return effectiveFetch(
+        `${baseUrl}/api/v1/storage/objects/${encodeURIComponent(bucketId)}/${objectPath}`,
+        {
+          method: "GET",
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      )
+    }
   }
 
   throw new Error(

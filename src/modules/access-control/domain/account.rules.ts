@@ -73,9 +73,10 @@ export function avatarPathFromStored(value: string | null | undefined): string |
   }
 
   const match = raw.match(/\/storage\/v1\/object\/(?:public|sign|authenticated)\/avatars\/(.+)$/i)
-  if (!match) return null
+  if (!match || !match[1]) return null
 
-  const path = decodeURIComponent(match[1].split("?")[0].split("#")[0]).replace(/^\/+/, "")
+  const cleanSegment = (match[1].split("?")[0] ?? "").split("#")[0] ?? ""
+  const path = decodeURIComponent(cleanSegment).replace(/^\/+/, "")
   return path || null
 }
 

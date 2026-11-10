@@ -1,0 +1,98 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sitecorp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sitecorp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sitecorp_local_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-sitecorp}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - sitecorp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-sitecorp} -d $${POSTGRES_DB:-sitecorp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: sitecorp-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_WEB_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-api:
+    build:
+      context: ./services/auth-api
+      dockerfile: Dockerfile
+    container_name: sitecorp-auth-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      NODE_ENV: ${SITECORP_AUTH_ENV:-development}
+      SITECORP_AUTH_ENV: ${SITECORP_AUTH_ENV:-development}
+      SITECORP_HTTP_HOST: 0.0.0.0
+      SITECORP_HTTP_PORT: 4010
+      SITECORP_HTTP_ALLOWED_ORIGINS: ${SITECORP_HTTP_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SITECORP_HTTP_COOKIE_SECURE: ${SITECORP_HTTP_COOKIE_SECURE:-false}
+      SITECORP_HTTP_COOKIE_SAMESITE: ${SITECORP_HTTP_COOKIE_SAMESITE:-Lax}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-sitecorp}:${POSTGRES_PASSWORD:-sitecorp_local_dev_only}@postgres:5432/${POSTGRES_DB:-sitecorp}
+      STORAGE_LOCAL_ROOT_DIR: /var/lib/sitecorp/storage
+      SITECORP_AUTO_MIGRATE: ${SITECORP_AUTO_MIGRATE:-true}
+      SITECORP_AUTO_GENERATE_DEV_KEYS: ${SITECORP_AUTO_GENERATE_DEV_KEYS:-true}
+      SITECORP_ALLOW_INITIAL_ADMIN_BOOTSTRAP: ${SITECORP_ALLOW_INITIAL_ADMIN_BOOTSTRAP:-true}
+      SITECORP_JWT_ISSUER: ${SITECORP_JWT_ISSUER:-urn:sitecorp:auth-api}
+      SITECORP_JWT_AUDIENCE: ${SITECORP_JWT_AUDIENCE:-urn:sitecorp:api}
+      SITECORP_JWT_ACTIVE_KID: ${SITECORP_JWT_ACTIVE_KID:-ed25519-local-dev-v1}
+      SITECORP_JWT_PRIVATE_KEY_PEM: ${SITECORP_JWT_PRIVATE_KEY_PEM:-}
+      SITECORP_JWT_PUBLIC_KEY_PEM: ${SITECORP_JWT_PUBLIC_KEY_PEM:-}
+      SITECORP_CSRF_HMAC_SECRET: ${SITECORP_CSRF_HMAC_SECRET:-}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      SMTP_FROM_EMAIL: no-reply@sitecorp.local
+      SMTP_FROM_NAME: SiteCorp Local
+    ports:
+      - "${AUTH_API_PORT:-4010}:4010"
+    volumes:
+      - sitecorp_storage_data:/var/lib/sitecorp/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4010/health/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: sitecorp-frontend
+    restart: unless-stopped
+    depends_on:
+      auth-api:
+        condition: service_healthy
+    environment:
+      VITE_AUTH_PROVIDER: self_hosted
+      VITE_AUTH_API_URL: ${VITE_AUTH_API_URL:-http://localhost:3000}
+      VITE_BACKEND_PROXY_TARGET: http://auth-api:4010
+      VITE_SUPABASE_URL: http://localhost:3000
+      VITE_SUPABASE_ANON_KEY: self-hosted-autonomous-mode
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  sitecorp_postgres_data:
+  sitecorp_storage_data:

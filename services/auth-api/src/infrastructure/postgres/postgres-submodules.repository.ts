@@ -449,6 +449,13 @@ export const ALLOWED_REST_TABLES: ReadonlyMap<string, RestTablePolicy> = new Map
   // Empresas y estructura organizativa
   ["company_clients", COMPANY_TABLE("companies.view", "companies.manage", "id")],
   ["clients", COMPANY_TABLE("companies.view", "companies.manage", "company_client_id")],
+  ["company_client_memberships", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["company_client_roles", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["company_client_role_permissions", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["company_client_user_roles", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["company_client_invitations", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["company_client_user_permissions", COMPANY_TABLE("companies.view", "companies.manage")],
+  ["company_client_permissions", CATALOG_TABLE()],
   ["company_client_user_access", COMPANY_TABLE("companies.view", "companies.manage")],
   ["organization_entities", COMPANY_TABLE("entities.view", "entities.manage")],
   ["organization_areas", COMPANY_TABLE("entities.view", "entities.manage")],
@@ -613,6 +620,7 @@ export const ALLOWED_AUTONOMOUS_RPCS: ReadonlyMap<string, AutonomousRpcPolicy> =
   ["is_platform_founder", { scope: "user" }],
   ["has_platform_permission", { scope: "user" }],
   ["has_tenant_permission", { scope: "company", requiredPermission: "companies.view" }],
+  ["has_client_permission", { scope: "company", requiredPermission: "companies.view" }],
   ["has_company_client_permission", { scope: "company", requiredPermission: "companies.view" }],
   ["can_access_entity", { scope: "company", requiredPermission: "entities.view" }],
   ["can_view_entity", { scope: "company", requiredPermission: "entities.view" }],
@@ -2541,15 +2549,38 @@ export class PostgresSubmodulesRepository {
       await this.domainRepo.requirePlatformAdmin(input.userId);
       if (rpcName === "create_workspace" || rpcName === "create_company_client") {
         const name = String(args.p_name ?? args.name ?? "").trim();
-        const code = String(args.p_code ?? args.code ?? name.slice(0, 12).toUpperCase()).trim();
         if (!name) {
           throw new InvalidGatewayParameterError("Se requiere 'p_name' para crear la empresa.");
         }
-        return this.domainRepo.createCompanyClient({
+        const rawCode = String(args.p_code ?? args.code ?? "").trim();
+        const fallbackCode =
+          name
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-zA-Z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(0, 8)
+            .toUpperCase() +
+          "_" +
+          randomBytes(2).toString("hex").toUpperCase();
+        const code = rawCode || fallbackCode;
+        const created = await this.domainRepo.createCompanyClient({
           name,
           code,
           description: typeof args.p_tax_id === "string" ? args.p_tax_id : undefined,
         });
+        return {
+          ...created,
+          is_active: created.isActive,
+          created_at:
+            created.createdAt instanceof Date
+              ? created.createdAt.toISOString()
+              : String(created.createdAt),
+          updated_at:
+            created.updatedAt instanceof Date
+              ? created.updatedAt.toISOString()
+              : String(created.updatedAt),
+        };
       }
       return {
         executed: true,
@@ -2670,6 +2701,7 @@ export class PostgresSubmodulesRepository {
 
         if (
           rpcName === "has_tenant_permission" ||
+          rpcName === "has_client_permission" ||
           rpcName === "has_company_client_permission" ||
           rpcName === "can_access_entity" ||
           rpcName === "can_view_entity"
@@ -2916,8 +2948,33 @@ export class PostgresSubmodulesRepository {
     const op = input.operation ?? "select";
     const isRead = op === "select";
 
+    const normalizeOutputRows = (
+      rows: readonly Record<string, unknown>[]
+    ): readonly Record<string, unknown>[] =>
+      rows.map((row) => {
+        const normalized: Record<string, unknown> = { ...row };
+        if (
+          normalized.company_client_id !== undefined &&
+          normalized.tenant_id === undefined
+        ) {
+          normalized.tenant_id = normalized.company_client_id;
+        }
+        if (
+          rawTable === "entity_regimes" &&
+          typeof normalized.code === "string" &&
+          normalized.code.length > 0
+        ) {
+          normalized.id = normalized.code;
+        }
+        return normalized;
+      });
+
     const executeCoreQuery = async (
-      resolvedCompanyId: string | null
+      resolvedCompanyId: string | null,
+      options?: {
+        allowPlatformWideCompanySelect?: boolean;
+        authorizedCompanyIds?: readonly string[];
+      }
     ): Promise<AutonomousTableOperationResult> => {
       const executor = this.db.getActiveExecutor();
       const allowedColumns = await this.getAllowedColumnsForTable(rawTable);
@@ -2930,14 +2987,31 @@ export class PostgresSubmodulesRepository {
 
       // 1. Aplicar filtro obligatorio de aislamiento según el ámbito de la tabla
       if (policy.scope === "company" && policy.tenantCol) {
-        if (!resolvedCompanyId) {
-          throw new ForbiddenError(
-            `Se requiere 'companyClientId' válido para operar sobre la tabla '${rawTable}'.`
-          );
-        }
-        if (allowedColumns.has(policy.tenantCol)) {
-          values.push(resolvedCompanyId);
-          whereClauses.push(`"${policy.tenantCol}" = $${values.length}`);
+        if (options?.allowPlatformWideCompanySelect && isRead && !resolvedCompanyId) {
+          // Administrador de plataforma consultando listado global sin companyClientId explícito
+        } else if (
+          options?.authorizedCompanyIds &&
+          options.authorizedCompanyIds.length > 0 &&
+          isRead &&
+          !resolvedCompanyId
+        ) {
+          if (allowedColumns.has(policy.tenantCol)) {
+            const placeholders = options.authorizedCompanyIds.map((cid) => {
+              values.push(cid);
+              return `$${values.length}`;
+            });
+            whereClauses.push(`"${policy.tenantCol}" IN (${placeholders.join(", ")})`);
+          }
+        } else {
+          if (!resolvedCompanyId) {
+            throw new ForbiddenError(
+              `Se requiere 'companyClientId' válido para operar sobre la tabla '${rawTable}'.`
+            );
+          }
+          if (allowedColumns.has(policy.tenantCol)) {
+            values.push(resolvedCompanyId);
+            whereClauses.push(`"${policy.tenantCol}" = $${values.length}`);
+          }
         }
       } else if (policy.scope === "user" && policy.tenantCol) {
         if (allowedColumns.has(policy.tenantCol)) {
@@ -2966,8 +3040,14 @@ export class PostgresSubmodulesRepository {
       }
 
       for (const pred of allPredicates) {
+        const mappedCol =
+          pred.column === "tenant_id" &&
+          !allowedColumns.has("tenant_id") &&
+          allowedColumns.has("company_client_id")
+            ? "company_client_id"
+            : pred.column;
         const validCol = this.assertValidTableColumn(
-          pred.column,
+          mappedCol,
           allowedColumns,
           rawTable
         );
@@ -2986,7 +3066,9 @@ export class PostgresSubmodulesRepository {
               `Intento de filtrar registros de otra empresa en '${rawTable}'.`
             );
           }
-          continue;
+          if (resolvedCompanyId || policy.scope === "user") {
+            continue;
+          }
         }
 
         switch (pred.operator) {
@@ -3105,7 +3187,7 @@ export class PostgresSubmodulesRepository {
 
         const sql = `SELECT * FROM public."${rawTable}" ${whereSql} ${orderSql} LIMIT ${limitParam} OFFSET ${offsetParam};`;
         const res = await executor.query<Record<string, unknown>>(sql, queryValues);
-        return { rows: res.rows, totalCount };
+        return { rows: normalizeOutputRows(res.rows), totalCount };
       }
 
       // 4. Ejecutar INSERT / UPSERT
@@ -3125,6 +3207,16 @@ export class PostgresSubmodulesRepository {
         const insertedRows: Record<string, unknown>[] = [];
         for (const item of rawItems) {
           const record: Record<string, unknown> = { ...(item as Record<string, unknown>) };
+          if (
+            record.tenant_id !== undefined &&
+            !allowedColumns.has("tenant_id") &&
+            allowedColumns.has("company_client_id")
+          ) {
+            if (record.company_client_id === undefined) {
+              record.company_client_id = record.tenant_id;
+            }
+            delete record.tenant_id;
+          }
           if (allowedColumns.has("id") && typeof record.id !== "string") {
             record.id = randomUUID();
           }
@@ -3204,7 +3296,10 @@ export class PostgresSubmodulesRepository {
           }
         }
 
-        return { rows: insertedRows, totalCount: insertedRows.length };
+        return {
+          rows: normalizeOutputRows(insertedRows),
+          totalCount: insertedRows.length,
+        };
       }
 
       // 5. Ejecutar UPDATE
@@ -3256,7 +3351,10 @@ export class PostgresSubmodulesRepository {
           updateSql,
           values
         );
-        return { rows: updRes.rows, totalCount: updRes.rows.length };
+        return {
+          rows: normalizeOutputRows(updRes.rows),
+          totalCount: updRes.rows.length,
+        };
       }
 
       // 6. Ejecutar DELETE
@@ -3275,7 +3373,10 @@ export class PostgresSubmodulesRepository {
             "Operación denegada: el registro no existe o pertenece a otra empresa."
           );
         }
-        return { rows: res.rows, totalCount: res.rows.length };
+        return {
+          rows: normalizeOutputRows(res.rows),
+          totalCount: res.rows.length,
+        };
       }
 
       throw new InvalidGatewayParameterError(`Operación no soportada: '${String(op)}'.`);
@@ -3300,10 +3401,69 @@ export class PostgresSubmodulesRepository {
 
     // Ámbito "company"
     let companyId = input.companyClientId?.trim() || null;
+
+    if (!companyId && isRead) {
+      const isPlatformAdmin = await this.domainRepo.isUserPlatformAdmin(input.userId);
+      if (isPlatformAdmin) {
+        return this.runInTxIfNeeded(async () => {
+          await this.domainRepo.setTransactionalTenantContext({
+            userId: input.userId,
+            companyClientId: null,
+            isPlatformAdmin: true,
+          });
+          return executeCoreQuery(null, { allowPlatformWideCompanySelect: true });
+        });
+      }
+    }
+
+    if (!companyId && !isRead && rawTable === "organization_entities") {
+      const firstPayload = Array.isArray(input.payload)
+        ? (input.payload[0] as Record<string, unknown> | undefined)
+        : (input.payload as Record<string, unknown> | undefined);
+      const payloadCompanyId =
+        (typeof firstPayload?.company_client_id === "string" &&
+          firstPayload.company_client_id.trim()) ||
+        (typeof firstPayload?.tenant_id === "string" &&
+          firstPayload.tenant_id.trim()) ||
+        null;
+      if (payloadCompanyId) {
+        companyId = payloadCompanyId;
+      }
+    }
+
     if (!companyId) {
       const companies = await this.domainRepo.listAuthorizedCompaniesForUser(
         input.userId
       );
+      if (isRead && companies.length > 1) {
+        const requiredPermission = policy.readPerm;
+        const authorizedIds: string[] = [];
+        for (const comp of companies) {
+          try {
+            await this.domainRepo.requireCompanyPermission(
+              input.userId,
+              comp.id,
+              requiredPermission
+            );
+            authorizedIds.push(comp.id);
+          } catch {
+            // Omitir empresas donde carezca del permiso de lectura específico
+          }
+        }
+        if (authorizedIds.length === 0) {
+          throw new ForbiddenError(
+            `Acceso denegado a '${rawTable}': el usuario carece del permiso '${requiredPermission}'.`
+          );
+        }
+        return this.runInTxIfNeeded(async () => {
+          await this.domainRepo.setTransactionalTenantContext({
+            userId: input.userId,
+            companyClientId: authorizedIds[0] ?? null,
+            isPlatformAdmin: false,
+          });
+          return executeCoreQuery(null, { authorizedCompanyIds: authorizedIds });
+        });
+      }
       companyId = companies[0]?.id ?? null;
     }
 

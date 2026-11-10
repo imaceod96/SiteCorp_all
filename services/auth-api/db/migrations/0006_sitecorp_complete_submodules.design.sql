@@ -1227,4 +1227,99 @@ CREATE TRIGGER trg_work_accidents_cross_tenant_check
     FOR EACH ROW
     EXECUTE FUNCTION public.enforce_cross_tenant_worker_consistency();
 
+-- =============================================================================
+-- 10. COLUMNAS DE COMPATIBILIDAD Y SEMILLAS DE CATÁLOGOS BASE (IDEMPOTENTES)
+-- =============================================================================
+
+ALTER TABLE public.organization_entities
+    ADD COLUMN IF NOT EXISTS regime_id VARCHAR(64) NOT NULL DEFAULT 'EMPRESARIAL',
+    ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+    ADD COLUMN IF NOT EXISTS description TEXT NULL,
+    ADD COLUMN IF NOT EXISTS address TEXT NULL,
+    ADD COLUMN IF NOT EXISTS municipality VARCHAR(128) NULL,
+    ADD COLUMN IF NOT EXISTS province VARCHAR(128) NULL,
+    ADD COLUMN IF NOT EXISTS postal_code VARCHAR(32) NULL,
+    ADD COLUMN IF NOT EXISTS is_sitecorp_account BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS account_is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    ADD COLUMN IF NOT EXISTS account_code VARCHAR(64) NULL,
+    ADD COLUMN IF NOT EXISTS organism VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS branch VARCHAR(255) NULL,
+    ADD COLUMN IF NOT EXISTS labor_identification_code VARCHAR(64) NULL,
+    ADD COLUMN IF NOT EXISTS revolution_year VARCHAR(128) NULL;
+
+ALTER TABLE public.occupational_categories
+    ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE public.preparation_levels
+    ADD COLUMN IF NOT EXISTS sort_order INT NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+INSERT INTO public.entity_regimes (code, name)
+VALUES
+    ('PRESUPUESTADA', 'Unidad Presupuestada'),
+    ('EMPRESARIAL', 'Sistema Empresarial')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.occupational_categories (code, name, sort_order, is_active)
+VALUES
+    ('CUADRO', 'Cuadro', 1, TRUE),
+    ('TECNICO', 'Técnico', 2, TRUE),
+    ('ADMINISTRATIVO', 'Administrativo', 3, TRUE),
+    ('SERVICIO', 'Servicio', 4, TRUE),
+    ('OPERARIO', 'Operario', 5, TRUE)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.preparation_levels (code, name, sort_order, is_active)
+VALUES
+    ('SUPERIOR', 'Nivel Superior', 1, TRUE),
+    ('MEDIO_SUPERIOR', 'Nivel Medio Superior', 2, TRUE),
+    ('MEDIO_BASICO', 'Nivel Medio Básico', 3, TRUE),
+    ('OBRERO_CALIFICADO', 'Obrero Calificado', 4, TRUE)
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.genders (code, name)
+VALUES
+    ('M', 'Masculino'),
+    ('F', 'Femenino')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.marital_statuses (code, name)
+VALUES
+    ('SOLTERO', 'Soltero(a)'),
+    ('CASADO', 'Casado(a)'),
+    ('UNION_CONSENSO', 'Unión Consensual'),
+    ('DIVORCIADO', 'Divorciado(a)'),
+    ('VIUDO', 'Viudo(a)')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.skin_colors (code, name)
+VALUES
+    ('BLANCA', 'Blanca'),
+    ('NEGRA', 'Negra'),
+    ('MESTIZA', 'Mestiza')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.education_levels (code, name)
+VALUES
+    ('UNIVERSITARIO', 'Universitario'),
+    ('TECNICO_MEDIO', 'Técnico Medio'),
+    ('PREUNIVERSITARIO', 'Preuniversitario'),
+    ('SECUNDARIA_BASICA', 'Secundaria Básica')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.employment_contract_types (code, name)
+VALUES
+    ('INDEFINIDO', 'Contrato por Tiempo Indeterminado'),
+    ('DETERMINADO', 'Contrato por Tiempo Determinado'),
+    ('OBRA', 'Contrato para la Ejecución de Trabajo u Obra')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO public.payment_methods (code, name)
+VALUES
+    ('TRANSFERENCIA', 'Transferencia Bancaria'),
+    ('EFECTIVO', 'Efectivo')
+ON CONFLICT (code) DO NOTHING;
+
 COMMIT;
+

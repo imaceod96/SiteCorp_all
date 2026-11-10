@@ -41,3 +41,10 @@ dist-ssr
 .aistudio/
 *.tsbuildinfo
 
+# Local environment & runtime secrets
+.env.docker
+.env.example
+.storage/
+services/auth-api/.storage/
+*.pem
+.dev-ed25519-keypair.json

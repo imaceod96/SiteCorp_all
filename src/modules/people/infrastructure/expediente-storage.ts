@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { loadSessionUser } from "@/modules/access-control"
 
 /**
  * Personas — Documentos del expediente en el Storage (infraestructura).
@@ -13,8 +14,8 @@ export const EXPEDIENTE_BUCKET = "documents"
 
 /** Identificador del usuario autenticado: autor del documento o del registro. */
 export async function currentUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getUser()
-  return data.user?.id ?? null
+  const user = await loadSessionUser()
+  return user?.id ?? null
 }
 
 /** Usuario autenticado exigido por las escrituras del expediente. */

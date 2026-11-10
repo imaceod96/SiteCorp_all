@@ -10,6 +10,11 @@ import type {
   AuthUserIdentity,
   IAuthenticationProvider,
 } from "../domain/auth-provider.contracts"
+import {
+  configureSelfHostedRuntimeBridge,
+  isSelfHostedModeActive,
+  resolveAutonomousApiBaseUrl,
+} from "../../../lib/supabase"
 
 export interface StorageLike {
   getItem(key: string): string | null
@@ -20,6 +25,7 @@ export interface StorageLike {
 export interface SelfHostedAuthAdapterOptions {
   baseUrl?: string
   fetchFn?: typeof fetch
+  fetchImpl?: typeof fetch
   storage?: StorageLike
 }
 
@@ -77,6 +83,7 @@ interface ApiMeResponse {
 
 const STORAGE_SESSION_KEY = "sitecorp_self_hosted_session"
 const STORAGE_CSRF_KEY = "sitecorp_self_hosted_csrf"
+const STORAGE_MUST_CHANGE_KEY = "sitecorp_self_hosted_must_change_pwd"
 
 class MemoryStorage implements StorageLike {
   private store = new Map<string, string>()
@@ -111,6 +118,7 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
   private readonly listeners = new Set<(event: AuthStateChangeEvent) => void>()
   private currentSession: AuthSession | null = null
   private currentCsrfToken: string | null = null
+  private currentMustChangePassword = false
   private pendingActivationPassword: string | null = null
 
   constructor(options: SelfHostedAuthAdapterOptions = {}) {
@@ -121,11 +129,13 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
     ).window
     const defaultBaseUrl = win?.__SITECORP_AUTH_URL__
       ? win.__SITECORP_AUTH_URL__
-      : "http://127.0.0.1:4010"
+      : resolveAutonomousApiBaseUrl()
 
     this.baseUrl = (options.baseUrl ?? defaultBaseUrl).replace(/\/+$/, "")
     this.fetch =
       options.fetchFn ??
+      options.fetchImpl ??
+      globalThis.__SITECORP_CUSTOM_FETCH__ ??
       (typeof fetch !== "undefined"
         ? fetch.bind(globalThis)
         : (undefined as unknown as typeof fetch))
@@ -141,6 +151,16 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
     this.loadPersistedSession()
   }
 
+  private syncRuntimeBridge(session: AuthSession | null): void {
+    if (isSelfHostedModeActive()) {
+      configureSelfHostedRuntimeBridge({
+        provider: "self_hosted",
+        apiBaseUrl: this.baseUrl,
+        accessToken: session?.accessToken ?? null,
+      })
+    }
+  }
+
   private loadPersistedSession(): void {
     try {
       const raw = this.storage.getItem(STORAGE_SESSION_KEY)
@@ -149,19 +169,31 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         if (parsed && parsed.accessToken && parsed.user?.id) {
           this.currentSession = parsed
           this.currentCsrfToken = this.storage.getItem(STORAGE_CSRF_KEY)
+          this.currentMustChangePassword =
+            this.storage.getItem(STORAGE_MUST_CHANGE_KEY) === "true"
+          this.syncRuntimeBridge(parsed)
         }
       }
     } catch {
       this.storage.removeItem(STORAGE_SESSION_KEY)
       this.storage.removeItem(STORAGE_CSRF_KEY)
+      this.storage.removeItem(STORAGE_MUST_CHANGE_KEY)
     }
   }
 
-  private persistSession(session: AuthSession | null, csrfToken?: string | null): void {
+  private persistSession(
+    session: AuthSession | null,
+    csrfToken?: string | null,
+    mustChangePassword?: boolean
+  ): void {
     this.currentSession = session
     if (csrfToken !== undefined) {
       this.currentCsrfToken = csrfToken
     }
+    if (mustChangePassword !== undefined) {
+      this.currentMustChangePassword = mustChangePassword
+    }
+    this.syncRuntimeBridge(session)
 
     if (session) {
       try {
@@ -169,14 +201,32 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         if (this.currentCsrfToken) {
           this.storage.setItem(STORAGE_CSRF_KEY, this.currentCsrfToken)
         }
+        this.storage.setItem(
+          STORAGE_MUST_CHANGE_KEY,
+          this.currentMustChangePassword ? "true" : "false"
+        )
       } catch {
         // En caso de cuotas de almacenamiento excedidas, la sesión se mantiene en memoria
       }
     } else {
       this.storage.removeItem(STORAGE_SESSION_KEY)
       this.storage.removeItem(STORAGE_CSRF_KEY)
+      this.storage.removeItem(STORAGE_MUST_CHANGE_KEY)
+      this.currentMustChangePassword = false
       this.pendingActivationPassword = null
     }
+  }
+
+  public isMustChangePasswordRequired(): boolean {
+    return this.currentMustChangePassword
+  }
+
+  public getAccessTokenSync(): string | null {
+    return this.currentSession?.accessToken ?? null
+  }
+
+  public getBaseUrl(): string {
+    return this.baseUrl
   }
 
   private emitStateChange(event: AuthStateChangeEvent): void {
@@ -273,7 +323,7 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         this.pendingActivationPassword = null
       }
 
-      this.persistSession(session, csrfToken)
+      this.persistSession(session, csrfToken, Boolean(mustChangePassword ?? user.mustChangePassword))
 
       this.emitStateChange({
         event: mustChangePassword ? "PASSWORD_RECOVERY" : "SIGNED_IN",
@@ -455,8 +505,9 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
         }
       }
 
-      // Contraseña actualizada con éxito: limpiar credencial de activación
+      // Contraseña actualizada con éxito: limpiar credencial de activación y marca de cambio obligatorio
       this.pendingActivationPassword = null
+      this.persistSession(this.currentSession, this.currentCsrfToken, false)
 
       this.emitStateChange({
         event: "USER_UPDATED",
@@ -637,3 +688,19 @@ export class SelfHostedAuthAdapter implements IAuthenticationProvider {
     return session?.user?.id ?? null
   }
 }
+
+let sharedSelfHostedAuthAdapter: SelfHostedAuthAdapter | null = null
+
+export function getSharedSelfHostedAuthAdapter(
+  options?: SelfHostedAuthAdapterOptions
+): SelfHostedAuthAdapter {
+  if (!sharedSelfHostedAuthAdapter || options) {
+    sharedSelfHostedAuthAdapter = new SelfHostedAuthAdapter(options)
+  }
+  return sharedSelfHostedAuthAdapter
+}
+
+export function resetSharedSelfHostedAuthAdapter(): void {
+  sharedSelfHostedAuthAdapter = null
+}
+
