@@ -138,12 +138,13 @@ export async function fetchPreparationLevels(): Promise<PreparationLevel[]> {
 
 /** Niveles configurados por cargo: { organization_job_id: niveles ordenados }. */
 export async function fetchJobPreparationLevels(
-  jobIds: string[]
+  jobIds: string[],
+  preloadedCatalog?: PreparationLevel[]
 ): Promise<Record<string, PreparationLevel[]>> {
   if (jobIds.length === 0) return {}
 
   const [catalog, linksRes] = await Promise.all([
-    fetchPreparationLevels(),
+    preloadedCatalog ? Promise.resolve(preloadedCatalog) : fetchPreparationLevels(),
     supabase
       .from("organization_job_preparation_levels")
       .select("organization_job_id, preparation_level_id")

@@ -138,6 +138,14 @@ const DocumentTemplateValidationPanel = ({ validation, loading }: Props) => {
             </div>
           </div>
 
+          {validation.server_catalog_out_of_sync && (
+            <SiteCorpAlert type="warning" title="Catálogo documental pendiente de sincronización en Supabase">
+              Las variables coinciden con el catálogo oficial de la aplicación, pero la base de datos
+              en Supabase devolvió un análisis anterior sin estas claves. Ejecuta la migración SQL de
+              variables documentales en Supabase y luego pulsa «Analizar de nuevo» antes de activar.
+            </SiteCorpAlert>
+          )}
+
           {validation.analysis_issue && (
             <SiteCorpAlert type="warning" title="Documento no preparado para análisis">
               <p>{validation.analysis_issue}</p>

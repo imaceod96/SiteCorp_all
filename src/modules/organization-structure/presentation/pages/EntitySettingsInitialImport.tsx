@@ -215,7 +215,7 @@ const EntitySettingsInitialImport = () => {
     <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Carga inicial de trabajadores"
-        description="Incorpora trabajadores existentes como Workers. La migración crea solo personas: quedan pendientes de vinculación a plantilla."
+        description="Incorpora trabajadores existentes como registros históricos. La migración crea solo personas: quedan pendientes de vinculación a plantilla."
         actions={canManageWorkers && (
           <Button variant="outline" onClick={() => setIndividualOpen(true)}>
             <UserPlus className="mr-2 h-4 w-4" />Migración individual
@@ -369,7 +369,7 @@ const EntitySettingsInitialImport = () => {
 
       <SiteCorpCard className="rounded-2xl">
         <h2 className="text-lg font-semibold text-slate-900">Historial de lotes</h2>
-        <p className="mb-4 text-sm text-slate-600">Los registros provienen de los Workers creados por cada lote de migración.</p>
+        <p className="mb-4 text-sm text-slate-600">Los registros provienen de los trabajadores creados por cada lote de migración.</p>
         {history.length === 0 ? <p className="text-sm text-slate-500">Todavía no hay lotes importados.</p> : <div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Lote</TableHead><TableHead>Total</TableHead><TableHead>Vinculados</TableHead><TableHead>Pendientes</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{history.map((batch) => <TableRow key={batch.batchId}><TableCell>{batch.migratedAt ? new Date(batch.migratedAt).toLocaleString("es-CU") : "—"}</TableCell><TableCell className="font-mono text-xs">{batch.batchId}</TableCell><TableCell>{batch.total}</TableCell><TableCell>{batch.linked}</TableCell><TableCell>{batch.pending}</TableCell><TableCell><Badge variant="secondary">Importado</Badge></TableCell></TableRow>)}</TableBody></Table></div>}
       </SiteCorpCard>
 
@@ -396,7 +396,7 @@ const EntitySettingsInitialImport = () => {
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Migración individual</DialogTitle>
-            <DialogDescription>Crea un Worker histórico directamente. Queda sin puesto y sin documentos; podrá vincularlo a la plantilla después.</DialogDescription>
+            <DialogDescription>Crea un trabajador histórico directamente. Queda sin puesto y sin documentos; podrá vincularlo a la plantilla después.</DialogDescription>
           </DialogHeader>
           <MigratedWorkerDialog
             onCancel={() => setIndividualOpen(false)}

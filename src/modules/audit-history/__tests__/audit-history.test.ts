@@ -16,6 +16,9 @@ import {
   selectAuditEvents,
   insertAuditEvent,
   selectAuditEntityOptions,
+  extractEntityIdFromSearch,
+  extractEntityIdFromPathname,
+  extractMutationErrorSummary,
 } from "../infrastructure/audit-history.repository"
 import { loadAuditHistory } from "../application/audit-history.queries"
 import { recordAuditEvent, exportAuditEventsToCsv } from "../application/audit-history.commands"
@@ -141,6 +144,62 @@ describe("audit-history · Repositorio y Casos de Uso", () => {
     })
 
     expect(result.events.some((e) => e.action === "worker_assigned_to_position")).toBe(true)
+  })
+
+  it("extrae entityId de parámetros PostgREST y rutas /entity/:id, y guarda el detalle de errores fallidos", async () => {
+    const entityUuid = "6926ce6d-bd88-438e-91d7-291601e1c827"
+    expect(extractEntityIdFromSearch(`?organization_entity_id=eq.${entityUuid}`)).toBe(entityUuid)
+    expect(extractEntityIdFromSearch(`?entity_id=${entityUuid}`)).toBe(entityUuid)
+    expect(extractEntityIdFromPathname(`/entity/${entityUuid}/settings/staffing`)).toBe(entityUuid)
+    expect(extractEntityIdFromPathname("/admin/history")).toBeNull()
+
+    const summary = extractMutationErrorSummary(
+      {
+        code: "42703",
+        message: 'column "company_client_id" does not exist',
+        details: "Fallo en RPC",
+        hint: "Actualiza la función",
+      },
+      400
+    )
+    expect(summary.summary).toContain('column "company_client_id" does not exist')
+    expect(summary.detail).toMatchObject({
+      http_status: 400,
+      code: "42703",
+      message: 'column "company_client_id" does not exist',
+    })
+
+    const uniqueName = `Puesto Fallido QA ${Date.now()}`
+    globalThis.__sitecorpSupabaseMutationHook?.({
+      url: `https://xvswjkpoeccgpiewptur.supabase.co/rest/v1/rpc/save_position_with_schedule?organization_entity_id=eq.${entityUuid}`,
+      method: "POST",
+      requestBody: {
+        p_entity_id: entityUuid,
+        p_name: uniqueName,
+      },
+      responseBody: {
+        code: "42703",
+        message: "Error de prueba en puesto",
+      },
+      status: 400,
+      ok: false,
+    })
+
+    await new Promise((r) => setTimeout(r, 400))
+
+    const result = await selectAuditEvents({
+      filters: { ...emptyAuditFilters(), result: "FAILURE" },
+      page: 1,
+      pageSize: 20,
+    })
+
+    const recorded = result.events.find((e) => e.record_id === uniqueName)
+    expect(recorded).toBeDefined()
+    expect(recorded?.result).toBe("FAILURE")
+    expect(recorded?.scope).toBe("ENTITY")
+    expect(recorded?.organization_entity_id).toBe(entityUuid)
+    expect(recorded?.description).toContain("Error de prueba en puesto")
+    expect((recorded?.new_values as Record<string, unknown> | null)?.error).toBeDefined()
   })
 })
 

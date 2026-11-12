@@ -107,10 +107,21 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
 
     const reconciledValidation = reconcileTemplateValidationWithCatalog(staleValidation)
     expect(reconciledValidation.ready).toBe(true)
+    expect(reconciledValidation.server_catalog_out_of_sync).toBe(true)
     expect(reconciledValidation.variables_valid).toBe(45)
     expect(reconciledValidation.variables_unknown).toBe(0)
     expect(reconciledValidation.unknown_variables).toHaveLength(0)
     expect(reconciledValidation.required_variables).toHaveLength(45)
+
+    const syncedValidation = reconcileTemplateValidationWithCatalog({
+      ...reconciledValidation,
+      checks: {
+        ...reconciledValidation.checks,
+        no_unknown_variables: true,
+        no_incompatible_variables: true,
+      },
+    })
+    expect(syncedValidation.server_catalog_out_of_sync).toBe(false)
   })
 
   it("G1 y G2: worker.full_name se acepta como alias retrocompatible en los 5 tipos y los ejemplos usan el prefijo propio de cada tipo", () => {

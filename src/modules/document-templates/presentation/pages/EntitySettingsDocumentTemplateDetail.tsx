@@ -249,7 +249,18 @@ const EntitySettingsDocumentTemplateDetail = () => {
       await reload(version.id)
     } catch (err) {
       setBusyLabel(null)
-      showError(err instanceof Error ? err.message : "No se pudo activar la versión.")
+      const rawMessage = err instanceof Error ? err.message : "No se pudo activar la versión."
+      if (
+        rawMessage.includes("registro documental") ||
+        rawMessage.includes("desconocida") ||
+        rawMessage.includes("unknown")
+      ) {
+        showError(
+          `${rawMessage} Ejecuta la migración SQL de variables documentales en Supabase y pulsa «Analizar de nuevo» en la plantilla antes de activar.`
+        )
+      } else {
+        showError(rawMessage)
+      }
     }
   }
 

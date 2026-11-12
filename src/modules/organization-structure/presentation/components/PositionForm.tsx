@@ -15,7 +15,9 @@ import {
   WEEK_DAYS,
   addDraftScheduleSegments,
   formatTime,
+  getScheduleWeeklyHoursWarning,
   normalizeScheduleTime,
+  parseNullableNumber,
   positionSaveErrorMessage,
   positionSchedulePayload,
   removeScheduleSegment,
@@ -175,6 +177,16 @@ export const PositionForm: React.FC<PositionFormProps> = ({
   }, [selectedJob, applicableScaleId, salaryValuesByGroup])
 
   const sortedSegments = React.useMemo(() => sortScheduleSegments(segments), [segments])
+
+  const weeklyHoursWarning = React.useMemo(
+    () =>
+      getScheduleWeeklyHoursWarning({
+        segments: sortedSegments,
+        weeklyHours: parseNullableNumber(weeklyHours),
+        breakMinutes: parseNullableNumber(breakMinutes),
+      }),
+    [sortedSegments, weeklyHours, breakMinutes]
+  )
 
   const toggleDraftDay = (day: number) => {
     setDraftDays(prev => (prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]))
@@ -507,6 +519,12 @@ export const PositionForm: React.FC<PositionFormProps> = ({
               </li>
             ))}
           </ul>
+        )}
+
+        {weeklyHoursWarning && (
+          <SiteCorpAlert type="warning" title="Diferencia entre horario y horas semanales">
+            {weeklyHoursWarning}
+          </SiteCorpAlert>
         )}
 
         <div className="space-y-2">

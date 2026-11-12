@@ -1,6 +1,13 @@
 import * as React from "react"
 import { useParams } from "react-router-dom"
-import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
+import {
+  ciToBirthDate,
+  isValidIdentification,
+  sanitizeIdentificationInput,
+  IDENTIFICATION_ERROR_MESSAGE,
+  IDENTIFICATION_LENGTH,
+} from "@/utils/ci"
+import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { createMigratedWorker } from "@/modules/people/application/worker-migration.commands"
 import {
   loadCandidateRegistryCatalogs,
@@ -59,15 +66,26 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
   // Al escribir la identificación, deriva la fecha de nacimiento con la lógica
   // existente de SiteCorp (nunca la inventa).
   const handleIdentification = (value: string) => {
+    const cleaned = sanitizeIdentificationInput(value)
     setForm((previous) => {
       const derivedBefore = ciToBirthDate(previous.identification)
-      const next = { ...previous, identification: value }
+      const next = { ...previous, identification: cleaned }
       if (!previous.birth_date || previous.birth_date === derivedBefore) {
-        next.birth_date = ciToBirthDate(value) || ""
+        next.birth_date = ciToBirthDate(cleaned) || ""
       }
       return next
     })
   }
+
+  const handleProvinceChange = (value: string) => {
+    const province = value === "__placeholder__" ? "" : value
+    setForm((previous) => ({ ...previous, province, municipality: "" }))
+  }
+
+  const municipalityOptions = React.useMemo(
+    () => cubaMunicipalityOptions(form.province, form.municipality),
+    [form.province, form.municipality]
+  )
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -120,10 +138,28 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
     }
   }
 
-  const field = (label: string, key: keyof typeof form, type = "text", required = false, onChange?: (value: string) => void) => <div className="space-y-1.5" key={key}>
-    <Label htmlFor={`migration-${key}`}>{label}{required ? " *" : ""}</Label>
-    <SiteCorpInput id={`migration-${key}`} type={type} value={form[key]} onChange={(event) => (onChange ? onChange(event.target.value) : set(key, event.target.value))} required={required} />
-  </div>
+  const field = (
+    label: string,
+    key: keyof typeof form,
+    type = "text",
+    required = false,
+    onChange?: (value: string) => void,
+    extraProps?: { maxLength?: number; placeholder?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"] }
+  ) => (
+    <div className="space-y-1.5" key={key}>
+      <Label htmlFor={`migration-${key}`}>{label}{required ? " *" : ""}</Label>
+      <SiteCorpInput
+        id={`migration-${key}`}
+        type={type}
+        value={form[key]}
+        onChange={(event) => (onChange ? onChange(event.target.value) : set(key, event.target.value))}
+        required={required}
+        maxLength={extraProps?.maxLength}
+        placeholder={extraProps?.placeholder}
+        inputMode={extraProps?.inputMode}
+      />
+    </div>
+  )
   const catalog = (label: string, key: "gender_id" | "marital_status_id" | "skin_color_id" | "education_level_id") => <div className="space-y-1.5" key={key}>
     <Label>{label}</Label>
     <SiteCorpSelect value={form[key] || undefined} onValueChange={(value) => set(key, value === "__placeholder__" ? "" : value)}>
@@ -135,22 +171,57 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
   return <form className="space-y-5" onSubmit={submit}>
     {error && <SiteCorpAlert type="danger">{error}</SiteCorpAlert>}
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {field("Identificación", "identification", "text", true, handleIdentification)}{field("Nombre", "first_name", "text", true)}{field("Primer apellido", "first_surname", "text", true)}
-      {field("Segundo apellido", "second_surname")}{field("Fecha de nacimiento", "birth_date", "date")}{catalog("Sexo", "gender_id")}
-      {catalog("Estado civil", "marital_status_id")}{catalog("Color de piel", "skin_color_id")}{field("Teléfono", "phone")}
-      {field("Correo", "email", "email")}{field("Dirección", "address")}{field("Provincia", "province")}
-      {field("Municipio", "municipality")}
+      {field("Identificación", "identification", "text", true, handleIdentification, {
+        maxLength: IDENTIFICATION_LENGTH,
+        placeholder: "11 dígitos",
+        inputMode: "numeric",
+      })}
+      {field("Nombre", "first_name", "text", true)}
+      {field("Primer apellido", "first_surname", "text", true)}
+      {field("Segundo apellido", "second_surname")}
+      {field("Fecha de nacimiento", "birth_date", "date")}
+      {catalog("Sexo", "gender_id")}
+      {catalog("Estado civil", "marital_status_id")}
+      {catalog("Color de piel", "skin_color_id")}
+      {field("Teléfono", "phone", "tel", false, undefined, { placeholder: "+53 5 123 4567" })}
+      {field("Correo", "email", "email")}
+      {field("Dirección", "address")}
+      <div className="space-y-1.5" key="province">
+        <Label>Provincia</Label>
+        <SiteCorpSelect value={form.province || undefined} onValueChange={handleProvinceChange}>
+          <SelectItem value="__placeholder__">Sin especificar</SelectItem>
+          {CUBA_PROVINCES_FULL.map((prov) => (
+            <SelectItem key={prov} value={prov}>{prov}</SelectItem>
+          ))}
+        </SiteCorpSelect>
+      </div>
+      <div className="space-y-1.5" key="municipality">
+        <Label>Municipio</Label>
+        <SiteCorpSelect
+          value={form.municipality || undefined}
+          onValueChange={(value) => set("municipality", value === "__placeholder__" ? "" : value)}
+          disabled={!form.province}
+        >
+          <SelectItem value="__placeholder__">Sin especificar</SelectItem>
+          {municipalityOptions.map((muni) => (
+            <SelectItem key={muni} value={muni}>{muni}</SelectItem>
+          ))}
+        </SiteCorpSelect>
+      </div>
       <div className="space-y-1.5" key="employment_start_date">
         <Label htmlFor="migration-employment_start_date">Fecha de incorporación *</Label>
         <SiteCorpInput id="migration-employment_start_date" type="date" value={form.employment_start_date} required onChange={(event) => set("employment_start_date", event.target.value)} />
         <p className="text-xs text-slate-500">Fecha en la que el trabajador comenzó a trabajar en la entidad.</p>
       </div>
-      {catalog("Nivel educacional", "education_level_id")}{field("Especialidad", "specialty")}{field("Profesión u oficio", "profession_or_trade")}
+      {catalog("Nivel educacional", "education_level_id")}
+      {field("Especialidad", "specialty")}
+      {field("Profesión u oficio", "profession_or_trade")}
     </div>
     <p className="-mt-1 text-xs text-slate-600">La fecha de nacimiento se deriva del carné de identidad cuando es posible; puede completarla manualmente si no se deriva.</p>
-    <div className="space-y-2"><Label>Licencias de conducción</Label><DrivingLicenseSelector categories={licenseCategories} value={licenseIds} onChange={setLicenseIds} disabled={busy} /></div>
+    <DrivingLicenseSelector categories={licenseCategories} value={licenseIds} onChange={setLicenseIds} disabled={busy} />
     <div className="grid gap-3 sm:grid-cols-3">
-      {field("Saldo inicial vacaciones (opcional)", "initial_vacation_balance", "text")}{field("Fecha corte vacaciones", "vacation_cutoff_date", "date")}
+      {field("Saldo inicial vacaciones (opcional)", "initial_vacation_balance", "text")}
+      {field("Fecha corte vacaciones", "vacation_cutoff_date", "date")}
     </div>
     <p className="text-xs text-slate-600">El trabajador se crea sin puesto y sin documentos. Podrá vincularlo a la plantilla posteriormente desde su ficha.</p>
     <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={onCancel} disabled={busy}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Creando…" : "Crear trabajador"}</Button></div>

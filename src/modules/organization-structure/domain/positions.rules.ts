@@ -208,9 +208,105 @@ export function validatePositionInput(input: {
   }
 }
 
-/** Mensaje de error del guardado del puesto (conflicto de código único). */
+export interface ScheduledWeeklyHoursSummary {
+  grossHours: number
+  effectiveHours: number
+  segmentCount: number
+}
+
+function timeToMinutes(time: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})/.exec(time.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+  return hours * 60 + minutes
+}
+
+function roundHours(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/**
+ * Calcula las horas semanales brutas y efectivas (descontando el descanso por tramo cuando aplica)
+ * a partir de los segmentos del horario habitual. Soporta turnos que cruzan medianoche.
+ */
+export function calculateScheduledWeeklyHours(
+  segments: Pick<PositionScheduleSegment, "start_time" | "end_time">[],
+  breakMinutes: number | null = 0
+): ScheduledWeeklyHoursSummary {
+  const safeBreak = breakMinutes && breakMinutes > 0 ? breakMinutes : 0
+  let grossMinutes = 0
+  let effectiveMinutes = 0
+
+  for (const segment of segments) {
+    const start = timeToMinutes(segment.start_time)
+    const end = timeToMinutes(segment.end_time)
+    if (start === null || end === null || start === end) continue
+    const duration = end > start ? end - start : 24 * 60 - start + end
+    grossMinutes += duration
+    effectiveMinutes += safeBreak > 0 && duration > safeBreak ? duration - safeBreak : duration
+  }
+
+  return {
+    grossHours: roundHours(grossMinutes / 60),
+    effectiveHours: roundHours(effectiveMinutes / 60),
+    segmentCount: segments.length,
+  }
+}
+
+/**
+ * Devuelve un aviso informativo (no bloqueante) cuando las horas semanales declaradas no coinciden
+ * con el total de horas del horario habitual configurado.
+ */
+export function getScheduleWeeklyHoursWarning(input: {
+  segments: Pick<PositionScheduleSegment, "start_time" | "end_time">[]
+  weeklyHours: number | null
+  breakMinutes: number | null
+}): string | null {
+  if (
+    input.segments.length === 0 ||
+    input.weeklyHours === null ||
+    Number.isNaN(input.weeklyHours) ||
+    input.weeklyHours <= 0
+  ) {
+    return null
+  }
+
+  const summary = calculateScheduledWeeklyHours(input.segments, input.breakMinutes)
+  const tolerance = 0.05
+  if (
+    Math.abs(summary.effectiveHours - input.weeklyHours) <= tolerance ||
+    Math.abs(summary.grossHours - input.weeklyHours) <= tolerance
+  ) {
+    return null
+  }
+
+  const hasBreakDifference = Math.abs(summary.grossHours - summary.effectiveHours) > tolerance
+  const scheduleLabel = hasBreakDifference
+    ? `${summary.effectiveHours} h efectivas (${summary.grossHours} h brutas)`
+    : `${summary.effectiveHours} h`
+
+  return `Las horas semanales declaradas (${input.weeklyHours} h) no coinciden con la suma del horario habitual (${scheduleLabel} en ${summary.segmentCount} tramo(s)). Verifica si corresponde a sábados alternos u otra distribución.`
+}
+
+/** Mensaje de error del guardado del puesto (conflicto de código único o detalle de BD). */
 export function positionSaveErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : "Error al guardar el puesto"
+  let message = ""
+  if (error instanceof Error) {
+    message = error.message
+  } else if (error && typeof error === "object") {
+    const record = error as { message?: unknown; details?: unknown; hint?: unknown }
+    const parts = [record.message, record.details, record.hint]
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    message = parts.join(" — ")
+  } else if (typeof error === "string") {
+    message = error
+  }
+
+  if (!message.trim()) {
+    return "Error al guardar el puesto"
+  }
   if (
     message.includes("organization_positions_entity_code_unique") ||
     message.includes("organization_positions_job_id_code_unique")

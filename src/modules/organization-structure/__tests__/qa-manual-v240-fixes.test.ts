@@ -7,6 +7,11 @@ import {
   tenureFormToValues,
   validateTenureScaleContinuity,
 } from "../domain/tenure-scale.rules"
+import {
+  calculateScheduledWeeklyHours,
+  getScheduleWeeklyHoursWarning,
+  positionSaveErrorMessage,
+} from "../domain/positions.rules"
 import type { OrganizationArea, OccupationalCategory, TenureScaleRange } from "../domain/entities"
 
 describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad", () => {
@@ -180,6 +185,50 @@ describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad",
         amount: "-100",
       })
       expect(negative.error).toContain("importe")
+    })
+  })
+
+  describe("Ronda 2 — Puestos: detalle de error PostgREST y aviso por diferencia de horas semanales", () => {
+    it("extrae message, details y hint de errores planos devueltos por PostgREST", () => {
+      const msg = positionSaveErrorMessage({
+        message: 'column "company_client_id" of relation "organization_positions" does not exist',
+        details: "Fallo en save_position_with_schedule",
+        hint: "Revisa la migración SQL",
+      })
+      expect(msg).toContain("company_client_id")
+      expect(msg).toContain("Fallo en save_position_with_schedule")
+      expect(msg).toContain("Revisa la migración SQL")
+    })
+
+    it("calcula horas brutas y efectivas (incluidos turnos nocturnos) y advierte si difieren de las declaradas", () => {
+      const segments5x8Effective = [1, 2, 3, 4, 5].map(() => ({
+        start_time: "08:00",
+        end_time: "16:30",
+      }))
+      const summary = calculateScheduledWeeklyHours(segments5x8Effective, 30)
+      expect(summary.grossHours).toBe(42.5)
+      expect(summary.effectiveHours).toBe(40)
+
+      const warning = getScheduleWeeklyHoursWarning({
+        segments: segments5x8Effective,
+        weeklyHours: 44,
+        breakMinutes: 30,
+      })
+      expect(warning).toContain("44 h")
+      expect(warning).toContain("40 h efectivas")
+
+      const noWarning = getScheduleWeeklyHoursWarning({
+        segments: segments5x8Effective,
+        weeklyHours: 40,
+        breakMinutes: 30,
+      })
+      expect(noWarning).toBeNull()
+
+      const overnight = calculateScheduledWeeklyHours(
+        [{ start_time: "20:00", end_time: "04:00" }],
+        0
+      )
+      expect(overnight.effectiveHours).toBe(8)
     })
   })
 })

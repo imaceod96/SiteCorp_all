@@ -228,6 +228,8 @@ export interface TemplateValidation {
   malformed_placeholders: TemplateMalformed[]
   warnings: string[]
   analysis: DocumentTemplateAnalysis | null
+  /** Indica que el análisis en BD reportó variables válidas del catálogo actual antes de sincronizar la BD. */
+  server_catalog_out_of_sync?: boolean
 }
 
 /** Datos de entrada del alta de una plantilla (su versión 1 nace en borrador). */

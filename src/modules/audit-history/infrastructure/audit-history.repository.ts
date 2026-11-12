@@ -1111,6 +1111,81 @@ function asObject(val: unknown): Record<string, unknown> | null {
   return null
 }
 
+function extractUuidParamValue(raw: string | null): string | null {
+  if (!raw) return null
+  const normalized = raw.startsWith("eq.") ? raw.slice(3) : raw
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)
+    ? normalized
+    : null
+}
+
+export function extractEntityIdFromSearch(search: string): string | null {
+  try {
+    const params = new URLSearchParams(search)
+    return (
+      extractUuidParamValue(params.get("organization_entity_id")) ||
+      extractUuidParamValue(params.get("entity_id"))
+    )
+  } catch {
+    return null
+  }
+}
+
+export function extractEntityIdFromPathname(pathname: string): string | null {
+  const match = /\/entity\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i.exec(
+    pathname
+  )
+  return match ? match[1] : null
+}
+
+function currentWindowEntityId(): string | null {
+  if (typeof window === "undefined" || !window.location?.pathname) return null
+  return extractEntityIdFromPathname(window.location.pathname)
+}
+
+export function extractMutationErrorSummary(
+  responseBody: unknown,
+  status: number
+): { summary: string; detail: Record<string, unknown> } {
+  const resObj = asObject(responseBody)
+  if (resObj) {
+    const message =
+      (typeof resObj.message === "string" && resObj.message) ||
+      (typeof resObj.error_description === "string" && resObj.error_description) ||
+      (typeof resObj.error === "string" && resObj.error) ||
+      (typeof resObj.msg === "string" && resObj.msg) ||
+      ""
+    const details = typeof resObj.details === "string" ? resObj.details : ""
+    const hint = typeof resObj.hint === "string" ? resObj.hint : ""
+    const code = typeof resObj.code === "string" || typeof resObj.code === "number" ? String(resObj.code) : ""
+    const parts = [message, details, hint].filter((v) => v.trim().length > 0)
+    const summary = parts.length > 0 ? parts.join(" · ") : `Error HTTP ${status}`
+    return {
+      summary,
+      detail: {
+        http_status: status,
+        ...(code ? { code } : {}),
+        ...(message ? { message } : {}),
+        ...(details ? { details } : {}),
+        ...(hint ? { hint } : {}),
+        raw: resObj,
+      },
+    }
+  }
+
+  if (typeof responseBody === "string" && responseBody.trim().length > 0) {
+    return {
+      summary: responseBody.trim(),
+      detail: { http_status: status, message: responseBody.trim() },
+    }
+  }
+
+  return {
+    summary: `Error HTTP ${status}`,
+    detail: { http_status: status, message: `Error HTTP ${status}` },
+  }
+}
+
 async function handleInterceptedMutation(payload: SupabaseMutationInterceptPayload): Promise<void> {
   try {
     const parsedUrl = new URL(payload.url, "https://xvswjkpoeccgpiewptur.supabase.co")
@@ -1118,13 +1193,14 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
     const reqObj = asObject(payload.requestBody)
     const resObj = asObject(payload.responseBody)
     const resultStatus = payload.ok ? "SUCCESS" : payload.status === 401 || payload.status === 403 ? "DENIED" : "FAILURE"
+    const errorInfo = payload.ok ? null : extractMutationErrorSummary(payload.responseBody, payload.status)
 
     // 1. Llamadas RPC (/rest/v1/rpc/<rpc_name>)
     if (pathname.includes("/rest/v1/rpc/")) {
       const rpcName = pathname.split("/rest/v1/rpc/")[1]?.split("/")[0] || ""
       if (!rpcName || isReadOnlyRpc(rpcName)) return
 
-      const sig = `rpc:${rpcName}:${JSON.stringify(reqObj || {})}`
+      const sig = `rpc:${rpcName}:${payload.status}:${JSON.stringify(reqObj || {})}`
       if (isDuplicateIntercept(sig)) return
 
       const actor = await resolveCurrentActor()
@@ -1143,7 +1219,9 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         (reqObj?.p_entity_id as string | undefined) ||
         (reqObj?.p_organization_entity_id as string | undefined) ||
         (reqObj?.organization_entity_id as string | undefined) ||
+        (reqObj?.entity_id as string | undefined) ||
         (resObj?.organization_entity_id as string | undefined) ||
+        extractEntityIdFromSearch(parsedUrl.search) ||
         null
 
       const [workerInfo, posInfo] = await Promise.all([
@@ -1152,7 +1230,7 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
       ])
 
       if (!entityId) {
-        entityId = posInfo?.entityId || workerInfo?.entityId || null
+        entityId = posInfo?.entityId || workerInfo?.entityId || currentWindowEntityId() || null
       }
       const entityName = await resolveEntityName(entityId)
 
@@ -1269,12 +1347,16 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         module = "documents"
         action = rpcName
         entityType = "document_template"
-        description = `Configuración de plantilla documental (${rpcName})`
+        description = `Configuración de plantilla documental (${rpcName})${entityName ? ` en ${entityName}` : ""}`
       } else if (rpcName.includes("contract_data")) {
         module = "entity_settings"
         action = "entity_contract_data_saved"
         entityType = "entity_contract_data"
         description = `Actualización de datos contractuales${entityName ? ` de ${entityName}` : ""}`
+      }
+
+      if (errorInfo) {
+        description = `${description} — Error: ${errorInfo.summary}`
       }
 
       await insertAuditEvent({
@@ -1291,7 +1373,9 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         record_id: String(recordId),
         description,
         old_values: null,
-        new_values: reqObj || resObj || null,
+        new_values: errorInfo
+          ? { error: errorInfo.detail, request: reqObj || null }
+          : reqObj || resObj || null,
         result: resultStatus,
       })
       return
@@ -1300,28 +1384,38 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
     // 2. Edge Functions (/functions/v1/<fn_name>)
     if (pathname.includes("/functions/v1/")) {
       const fnName = pathname.split("/functions/v1/")[1]?.split("/")[0] || "edge_function"
-      const sig = `fn:${fnName}:${JSON.stringify(reqObj || {})}`
+      const sig = `fn:${fnName}:${payload.status}:${JSON.stringify(reqObj || {})}`
       if (isDuplicateIntercept(sig)) return
 
       const actor = await resolveCurrentActor()
+      const fnEntityId =
+        (reqObj?.entity_id as string | undefined) ||
+        (reqObj?.organization_entity_id as string | undefined) ||
+        currentWindowEntityId() ||
+        null
+      const fnEntityName = fnEntityId ? await resolveEntityName(fnEntityId) : "SiteCorp Global"
+      const baseDescription = `Ejecución de servicio "${fnName}"${reqObj?.full_name ? ` para ${String(reqObj.full_name)}` : ""}`
       await insertAuditEvent({
         actor_user_id: actor.userId,
         actor_full_name: actor.fullName,
         actor_username: actor.username,
-        scope: "SITECORP",
-        organization_entity_id: null,
-        entity_name: "SiteCorp Global",
+        scope: fnEntityId ? "ENTITY" : "SITECORP",
+        organization_entity_id: fnEntityId,
+        entity_name: fnEntityName,
         company_client_id: null,
-        module: "users",
+        module: fnName.includes("template") ? "documents" : "users",
         action: fnName.replace(/-/g, "_"),
-        entity_type: "user_account",
+        entity_type: fnName.includes("template") ? "document_template" : "user_account",
         record_id:
           (reqObj?.username as string | undefined) ||
           (reqObj?.email as string | undefined) ||
+          (reqObj?.version_id as string | undefined) ||
           fnName,
-        description: `Ejecución de servicio "${fnName}"${reqObj?.full_name ? ` para ${String(reqObj.full_name)}` : ""}`,
+        description: errorInfo ? `${baseDescription} — Error: ${errorInfo.summary}` : baseDescription,
         old_values: null,
-        new_values: reqObj || null,
+        new_values: errorInfo
+          ? { error: errorInfo.detail, request: reqObj || null }
+          : reqObj || null,
         result: resultStatus,
       })
       return
@@ -1332,18 +1426,24 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
       const table = pathname.split("/rest/v1/")[1]?.split("/")[0] || ""
       if (!table || table === "audit_events" || table === "rpc") return
 
-      const sig = `table:${payload.method}:${table}:${parsedUrl.search}:${JSON.stringify(reqObj || {})}`
+      const sig = `table:${payload.method}:${table}:${parsedUrl.search}:${payload.status}:${JSON.stringify(reqObj || {})}`
       if (isDuplicateIntercept(sig)) return
 
       const mapping = TABLE_TO_MODULE[table] || { module: "system", label: table }
       const actor = await resolveCurrentActor()
-      const dataObj = resObj || reqObj || {}
+      const dataObj = (payload.ok ? resObj : reqObj) || reqObj || resObj || {}
+      const queryRecordId = extractUuidParamValue(parsedUrl.searchParams.get("id"))
 
       const workerId = (dataObj.worker_id as string | undefined) || null
       const positionId = (dataObj.position_id as string | undefined) || null
       let entityId =
         (dataObj.organization_entity_id as string | undefined) ||
-        (table === "organization_entities" ? (dataObj.id as string | undefined) : null) ||
+        (reqObj?.organization_entity_id as string | undefined) ||
+        (resObj?.organization_entity_id as string | undefined) ||
+        (table === "organization_entities"
+          ? (dataObj.id as string | undefined) || queryRecordId
+          : null) ||
+        extractEntityIdFromSearch(parsedUrl.search) ||
         null
 
       const [workerInfo, posInfo] = await Promise.all([
@@ -1352,7 +1452,7 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
       ])
 
       if (!entityId) {
-        entityId = posInfo?.entityId || workerInfo?.entityId || null
+        entityId = posInfo?.entityId || workerInfo?.entityId || currentWindowEntityId() || null
       }
       const entityName =
         (table === "organization_entities" ? (dataObj.name as string | undefined) : null) ||
@@ -1386,6 +1486,7 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         (dataObj.code as string | undefined) ||
         (dataObj.identification as string | undefined) ||
         (dataObj.id as string | undefined) ||
+        queryRecordId ||
         itemName ||
         table
 
@@ -1398,6 +1499,10 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
       } else if (table === "organization_entities") {
         action = payload.method === "POST" ? "entity_created" : "entity_updated"
         description = `${verbLabel} de la entidad "${itemName || entityName || recordId}"`
+      }
+
+      if (errorInfo) {
+        description = `${description} — Error: ${errorInfo.summary}`
       }
 
       await insertAuditEvent({
@@ -1414,7 +1519,9 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         record_id: String(recordId),
         description,
         old_values: null,
-        new_values: reqObj || resObj || null,
+        new_values: errorInfo
+          ? { error: errorInfo.detail, request: reqObj || null }
+          : reqObj || resObj || null,
         result: resultStatus,
       })
     }
