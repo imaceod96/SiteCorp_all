@@ -35,6 +35,7 @@ import {
   EMPTY_TENURE_FORM,
   createTenureScaleRange,
   deleteTenureScaleRange,
+  formatTenureMonths,
   formatTenureRange,
   loadTenureScaleRanges,
   tenureRangeToForm,
@@ -42,6 +43,7 @@ import {
   type TenureScaleFormValues,
   type TenureScaleRange,
 } from "@/modules/organization-structure"
+import { showSuccess, showError } from "@/utils/toast"
 
 /**
  * Escala de pago de antigüedad de UNA entidad.
@@ -63,35 +65,47 @@ const EntitySettingsTenureScale = () => {
   const [formDialogOpen, setFormDialogOpen] = React.useState(false)
   const [formMode, setFormMode] = React.useState<"create" | "edit">("create")
   const [formData, setFormData] = React.useState<TenureScaleFormValues>(EMPTY_TENURE_FORM)
+  const [formError, setFormError] = React.useState<string | null>(null)
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
+  const [deletingRange, setDeletingRange] = React.useState<TenureScaleRange | null>(null)
+  const [deleting, setDeleting] = React.useState(false)
 
-  const loadRanges = React.useCallback(async () => {
+  const loadRanges = React.useCallback(async (silent = false) => {
     if (!entityId) return
 
-    setLoading(true)
-    setError(null)
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
 
     try {
       const data = await loadTenureScaleRanges(entityId)
       setRanges(data)
     } catch (err) {
       console.error("Error loading tenure scales:", err)
-      setError(
+      const msg =
         err instanceof Error ? err.message : "Error al cargar los tramos de escala"
-      )
+      if (silent) {
+        showError(msg)
+      } else {
+        setError(msg)
+      }
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [entityId])
 
   React.useEffect(() => {
-    loadRanges()
+    loadRanges(false)
   }, [loadRanges])
 
   const handleOpenCreateForm = () => {
     setFormMode("create")
     setFormData(EMPTY_TENURE_FORM)
+    setFormError(null)
     setEditingId(null)
     setFormDialogOpen(true)
   }
@@ -99,12 +113,14 @@ const EntitySettingsTenureScale = () => {
   const handleOpenEditForm = (range: TenureScaleRange) => {
     setFormMode("edit")
     setFormData(tenureRangeToForm(range))
+    setFormError(null)
     setEditingId(range.id)
     setFormDialogOpen(true)
   }
 
   const handleCloseForm = () => {
     setFormDialogOpen(false)
+    setFormError(null)
     setEditingId(null)
   }
 
@@ -112,20 +128,24 @@ const EntitySettingsTenureScale = () => {
     e.preventDefault()
     if (!entityId) return
 
+    setFormError(null)
     setSubmitting(true)
     try {
       if (formMode === "create") {
-        await createTenureScaleRange(entityId, formData)
+        await createTenureScaleRange(entityId, formData, ranges)
+        showSuccess("Tramo de antigüedad creado correctamente.")
       } else {
         if (!editingId) throw new Error("ID de edición no disponible")
-        await updateTenureScaleRangeById(editingId, formData)
+        await updateTenureScaleRangeById(editingId, formData, ranges)
+        showSuccess("Tramo de antigüedad actualizado correctamente.")
       }
 
       setFormDialogOpen(false)
-      await loadRanges()
+      setFormError(null)
+      await loadRanges(true)
     } catch (err) {
       console.error("Error saving tenure scale:", err)
-      setError(
+      setFormError(
         err instanceof Error
           ? err.message
           : "Error al guardar el tramo de escala salarial"
@@ -135,19 +155,23 @@ const EntitySettingsTenureScale = () => {
     }
   }
 
-  const handleDeleteRange = async (id: string) => {
-    if (!window.confirm("¿Está seguro de eliminar este tramo?")) return
-
+  const handleConfirmDeleteRange = async () => {
+    if (!deletingRange) return
+    setDeleting(true)
     try {
-      await deleteTenureScaleRange(id)
-      await loadRanges()
+      await deleteTenureScaleRange(deletingRange.id)
+      showSuccess("Tramo de antigüedad eliminado.")
+      setDeletingRange(null)
+      await loadRanges(true)
     } catch (err) {
       console.error("Error deleting tenure scale:", err)
-      setError(
+      showError(
         err instanceof Error
           ? err.message
           : "Error al eliminar el tramo de escala salarial"
       )
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -216,14 +240,14 @@ const EntitySettingsTenureScale = () => {
               <tbody className="divide-y">
                 {ranges.map((range) => (
                   <tr key={range.id} className="hover:bg-muted">
-                    <td className="px-4 py-3">{formatTenureRange(range)}</td>
+                    <td className="px-4 py-3">{formatTenureMonths(range.from_months)}</td>
                     <td className="px-4 py-3">
                       {range.to_months === null ? (
                         <span className="font-medium text-sitecorp-primary">
                           Sin límite
                         </span>
                       ) : (
-                        formatTenureRange(range)
+                        formatTenureMonths(range.to_months)
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -231,23 +255,25 @@ const EntitySettingsTenureScale = () => {
                         minimumFractionDigits: 2,
                       })} CUP
                     </td>
-                    <td className="px-4 py-3 space-x-2">
-                      <SiteCorpButton
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEditForm(range)}
-                        className="flex items-center gap-1"
-                      >
-                        <Pencil className="h-3 w-3" /> Editar
-                      </SiteCorpButton>
-                      <SiteCorpButton
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeleteRange(range.id)}
-                        className="flex items-center gap-1 text-sitecorp-danger"
-                      >
-                        <Trash2 className="h-3 w-3" /> Eliminar
-                      </SiteCorpButton>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <SiteCorpButton
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenEditForm(range)}
+                          className="flex items-center gap-1"
+                        >
+                          <Pencil className="h-3 w-3" /> Editar
+                        </SiteCorpButton>
+                        <SiteCorpButton
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDeletingRange(range)}
+                          className="flex items-center gap-1 text-sitecorp-danger"
+                        >
+                          <Trash2 className="h-3 w-3" /> Eliminar
+                        </SiteCorpButton>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -273,18 +299,23 @@ const EntitySettingsTenureScale = () => {
       )}
 
       <Dialog
-              open={formDialogOpen}
-              onOpenChange={setFormDialogOpen}
-            >
+        open={formDialogOpen}
+        onOpenChange={(open) => {
+          setFormDialogOpen(open)
+          if (!open) setFormError(null)
+        }}
+      >
         <DialogContent className="p-6 space-y-4">
           <DialogHeader>
             <DialogTitle>
               {formMode === "create" ? "Nuevo tramo" : "Editar tramo"}
             </DialogTitle>
             <DialogDescription>
-              Configure un nuevo tramo de antigüedad para esta entidad.
+              Configure un tramo continuo de antigüedad para esta entidad (por ejemplo: 1 a 5 años, 5 a 10 años, 10 años Sin límite).
             </DialogDescription>
           </DialogHeader>
+
+          {formError && <SiteCorpAlert type="danger">{formError}</SiteCorpAlert>}
 
           <form onSubmit={handleFormSubmit} className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -296,24 +327,26 @@ const EntitySettingsTenureScale = () => {
                     min="0"
                     step="0.01"
                     value={formData.from_amount}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setFormError(null)
                       setFormData((d) => ({ ...d, from_amount: e.target.value }))
-                    }
+                    }}
                     placeholder="0"
                     required
                   />
                   <SiteCorpSelect
-                                      value={formData.from_unit}
-                                      onValueChange={(v) =>
-                                        setFormData((d) => ({ ...d, from_unit: v as "Meses" | "Años" }))
-                                      }
-                                    >
+                    value={formData.from_unit}
+                    onValueChange={(v) => {
+                      setFormError(null)
+                      setFormData((d) => ({ ...d, from_unit: v as "Meses" | "Años" }))
+                    }}
+                  >
                     <option value="Meses">Meses</option>
                     <option value="Años">Años</option>
                   </SiteCorpSelect>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Ejemplo: 1 Meses o 1 Años
+                  Para tramos consecutivos, use el mismo límite anterior (ej. 5 Años).
                 </p>
               </div>
 
@@ -325,39 +358,41 @@ const EntitySettingsTenureScale = () => {
                     min="0"
                     step="0.01"
                     value={formData.to_amount}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      setFormError(null)
                       setFormData((d) => ({ ...d, to_amount: e.target.value }))
-                    }
+                    }}
                     placeholder="0"
                     disabled={formData.to_limit}
                   />
                   <SiteCorpSelect
-                                      value={formData.to_unit}
-                                      onValueChange={(v) =>
-                                        setFormData((d) => ({ ...d, to_unit: v as "Meses" | "Años" }))
-                                      }
-                                      disabled={formData.to_limit}
-                                    >
+                    value={formData.to_unit}
+                    onValueChange={(v) => {
+                      setFormError(null)
+                      setFormData((d) => ({ ...d, to_unit: v as "Meses" | "Años" }))
+                    }}
+                    disabled={formData.to_limit}
+                  >
                     <option value="Meses">Meses</option>
                     <option value="Años">Años</option>
                   </SiteCorpSelect>
                   <SiteCorpCheckbox
-                                      label="Sin límite"
-                                      checked={formData.to_limit}
-                                      onCheckedChange={(checked) =>
-                                        setFormData((d) => ({
-                                          ...d,
-                                          to_limit: !!checked,
-                                          to_amount: checked ? "" : formData.to_amount,
-                                          to_unit: checked ? "Meses" : formData.to_unit,
-                                        }))
-                                      }
-                                      disabled={false}
-                                    />
+                    label="Sin límite"
+                    checked={formData.to_limit}
+                    onCheckedChange={(checked) => {
+                      setFormError(null)
+                      setFormData((d) => ({
+                        ...d,
+                        to_limit: !!checked,
+                        to_amount: checked ? "" : formData.to_amount,
+                        to_unit: checked ? "Meses" : formData.to_unit,
+                      }))
+                    }}
+                    disabled={false}
+                  />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Deje el campo cantidad vacío o marque "Sin límite" para el
-                  último tramo
+                  Marque "Sin límite" únicamente en el último tramo de la escala
                 </p>
               </div>
             </div>
@@ -369,9 +404,10 @@ const EntitySettingsTenureScale = () => {
                 min="0"
                 step="0.01"
                 value={formData.amount}
-                onChange={(e) =>
+                onChange={(e) => {
+                  setFormError(null)
                   setFormData((d) => ({ ...d, amount: e.target.value }))
-                }
+                }}
                 placeholder="0.00"
                 required
               />
@@ -395,7 +431,7 @@ const EntitySettingsTenureScale = () => {
               >
                 {submitting ? (
                   <>
-                    <Loader2 className="mr-2 h-3 w-3" />
+                    <Loader2 className="mr-2 h-3 w-3 animate-spin" />
                     Guardando...
                   </>
                 ) : formMode === "create" ? (
@@ -406,6 +442,42 @@ const EntitySettingsTenureScale = () => {
               </SiteCorpButton>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deletingRange)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeletingRange(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Eliminar tramo de antigüedad</DialogTitle>
+            <DialogDescription>
+              {deletingRange
+                ? `¿Está seguro de desactivar el tramo "${formatTenureRange(deletingRange)}" (${deletingRange.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} CUP)?`
+                : "¿Está seguro de eliminar este tramo?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-end gap-2">
+            <SiteCorpButton
+              variant="outline"
+              type="button"
+              disabled={deleting}
+              onClick={() => setDeletingRange(null)}
+            >
+              Cancelar
+            </SiteCorpButton>
+            <SiteCorpButton
+              variant="destructive"
+              type="button"
+              disabled={deleting}
+              onClick={handleConfirmDeleteRange}
+            >
+              {deleting ? "Eliminando..." : "Eliminar"}
+            </SiteCorpButton>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

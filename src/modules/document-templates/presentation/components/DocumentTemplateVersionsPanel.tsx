@@ -1,6 +1,9 @@
 import * as React from "react"
 import { templateVersionPeriodLabel } from "@/modules/document-templates/domain/rules"
-import type { DocumentTemplateVersion } from "@/modules/document-templates/domain/entities"
+import type {
+  DocumentTemplateVersion,
+  TemplateValidation,
+} from "@/modules/document-templates/domain/entities"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
@@ -19,6 +22,7 @@ import { CheckCircle2, Eye, FilePlus2, Power, PowerOff } from "lucide-react"
 interface Props {
   versions: DocumentTemplateVersion[]
   selectedVersionId: string | null
+  validation?: TemplateValidation | null
   canManage: boolean
   busy: boolean
   onSelect: (versionId: string) => void
@@ -46,6 +50,7 @@ const statusBadge = (status: DocumentTemplateVersion["status"]) => {
 const DocumentTemplateVersionsPanel = ({
   versions,
   selectedVersionId,
+  validation,
   canManage,
   busy,
   onSelect,
@@ -113,7 +118,23 @@ const DocumentTemplateVersionsPanel = ({
                       Ver
                     </SiteCorpButton>
                     {canManage && version.status !== "ACTIVE" && (
-                      <SiteCorpButton size="sm" disabled={busy} onClick={() => onActivate(version)}>
+                      <SiteCorpButton
+                        size="sm"
+                        disabled={
+                          busy ||
+                          !version.configured_file_path ||
+                          Boolean(version.analysis_issue) ||
+                          (selected && validation !== null && validation !== undefined && !validation.ready)
+                        }
+                        title={
+                          !version.configured_file_path
+                            ? "Debe cargar y analizar el documento configurado antes de activar la versión."
+                            : selected && validation && !validation.ready
+                              ? validation.errors[0] || "Corrija las observaciones de validación antes de activar."
+                              : undefined
+                        }
+                        onClick={() => onActivate(version)}
+                      >
                         <Power className="mr-1 h-3.5 w-3.5" />
                         Activar
                       </SiteCorpButton>

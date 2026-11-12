@@ -2,6 +2,7 @@ import * as React from "react"
 import { formatDocumentDate } from "@/modules/document-templates/domain/document-variables"
 import {
   formatTemplateFileSize,
+  TEMPLATE_TYPE_USES_XLSX,
   templateAcceptForType,
   templateFileFormatLabel,
   templateVersionPeriodLabel,
@@ -40,6 +41,7 @@ const DocumentTemplateFilesPanel = ({ version, canManage, busy, onUpload, onRean
 
   const isDraft = version.status === "DRAFT"
   const effectivePath = version.configured_file_path || version.original_file_path
+  const usesXlsx = TEMPLATE_TYPE_USES_XLSX(version.document_type_code)
 
   const handleDownload = async (path: string | null) => {
     if (!path) return
@@ -82,7 +84,7 @@ const DocumentTemplateFilesPanel = ({ version, canManage, busy, onUpload, onRean
           </div>
           {path ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {name || "documento Word"} · {formatTemplateFileSize(size)} · cargado el{" "}
+              {name || (usesXlsx ? "plantilla Excel" : "documento Word")} · {formatTemplateFileSize(size)} · cargado el{" "}
               {formatDocumentDate(uploadedAt) || "—"}
             </p>
           ) : (
@@ -160,7 +162,8 @@ const DocumentTemplateFilesPanel = ({ version, canManage, busy, onUpload, onRean
             <p>{version.analysis_issue}</p>
             <p className="mt-1 text-xs">
               El original se conserva intacto. Mientras no exista un documento analizable, la
-              plantilla no puede activarse: puede reemplazar el archivo por su versión .docx.
+              plantilla no puede activarse: puede reemplazar el archivo por su versión{" "}
+              {usesXlsx ? ".xlsx" : ".docx"}.
             </p>
           </SiteCorpAlert>
         )}

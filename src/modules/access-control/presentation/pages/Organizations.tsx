@@ -128,6 +128,10 @@ const Organizations = () => {
   const [entityDefaultType, setEntityDefaultType] = React.useState<
     OrganizationEntity["entity_type"]
   >("business_group")
+  const [entityDefaultRegime, setEntityDefaultRegime] = React.useState<
+    OrganizationEntity["regime_id"]
+  >("PRESUPUESTADA")
+  const [entityLockType, setEntityLockType] = React.useState(false)
 
   const [usersEntity, setUsersEntity] = React.useState<OrganizationEntity | null>(null)
   const [deleteEntity, setDeleteEntity] = React.useState<OrganizationEntity | null>(null)
@@ -293,6 +297,8 @@ const Organizations = () => {
     setEntityDefaultCompanyClient(companyClientId)
     setEntityDefaultParent(undefined)
     setEntityDefaultType("business_group")
+    setEntityDefaultRegime("PRESUPUESTADA")
+    setEntityLockType(true)
     setEntityDialogOpen(true)
   }
 
@@ -301,6 +307,8 @@ const Organizations = () => {
     setEntityDefaultCompanyClient(parent.tenant_id)
     setEntityDefaultParent(parent.id)
     setEntityDefaultType(parent.entity_type === "business_group" ? "company" : "ueb")
+    setEntityDefaultRegime(parent.regime_id || "PRESUPUESTADA")
+    setEntityLockType(true)
     setEntityDialogOpen(true)
   }
 
@@ -309,6 +317,8 @@ const Organizations = () => {
     setEntityDefaultCompanyClient(entity.tenant_id)
     setEntityDefaultParent(entity.parent_id || undefined)
     setEntityDefaultType(entity.entity_type)
+    setEntityDefaultRegime(entity.regime_id || "PRESUPUESTADA")
+    setEntityLockType(false)
     setEntityDialogOpen(true)
   }
 
@@ -682,9 +692,10 @@ const Organizations = () => {
               <label className="text-sm font-medium text-ink">Nombre</label>
               <SiteCorpInput
                 value={companyClientForm.name}
-                onChange={(event) =>
+                onChange={(event) => {
+                  if (companyClientError) setCompanyClientError(null)
                   setCompanyClientForm((current) => ({ ...current, name: event.target.value }))
-                }
+                }}
                 placeholder="Ej.: Grupo Empresarial Mayabeque"
                 required
               />
@@ -755,7 +766,8 @@ const Organizations = () => {
         editingEntity={editingEntity}
         defaultEntityType={entityDefaultType}
         defaultParentId={entityDefaultParent}
-        defaultRegime="PRESUPUESTADA"
+        defaultRegime={entityDefaultRegime}
+        lockEntityType={entityLockType}
       />
 
       <EntityUsersDialog

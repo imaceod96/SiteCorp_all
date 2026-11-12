@@ -131,20 +131,31 @@ const EntitySettingsStaffing = () => {
   >({})
   const [exporting, setExporting] = React.useState(false)
 
+  const [toggleConfirm, setToggleConfirm] = React.useState<{
+    kind: "area" | "job" | "position"
+    id: string
+    name: string
+    nextActive: boolean
+    warning: string | null
+  } | null>(null)
+  const [toggling, setToggling] = React.useState(false)
+
   const showNotice = (type: "success" | "danger", message: string) => {
     setNotice({ type, message })
     setTimeout(() => setNotice(null), 5000)
   }
 
-  const loadData = React.useCallback(async () => {
+  const loadData = React.useCallback(async (silent = false) => {
     if (!entityId) {
       setError("Parámetros de URL no válidos")
       setLoading(false)
       return
     }
 
-    setLoading(true)
-    setError(null)
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
 
     try {
       // Caso de uso del dominio: permisos, entidad, áreas, cargos con su grupo salarial,
@@ -168,14 +179,21 @@ const EntitySettingsStaffing = () => {
       setPositions(workspace.positions)
     } catch (err) {
       console.error("Error loading data:", err)
-      setError(err instanceof Error ? err.message : "Error al cargar los datos")
+      const msg = err instanceof Error ? err.message : "Error al cargar los datos"
+      if (silent) {
+        showNotice("danger", msg)
+      } else {
+        setError(msg)
+      }
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [entityId])
 
   React.useEffect(() => {
-    loadData()
+    loadData(false)
   }, [loadData])
 
   // Keep every node expanded by default when data changes
@@ -347,7 +365,7 @@ const EntitySettingsStaffing = () => {
     }
 
   const handlePositionSave = async () => {
-    await loadData()
+    await loadData(true)
     setPositionDialogOpen(false)
     setEditingPosition(null)
   }
@@ -383,27 +401,23 @@ const EntitySettingsStaffing = () => {
     }
   }
 
-  const handleToggleActivePosition = async (position: OrganizationPosition) => {
-    if (position.is_active) {
-      if (!confirm(`¿Desactivar el puesto "${position.name}"?`)) return
-    } else {
+  const handleToggleActivePosition = (position: OrganizationPosition) => {
+    if (!position.is_active) {
       const job = jobs.find(j => j.id === position.job_id)
       if (job && !job.is_active) {
         showNotice("danger", "No se puede reactivar este puesto porque su cargo está inactivo. Reactiva primero el cargo.")
         return
       }
-      if (!confirm(`¿Reactivar el puesto "${position.name}"?`)) return
     }
-
-    try {
-      await setPositionActive(position.id, !position.is_active)
-      await loadData()
-      showNotice("success", position.is_active ? "Puesto desactivado" : "Puesto reactivado")
-    } catch (err) {
-      console.error("Error toggling position state:", err)
-      const message = err instanceof Error ? err.message : "Error al cambiar el estado del puesto"
-      showNotice("danger", message)
-    }
+    setToggleConfirm({
+      kind: "position",
+      id: position.id,
+      name: position.name,
+      nextActive: !position.is_active,
+      warning: position.is_active
+        ? `Este puesto tiene ${position.authorized_quantity} plaza(s) autorizada(s). Al desactivarlo dejará de estar disponible para nuevas contrataciones o movimientos.`
+        : null,
+    })
   }
 
   const filteredAreas = React.useMemo(() => {
@@ -441,58 +455,84 @@ const EntitySettingsStaffing = () => {
   }
 
   const handleAreaSave = async () => {
-    await loadData()
+    await loadData(true)
     setAreaDialogOpen(false)
     setEditingArea(null)
   }
 
   const handleJobSave = async () => {
-    await loadData()
+    await loadData(true)
     setJobDialogOpen(false)
     setEditingJob(null)
   }
 
-  const handleToggleActiveArea = async (area: OrganizationArea) => {
-        if (area.is_active) {
-          if (!confirm(`¿Desactivar el área "${area.name}"?`)) return
-        } else {
-          if (!confirm(`¿Reactivar el área "${area.name}"?`)) return
-        }
-    
-        try {
-          await setAreaActive(area.id, !area.is_active)
-          await loadData()
-          showNotice("success", area.is_active ? "Área desactivada" : "Área reactivada")
-        } catch (err) {
-          console.error("Error toggling area state:", err)
-          const message = err instanceof Error ? err.message : "Error al cambiar el estado del área"
-          showNotice("danger", message)
-        }
+  const handleToggleActiveArea = (area: OrganizationArea) => {
+    const childAreasCount = areas.filter(a => a.parent_area_id === area.id && a.is_active).length
+    const areaJobsCount = jobs.filter(j => j.area_id === area.id && j.is_active).length
+    const areaPositionsCount = positions.filter(p => p.job?.area_id === area.id && p.is_active).length
+
+    const dependencyParts: string[] = []
+    if (childAreasCount > 0) dependencyParts.push(`${childAreasCount} subárea(s) activa(s)`)
+    if (areaJobsCount > 0) dependencyParts.push(`${areaJobsCount} cargo(s) activo(s)`)
+    if (areaPositionsCount > 0) dependencyParts.push(`${areaPositionsCount} puesto(s) activo(s)`)
+
+    setToggleConfirm({
+      kind: "area",
+      id: area.id,
+      name: area.name,
+      nextActive: !area.is_active,
+      warning:
+        area.is_active && dependencyParts.length > 0
+          ? `Esta área tiene asociados ${dependencyParts.join(", ")}. Desactivarla impedirá dar de alta nuevos cargos o puestos bajo ella.`
+          : null,
+    })
+  }
+
+  const handleToggleActiveJob = (job: OrganizationJob) => {
+    if (!job.is_active) {
+      const area = areas.find(a => a.id === job.area_id)
+      if (area && !area.is_active) {
+        showNotice("danger", "No se puede reactivar este cargo porque su área está inactiva. Reactiva primero el área.")
+        return
       }
-  
-    const handleToggleActiveJob = async (job: OrganizationJob) => {
-        if (job.is_active) {
-          if (!confirm(`¿Desactivar el cargo "${job.name}"?`)) return
-        } else {
-          // Validate that the area is active before allowing reactivation
-          const area = areas.find(a => a.id === job.area_id)
-          if (area && !area.is_active) {
-            showNotice("danger", "No se puede reactivar este cargo porque su área está inactiva. Reactiva primero el área.")
-            return
-          }
-          if (!confirm(`¿Reactivar el cargo "${job.name}"?`)) return
-        }
-    
-        try {
-          await setJobActive(job.id, !job.is_active)
-          await loadData()
-          showNotice("success", job.is_active ? "Cargo desactivado" : "Cargo reactivado")
-        } catch (err) {
-          console.error("Error toggling job state:", err)
-          const message = err instanceof Error ? err.message : "Error al cambiar el estado del cargo"
-          showNotice("danger", message)
-        }
+    }
+    const jobPositionsCount = positions.filter(p => p.job_id === job.id && p.is_active).length
+    setToggleConfirm({
+      kind: "job",
+      id: job.id,
+      name: job.name,
+      nextActive: !job.is_active,
+      warning:
+        job.is_active && jobPositionsCount > 0
+          ? `Este cargo tiene ${jobPositionsCount} puesto(s) activo(s) asociado(s). Si lo desactiva, no podrá reactivar ni crear puestos en este cargo mientras permanezca inactivo.`
+          : null,
+    })
+  }
+
+  const executeToggleConfirm = async () => {
+    if (!toggleConfirm) return
+    setToggling(true)
+    try {
+      if (toggleConfirm.kind === "area") {
+        await setAreaActive(toggleConfirm.id, toggleConfirm.nextActive)
+        showNotice("success", toggleConfirm.nextActive ? "Área reactivada" : "Área desactivada")
+      } else if (toggleConfirm.kind === "job") {
+        await setJobActive(toggleConfirm.id, toggleConfirm.nextActive)
+        showNotice("success", toggleConfirm.nextActive ? "Cargo reactivado" : "Cargo desactivado")
+      } else {
+        await setPositionActive(toggleConfirm.id, toggleConfirm.nextActive)
+        showNotice("success", toggleConfirm.nextActive ? "Puesto reactivado" : "Puesto desactivado")
       }
+      setToggleConfirm(null)
+      await loadData(true)
+    } catch (err) {
+      console.error("Error toggling state:", err)
+      const message = err instanceof Error ? err.message : "Error al cambiar el estado"
+      showNotice("danger", message)
+    } finally {
+      setToggling(false)
+    }
+  }
 
   const renderNode = (node: AreaNode): React.ReactNode => {
     const hasChildren = node.children.length > 0
@@ -1247,6 +1287,54 @@ const EntitySettingsStaffing = () => {
       </Dialog>
 
 
+      <Dialog
+        open={Boolean(toggleConfirm)}
+        onOpenChange={(open) => {
+          if (!open && !toggling) setToggleConfirm(null)
+        }}
+      >
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {toggleConfirm?.nextActive ? "Reactivar" : "Desactivar"}{" "}
+              {toggleConfirm?.kind === "area"
+                ? "área"
+                : toggleConfirm?.kind === "job"
+                  ? "cargo"
+                  : "puesto"}
+            </DialogTitle>
+            <DialogDescription>
+              ¿Confirma que desea {toggleConfirm?.nextActive ? "reactivar" : "desactivar"}{" "}
+              <strong className="text-ink">"{toggleConfirm?.name}"</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          {toggleConfirm?.warning && (
+            <SiteCorpAlert type="warning">{toggleConfirm.warning}</SiteCorpAlert>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <SiteCorpButton
+              type="button"
+              variant="outline"
+              disabled={toggling}
+              onClick={() => setToggleConfirm(null)}
+            >
+              Cancelar
+            </SiteCorpButton>
+            <SiteCorpButton
+              type="button"
+              variant={toggleConfirm?.nextActive ? "default" : "destructive"}
+              disabled={toggling}
+              onClick={executeToggleConfirm}
+            >
+              {toggling
+                ? "Procesando..."
+                : toggleConfirm?.nextActive
+                  ? "Reactivar"
+                  : "Desactivar"}
+            </SiteCorpButton>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

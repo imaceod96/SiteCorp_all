@@ -12,6 +12,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SalaryGroupDialog } from "@/modules/organization-structure/presentation/components/salary-group-dialog"
 import ReviewSalaryChangeDialog from "@/modules/contracts/presentation/components/ReviewSalaryChangeDialog"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { formatDocumentDate } from "@/modules/document-templates/domain/document-variables"
 import { Scale, Plus, Edit3, Clock, AlertTriangle } from "lucide-react"
 import type { SalaryGroupWithCurrent, SalaryScale } from "@/contexts/SalaryContext"
 
@@ -296,7 +297,7 @@ const EntitySettingsSalary = () => {
                                                   {group.current_value.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} {group.current_value.currency_code}
                                                 </p>
                                                 <p className="text-xs text-muted-foreground">
-                                                  Vigente desde: {group.current_value.effective_from}
+                                                  Vigente desde: {formatDocumentDate(group.current_value.effective_from) || group.current_value.effective_from}
                                                 </p>
                                               </div>
                                             ) : (
@@ -360,7 +361,10 @@ const EntitySettingsSalary = () => {
             </SiteCorpCard>
           ) : (
         <>
-          <SiteCorpCard title={`Escala salarial de ${currentEntity.name}`} description={scale.description || "Escala salarial empresarial"}>
+          <SiteCorpCard
+            title={scale.name || `Escala salarial de ${currentEntity.name}`}
+            description={scale.description || `Escala salarial empresarial de ${currentEntity.name}`}
+          >
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -408,7 +412,7 @@ const EntitySettingsSalary = () => {
                             {group.current_value.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} {group.current_value.currency_code}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Vigente desde: {group.current_value.effective_from}
+                            Vigente desde: {formatDocumentDate(group.current_value.effective_from) || group.current_value.effective_from}
                           </p>
                         </div>
                       ) : (
@@ -448,17 +452,21 @@ const EntitySettingsSalary = () => {
                 <div key={group.id} className="rounded-lg border border-border bg-muted/30 p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-bold text-sitecorp-primary">{group.roman_numeral}</span>
-                    <span className="text-sm text-muted-foreground">Grupo {group.sequence_number}</span>
+                    <span className="text-sm text-muted-foreground">
+                      Grupo {group.roman_numeral} (Secuencia {group.sequence_number})
+                    </span>
                   </div>
                   <div className="space-y-1">
                     {group.current_value && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Clock className="h-3 w-3" />
-                        <span>Actual: {group.current_value.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} {group.current_value.currency_code} desde {group.current_value.effective_from}</span>
+                        <span>
+                          Actual: {group.current_value.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} {group.current_value.currency_code} desde {formatDocumentDate(group.current_value.effective_from) || group.current_value.effective_from}
+                        </span>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Historial completo disponible en la sección de historial global.
+                      Use el botón «Ver historial» del grupo para consultar todos sus valores anteriores.
                     </p>
                   </div>
                 </div>
@@ -503,6 +511,14 @@ const EntitySettingsSalary = () => {
         open={showHistoryModal}
         onOpenChange={(open) => setShowHistoryModal(open)}
         groupId={historyGroupId}
+        groupLabel={
+          historyGroupId
+            ? (() => {
+                const found = groups.find((g) => g.id === historyGroupId)
+                return found ? `Grupo ${found.roman_numeral} (Secuencia ${found.sequence_number})` : `Grupo`
+              })()
+            : null
+        }
         historyData={historyData}
         historyLoading={historyLoading}
       />
@@ -515,12 +531,14 @@ const SalaryHistoryModal = ({
   open, 
   onOpenChange, 
   groupId, 
+  groupLabel,
   historyData, 
   historyLoading 
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   groupId: string | null
+  groupLabel?: string | null
   historyData: SalaryHistoryValue[]
   historyLoading: boolean
 }) => {
@@ -567,7 +585,7 @@ const SalaryHistoryModal = ({
             <div className="space-y-4">
               <div className="border-t border-border pt-4">
                 <h3 className="text-lg font-semibold text-ink mb-2">
-                  Grupo {groupId}
+                  {groupLabel || `Grupo ${groupId}`}
                 </h3>
                 
                 {historyLoading ? (
@@ -580,7 +598,7 @@ const SalaryHistoryModal = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {historyData.map((value, index) => (
+                    {historyData.map((value) => (
                       <div key={value.id} className="rounded-lg border border-border bg-muted/50 p-4">
                         <div className="grid gap-3 md:grid-cols-4 items-start">
                           <div className="space-y-1">
@@ -591,13 +609,13 @@ const SalaryHistoryModal = ({
                           </div>
                           <div className="space-y-1">
                             <p className="text-sm text-muted-foreground">
-                              {value.effective_from}
+                              {formatDocumentDate(value.effective_from) || value.effective_from}
                             </p>
                             <p className="text-xs text-muted-foreground">Vigente desde</p>
                           </div>
                           <div className="space-y-1">
                             <p className="text-sm text-muted-foreground">
-                              {value.effective_to || "Sin fecha de fin"}
+                              {value.effective_to ? formatDocumentDate(value.effective_to) || value.effective_to : "Sin fecha de fin"}
                             </p>
                             <p className="text-xs text-muted-foreground">Vigente hasta</p>
                           </div>

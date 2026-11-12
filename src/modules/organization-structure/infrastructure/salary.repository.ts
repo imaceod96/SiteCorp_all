@@ -11,8 +11,50 @@ export async function resolveApplicableScaleId(entityId: string): Promise<string
   const { data, error } = await supabase.rpc("resolve_salary_scale_for_entity", {
     entity_id: entityId,
   })
-  if (error) throw error
-  return (data as string | null) || null
+  if (!error && data) {
+    return data as string
+  }
+
+  // Respaldo coherente con el régimen de la entidad si la RPC remota aún conserva
+  // el filtro antiguo `is_sitecorp_account = false` antes de aplicar la migración SQL.
+  const { data: entityRow, error: entityError } = await supabase
+    .from("organization_entities")
+    .select("regime_id, is_active")
+    .eq("id", entityId)
+    .maybeSingle()
+
+  if (entityError || !entityRow || !entityRow.is_active) {
+    if (error) throw error
+    return null
+  }
+
+  const regime = String(entityRow.regime_id || "").trim().toUpperCase()
+  if (regime === "PRESUPUESTADA") {
+    const { data: globalScale } = await supabase
+      .from("salary_scales")
+      .select("id")
+      .in("scope_type", ["PRESUPUESTADA_GLOBAL", "GLOBAL"])
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return (globalScale as { id: string } | null)?.id ?? null
+  }
+
+  if (regime === "EMPRESARIAL") {
+    const { data: entityScale } = await supabase
+      .from("salary_scales")
+      .select("id")
+      .eq("scope_type", "EMPRESARIAL_ENTITY")
+      .eq("organization_entity_id", entityId)
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return (entityScale as { id: string } | null)?.id ?? null
+  }
+
+  return null
 }
 
 /**

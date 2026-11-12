@@ -11,6 +11,62 @@ import {
  * Común a todas las entidades y tenants: nunca se filtra por tenant ni entidad.
  * La lógica de negocio se apoya en `code` (estable), nunca en el nombre visible.
  */
+const CANONICAL_CATEGORY_SYNONYMS: Record<string, { code: string; name: string; sortOrder: number }> = {
+  cuadro: { code: "CUADRO", name: "Cuadro", sortOrder: 1 },
+  directivo: { code: "CUADRO", name: "Cuadro", sortOrder: 1 },
+  tecnico: { code: "TECNICO", name: "Técnico", sortOrder: 2 },
+  técnico: { code: "TECNICO", name: "Técnico", sortOrder: 2 },
+  administrativo: { code: "ADMINISTRATIVO", name: "Administrativo", sortOrder: 3 },
+  servicio: { code: "SERVICIO", name: "Servicio", sortOrder: 4 },
+  servicios: { code: "SERVICIO", name: "Servicio", sortOrder: 4 },
+  operario: { code: "OPERARIO", name: "Operario", sortOrder: 5 },
+  obrero: { code: "OPERARIO", name: "Operario", sortOrder: 5 },
+}
+
+/**
+ * Normaliza y deduplica el catálogo de categorías ocupacionales para evitar
+ * duplicados o sinónimos equivalentes (Cuadro/Directivo, Operario/Obrero, Servicio/Servicios).
+ */
+export function deduplicateOccupationalCategories(
+  rows: OccupationalCategory[]
+): OccupationalCategory[] {
+  const byKey = new Map<string, OccupationalCategory>()
+
+  for (const row of rows) {
+    const rawCode = (row.code ?? "").trim().toLowerCase()
+    const rawName = (row.name ?? "").trim().toLowerCase()
+    const canonical =
+      CANONICAL_CATEGORY_SYNONYMS[rawCode] ?? CANONICAL_CATEGORY_SYNONYMS[rawName]
+    const key = canonical ? canonical.code : (rawCode || rawName).toUpperCase()
+
+    const existing = byKey.get(key)
+    if (!existing) {
+      byKey.set(key, {
+        ...row,
+        code: canonical ? canonical.code : row.code,
+        name: canonical ? canonical.name : row.name.trim(),
+        sort_order: row.sort_order ?? canonical?.sortOrder ?? 99,
+      })
+    } else if (
+      canonical &&
+      row.name.trim().toLowerCase() === canonical.name.toLowerCase() &&
+      existing.name.trim().toLowerCase() !== canonical.name.toLowerCase()
+    ) {
+      // Prioriza el registro cuyo nombre ya coincide con el término canónico
+      byKey.set(key, {
+        ...row,
+        code: canonical.code,
+        name: canonical.name,
+        sort_order: row.sort_order ?? canonical.sortOrder,
+      })
+    }
+  }
+
+  return Array.from(byKey.values()).sort(
+    (a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || a.name.localeCompare(b.name, "es")
+  )
+}
+
 export async function fetchOccupationalCategories(options?: {
   includeInactive?: boolean
 }): Promise<OccupationalCategory[]> {
@@ -26,7 +82,7 @@ export async function fetchOccupationalCategories(options?: {
 
   const { data, error } = await query
   if (error) throw error
-  return (data as OccupationalCategory[]) || []
+  return deduplicateOccupationalCategories((data as OccupationalCategory[]) || [])
 }
 
 /**

@@ -2,6 +2,7 @@ import * as React from "react"
 import {
   TEMPLATE_TYPE_USES_XLSX,
   templateAcceptForType,
+  templatePlaceholderExamplesForType,
   describeTemplateFileProblem,
 } from "@/modules/document-templates/domain/rules"
 import {
@@ -236,7 +237,7 @@ const CreateDocumentTemplateDialog = ({ open, onOpenChange, entityId, onCreated 
             <p className="text-xs text-muted-foreground">
               {usesXlsx
                 ? "Suba la hoja de cálculo oficial tal cual. No se modifica ni se sobrescribe: en el detalle de la plantilla podrá descargarla, insertar en las celdas los marcadores ({{m.nom}}) y subirla como plantilla configurada."
-                : "Suba el modelo oficial tal cual. No se modifica ni se sobrescribe: en el detalle de la plantilla podrá descargarlo, insertar en Word los marcadores ({{worker.full_name}}) y subirlo como documento configurado."}
+                : `Suba el modelo oficial tal cual. No se modifica ni se sobrescribe: en el detalle de la plantilla podrá descargarlo, insertar en Word los marcadores (${templatePlaceholderExamplesForType(documentTypeCode).primary}) y subirlo como documento configurado.`}
             </p>
           </div>
 

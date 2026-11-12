@@ -81,26 +81,33 @@ const SC404_INTERNAL = ["SC_4_04"] as DocumentTypeCode[]
 const CONTRACT_HIDDEN = ["CONTRACT"] as DocumentTypeCode[]
 const ADDENDUM_HIDDEN = ["ADDENDUM"] as DocumentTypeCode[]
 const ALL_DOC_TYPES = ["CONTRACT", "ADDENDUM", "SC_4_04"] as DocumentTypeCode[]
+const ALL_FIVE_DOC_TYPES = [
+  "CONTRACT",
+  "ADDENDUM",
+  "SC_4_04",
+  "RESOLUTION",
+  "PAYROLL_MOVEMENT",
+] as DocumentTypeCode[]
 
 /** Catálogo global de variables documentales (no pertenece a ningún tenant). */
 export const DOCUMENT_VARIABLES: DocumentVariableDefinition[] = [
   // ---------------- Entidad ----------------
-  { key: "entity.name", label: "Nombre de la entidad", category: "Entidad", documentTypes: WITH_SC404, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Snapshot contractual de la entidad firmante." },
-  { key: "entity.organism", label: "Organismo", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Organismo al que pertenece la entidad (snapshot)." },
-  { key: "entity.branch", label: "Rama", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Rama de la entidad (snapshot)." },
-  { key: "entity.labor_code", label: "Código laboral/organizacional", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Código de identificación laboral (snapshot)." },
-  { key: "entity.address", label: "Dirección de la entidad", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Dirección de la entidad (snapshot)." },
-  { key: "entity.province", label: "Provincia de la entidad", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Provincia de la entidad (snapshot)." },
-  { key: "entity.municipality", label: "Municipio de la entidad", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Municipio de la entidad (snapshot)." },
-  { key: "entity.revolution_year", label: "Año de la Revolución", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Valor institucional configurado por entidad (texto libre, p. ej. 68) y preservado en el snapshot (nunca se calcula)." },
+  { key: "entity.name", label: "Nombre de la entidad", category: "Entidad", documentTypes: WITH_SC404, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Nombre oficial de la entidad firmante." },
+  { key: "entity.organism", label: "Organismo", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Organismo al que pertenece la entidad." },
+  { key: "entity.branch", label: "Rama", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Rama de actividad de la entidad." },
+  { key: "entity.labor_code", label: "Código laboral/organizacional", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Código de identificación laboral de la entidad." },
+  { key: "entity.address", label: "Dirección de la entidad", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Dirección oficial de la entidad." },
+  { key: "entity.province", label: "Provincia de la entidad", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Provincia de la entidad." },
+  { key: "entity.municipality", label: "Municipio de la entidad", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Municipio de la entidad." },
+  { key: "entity.revolution_year", label: "Año de la Revolución", category: "Entidad", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Valor institucional configurado por la entidad para el encabezado oficial." },
 
   // ---------------- Representante ----------------
-  { key: "representative.name", label: "Nombre del representante", category: "Representante", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Representante histórico que suscribió el documento (snapshot)." },
-  { key: "representative.position", label: "Cargo del representante", category: "Representante", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Cargo del representante histórico (snapshot)." },
+  { key: "representative.name", label: "Nombre del representante", category: "Representante", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Nombre completo del representante que suscribe el documento." },
+  { key: "representative.position", label: "Cargo del representante", category: "Representante", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Cargo del representante que suscribe el documento." },
 
   // ---------------- Trabajador ----------------
-  { key: "worker.full_name", label: "Nombre completo", category: "Trabajador", documentTypes: WITH_SC404, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Nombre y apellidos del trabajador." },
-  { key: "worker.identification", label: "Carné de identidad", category: "Trabajador", documentTypes: WITH_SC404, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Carné de identidad del trabajador." },
+  { key: "worker.full_name", label: "Nombre completo", category: "Trabajador", documentTypes: ALL_FIVE_DOC_TYPES, catalogHiddenFor: ALL_FIVE_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Nombre y apellidos del trabajador." },
+  { key: "worker.identification", label: "Carné de identidad", category: "Trabajador", documentTypes: ALL_FIVE_DOC_TYPES, catalogHiddenFor: ALL_FIVE_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Carné de identidad del trabajador." },
   { key: "worker.birth_date", label: "Fecha de nacimiento", category: "Trabajador", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "date", kind: "SOURCE", description: "Fecha de nacimiento del trabajador." },
   { key: "worker.profession", label: "Profesión u oficio", category: "Trabajador", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Profesión u oficio (dato profesional, no nivel de estudios)." },
   { key: "worker.address", label: "Dirección del trabajador", category: "Trabajador", documentTypes: BOTH, catalogHiddenFor: ALL_DOC_TYPES, dataType: "text", kind: "SOURCE", description: "Dirección particular del trabajador." },
@@ -126,7 +133,7 @@ export const DOCUMENT_VARIABLES: DocumentVariableDefinition[] = [
   { key: "contract.type", label: "Tipo de contrato", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "text", kind: "SOURCE", description: "Nombre del tipo de contrato (determinado / indeterminado)." },
   { key: "contract.start_date", label: "Fecha de inicio", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "date", kind: "SOURCE", description: "Fecha de inicio del contrato." },
   { key: "contract.end_date", label: "Fecha de fin", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "date", kind: "SOURCE", description: "Fecha de fin prevista (contrato por tiempo determinado)." },
-  { key: "contract.duration", label: "Duración", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "text", kind: "CALCULATED", description: "Duración humana calculada a partir de start_date y end_date (p. ej. «6 meses»)." },
+  { key: "contract.duration", label: "Duración", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "text", kind: "CALCULATED", description: "Duración calculada a partir de la fecha de inicio y la fecha de término (p. ej. «6 meses»)." },
   { key: "contract.signature_date", label: "Fecha de firma", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "date", kind: "SOURCE", description: "Fecha de firma del contrato." },
   { key: "contract.signature_day", label: "Día de firma", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "integer", kind: "CALCULATED", description: "Día de la fecha de firma (calculado, no se persiste)." },
   { key: "contract.signature_month", label: "Mes de firma", category: "Contrato", documentTypes: ["CONTRACT"], catalogHiddenFor: CONTRACT_HIDDEN, dataType: "text", kind: "CALCULATED", description: "Mes de la fecha de firma en español (calculado, no se persiste)." },
@@ -166,46 +173,46 @@ export const DOCUMENT_VARIABLES: DocumentVariableDefinition[] = [
   { key: "addendum.new.total", label: "Total nuevo", category: "Anexo", documentTypes: ["ADDENDUM"], catalogHiddenFor: ADDENDUM_HIDDEN, dataType: "amount", kind: "SOURCE", description: "Total contractual nuevo según el anexo." },
 
   // ---------------- SC-4-04 (variables unificadas según origen) ----------------
-  { key: "sc404.fecha_desde", label: "SC-4-04 · Fecha desde", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Inicio del período en formato DD/MM/AA. Vacaciones: start_date. Certificado: fecha de salida." },
-  { key: "sc404.fecha_hasta", label: "SC-4-04 · Fecha hasta", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "ÚLTIMO día del período en DD/MM/AA. Vacaciones: end_date. Certificado médico: vacío (return_date es reincorporación)." },
-  { key: "sc404.dias", label: "SC-4-04 · Días", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Vacaciones: DÍAS NATURALES del período (no el consumo del ledger). Certificado: days explícito." },
-  { key: "sc404.incorporacion_dia", label: "SC-4-04 · Día de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Día (1–31) de la fecha de incorporación. Vacaciones: primer día hábil posterior al período según el horario del Puesto. Certificado: día de return_date." },
+  { key: "sc404.fecha_desde", label: "SC-4-04 · Fecha desde", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Inicio del período en formato DD/MM/AA (fecha de inicio de vacaciones o fecha de salida del certificado médico)." },
+  { key: "sc404.fecha_hasta", label: "SC-4-04 · Fecha hasta", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Último día del período en DD/MM/AA (fecha de término en vacaciones; vacío en certificado médico)." },
+  { key: "sc404.dias", label: "SC-4-04 · Días", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Vacaciones: días naturales del período. Certificado médico: cantidad de días otorgados." },
+  { key: "sc404.incorporacion_dia", label: "SC-4-04 · Día de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Día (1–31) de la fecha de incorporación. Vacaciones: primer día hábil posterior al período según el horario del puesto. Certificado médico: día de reincorporación." },
   { key: "sc404.incorporacion_mes", label: "SC-4-04 · Mes de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Mes numérico (1–12) de la fecha de incorporación." },
   { key: "sc404.incorporacion_anio", label: "SC-4-04 · Año de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Año en dos dígitos (AA) de la fecha de incorporación." },
   { key: "certificado.es_licencia_subsidio", label: "Marcador Licencia/Subsidio", category: "SC-4-04", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Devuelve «X» cuando el origen es un certificado médico; vacío para vacaciones." },
 
   // ---------------- Certificado médico (origen, interno) ----------------
   { key: "certificado.fecha_salida", label: "Certificado · Fecha de salida", category: "Certificado médico", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Fecha de salida del certificado médico en DD/MM/AA." },
-  { key: "certificado.fecha_reincorporacion", label: "Certificado · Fecha de reincorporación", category: "Certificado médico", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "return_date del certificado médico en DD/MM/AA." },
-  { key: "certificado.dias", label: "Certificado · Días", category: "Certificado médico", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Cantidad de días explícita del certificado médico (fuente de verdad)." },
+  { key: "certificado.fecha_reincorporacion", label: "Certificado · Fecha de reincorporación", category: "Certificado médico", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Fecha de reincorporación del certificado médico en DD/MM/AA." },
+  { key: "certificado.dias", label: "Certificado · Días", category: "Certificado médico", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Cantidad de días otorgados en el certificado médico." },
 
   // ---------------- Vacaciones (origen, interno) ----------------
-  { key: "vacaciones.fecha_desde", label: "Vacaciones · Fecha desde", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "start_date del período de vacaciones en DD/MM/AA." },
-  { key: "vacaciones.fecha_hasta", label: "Vacaciones · Fecha hasta", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "end_date del período de vacaciones en DD/MM/AA." },
-  { key: "vacaciones.dias_naturales", label: "Vacaciones · Días naturales", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Días naturales del período (hasta − desde + 1), valor persistido." },
-  { key: "vacaciones.dias_consumidos", label: "Vacaciones · Días consumidos", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Días descontados del saldo (días naturales menos domingos)." },
-  { key: "vacaciones.reincorporacion", label: "Vacaciones · Incorporación", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Primer día hábil posterior al período según el horario del Puesto (DD/MM/AA)." },
+  { key: "vacaciones.fecha_desde", label: "Vacaciones · Fecha desde", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Fecha de inicio del período de vacaciones en DD/MM/AA." },
+  { key: "vacaciones.fecha_hasta", label: "Vacaciones · Fecha hasta", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Fecha de término del período de vacaciones en DD/MM/AA." },
+  { key: "vacaciones.dias_naturales", label: "Vacaciones · Días naturales", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Días naturales del período (hasta − desde + 1)." },
+  { key: "vacaciones.dias_consumidos", label: "Vacaciones · Días consumidos", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "integer", kind: "SOURCE", description: "Días descontados del saldo vacacional (días naturales menos domingos)." },
+  { key: "vacaciones.reincorporacion", label: "Vacaciones · Incorporación", category: "Vacaciones", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Primer día hábil posterior al período según el horario del puesto (DD/MM/AA)." },
 
   // ---------------- Comunes SC-4-04 (internos) ----------------
-  { key: "area.name", label: "Área", category: "Cargo y Puesto", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Área del puesto de la asignación vigente al período (asignación → puesto → cargo → área)." },
-  { key: "entity.code", label: "Código de la entidad", category: "Entidad", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "organization_entities.code de la entidad real del trabajador." },
+  { key: "area.name", label: "Área", category: "Cargo y Puesto", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Área del puesto de la asignación vigente al período." },
+  { key: "entity.code", label: "Código de la entidad", category: "Entidad", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "SOURCE", description: "Código interno de la entidad del trabajador." },
   { key: "documento.fecha_emision", label: "Fecha de emisión del documento", category: "Documento", documentTypes: ["SC_4_04"], catalogHiddenFor: SC404_INTERNAL, dataType: "text", kind: "CALCULATED", description: "Fecha (día de la generación) en que se emite el documento, en DD/MM/AA." },
 
   // ---------------- SC-4-04 · catálogo VISIBLE exclusivo (short aliases s.*) ----------------
   // wrappers s.* de los datos comunes: quien prepara el Word no necesita
   // conocer la estructura interna de SiteCorp (§Fase 22).
   { key: "s.fem", label: "SC-4-04 · Fecha de emisión", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "CALCULATED", description: "Fecha (día de la generación) en que se emite el documento, en DD/MM/AA." },
-  { key: "s.ent", label: "SC-4-04 · Nombre de la entidad", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Nombre de la entidad real del trabajador." },
-  { key: "s.cod", label: "SC-4-04 · Código de la entidad", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Código (organization_entities.code) de la entidad real del trabajador." },
+  { key: "s.ent", label: "SC-4-04 · Nombre de la entidad", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Nombre de la entidad del trabajador." },
+  { key: "s.cod", label: "SC-4-04 · Código de la entidad", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Código interno de la entidad del trabajador." },
   { key: "s.nom", label: "SC-4-04 · Nombre del trabajador", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Nombre o nombres del trabajador, sin apellidos." },
   { key: "s.ap1", label: "SC-4-04 · Primer apellido", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Primer apellido del trabajador." },
   { key: "s.ap2", label: "SC-4-04 · Segundo apellido", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Segundo apellido del trabajador." },
   { key: "s.ci", label: "SC-4-04 · Carné de identidad", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Carné de identidad del trabajador." },
   { key: "s.area", label: "SC-4-04 · Área", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Área del puesto de la asignación vigente al período." },
-  { key: "s.f_des", label: "SC-4-04 · Fecha desde", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Inicio del período en formato DD/MM/AA. Vacaciones: start_date. Certificado: fecha de salida." },
-  { key: "s.f_has", label: "SC-4-04 · Fecha hasta", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "ÚLTIMO día del período en DD/MM/AA. Vacaciones: end_date. Certificado médico: vacío (return_date es reincorporación)." },
-  { key: "s.dias", label: "SC-4-04 · Días", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "integer", kind: "SOURCE", description: "Vacaciones: DÍAS NATURALES del período (no el consumo del ledger). Certificado: days explícito." },
-  { key: "s.inc_d", label: "SC-4-04 · Día de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "CALCULATED", description: "Día (1–31) de la fecha de incorporación. Vacaciones: primer día hábil posterior al período según el horario del Puesto. Certificado: día de return_date." },
+  { key: "s.f_des", label: "SC-4-04 · Fecha desde", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Inicio del período en formato DD/MM/AA. Vacaciones: fecha de inicio. Certificado médico: fecha de salida." },
+  { key: "s.f_has", label: "SC-4-04 · Fecha hasta", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "SOURCE", description: "Último día del período en DD/MM/AA. Vacaciones: fecha de término. Certificado médico: vacío." },
+  { key: "s.dias", label: "SC-4-04 · Días", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "integer", kind: "SOURCE", description: "Vacaciones: días naturales del período. Certificado médico: cantidad de días otorgados." },
+  { key: "s.inc_d", label: "SC-4-04 · Día de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "CALCULATED", description: "Día (1–31) de la fecha de incorporación. Vacaciones: primer día hábil posterior al período según el horario del puesto. Certificado médico: día de reincorporación." },
   { key: "s.inc_m", label: "SC-4-04 · Mes de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "CALCULATED", description: "Mes numérico (1–12) de la fecha de incorporación." },
   { key: "s.inc_a", label: "SC-4-04 · Año de incorporación", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "CALCULATED", description: "Año en dos dígitos (AA) de la fecha de incorporación." },
   { key: "s.vac", label: "SC-4-04 · Marca de vacaciones", category: "SC-4-04", documentTypes: ["SC_4_04"], dataType: "text", kind: "CALCULATED", description: "Devuelve «X» cuando el origen es un período de vacaciones; vacío para certificado médico." },
@@ -248,7 +255,7 @@ export const DOCUMENT_VARIABLES: DocumentVariableDefinition[] = [
   { key: "c.tipo", label: "Contrato · Tipo de contrato", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "text", kind: "SOURCE", description: "Nombre del tipo de contrato (determinado / indeterminado)." },
   { key: "c.inicio", label: "Contrato · Fecha de inicio", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "date", kind: "SOURCE", description: "Fecha de inicio del contrato." },
   { key: "c.fin", label: "Contrato · Fecha de fin", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "date", kind: "SOURCE", description: "Fecha de fin prevista (contrato por tiempo determinado)." },
-  { key: "c.duracion", label: "Contrato · Duración", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "text", kind: "CALCULATED", description: "Duración humana calculada a partir de start_date y end_date (p. ej. «6 meses»)." },
+  { key: "c.duracion", label: "Contrato · Duración", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "text", kind: "CALCULATED", description: "Duración calculada a partir de la fecha de inicio y la fecha de término (p. ej. «6 meses»)." },
   { key: "c.firma", label: "Contrato · Fecha de firma", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "date", kind: "SOURCE", description: "Fecha de firma del contrato." },
   { key: "c.firma_dia", label: "Contrato · Día de firma", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "integer", kind: "CALCULATED", description: "Día de la fecha de firma (calculado, no se persiste)." },
   { key: "c.firma_mes", label: "Contrato · Mes de firma", category: "Contrato", documentTypes: ["CONTRACT"], dataType: "text", kind: "CALCULATED", description: "Mes de la fecha de firma en español (calculado, no se persiste)." },
@@ -325,7 +332,7 @@ export const DOCUMENT_VARIABLES: DocumentVariableDefinition[] = [
 
   // ---------------- Movimiento de Nómina · catálogo visible (short aliases m.*) ----------------
   // Documento de Altas, Reubicaciones (cambio de puesto y/o salario efectivo) y Bajas.
-  { key: "m.org", label: "Movimiento · Organismo", category: "Movimiento de Nómina", documentTypes: ["PAYROLL_MOVEMENT"], dataType: "text", kind: "SOURCE", description: "Organismo configurado en la entidad (organization_entities.organism)." },
+  { key: "m.org", label: "Movimiento · Organismo", category: "Movimiento de Nómina", documentTypes: ["PAYROLL_MOVEMENT"], dataType: "text", kind: "SOURCE", description: "Organismo al que pertenece la entidad." },
   { key: "m.emp", label: "Movimiento · Empresa", category: "Movimiento de Nómina", documentTypes: ["PAYROLL_MOVEMENT"], dataType: "text", kind: "SOURCE", description: "Empresa según la jerarquía real (UEB → empresa padre; empresa; o grupo empresarial)." },
   { key: "m.uni", label: "Movimiento · Unidad", category: "Movimiento de Nómina", documentTypes: ["PAYROLL_MOVEMENT"], dataType: "text", kind: "SOURCE", description: "Unidad concreta (UEB). Vacío si la entidad no es una UEB." },
   { key: "m.exp", label: "Movimiento · Expediente", category: "Movimiento de Nómina", documentTypes: ["PAYROLL_MOVEMENT"], dataType: "text", kind: "SOURCE", description: "Número de identificación del trabajador (11 dígitos, preservado como texto)." },

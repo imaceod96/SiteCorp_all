@@ -110,7 +110,18 @@ export function validateAreaInput(input: {
   hierarchyOrder?: number
   editingAreaId?: string | null
 }): string | null {
-  if (!input.name) return "El nombre es obligatorio"
+  const normalizedName = (input.name ?? "").trim().replace(/\s+/g, " ").toLowerCase()
+  if (!normalizedName) return "El nombre es obligatorio"
+
+  const duplicateName = input.areas.some(
+    (area) =>
+      area.organization_entity_id === input.entityId &&
+      area.id !== (input.editingAreaId ?? null) &&
+      (area.name ?? "").trim().replace(/\s+/g, " ").toLowerCase() === normalizedName
+  )
+  if (duplicateName) {
+    return "Ya existe un área con ese nombre en esta entidad"
+  }
 
   const hasOrder = input.hierarchyOrder !== undefined && !Number.isNaN(input.hierarchyOrder)
 
@@ -140,12 +151,16 @@ export function validateAreaInput(input: {
 
 /**
  * Mensaje de error del guardado del área: el conflicto de código único
- * (`organization_areas_organization_entity_id_code_unique`) tiene un texto propio.
+ * (`organization_areas_organization_entity_id_code_unique`) o de nombre único
+ * (`organization_areas_entity_name_unique`) tiene un texto propio.
  */
 export function areaSaveErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "Error al guardar el área"
   if (message.includes("organization_areas_organization_entity_id_code_unique")) {
     return "Ya existe un área con ese código en esta entidad"
+  }
+  if (message.includes("organization_areas_entity_name_unique")) {
+    return "Ya existe un área con ese nombre en esta entidad"
   }
   return message
 }

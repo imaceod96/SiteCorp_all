@@ -186,13 +186,17 @@ export class UserManualPdfService {
     doc.setTextColor(15, 23, 42)
     const modulesList = isEntity
       ? [
-          { col: 0, text: "• Panel de Resumen y Dotación" },
-          { col: 0, text: "• Plantilla Orgánica (Anexo14B)" },
-          { col: 0, text: "• Padrón Maestro de Trabajadores" },
+          { col: 0, text: "• Paso 1: Escala Salarial (CUP)" },
+          { col: 0, text: "• Paso 2: Plantilla (Área/Cargo/Puesto)" },
+          { col: 0, text: "• Paso 3: Datos Contractuales" },
+          { col: 0, text: "• Paso 4: Escala de Antigüedad" },
+          { col: 0, text: "• Paso 5: Plantillas (.docx / .xlsx)" },
+          { col: 1, text: "• Panel de Resumen y Dotación" },
+          { col: 1, text: "• Plantilla Orgánica (Anexo14B)" },
+          { col: 1, text: "• Padrón Maestro de Trabajadores" },
           { col: 1, text: "• Contratación y Cobertura Vacantes" },
-          { col: 1, text: "• Vencimientos y Alertas Contratos" },
-          { col: 1, text: "• Prenómina y Períodos Salariales" },
-          { col: 2, text: "• SST: Avisos y Capacitación" },
+          { col: 2, text: "• Vencimientos y Alertas Contratos" },
+          { col: 2, text: "• Prenómina y Períodos Salariales" },
           { col: 2, text: "• SST: EPP, IPERC y Accidentes" },
           { col: 2, text: "• Licencias y Certificados Médicos" },
         ]
@@ -363,9 +367,9 @@ export class UserManualPdfService {
     )
 
     // =========================================================================
-    // PÁGINA 3 (SÓLO GESTOR): SECUENCIA OBLIGATORIA DE CONFIGURACIÓN INICIAL
+    // PÁGINA 3: SECUENCIA OBLIGATORIA DE CONFIGURACIÓN INICIAL (GESTOR Y ENTIDAD)
     // =========================================================================
-    if (!isEntity) {
+    {
       doc.addPage()
       currentPage++
       addHeaderAndFooter("Configuración Inicial")

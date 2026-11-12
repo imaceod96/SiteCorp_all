@@ -285,6 +285,7 @@ const rawValueFor = (
         return date != null ? String(Number(date.slice(0, 10).split("-")[0])) : null
       case "r.rev": return textOrNull(data.entity.revolution_year)
       case "r.rep": return textOrNull(data.representative.name)
+      case "worker.full_name": return textOrNull(data.worker.full_name)
       default: return null
     }
   }
@@ -296,10 +297,18 @@ const rawValueFor = (
       case "m.org": return textOrNull(data.entity.organism)
       case "m.emp": return textOrNull(data.entity.company)
       case "m.uni": return textOrNull(data.entity.unit)
-      case "m.exp": return textOrNull(data.worker.identification)
+      case "m.exp":
+      case "worker.identification": return textOrNull(data.worker.identification)
       case "m.dia": return date ? Number(date.slice(0, 10).split("-")[2]) : null
       case "m.mes": return documentSignatureMonth(date)
       case "m.ano": return date ? Number(date.slice(0, 10).split("-")[0]) : null
+      case "worker.full_name":
+        return textOrNull(
+          [data.worker.first_name, data.worker.first_surname, data.worker.second_surname]
+            .map((part) => (part ?? "").trim())
+            .filter(Boolean)
+            .join(" ")
+        )
       case "m.nom": return textOrNull(data.worker.first_name)
       case "m.ap1": return textOrNull(data.worker.first_surname)
       case "m.ap2": return textOrNull(data.worker.second_surname)
