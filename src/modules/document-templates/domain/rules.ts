@@ -274,6 +274,13 @@ export const reconcileTemplateValidationWithCatalog = (
     return true
   })
 
+  const serverReportedUnrecognized =
+    validation.checks.analysis_present &&
+    (!validation.checks.no_unknown_variables || !validation.checks.no_incompatible_variables)
+  const serverCatalogOutOfSync = Boolean(
+    serverReportedUnrecognized && checks.no_unknown_variables && checks.no_incompatible_variables
+  )
+
   return {
     ...validation,
     analysis: reconciledAnalysis,
@@ -288,6 +295,7 @@ export const reconcileTemplateValidationWithCatalog = (
     warnings: filteredWarnings,
     checks,
     ready,
+    server_catalog_out_of_sync: serverCatalogOutOfSync,
   }
 }
 

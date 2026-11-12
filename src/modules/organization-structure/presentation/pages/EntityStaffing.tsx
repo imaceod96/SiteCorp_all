@@ -765,7 +765,7 @@ const EntityStaffing = () => {
           <DialogHeader>
             <DialogTitle>Migrar trabajador</DialogTitle>
             <DialogDescription>
-              Crea un Worker histórico directamente. Queda sin puesto y sin documentos; podrá
+              Crea un trabajador histórico directamente. Queda sin puesto y sin documentos; podrá
               vincularlo a la plantilla después.
             </DialogDescription>
           </DialogHeader>
@@ -786,7 +786,7 @@ const EntityStaffing = () => {
           <DialogHeader>
             <DialogTitle>Vincular a plantilla</DialogTitle>
             <DialogDescription>
-              La fecha histórica de incorporación no cambia. Esta acción crea únicamente un Assignment.
+              La fecha histórica de incorporación no cambia. Esta acción crea únicamente una asignación.
             </DialogDescription>
           </DialogHeader>
           {linkWorkerId && (

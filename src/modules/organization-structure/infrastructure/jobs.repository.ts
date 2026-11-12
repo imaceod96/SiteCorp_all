@@ -49,7 +49,7 @@ export interface ConfigurationJobRow {
     sequence_number: number
     description: string | null
     is_active: boolean
-    salary_group_values: {
+    salary_group_values?: {
       id: string
       amount: number
       currency_code: string
@@ -60,7 +60,7 @@ export interface ConfigurationJobRow {
   } | null
 }
 
-/** Cargos de la entidad con su área y su grupo salarial (incluido su histórico de valores). */
+/** Cargos de la entidad con su área y su grupo salarial (ligero para la configuración de plantilla). */
 export async function selectConfigurationJobRows(
   entityId: string
 ): Promise<ConfigurationJobRow[]> {
@@ -74,15 +74,7 @@ export async function selectConfigurationJobRows(
         salary_scale_id,
         sequence_number,
         description,
-        is_active,
-        salary_group_values(
-          id,
-          amount,
-          currency_code,
-          effective_from,
-          effective_to,
-          is_active
-        )
+        is_active
       )
     `)
     .eq("organization_entity_id", entityId)

@@ -119,6 +119,36 @@ export async function selectConfigurationPositionRows(
   )
 }
 
+/** Versión ligera de puestos sin re-anidar cargo/área/grupo (el caso de uso los hidrata en memoria). */
+export async function selectConfigurationPositionBaseRows(
+  entityId: string
+): Promise<Omit<ConfigurationPositionRow, "job">[]> {
+  const { data, error } = await supabase
+    .from("organization_positions")
+    .select(
+      "id, organization_entity_id, job_id, name, description, position_order, is_active, created_at, updated_at, authorized_quantity, work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes"
+    )
+    .eq("organization_entity_id", entityId)
+    .order("position_order", { ascending: true })
+    .order("name", { ascending: true })
+
+  if (error) throw error
+  return (data as Omit<ConfigurationPositionRow, "job">[]) || []
+}
+
+function toPositionRepositoryError(error: unknown, fallback: string): Error {
+  if (error instanceof Error) return error
+  if (error && typeof error === "object") {
+    const record = error as { message?: unknown; details?: unknown; hint?: unknown }
+    const parts = [record.message, record.details, record.hint]
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    if (parts.length > 0) {
+      return new Error(parts.join(" — "))
+    }
+  }
+  return new Error(fallback)
+}
+
 /**
  * Alta o edición de un puesto con su horario habitual en UNA sola operación atómica:
  * la RPC `save_position_with_schedule` escribe el puesto y reemplaza sus segmentos de
@@ -155,7 +185,7 @@ export async function savePositionWithSchedule(input: {
     p_segments: input.segments,
   })
 
-  if (error) throw error
+  if (error) throw toPositionRepositoryError(error, "Error al guardar el puesto")
 }
 
 /** Activa o desactiva un puesto: los puestos nunca se eliminan. */
@@ -168,5 +198,5 @@ export async function setOrganizationPositionActive(
     .update({ is_active: isActive })
     .eq("id", positionId)
 
-  if (error) throw error
+  if (error) throw toPositionRepositoryError(error, "Error al actualizar el estado del puesto")
 }

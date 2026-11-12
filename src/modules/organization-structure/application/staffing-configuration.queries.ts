@@ -1,6 +1,7 @@
 import {
   fetchJobPreparationLevels,
   fetchOccupationalCategories,
+  fetchPreparationLevels,
 } from "../infrastructure/catalogs.repository"
 import { fetchEntityName } from "../infrastructure/entity-staffing.repository"
 import { fetchEntityScheduleSegments } from "../infrastructure/schedule.repository"
@@ -13,7 +14,8 @@ import {
   selectConfigurationJobRows,
   type ConfigurationJobRow,
 } from "../infrastructure/jobs.repository"
-import { selectConfigurationPositionRows } from "../infrastructure/positions.repository"
+import { selectConfigurationPositionBaseRows } from "../infrastructure/positions.repository"
+import { sortPositionsByHierarchyOrder } from "../domain/positions.rules"
 import { loadEntityPermission } from "@/modules/access-control"
 import type {
   OccupationalCategory,
@@ -71,16 +73,21 @@ const emptyStaffingConfiguration = (canManage = false): StaffingConfigurationWor
 })
 
 /**
- * La categoría ocupacional y el grupo salarial del cargo se resuelven en el cliente por
- * identificador: la pantalla nunca depende de que PostgREST detecte la relación.
+ * La categoría ocupacional y el valor salarial vigente del grupo se resuelven por
+ * identificador en memoria, evitando joins históricos pesados en PostgREST.
  */
 function mapConfigurationJobs(
   rows: ConfigurationJobRow[],
-  categoryById: Map<string, OccupationalCategory>
+  categoryById: Map<string, OccupationalCategory>,
+  salaryValuesByGroup: Record<string, SalaryValue | null>
 ): OrganizationJob[] {
   return rows.map((row) => {
-    const values = row.salary_group?.salary_group_values
-    const currentValue = values && values.length > 0 ? values[0] : null
+    const fallbackValues = row.salary_group?.salary_group_values
+    const fallbackCurrent =
+      fallbackValues && fallbackValues.length > 0 ? fallbackValues[0] : null
+    const resolvedCurrent = row.salary_group
+      ? salaryValuesByGroup[row.salary_group.id] ?? fallbackCurrent
+      : null
 
     return {
       ...row,
@@ -94,8 +101,8 @@ function mapConfigurationJobs(
             sequence_number: row.salary_group.sequence_number,
             description: row.salary_group.description,
             is_active: row.salary_group.is_active,
-            current_value: currentValue
-              ? { amount: currentValue.amount, currency_code: currentValue.currency_code }
+            current_value: resolvedCurrent
+              ? { amount: resolvedCurrent.amount, currency_code: resolvedCurrent.currency_code }
               : null,
           }
         : null,
@@ -118,16 +125,18 @@ export async function loadStaffingConfiguration(
     areas,
     jobRows,
     categories,
+    prepLevelsCatalog,
     applicableScaleId,
-    positionRows,
+    positionBaseRows,
     segmentsByPosition,
   ] = await Promise.all([
     fetchEntityName(entityId),
     selectEntityAreas(entityId),
     selectConfigurationJobRows(entityId),
     fetchOccupationalCategories({ includeInactive: true }),
+    fetchPreparationLevels(),
     resolveApplicableScaleId(entityId),
-    selectConfigurationPositionRows(entityId),
+    selectConfigurationPositionBaseRows(entityId),
     fetchEntityScheduleSegments(entityId),
   ])
 
@@ -137,21 +146,58 @@ export async function loadStaffingConfiguration(
     categoryNameById[c.id] = c.name
   })
 
-  const jobs = mapConfigurationJobs(jobRows, categoryById)
-
-  const groupIds = jobs
+  const jobIds = jobRows.map((job) => job.id)
+  const groupIds = jobRows
     .map((job) => job.salary_group?.id)
     .filter((id): id is string => !!id)
 
   const [preparationLevelsByJob, salaryValuesByGroup] = await Promise.all([
-    fetchJobPreparationLevels(jobs.map((job) => job.id)),
-    fetchSalaryValuesForGroups(groupIds),
+    jobIds.length > 0
+      ? fetchJobPreparationLevels(jobIds, prepLevelsCatalog)
+      : Promise.resolve({} as Record<string, PreparationLevel[]>),
+    groupIds.length > 0
+      ? fetchSalaryValuesForGroups(groupIds)
+      : Promise.resolve({} as Record<string, SalaryValue | null>),
   ])
 
-  const positions: OrganizationPosition[] = positionRows.map((position) => ({
-    ...position,
-    schedule_segments: segmentsByPosition[position.id] || [],
-  }))
+  const jobs = mapConfigurationJobs(jobRows, categoryById, salaryValuesByGroup)
+  const jobById = new Map(jobs.map((job) => [job.id, job]))
+
+  const hydratedPositions: OrganizationPosition[] = positionBaseRows.map((position) => {
+    const job = jobById.get(position.job_id) || null
+    return {
+      ...position,
+      job: job
+        ? {
+            id: job.id,
+            name: job.name,
+            code: job.code,
+            hierarchy_order: job.hierarchy_order,
+            is_active: job.is_active,
+            area_id: job.area_id,
+            occupational_category_id: job.occupational_category_id,
+            area: job.area
+              ? {
+                  id: job.area.id,
+                  name: job.area.name,
+                  code: job.area.code,
+                  hierarchy_order: job.area.hierarchy_order,
+                }
+              : null,
+            salary_group: job.salary_group
+              ? {
+                  id: job.salary_group.id,
+                  salary_scale_id: job.salary_group.salary_scale_id,
+                  sequence_number: job.salary_group.sequence_number,
+                }
+              : null,
+          }
+        : null,
+      schedule_segments: segmentsByPosition[position.id] || [],
+    }
+  })
+
+  const positions = sortPositionsByHierarchyOrder(hydratedPositions, areas, jobs)
 
   return {
     authorized: true,

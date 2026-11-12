@@ -50,6 +50,7 @@ import {
   addCandidateExpedienteDocument,
   addCandidateNote,
   addCandidateWorkExperience,
+  candidateRequiresSpecialty,
   downloadCandidateExpedienteDocument,
   drivingLicenseLabels,
   isActiveWorker,
@@ -656,7 +657,7 @@ const CandidateDetail = () => {
     if (!candidate.specialty) return "—"
     if (candidate.education_level_id) {
       const level = educationLevels.find(l => l.id === candidate.education_level_id)
-      if (level?.name === "Técnico" || level?.name === "Obrero") {
+      if (candidateRequiresSpecialty(level?.name)) {
         return candidate.specialty
       }
     }

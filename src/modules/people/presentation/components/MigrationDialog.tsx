@@ -203,13 +203,13 @@ export const MigrationDialog: React.FC<MigrationDialogProps> = ({
                     <SelectItem value="basic">
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4" />
-                        <span>Básica (Worker + Assignment + Vacaciones)</span>
+                        <span>Básica (Trabajador + Asignación + Vacaciones)</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="complete">
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
-                        <span>Completa (Worker + Assignment + Vacaciones + Contrato)</span>
+                        <span>Completa (Trabajador + Asignación + Vacaciones + Contrato)</span>
                       </div>
                     </SelectItem>
                   </SelectContent>

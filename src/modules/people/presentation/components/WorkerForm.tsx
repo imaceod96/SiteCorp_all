@@ -784,15 +784,14 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
           </p>
         </div>
 
-        <div className="mt-4 space-y-2">
-                  <Label>Licencias de conducción</Label>
-                  <DrivingLicenseSelector
-                    categories={licenseCategories}
-                    value={licenseIds}
-                    onChange={setLicenseIds}
-                    disabled={submitting}
-                  />
-                </div>
+        <div className="mt-4">
+          <DrivingLicenseSelector
+            categories={licenseCategories}
+            value={licenseIds}
+            onChange={setLicenseIds}
+            disabled={submitting}
+          />
+        </div>
         
                 {/* Verificaciones de seguridad (Chequeo Preempleo y Antecedentes Penales) */}
                 <div className="mt-4 space-y-4">

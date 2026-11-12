@@ -20,7 +20,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/shared/components/ui/dialog"
-import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
+import {
+  ciToBirthDate,
+  formatIsoDateToDisplay,
+  isValidIdentification,
+  sanitizeIdentificationInput,
+  IDENTIFICATION_ERROR_MESSAGE,
+  IDENTIFICATION_LENGTH,
+} from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { DrivingLicenseSelector } from "@/modules/people/presentation/components/DrivingLicenseSelector"
 import { AcademicDegreeCheckboxes } from "@/modules/people/presentation/components/AcademicDegreeCheckboxes"
@@ -155,15 +162,6 @@ const EDUCATION_LEVEL_ORDER = [
   "Superior",
 ]
 
-const formatIsoDateToDisplay = (value: string | null | undefined): string => {
-  const trimmed = (value ?? "").trim()
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
-  if (match) {
-    return `${match[3]}/${match[2]}/${match[1]}`
-  }
-  return trimmed
-}
-
 /** `page` = ficha completa con tarjetas; `dialog` = mismas secciones dentro de un diálogo. */
 export type CandidateFormVariant = "page" | "dialog"
 
@@ -244,6 +242,7 @@ const CandidateForm = ({
   // Medidas disciplinarias: el archivo se conserva en memoria y viaja con el alta.
   const [disciplinaryDialogOpen, setDisciplinaryDialogOpen] = React.useState(false)
   const [disciplinaryDocument, setDisciplinaryDocument] = React.useState<File | null>(null)
+  const birthDateClearedRef = React.useRef(false)
 
   // Load entities for select when no effectiveEntityId in create mode (SuperAdmin Bolsa)
   React.useEffect(() => {
@@ -403,16 +402,32 @@ const CandidateForm = ({
   }
 
   const handleIdentificationChange = (value: string) => {
-    // Se conserva el valor tal cual se escribe: la validación exige exactamente
-    // 11 dígitos (0-9). No se convierte a número para no perder ceros iniciales.
-    setFormData(prev => ({ ...prev, identification: value }))
+    // Se restringe a un máximo de 11 dígitos (0-9) y se conserva como texto para no
+    // perder ceros iniciales.
+    const cleaned = sanitizeIdentificationInput(value)
 
-    // La fecha de nacimiento se deriva solo de los dígitos disponibles (ayuda de
-    // autocompletado, nunca inventa una fecha).
-    const derived = ciToBirthDate(value)
-    if (derived) {
-      setFormData(prev => ({ ...prev, birth_date: derived }))
-    }
+    setFormData(prev => {
+      const prevDerivedIso = ciToBirthDate(prev.identification)
+      const prevDerivedDisplay = prevDerivedIso ? formatIsoDateToDisplay(prevDerivedIso) : ""
+      const nextDerivedIso = ciToBirthDate(cleaned)
+      const nextDerivedDisplay = nextDerivedIso ? formatIsoDateToDisplay(nextDerivedIso) : ""
+
+      let nextBirthDate = prev.birth_date
+      const firstSixChanged = cleaned.slice(0, 6) !== prev.identification.slice(0, 6)
+      if (firstSixChanged && cleaned.length < 6) {
+        birthDateClearedRef.current = false
+      }
+
+      if (!birthDateClearedRef.current && (!prev.birth_date || prev.birth_date === prevDerivedDisplay)) {
+        nextBirthDate = nextDerivedDisplay
+      }
+
+      return {
+        ...prev,
+        identification: cleaned,
+        birth_date: nextBirthDate,
+      }
+    })
   }
 
   const handleProvinceChange = (province: string) => {
@@ -469,6 +484,7 @@ const CandidateForm = ({
   })
 
   const resetForm = () => {
+    birthDateClearedRef.current = false
     setFormData(emptyFormData)
     setDisciplinaryDocument(null)
     setMunicipalities([])
@@ -676,17 +692,34 @@ const CandidateForm = ({
           </div>
           <div className="space-y-1.5">
             <Label>Identificación *</Label>
-            <SiteCorpInput type="text" inputMode="numeric" placeholder="11 dígitos" value={formData.identification} onChange={(e) => handleIdentificationChange(e.target.value)} required />
+            <SiteCorpInput
+              type="text"
+              inputMode="numeric"
+              maxLength={IDENTIFICATION_LENGTH}
+              placeholder="11 dígitos"
+              value={formData.identification}
+              onChange={(e) => handleIdentificationChange(e.target.value)}
+              required
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Fecha de nacimiento (dd/mm/aaaa) *</Label>
-            <SiteCorpInput type="text" placeholder="dd/mm/aaaa" value={formData.birth_date} required onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, "").substring(0, 8)
-              let formatted = val
-              if (val.length > 4) formatted = `${val.substring(0, 2)}/${val.substring(2, 4)}/${val.substring(4, 8)}`
-              else if (val.length > 2) formatted = `${val.substring(0, 2)}/${val.substring(2)}`
-              handleFormChange("birth_date", formatted)
-            }} />
+            <SiteCorpInput
+              type="text"
+              inputMode="numeric"
+              maxLength={10}
+              placeholder="dd/mm/aaaa"
+              value={formData.birth_date}
+              required
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").substring(0, 8)
+                let formatted = val
+                if (val.length > 4) formatted = `${val.substring(0, 2)}/${val.substring(2, 4)}/${val.substring(4, 8)}`
+                else if (val.length > 2) formatted = `${val.substring(0, 2)}/${val.substring(2)}`
+                birthDateClearedRef.current = formatted.length === 0
+                handleFormChange("birth_date", formatted)
+              }}
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Sexo</Label>
@@ -747,7 +780,7 @@ const CandidateForm = ({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Teléfono</Label>
-            <SiteCorpInput type="tel" placeholder="+51 999 999 999" value={formData.phone} onChange={(e) => handleFormChange("phone", e.target.value)} />
+            <SiteCorpInput type="tel" placeholder="+53 5 123 4567" value={formData.phone} onChange={(e) => handleFormChange("phone", e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label>Email</Label>

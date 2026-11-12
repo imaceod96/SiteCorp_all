@@ -88,10 +88,12 @@ export {
 } from "./domain/jobs.rules"
 
 // --- Reglas puras de puestos ---
-export type { PositionFormValidation } from "./domain/positions.rules"
+export type { PositionFormValidation, ScheduledWeeklyHoursSummary } from "./domain/positions.rules"
 export {
   MAX_AUTHORIZED_QUANTITY,
   addDraftScheduleSegments,
+  calculateScheduledWeeklyHours,
+  getScheduleWeeklyHoursWarning,
   normalizeScheduleTime,
   parseNullableNumber,
   positionSaveErrorMessage,

@@ -15,7 +15,6 @@ import {
   formatAuditDateTime,
   loadAuditEntityOptions,
   loadAuditHistory,
-  recordAuditEvent,
   exportAuditEventsToCsv,
   type AuditEntityOption,
   type AuditEvent,
@@ -40,7 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/components/ui/dialog"
-import { ChevronLeft, ChevronRight, Check, Copy, Database, Download, Eye, Filter, History, PlusCircle, Search, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Download, Eye, Filter, History, Search, X } from "lucide-react"
 
 /**
  * Historial (SiteCorp global) — EXCLUSIVO del Super Admin.
@@ -56,47 +55,46 @@ import { ChevronLeft, ChevronRight, Check, Copy, Database, Download, Eye, Filter
 /** Valor de «sin filtro» para los selectores (Radix no admite `""` como valor). */
 const ANY = "__any__"
 
-const AUDIT_SQL_SCRIPT = `-- ============================================================================
--- SCRIPT DE CREACIÓN DE LA TABLA AUDIT_EVENTS EN SUPABASE
--- Pega este script en el SQL Editor de Supabase (https://supabase.com) y pulsa Run
--- ============================================================================
-CREATE TABLE IF NOT EXISTS public.audit_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  actor_user_id UUID,
-  actor_full_name TEXT,
-  actor_username TEXT,
-  scope TEXT NOT NULL DEFAULT 'SITECORP',
-  organization_entity_id UUID,
-  entity_name TEXT,
-  company_client_id UUID,
-  module TEXT NOT NULL,
-  action TEXT NOT NULL,
-  entity_type TEXT,
-  record_id TEXT,
-  description TEXT NOT NULL,
-  old_values JSONB,
-  new_values JSONB,
-  result TEXT NOT NULL DEFAULT 'SUCCESS'
-);
+function extractAuditFailureDetail(event: AuditEvent): {
+  message: string
+  details?: string
+  hint?: string
+  code?: string
+  httpStatus?: number
+} | null {
+  if (event.result === "SUCCESS") return null
+  const values = event.new_values
+  if (!values || typeof values !== "object") {
+    return { message: event.description }
+  }
 
-CREATE INDEX IF NOT EXISTS audit_events_occurred_at_idx ON public.audit_events (occurred_at DESC);
-CREATE INDEX IF NOT EXISTS audit_events_scope_occurred_at_idx ON public.audit_events (scope, occurred_at DESC);
-CREATE INDEX IF NOT EXISTS audit_events_entity_occurred_at_idx ON public.audit_events (organization_entity_id, occurred_at DESC);
+  const root = values as Record<string, unknown>
+  const errObj =
+    root.error && typeof root.error === "object"
+      ? (root.error as Record<string, unknown>)
+      : root
 
-ALTER TABLE IF EXISTS public.candidates ADD COLUMN IF NOT EXISTS area_id UUID REFERENCES public.organization_areas(id);
+  const message =
+    (typeof errObj.message === "string" && errObj.message) ||
+    (typeof errObj.error === "string" && errObj.error) ||
+    (typeof errObj.error_description === "string" && errObj.error_description) ||
+    event.description
 
-GRANT SELECT, INSERT ON TABLE public.audit_events TO authenticated, service_role;
-ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
+  const details = typeof errObj.details === "string" ? errObj.details : undefined
+  const hint = typeof errObj.hint === "string" ? errObj.hint : undefined
+  const code =
+    typeof errObj.code === "string" || typeof errObj.code === "number"
+      ? String(errObj.code)
+      : undefined
+  const httpStatus =
+    typeof errObj.http_status === "number"
+      ? errObj.http_status
+      : typeof root.http_status === "number"
+        ? root.http_status
+        : undefined
 
-DROP POLICY IF EXISTS "audit_events_select_superadmin" ON public.audit_events;
-CREATE POLICY "audit_events_select_superadmin" ON public.audit_events
-  FOR SELECT TO authenticated USING (true);
-
-DROP POLICY IF EXISTS "audit_events_insert_authenticated" ON public.audit_events;
-CREATE POLICY "audit_events_insert_authenticated" ON public.audit_events
-  FOR INSERT TO authenticated WITH CHECK (true);
-`
+  return { message, details, hint, code, httpStatus }
+}
 
 const AdminHistory = () => {
   const { isPlatformSuperAdmin } = useAuth()
@@ -115,8 +113,6 @@ const AdminHistory = () => {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [selectedEvent, setSelectedEvent] = React.useState<AuditEvent | null>(null)
-  const [sqlModalOpen, setSqlModalOpen] = React.useState(false)
-  const [copiedSql, setCopiedSql] = React.useState(false)
 
   const years = React.useMemo(() => availableAuditYears(), [])
 
@@ -189,32 +185,6 @@ const AdminHistory = () => {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.error("Error exporting audit history:", err)
-    }
-  }
-
-  const handleTestEvent = async () => {
-    try {
-      await recordAuditEvent({
-        module: "system",
-        action: "manual_audit_check",
-        description: "Verificación manual de auditoría ejecutada por el Administrador",
-        scope: "SITECORP",
-        recordId: `AUDIT-TEST-${Date.now().toString().slice(-4)}`,
-        newValues: { test_mode: true, timestamp: new Date().toISOString() },
-      })
-      const data = await loadAuditHistory({ filters: appliedFilters, page: 1 })
-      setResult(data)
-      setPage(1)
-    } catch (err) {
-      console.error("Error recording test event:", err)
-    }
-  }
-
-  const handleCopySql = () => {
-    if (typeof navigator !== "undefined" && navigator.clipboard) {
-      navigator.clipboard.writeText(AUDIT_SQL_SCRIPT)
-      setCopiedSql(true)
-      setTimeout(() => setCopiedSql(false), 2500)
     }
   }
 
@@ -342,23 +312,6 @@ const AdminHistory = () => {
             title="Descargar registro en CSV"
           >
             <Download className="mr-1.5 h-4 w-4" /> Exportar CSV
-          </SiteCorpButton>
-          <SiteCorpButton
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSqlModalOpen(true)}
-            title="Ver o copiar el script SQL para la base de datos de Supabase"
-          >
-            <Database className="mr-1.5 h-4 w-4" /> Script SQL para Nube
-          </SiteCorpButton>
-          <SiteCorpButton
-            type="button"
-            size="sm"
-            onClick={handleTestEvent}
-            title="Generar evento de auditoría de comprobación"
-          >
-            <PlusCircle className="mr-1.5 h-4 w-4" /> Registrar evento de prueba
           </SiteCorpButton>
         </div>
       </div>
@@ -583,116 +536,98 @@ const AdminHistory = () => {
             </DialogDescription>
           </DialogHeader>
 
-          {selectedEvent && (
-            <div className="space-y-4">
-              <dl className="grid gap-3 sm:grid-cols-2">
-                {[
-                  ["Fecha y hora", formatAuditDateTime(selectedEvent.occurred_at)],
-                  ["Ámbito", AUDIT_SCOPE_LABELS[selectedEvent.scope]],
-                  ["Entidad", selectedEvent.entity_name || "—"],
-                  ["Módulo", auditModuleLabel(selectedEvent.module)],
-                  ["Acción", selectedEvent.action],
-                  ["Resultado", AUDIT_RESULT_LABELS[selectedEvent.result]],
-                  ["Ejecutor", auditActorLabel(selectedEvent)],
-                  ["ID del ejecutor", selectedEvent.actor_user_id || "—"],
-                  ["Tipo de registro", selectedEvent.entity_type || "—"],
-                  ["Registro afectado", selectedEvent.record_id || "—"],
-                ].map(([label, value]) => (
-                  <div key={label} className="min-w-0">
-                    <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {label}
-                    </dt>
-                    <dd className="break-words text-sm text-ink">{value}</dd>
+          {selectedEvent && (() => {
+            const failureDetail = extractAuditFailureDetail(selectedEvent)
+            return (
+              <div className="space-y-4">
+                {failureDetail && (
+                  <SiteCorpAlert
+                    type={selectedEvent.result === "DENIED" ? "warning" : "danger"}
+                    title={
+                      selectedEvent.result === "DENIED"
+                        ? "Operación denegada"
+                        : "Detalle del error registrado"
+                    }
+                  >
+                    <div className="space-y-1">
+                      <p className="font-medium">{failureDetail.message}</p>
+                      {failureDetail.details && (
+                        <p className="text-xs opacity-90">Detalle: {failureDetail.details}</p>
+                      )}
+                      {failureDetail.hint && (
+                        <p className="text-xs opacity-90">Sugerencia: {failureDetail.hint}</p>
+                      )}
+                      {(failureDetail.httpStatus || failureDetail.code) && (
+                        <p className="font-mono text-xs opacity-80">
+                          {failureDetail.httpStatus ? `HTTP ${failureDetail.httpStatus}` : ""}
+                          {failureDetail.httpStatus && failureDetail.code ? " · " : ""}
+                          {failureDetail.code ? `Código ${failureDetail.code}` : ""}
+                        </p>
+                      )}
+                    </div>
+                  </SiteCorpAlert>
+                )}
+
+                <dl className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    ["Fecha y hora", formatAuditDateTime(selectedEvent.occurred_at)],
+                    ["Ámbito", AUDIT_SCOPE_LABELS[selectedEvent.scope]],
+                    ["Entidad", selectedEvent.entity_name || "—"],
+                    ["Módulo", auditModuleLabel(selectedEvent.module)],
+                    ["Acción", selectedEvent.action],
+                    ["Resultado", AUDIT_RESULT_LABELS[selectedEvent.result]],
+                    ["Ejecutor", auditActorLabel(selectedEvent)],
+                    ["ID del ejecutor", selectedEvent.actor_user_id || "—"],
+                    ["Tipo de registro", selectedEvent.entity_type || "—"],
+                    ["Registro afectado", selectedEvent.record_id || "—"],
+                  ].map(([label, value]) => (
+                    <div key={label} className="min-w-0">
+                      <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        {label}
+                      </dt>
+                      <dd className="break-words text-sm text-ink">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Descripción
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
+                    {selectedEvent.description}
+                  </p>
+                </div>
+
+                {selectedEvent.old_values && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Valores anteriores
+                    </p>
+                    <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-muted p-3 text-xs text-ink">
+                      {JSON.stringify(selectedEvent.old_values, null, 2)}
+                    </pre>
                   </div>
-                ))}
-              </dl>
+                )}
 
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Descripción
-                </p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-ink">
-                  {selectedEvent.description}
-                </p>
+                {selectedEvent.new_values && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {failureDetail ? "Datos de la solicitud y respuesta" : "Valores nuevos"}
+                    </p>
+                    <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-muted p-3 text-xs text-ink">
+                      {JSON.stringify(selectedEvent.new_values, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
-
-              {selectedEvent.old_values && (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Valores anteriores
-                  </p>
-                  <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-muted p-3 text-xs text-ink">
-                    {JSON.stringify(selectedEvent.old_values, null, 2)}
-                  </pre>
-                </div>
-              )}
-
-              {selectedEvent.new_values && (
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    Valores nuevos
-                  </p>
-                  <pre className="mt-1 max-h-48 overflow-auto rounded-lg bg-muted p-3 text-xs text-ink">
-                    {JSON.stringify(selectedEvent.new_values, null, 2)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
+            )
+          })()}
 
           <div className="flex justify-end pt-2">
             <SiteCorpButton type="button" variant="outline" onClick={() => setSelectedEvent(null)}>
               Cerrar
             </SiteCorpButton>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal para ver y copiar el script SQL de Supabase */}
-      <Dialog open={sqlModalOpen} onOpenChange={setSqlModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Script SQL para la Base de Datos en Supabase</DialogTitle>
-            <DialogDescription>
-              Para que la tabla se cree físicamente en tu nube de Supabase, copia este script y ejecútalo en la consola de tu proyecto.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900 border border-blue-200">
-              <p className="font-semibold mb-1">Instrucciones simples (1 minuto):</p>
-              <ol className="list-decimal pl-4 space-y-1">
-                <li>Haz clic en el botón <strong>«Copiar al portapapeles»</strong> a continuación.</li>
-                <li>Abre tu proyecto en <strong>supabase.com</strong> y pulsa en la sección <strong>SQL Editor</strong> del menú izquierdo.</li>
-                <li>Pega el contenido y pulsa el botón verde <strong>Run</strong>.</li>
-              </ol>
-            </div>
-
-            <pre className="max-h-64 overflow-auto rounded-lg bg-slate-900 p-4 text-xs font-mono text-emerald-400">
-              {AUDIT_SQL_SCRIPT}
-            </pre>
-
-            <div className="flex items-center justify-between pt-2">
-              <SiteCorpButton
-                type="button"
-                variant={copiedSql ? "default" : "secondary"}
-                onClick={handleCopySql}
-                className="flex items-center gap-2"
-              >
-                {copiedSql ? (
-                  <>
-                    <Check className="h-4 w-4 text-emerald-500" /> ¡Copiado con éxito!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4" /> Copiar al portapapeles
-                  </>
-                )}
-              </SiteCorpButton>
-              <SiteCorpButton type="button" variant="outline" onClick={() => setSqlModalOpen(false)}>
-                Cerrar
-              </SiteCorpButton>
-            </div>
           </div>
         </DialogContent>
       </Dialog>

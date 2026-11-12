@@ -18,7 +18,7 @@ export const ciToBirthDate = (ci: string): string | null => {
   // Descartar fechas inválidas (p. ej. 3102)
   if (date.getDate() !== day || date.getMonth() !== month - 1) return null
 
-  return date.toISOString().split("T")[0]
+  return `${fullYear}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
 }
 
 /**
@@ -31,6 +31,20 @@ export const IDENTIFICATION_REGEX = /^[0-9]{11}$/
 export const IDENTIFICATION_ERROR_MESSAGE =
   "El número de identificación debe contener exactamente 11 dígitos."
 
+/** Normaliza la entrada del carné a un máximo de 11 dígitos numéricos. */
+export const sanitizeIdentificationInput = (value: string): string =>
+  value.replace(/\D/g, "").slice(0, IDENTIFICATION_LENGTH)
+
 /** true si el valor (recortado) son exactamente 11 dígitos. */
 export const isValidIdentification = (value: unknown): boolean =>
   IDENTIFICATION_REGEX.test(String(value ?? "").trim())
+
+/** Convierte una fecha ISO YYYY-MM-DD a formato visual DD/MM/AAAA. */
+export const formatIsoDateToDisplay = (value: string | null | undefined): string => {
+  const trimmed = (value ?? "").trim()
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed)
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]}`
+  }
+  return trimmed
+}
