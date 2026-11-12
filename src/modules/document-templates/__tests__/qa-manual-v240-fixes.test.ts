@@ -26,31 +26,29 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
     const allOccurrences = contractVars.map((v) => ({
       key: v.key,
       count: 1,
-      parts: ["word/document.xml"],
       split_runs: 0,
     }))
 
-    // Simulamos que el RPC de BD (antes de la migración) devolvió solo 4 reconocidas y 41 como "unknown"
+    // Simulamos que el RPC de BD (antes de la migración) devolvió solo 4 reconocidas y 41 como "unknown_variables"
     const staleBackendAnalysis: DocumentTemplateAnalysis = {
-      id: "analysis-1",
-      template_id: "t-1",
-      version_id: "v-1",
-      file_id: "f-1",
-      file_kind: "CONFIGURED",
-      detected_format: "DOCX",
-      document_type_code: "CONTRACT",
-      valid_docx: true,
-      parts_scanned: ["word/document.xml"],
-      occurrences_total: 45,
-      variables_found: 45,
-      split_runs_Fixed: 0,
-      required_variables: allOccurrences.slice(0, 4).map((item) => item.key),
-      recognized: allOccurrences.slice(0, 4),
-      unknown: allOccurrences.slice(4),
-      incompatible: [],
-      malformed_placeholders: [],
-      warnings: ["El documento no contiene marcadores dinámicos {{variable}}."],
       analyzed_at: "2026-01-01T00:00:00Z",
+      file_path: "entity/qa/templates/t-1/v1/CONFIGURED.docx",
+      file_kind: "CONFIGURED",
+      file_name: "Contrato_Determinado.docx",
+      file_sha256: "abc123",
+      valid_docx: true,
+      zip_signature_ok: true,
+      has_document_xml: true,
+      scanned_parts: ["word/document.xml"],
+      paragraphs_scanned: 20,
+      occurrences: allOccurrences,
+      recognized: allOccurrences.slice(0, 4),
+      required_variables: allOccurrences.slice(0, 4).map((item) => item.key),
+      unknown_variables: allOccurrences.slice(4).map((item) => ({ key: item.key, count: item.count })),
+      incompatible_variables: [],
+      malformed_placeholders: [],
+      split_run_placeholders: 0,
+      warnings: ["El documento no contiene marcadores dinámicos {{variable}}."],
     }
 
     const reconciledAnalysis = reconcileTemplateAnalysisWithCatalog(
@@ -58,8 +56,8 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
       "CONTRACT"
     )
     expect(reconciledAnalysis.recognized).toHaveLength(45)
-    expect(reconciledAnalysis.unknown).toHaveLength(0)
-    expect(reconciledAnalysis.incompatible).toHaveLength(0)
+    expect(reconciledAnalysis.unknown_variables).toHaveLength(0)
+    expect(reconciledAnalysis.incompatible_variables).toHaveLength(0)
 
     const staleValidation: TemplateValidation = {
       version_id: "v-1",
@@ -69,6 +67,14 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
       status: "DRAFT",
       effective_from: null,
       effective_to: null,
+      original_file_name: "Contrato_Original.docx",
+      original_file_format: "DOCX",
+      original_mime_type: null,
+      configured_file_name: "Contrato_Determinado.docx",
+      configured_file_format: "DOCX",
+      configured_mime_type: null,
+      analysis_issue: null,
+      analyzed_file_path: "entity/qa/templates/t-1/v1/CONFIGURED.docx",
       ready: false,
       checks: {
         original_file_present: true,
@@ -84,16 +90,16 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
         effective_dates_coherent: true,
         no_simultaneous_active: true,
       },
-      configured_detected_format: "DOCX",
       analysis: staleBackendAnalysis,
       variables_found: 45,
       variables_valid: 4,
       variables_unknown: 41,
       variables_incompatible: 0,
-      malformed_count: 0,
+      occurrences_total: 45,
+      occurrences_invalid: 41,
       required_variables: allOccurrences.slice(0, 4).map((item) => item.key),
       recognized: allOccurrences.slice(0, 4),
-      unknown_variables: allOccurrences.slice(4),
+      unknown_variables: allOccurrences.slice(4).map((item) => ({ key: item.key, count: item.count })),
       incompatible_variables: [],
       malformed_placeholders: [],
       warnings: [],
@@ -139,73 +145,65 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
       "PAYROLL_MOVEMENT",
     ] as const) {
       const analysisWithAlias: DocumentTemplateAnalysis = {
-        id: "a-alias",
-        template_id: "t-1",
-        version_id: "v-1",
-        file_id: "f-1",
+        analyzed_at: "2026-01-01T00:00:00Z",
+        file_path: "entity/qa/templates/t-1/v1/CONFIGURED.docx",
         file_kind: "CONFIGURED",
-        detected_format: code === "PAYROLL_MOVEMENT" ? "XLSX" : "DOCX",
-        document_type_code: code,
+        file_name: "Plantilla.docx",
+        file_sha256: "abc123",
         valid_docx: true,
-        parts_scanned: ["word/document.xml"],
-        occurrences_total: 1,
-        variables_found: 1,
-        split_runs_Fixed: 0,
-        required_variables: [],
+        zip_signature_ok: true,
+        has_document_xml: true,
+        scanned_parts: ["word/document.xml"],
+        paragraphs_scanned: 5,
+        occurrences: [{ key: "worker.full_name", count: 1, split_runs: 0 }],
         recognized: [],
-        unknown: [],
-        incompatible: [
+        required_variables: [],
+        unknown_variables: [],
+        incompatible_variables: [
           {
             key: "worker.full_name",
-            count: 1,
-            parts: ["word/document.xml"],
-            split_runs: 0,
             label: "Trabajador · Nombre completo",
-            category: "Trabajador",
-            allowed_document_types: ["CONTRACT", "ADDENDUM", "SC_4_04", "PAYROLL_MOVEMENT"],
+            count: 1,
           },
         ],
         malformed_placeholders: [],
+        split_run_placeholders: 0,
         warnings: [],
-        analyzed_at: "2026-01-01T00:00:00Z",
       }
       const reconciled = reconcileTemplateAnalysisWithCatalog(analysisWithAlias, code)
       expect(reconciled.recognized.map((r) => r.key)).toContain("worker.full_name")
-      expect(reconciled.incompatible).toHaveLength(0)
+      expect(reconciled.incompatible_variables).toHaveLength(0)
     }
 
     // Y se resuelve también en RESOLUTION
     const resSnapshot: ResolutionDocumentData = {
-      schema_version: 1,
       document_type: "RESOLUTION",
-      generated_at: "2026-01-15T00:00:00Z",
-      resolution: {
-        number: "12/2026",
-        effective_date: "2026-01-15",
-        signature_date: "2026-01-15",
-        revolution_year: "Año 68 de la Revolución",
-        reference_norm: "Ley 116",
-      },
+      resolution_id: "res-1",
       entity: {
-        id: "ent-1",
         name: "Empresa QA",
         municipality: "Plaza",
-        parent_company_name: "Grupo QA",
+        revolution_year: "Año 68 de la Revolución",
+      },
+      parent_company: {
+        name: "Grupo QA",
+      },
+      representative: {
+        name: "María López",
+        position: "Directora General",
       },
       worker: {
-        id: "w-1",
         full_name: "Juan Pérez García",
-        ci: "90010112345",
+        identification: "90010112345",
       },
-      appointment: {
-        job_name: "Especialista Principal",
-        salary_group_roman: "II",
-        base_salary: 5200,
+      job: {
+        name: "Especialista Principal",
+        salary_group_sequence: 2,
+        salary_amount: 5200,
+        currency_code: "CUP",
         work_content: "Funciones técnicas",
       },
-      signatory: {
-        full_name: "María López",
-        job_title: "Directora General",
+      resolution: {
+        date: "2026-01-15",
       },
     }
     const resolved = resolveDocumentVariable(resSnapshot, "worker.full_name")

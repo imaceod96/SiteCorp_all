@@ -113,21 +113,19 @@ export const reconcileTemplateAnalysisWithCatalog = (
   analysis: DocumentTemplateAnalysis,
   templateTypeCode?: string | null
 ): DocumentTemplateAnalysis => {
-  const docType = documentTypeCodeForTemplateType(
-    templateTypeCode || analysis.document_type_code || "CONTRACT"
-  )
+  const docType = documentTypeCodeForTemplateType(templateTypeCode || "CONTRACT")
 
   const recognizedMap = new Map<string, DocumentTemplateAnalysis["recognized"][number]>()
   for (const item of analysis.recognized || []) {
     recognizedMap.set(item.key, { ...item })
   }
 
-  const remainingUnknown: DocumentTemplateAnalysis["unknown"] = []
-  const remainingIncompatible: DocumentTemplateAnalysis["incompatible"] = [
-    ...(analysis.incompatible || []),
+  const remainingUnknown: DocumentTemplateAnalysis["unknown_variables"] = []
+  const remainingIncompatible: DocumentTemplateAnalysis["incompatible_variables"] = [
+    ...(analysis.incompatible_variables || []),
   ]
 
-  for (const item of analysis.unknown || []) {
+  for (const item of analysis.unknown_variables || []) {
     const def = documentVariableByKey(item.key)
     if (!def) {
       remainingUnknown.push(item)
@@ -137,30 +135,27 @@ export const reconcileTemplateAnalysisWithCatalog = (
       recognizedMap.set(item.key, {
         key: item.key,
         count: item.count,
-        parts: item.parts,
-        split_runs: item.split_runs,
+        split_runs: 0,
       })
     } else if (!remainingIncompatible.some((inc) => inc.key === item.key)) {
       remainingIncompatible.push({
-        ...item,
+        key: item.key,
         label: def.label,
-        category: def.category,
-        allowed_document_types: def.documentTypes,
+        count: item.count,
       })
     }
   }
 
-  // Re-evaluar también `incompatible` por si una variable como `worker.full_name`
+  // Re-evaluar también `incompatible_variables` por si una variable como `worker.full_name`
   // ahora es compatible con el tipo documental (G1).
-  const finalIncompatible: DocumentTemplateAnalysis["incompatible"] = []
+  const finalIncompatible: DocumentTemplateAnalysis["incompatible_variables"] = []
   for (const inc of remainingIncompatible) {
     const def = documentVariableByKey(inc.key)
     if (def && def.documentTypes.includes(docType)) {
       recognizedMap.set(inc.key, {
         key: inc.key,
         count: inc.count,
-        parts: inc.parts,
-        split_runs: inc.split_runs,
+        split_runs: 0,
       })
     } else {
       finalIncompatible.push(inc)
@@ -180,8 +175,8 @@ export const reconcileTemplateAnalysisWithCatalog = (
   return {
     ...analysis,
     recognized,
-    unknown: remainingUnknown,
-    incompatible: finalIncompatible,
+    unknown_variables: remainingUnknown,
+    incompatible_variables: finalIncompatible,
     required_variables: requiredVariables,
     warnings: filteredWarnings,
   }
@@ -207,7 +202,8 @@ export const reconcileTemplateValidationWithCatalog = (
   const remainingUnknown: TemplateValidation["unknown_variables"] = []
   const remainingIncompatible: TemplateValidation["incompatible_variables"] = []
 
-  const sourceUnknown = reconciledAnalysis?.unknown ?? validation.unknown_variables ?? []
+  const sourceUnknown =
+    reconciledAnalysis?.unknown_variables ?? validation.unknown_variables ?? []
   for (const item of sourceUnknown) {
     const def = documentVariableByKey(item.key)
     if (!def) {
@@ -216,29 +212,26 @@ export const reconcileTemplateValidationWithCatalog = (
       recognizedMap.set(item.key, {
         key: item.key,
         count: item.count,
-        parts: item.parts,
-        split_runs: item.split_runs,
+        split_runs: 0,
       })
     } else {
       remainingIncompatible.push({
-        ...item,
+        key: item.key,
         label: def.label,
-        category: def.category,
-        allowed_document_types: def.documentTypes,
+        count: item.count,
       })
     }
   }
 
   const sourceIncompatible =
-    reconciledAnalysis?.incompatible ?? validation.incompatible_variables ?? []
+    reconciledAnalysis?.incompatible_variables ?? validation.incompatible_variables ?? []
   for (const inc of sourceIncompatible) {
     const def = documentVariableByKey(inc.key)
     if (def && def.documentTypes.includes(docType)) {
       recognizedMap.set(inc.key, {
         key: inc.key,
         count: inc.count,
-        parts: inc.parts,
-        split_runs: inc.split_runs,
+        split_runs: 0,
       })
     } else if (!remainingIncompatible.some((item) => item.key === inc.key)) {
       remainingIncompatible.push(inc)
