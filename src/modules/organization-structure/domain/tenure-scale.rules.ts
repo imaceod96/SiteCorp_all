@@ -82,20 +82,92 @@ export function tenureFormToValues(
   return { values: { from_months: fromMonths, to_months: toMonths, amount }, error: null }
 }
 
-/** Etiqueta legible de un tramo: «1 año a 2 años», «5 meses en adelante»… */
+/** Etiqueta individual de una cota en meses: «1 año», «1 año y 6 meses», «6 meses». */
+export function formatTenureMonths(months: number): string {
+  if (months <= 0) return "0 meses"
+  const years = Math.floor(months / MONTHS_PER_YEAR)
+  const remainder = months % MONTHS_PER_YEAR
+  const yearsStr = years > 0 ? `${years} ${years === 1 ? "año" : "años"}` : ""
+  const monthsStr = remainder > 0 ? `${remainder} ${remainder === 1 ? "mes" : "meses"}` : ""
+  if (yearsStr && monthsStr) return `${yearsStr} y ${monthsStr}`
+  return yearsStr || monthsStr
+}
+
+/** Etiqueta legible de un tramo completo: «1 año a 2 años», «5 meses en adelante»… */
 export function formatTenureRange(range: TenureScaleRange): string {
-  const fromStr = formatMonths(range.from_months)
+  const fromStr = formatTenureMonths(range.from_months)
 
   if (range.to_months === null) {
     return `${fromStr} en adelante`
   }
 
-  return `${fromStr} a ${formatMonths(range.to_months)}`
+  return `${fromStr} a ${formatTenureMonths(range.to_months)}`
 }
 
-function formatMonths(months: number): string {
-  const years = Math.floor(months / MONTHS_PER_YEAR)
-  if (years > 0) return `${years} ${years === 1 ? "año" : "años"}`
-  const remainder = months % MONTHS_PER_YEAR
-  return `${remainder} ${remainder === 1 ? "mes" : "meses"}`
+/**
+ * Valida la coherencia del conjunto de tramos de antigüedad de una entidad (G5):
+ * - No puede haber dos tramos abiertos («Sin límite»).
+ * - Ningún tramo puede empezar después o encima de un tramo abierto.
+ * - Dos tramos no pueden solaparse (`prev.to_months > next.from_months`).
+ * - No deben quedar huecos intermedios (`next.from_months > prev.to_months`), ya que el
+ *   cálculo de prenómina evalúa `meses >= desde AND meses < hasta`: para continuidad sin
+ *   huecos el «Desde» del siguiente tramo debe coincidir con el «Hasta» del anterior
+ *   (ej. 1 a 5 años, 5 a 10 años, 10 años en adelante).
+ */
+export function validateTenureScaleContinuity(
+  candidate: TenureScaleValues,
+  existingRanges: TenureScaleRange[],
+  editingId?: string | null
+): string | null {
+  const others = existingRanges.filter(
+    (range) => range.is_active !== false && range.id !== (editingId ?? null)
+  )
+
+  if (others.length === 0) return null
+
+  if (candidate.to_months === null) {
+    const existingOpen = others.find((range) => range.to_months === null)
+    if (existingOpen) {
+      return `Ya existe un tramo final «Sin límite» (desde ${formatTenureMonths(existingOpen.from_months)}). Solo puede existir un último tramo abierto.`
+    }
+  }
+
+  const all = [
+    ...others.map((range) => ({
+      id: range.id,
+      from_months: range.from_months,
+      to_months: range.to_months,
+      isCandidate: false,
+    })),
+    {
+      id: editingId ?? "__candidate__",
+      from_months: candidate.from_months,
+      to_months: candidate.to_months,
+      isCandidate: true,
+    },
+  ].sort((a, b) => {
+    if (a.from_months !== b.from_months) return a.from_months - b.from_months
+    const aEnd = a.to_months ?? Number.POSITIVE_INFINITY
+    const bEnd = b.to_months ?? Number.POSITIVE_INFINITY
+    return aEnd - bEnd
+  })
+
+  for (let index = 0; index < all.length - 1; index += 1) {
+    const current = all[index]
+    const next = all[index + 1]
+
+    if (current.to_months === null) {
+      return `El tramo «Sin límite» (desde ${formatTenureMonths(current.from_months)}) debe ser el último: no puede existir un tramo posterior desde ${formatTenureMonths(next.from_months)}.`
+    }
+
+    if (current.to_months > next.from_months) {
+      return `El tramo se solapa con el tramo existente (${formatTenureMonths(current.from_months)} a ${formatTenureMonths(current.to_months)}). El valor «Desde» debe ser al menos ${formatTenureMonths(current.to_months)}.`
+    }
+
+    if (next.from_months > current.to_months) {
+      return `Queda un hueco sin cobertura entre ${formatTenureMonths(current.to_months)} y ${formatTenureMonths(next.from_months)}. Para evitar meses sin pago de antigüedad, el tramo siguiente debe iniciar en ${formatTenureMonths(current.to_months)}.`
+    }
+  }
+
+  return null
 }

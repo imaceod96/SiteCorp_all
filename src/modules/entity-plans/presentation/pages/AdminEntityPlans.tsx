@@ -330,7 +330,7 @@ export const AdminEntityPlans: React.FC = () => {
       {selectedAccount && (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* COLUMNA IZQUIERDA: RESUMEN DEL PLAN ACTUAL */}
-          <div className="space-y-6 lg:col-span-1">
+          <div className="min-w-0 space-y-6 lg:col-span-1">
             <SiteCorpCard title="Plan actual de la cuenta" className="rounded-2xl">
               {loadingPlan ? (
                 <SiteCorpLoading rows={3} />
@@ -416,7 +416,7 @@ export const AdminEntityPlans: React.FC = () => {
           </div>
 
           {/* COLUMNA DERECHA: CONFIGURACIÓN DE LOS 3 PAQUETES (§4, §5) */}
-          <div className="space-y-6 lg:col-span-2">
+          <div className="min-w-0 space-y-6 lg:col-span-2">
             <SiteCorpCard
               title="Configuración de paquetes funcionales"
               description="Selecciona los paquetes que estarán habilitados para esta cuenta."
@@ -609,14 +609,14 @@ export const AdminEntityPlans: React.FC = () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table className="min-w-[680px]">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-28">Operación</TableHead>
-                        <TableHead>Fecha y hora</TableHead>
-                        <TableHead>Responsable</TableHead>
-                        <TableHead>Transición</TableHead>
-                        <TableHead>Motivo / Observaciones</TableHead>
+                        <TableHead className="w-28 whitespace-nowrap">Operación</TableHead>
+                        <TableHead className="w-36 whitespace-nowrap">Fecha y hora</TableHead>
+                        <TableHead className="min-w-[160px]">Responsable</TableHead>
+                        <TableHead className="min-w-[200px]">Transición</TableHead>
+                        <TableHead className="min-w-[180px]">Motivo / Observaciones</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -648,7 +648,7 @@ export const AdminEntityPlans: React.FC = () => {
                             <TableCell className="tabular-nums text-muted-foreground whitespace-nowrap">
                               {new Date(item.createdAt).toLocaleString("es-ES")}
                             </TableCell>
-                            <TableCell className="font-medium text-ink">
+                            <TableCell className="font-medium text-ink break-all">
                               {item.changedByEmail || item.changedBy || "Sistema"}
                             </TableCell>
                             <TableCell>
@@ -673,7 +673,10 @@ export const AdminEntityPlans: React.FC = () => {
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-muted-foreground italic max-w-xs truncate">
+                            <TableCell
+                              className="text-muted-foreground italic max-w-xs break-words"
+                              title={item.reason || undefined}
+                            >
                               {item.reason || "—"}
                             </TableCell>
                           </TableRow>

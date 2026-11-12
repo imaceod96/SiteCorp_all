@@ -364,7 +364,7 @@ export const JobForm: React.FC<JobFormProps> = ({
             ))}
           </SiteCorpSelect>
           <p className="text-xs text-muted-foreground">
-            Catálogo global de SiteCorp (Operario, Administrativo, Servicios, Técnico).
+            Catálogo global de SiteCorp (Cuadro, Técnico, Administrativo, Servicio, Operario).
           </p>
         </div>
 

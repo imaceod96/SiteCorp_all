@@ -272,12 +272,14 @@ const DocumentTemplateValidationPanel = ({ validation, loading }: Props) => {
 
       <SiteCorpCard
         title="Variables requeridas por esta plantilla"
-        description="Derivadas del documento configurado: son las que el motor documental (11B.2) necesitará resolver."
+        description="Derivadas del documento configurado: son las que el sistema completará automáticamente al generar el documento."
       >
         {validation.required_variables.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {analysisPresent
-              ? "El documento configurado no contiene variables dinámicas."
+              ? validation.variables_found > 0
+                ? "El documento configurado contiene marcadores, pero ninguno es válido y compatible con este tipo documental."
+                : "El documento configurado no contiene variables dinámicas."
               : "Todavía no hay un análisis del documento configurado."}
           </p>
         ) : (
@@ -304,16 +306,28 @@ const DocumentTemplateValidationPanel = ({ validation, loading }: Props) => {
       {analysis && (
         <SiteCorpCard
           title="Análisis del documento"
-          description="Resultado del analizador central sobre el documento Word analizable de la versión."
+          description={
+            validation.document_type_code === "PAYROLL_MOVEMENT"
+              ? "Resultado del analizador central sobre la plantilla Excel (.xlsx) analizable de la versión."
+              : "Resultado del analizador central sobre el documento Word analizable de la versión."
+          }
         >
           <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-border bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground">Párrafos analizados</p>
+                <p className="text-xs text-muted-foreground">
+                  {validation.document_type_code === "PAYROLL_MOVEMENT"
+                    ? "Celdas analizadas"
+                    : "Párrafos analizados"}
+                </p>
                 <p className="text-lg font-semibold text-ink">{analysis.paragraphs_scanned}</p>
               </div>
               <div className="rounded-xl border border-border bg-muted/30 p-3">
-                <p className="text-xs text-muted-foreground">Marcadores divididos por Word</p>
+                <p className="text-xs text-muted-foreground">
+                  {validation.document_type_code === "PAYROLL_MOVEMENT"
+                    ? "Marcadores divididos"
+                    : "Marcadores divididos por Word"}
+                </p>
                 <p className="text-lg font-semibold text-ink">{analysis.split_run_placeholders}</p>
               </div>
               <div className="rounded-xl border border-border bg-muted/30 p-3">

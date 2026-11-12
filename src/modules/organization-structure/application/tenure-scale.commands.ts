@@ -3,8 +3,11 @@ import {
   insertTenureScaleRange,
   updateTenureScaleRange,
 } from "../infrastructure/tenure-scale.repository"
-import { tenureFormToValues } from "../domain/tenure-scale.rules"
-import type { TenureScaleFormValues } from "../domain/entities"
+import {
+  tenureFormToValues,
+  validateTenureScaleContinuity,
+} from "../domain/tenure-scale.rules"
+import type { TenureScaleFormValues, TenureScaleRange } from "../domain/entities"
 
 /**
  * Escala de pago por antigüedad — Comandos (aplicación).
@@ -20,20 +23,26 @@ import type { TenureScaleFormValues } from "../domain/entities"
 /** Alta de un tramo. Lanza con el mensaje de validación si el formulario no es válido. */
 export async function createTenureScaleRange(
   entityId: string,
-  form: TenureScaleFormValues
+  form: TenureScaleFormValues,
+  existingRanges: TenureScaleRange[] = []
 ): Promise<void> {
   const { values, error } = tenureFormToValues(form)
   if (error) throw new Error(error)
+  const continuityError = validateTenureScaleContinuity(values, existingRanges, null)
+  if (continuityError) throw new Error(continuityError)
   await insertTenureScaleRange(entityId, values)
 }
 
 /** Edición de un tramo existente. */
 export async function updateTenureScaleRangeById(
   rangeId: string,
-  form: TenureScaleFormValues
+  form: TenureScaleFormValues,
+  existingRanges: TenureScaleRange[] = []
 ): Promise<void> {
   const { values, error } = tenureFormToValues(form)
   if (error) throw new Error(error)
+  const continuityError = validateTenureScaleContinuity(values, existingRanges, rangeId)
+  if (continuityError) throw new Error(continuityError)
   await updateTenureScaleRange(rangeId, values)
 }
 

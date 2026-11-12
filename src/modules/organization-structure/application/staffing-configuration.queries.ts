@@ -113,14 +113,24 @@ export async function loadStaffingConfiguration(
 
   if (!canView && !canManage) return emptyStaffingConfiguration(canManage)
 
-  const entityName = await fetchEntityName(entityId)
-  const areas = await selectEntityAreas(entityId)
+  const [
+    entityName,
+    areas,
+    jobRows,
+    categories,
+    applicableScaleId,
+    positionRows,
+    segmentsByPosition,
+  ] = await Promise.all([
+    fetchEntityName(entityId),
+    selectEntityAreas(entityId),
+    selectConfigurationJobRows(entityId),
+    fetchOccupationalCategories({ includeInactive: true }),
+    resolveApplicableScaleId(entityId),
+    selectConfigurationPositionRows(entityId),
+    fetchEntityScheduleSegments(entityId),
+  ])
 
-  const jobRows = await selectConfigurationJobRows(entityId)
-
-  // Catálogo GLOBAL de categorías ocupacionales: se resuelve por identificador para
-  // mostrar la categoría del cargo sin depender de la detección de la relación.
-  const categories = await fetchOccupationalCategories({ includeInactive: true })
   const categoryById = new Map(categories.map((c) => [c.id, c]))
   const categoryNameById: Record<string, string> = {}
   categories.forEach((c) => {
@@ -129,17 +139,15 @@ export async function loadStaffingConfiguration(
 
   const jobs = mapConfigurationJobs(jobRows, categoryById)
 
-  const preparationLevelsByJob = await fetchJobPreparationLevels(jobs.map((job) => job.id))
-
-  const applicableScaleId = await resolveApplicableScaleId(entityId)
-
   const groupIds = jobs
     .map((job) => job.salary_group?.id)
     .filter((id): id is string => !!id)
-  const salaryValuesByGroup = await fetchSalaryValuesForGroups(groupIds)
 
-  const positionRows = await selectConfigurationPositionRows(entityId)
-  const segmentsByPosition = await fetchEntityScheduleSegments(entityId)
+  const [preparationLevelsByJob, salaryValuesByGroup] = await Promise.all([
+    fetchJobPreparationLevels(jobs.map((job) => job.id)),
+    fetchSalaryValuesForGroups(groupIds),
+  ])
+
   const positions: OrganizationPosition[] = positionRows.map((position) => ({
     ...position,
     schedule_segments: segmentsByPosition[position.id] || [],

@@ -1,4 +1,10 @@
 import { supabase } from "@/lib/supabase"
+import { DOCUMENT_VARIABLES } from "../domain/document-variables"
+import {
+  documentTypeCodeForTemplateType,
+  reconcileTemplateAnalysisWithCatalog,
+  reconcileTemplateValidationWithCatalog,
+} from "../domain/rules"
 import type {
   CreateDocumentTemplateInput,
   DocumentTemplate,
@@ -137,6 +143,8 @@ const numValue = (value: unknown): number | null => {
 
 const toVersionDetail = (value: unknown): DocumentTemplateVersionDetail => {
   const row = record(value)
+  const docTypeCode = text(row.document_type_code)
+  const rawAnalysis = (row.analysis as DocumentTemplateAnalysis | null) ?? null
   return {
     id: String(row.id),
     version_number: numValue(row.version_number),
@@ -145,8 +153,10 @@ const toVersionDetail = (value: unknown): DocumentTemplateVersionDetail => {
     effective_to: text(row.effective_to),
     configured_file_path: text(row.configured_file_path),
     configured_file_format: text(row.configured_file_format),
-    document_type_code: text(row.document_type_code),
-    analysis: (row.analysis as DocumentTemplateAnalysis | null) ?? null,
+    document_type_code: docTypeCode,
+    analysis: rawAnalysis
+      ? reconcileTemplateAnalysisWithCatalog(rawAnalysis, docTypeCode)
+      : null,
     template_name: text(record(row.document_templates).name),
   }
 }
@@ -215,13 +225,21 @@ export const rpcResolveDocumentTemplateVersion = async (input: {
 export const selectCompatibleVariableKeys = async (
   templateTypeCode: string
 ): Promise<string[]> => {
+  const docType = documentTypeCodeForTemplateType(templateTypeCode)
+  const catalogKeys = DOCUMENT_VARIABLES.filter((v) =>
+    v.documentTypes.includes(docType)
+  ).map((v) => v.key)
+
   const { data, error } = await supabase
     .from("document_variables")
     .select("key")
-    .contains("document_types", [templateTypeCode])
+    .contains("document_types", [docType])
 
-  throwIfError(error)
-  return ((data as { key: string }[]) || []).map((row) => row.key)
+  if (error) {
+    return catalogKeys
+  }
+  const dbKeys = ((data as { key: string }[]) || []).map((row) => row.key)
+  return Array.from(new Set([...catalogKeys, ...dbKeys]))
 }
 
 /** Alta de la plantilla y de su versión 1 (ambas las crea el backend en una operación). */
@@ -273,7 +291,7 @@ export const rpcSaveDocumentTemplateAnalysis = async (
   })
 
   throwIfError(error)
-  return data as DocumentTemplateAnalysis
+  return reconcileTemplateAnalysisWithCatalog(data as DocumentTemplateAnalysis)
 }
 
 /** Validación estructural de una versión (decide el backend; el frontend sólo la muestra). */
@@ -285,7 +303,7 @@ export const rpcValidateDocumentTemplateVersion = async (
   })
 
   throwIfError(error)
-  return data as TemplateValidation
+  return reconcileTemplateValidationWithCatalog(data as TemplateValidation)
 }
 
 /** Activación de una versión: cierra la anterior del mismo tipo documental. */

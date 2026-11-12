@@ -1,4 +1,7 @@
-import type { DocumentTypeCode } from "./document-variables"
+import {
+  documentVariableByKey,
+  type DocumentTypeCode,
+} from "./document-variables"
 import {
   DOCX_MIME,
   DOC_MIME,
@@ -9,6 +12,7 @@ import {
   type DocumentTemplateAnalysis,
   type DocumentTemplateVersion,
   type TemplateFileInspection,
+  type TemplateValidation,
   type WordDocumentFormat,
 } from "./entities"
 
@@ -37,7 +41,7 @@ export const templateAcceptForType = (typeCode: string | null | undefined): stri
 
 /** Código de documento del registro central al que pertenece cada tipo de plantilla. */
 export const documentTypeCodeForTemplateType = (templateTypeCode: string): DocumentTypeCode =>
-  templateTypeCode === "EMPLOYMENT_CONTRACT_ADDENDUM"
+  templateTypeCode === "EMPLOYMENT_CONTRACT_ADDENDUM" || templateTypeCode === "ADDENDUM"
     ? "ADDENDUM"
     : templateTypeCode === "SC_4_04"
       ? "SC_4_04"
@@ -46,6 +50,253 @@ export const documentTypeCodeForTemplateType = (templateTypeCode: string): Docum
         : templateTypeCode === "PAYROLL_MOVEMENT"
           ? "PAYROLL_MOVEMENT"
           : "CONTRACT"
+
+/**
+ * Ejemplos de marcadores del catálogo oficial según el tipo de plantilla (G2).
+ * Muestra siempre las variables cortas visibles del catálogo (`c.*`, `a.*`, `s.*`, `r.*`, `m.*`).
+ */
+export const templatePlaceholderExamplesForType = (
+  templateTypeCode: string | null | undefined
+): { primary: string; secondary: string; beforeText: string; afterPrefix: string; afterMid: string } => {
+  const docType = documentTypeCodeForTemplateType(templateTypeCode || "CONTRACT")
+  switch (docType) {
+    case "ADDENDUM":
+      return {
+        primary: "{{a.nom}}",
+        secondary: "{{a.ci}}",
+        beforeText: "D. Juan Pérez García, trabajador con CI 90010112345",
+        afterPrefix: "D. ",
+        afterMid: ", trabajador con CI ",
+      }
+    case "SC_4_04":
+      return {
+        primary: "{{s.nom}}",
+        secondary: "{{s.ci}}",
+        beforeText: "Juan, trabajador con CI 90010112345",
+        afterPrefix: "",
+        afterMid: ", trabajador con CI ",
+      }
+    case "RESOLUTION":
+      return {
+        primary: "{{r.nom}}",
+        secondary: "{{r.car}}",
+        beforeText: "D. Juan Pérez García, designado en el cargo de Especialista Principal",
+        afterPrefix: "D. ",
+        afterMid: ", designado en el cargo de ",
+      }
+    case "PAYROLL_MOVEMENT":
+      return {
+        primary: "{{m.nom}}",
+        secondary: "{{m.exp}}",
+        beforeText: "Juan, expediente laboral 90010112345",
+        afterPrefix: "",
+        afterMid: ", expediente laboral ",
+      }
+    case "CONTRACT":
+    default:
+      return {
+        primary: "{{c.nom}}",
+        secondary: "{{c.ci}}",
+        beforeText: "D. Juan Pérez García, trabajador con CI 90010112345",
+        afterPrefix: "D. ",
+        afterMid: ", trabajador con CI ",
+      }
+  }
+}
+
+/**
+ * Reconcilia el análisis devuelto por el backend con el catálogo oficial de dominio
+ * (`DOCUMENT_VARIABLES`), garantizando una única fuente de verdad (C2/G1) incluso si la
+ * tabla `public.document_variables` remota aún no ha ejecutado la última migración SQL.
+ */
+export const reconcileTemplateAnalysisWithCatalog = (
+  analysis: DocumentTemplateAnalysis,
+  templateTypeCode?: string | null
+): DocumentTemplateAnalysis => {
+  const docType = documentTypeCodeForTemplateType(
+    templateTypeCode || analysis.document_type_code || "CONTRACT"
+  )
+
+  const recognizedMap = new Map<string, DocumentTemplateAnalysis["recognized"][number]>()
+  for (const item of analysis.recognized || []) {
+    recognizedMap.set(item.key, { ...item })
+  }
+
+  const remainingUnknown: DocumentTemplateAnalysis["unknown"] = []
+  const remainingIncompatible: DocumentTemplateAnalysis["incompatible"] = [
+    ...(analysis.incompatible || []),
+  ]
+
+  for (const item of analysis.unknown || []) {
+    const def = documentVariableByKey(item.key)
+    if (!def) {
+      remainingUnknown.push(item)
+      continue
+    }
+    if (def.documentTypes.includes(docType)) {
+      recognizedMap.set(item.key, {
+        key: item.key,
+        count: item.count,
+        parts: item.parts,
+        split_runs: item.split_runs,
+      })
+    } else if (!remainingIncompatible.some((inc) => inc.key === item.key)) {
+      remainingIncompatible.push({
+        ...item,
+        label: def.label,
+        category: def.category,
+        allowed_document_types: def.documentTypes,
+      })
+    }
+  }
+
+  // Re-evaluar también `incompatible` por si una variable como `worker.full_name`
+  // ahora es compatible con el tipo documental (G1).
+  const finalIncompatible: DocumentTemplateAnalysis["incompatible"] = []
+  for (const inc of remainingIncompatible) {
+    const def = documentVariableByKey(inc.key)
+    if (def && def.documentTypes.includes(docType)) {
+      recognizedMap.set(inc.key, {
+        key: inc.key,
+        count: inc.count,
+        parts: inc.parts,
+        split_runs: inc.split_runs,
+      })
+    } else {
+      finalIncompatible.push(inc)
+    }
+  }
+
+  const recognized = Array.from(recognizedMap.values())
+  const requiredVariables = recognized.map((item) => item.key)
+
+  const filteredWarnings = (analysis.warnings || []).filter((w) => {
+    if (recognized.length > 0 && w.includes("no contiene marcadores dinámicos")) {
+      return false
+    }
+    return true
+  })
+
+  return {
+    ...analysis,
+    recognized,
+    unknown: remainingUnknown,
+    incompatible: finalIncompatible,
+    required_variables: requiredVariables,
+    warnings: filteredWarnings,
+  }
+}
+
+/**
+ * Reconcilia el resultado de `validate_document_template_version` con el catálogo oficial
+ * de dominio (`DOCUMENT_VARIABLES`), actualizando contadores y checks estructurales (C2/G1).
+ */
+export const reconcileTemplateValidationWithCatalog = (
+  validation: TemplateValidation
+): TemplateValidation => {
+  const docType = documentTypeCodeForTemplateType(validation.document_type_code || "CONTRACT")
+  const reconciledAnalysis = validation.analysis
+    ? reconcileTemplateAnalysisWithCatalog(validation.analysis, validation.document_type_code)
+    : null
+
+  const recognizedMap = new Map<string, TemplateValidation["recognized"][number]>()
+  for (const item of reconciledAnalysis?.recognized || validation.recognized || []) {
+    recognizedMap.set(item.key, { ...item })
+  }
+
+  const remainingUnknown: TemplateValidation["unknown_variables"] = []
+  const remainingIncompatible: TemplateValidation["incompatible_variables"] = []
+
+  const sourceUnknown = reconciledAnalysis?.unknown ?? validation.unknown_variables ?? []
+  for (const item of sourceUnknown) {
+    const def = documentVariableByKey(item.key)
+    if (!def) {
+      remainingUnknown.push(item)
+    } else if (def.documentTypes.includes(docType)) {
+      recognizedMap.set(item.key, {
+        key: item.key,
+        count: item.count,
+        parts: item.parts,
+        split_runs: item.split_runs,
+      })
+    } else {
+      remainingIncompatible.push({
+        ...item,
+        label: def.label,
+        category: def.category,
+        allowed_document_types: def.documentTypes,
+      })
+    }
+  }
+
+  const sourceIncompatible =
+    reconciledAnalysis?.incompatible ?? validation.incompatible_variables ?? []
+  for (const inc of sourceIncompatible) {
+    const def = documentVariableByKey(inc.key)
+    if (def && def.documentTypes.includes(docType)) {
+      recognizedMap.set(inc.key, {
+        key: inc.key,
+        count: inc.count,
+        parts: inc.parts,
+        split_runs: inc.split_runs,
+      })
+    } else if (!remainingIncompatible.some((item) => item.key === inc.key)) {
+      remainingIncompatible.push(inc)
+    }
+  }
+
+  const recognized = Array.from(recognizedMap.values())
+  const requiredVariables = recognized.map((item) => item.key)
+  const variablesValid = recognized.length
+  const variablesUnknown = remainingUnknown.length
+  const variablesIncompatible = remainingIncompatible.length
+  const variablesFound = variablesValid + variablesUnknown + variablesIncompatible
+
+  const checks: TemplateValidation["checks"] = {
+    ...validation.checks,
+    no_unknown_variables: validation.checks.analysis_present ? variablesUnknown === 0 : false,
+    no_incompatible_variables: validation.checks.analysis_present
+      ? variablesIncompatible === 0
+      : false,
+    has_placeholders: variablesValid > 0,
+  }
+
+  const ready =
+    checks.original_file_present &&
+    checks.configured_file_present &&
+    checks.configured_format_analyzable &&
+    checks.analysis_present &&
+    checks.analysis_matches_configured &&
+    checks.valid_docx &&
+    checks.no_unknown_variables &&
+    checks.no_incompatible_variables &&
+    checks.no_malformed_placeholders &&
+    checks.effective_dates_coherent &&
+    checks.no_simultaneous_active
+
+  const filteredWarnings = (validation.warnings || []).filter((w) => {
+    if (variablesValid > 0 && w.includes("no contiene marcadores dinámicos")) {
+      return false
+    }
+    return true
+  })
+
+  return {
+    ...validation,
+    analysis: reconciledAnalysis,
+    variables_found: variablesFound,
+    variables_valid: variablesValid,
+    variables_unknown: variablesUnknown,
+    variables_incompatible: variablesIncompatible,
+    required_variables: requiredVariables,
+    recognized,
+    unknown_variables: remainingUnknown,
+    incompatible_variables: remainingIncompatible,
+    warnings: filteredWarnings,
+    checks,
+    ready,
+  }
+}
 
 /** Firma OLE/CFB de los documentos Word 97-2003 (`.doc`). */
 const OLE2_SIGNATURE = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]

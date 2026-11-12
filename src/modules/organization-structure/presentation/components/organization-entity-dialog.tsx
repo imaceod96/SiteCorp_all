@@ -85,6 +85,8 @@ interface OrganizationEntityDialogProps {
   /** Entidad superior preseleccionada según el nodo desde el que se crea */
   defaultParentId?: string
   defaultRegime?: OrganizationEntity["regime_id"]
+  /** Si se abre desde un botón contextual (+ Grupo / + Empresa / + UEB), restringe el tipo */
+  lockEntityType?: boolean
 }
 
 export const OrganizationEntityDialog = ({
@@ -97,6 +99,7 @@ export const OrganizationEntityDialog = ({
   defaultEntityType = "business_group",
   defaultParentId,
   defaultRegime = "PRESUPUESTADA",
+  lockEntityType = false,
 }: OrganizationEntityDialogProps) => {
   const { currentCompanyClient } = useCurrentCompanyClient()
   const { toast } = useToast()
@@ -153,10 +156,17 @@ export const OrganizationEntityDialog = ({
               })
         // Al editar, el código interno de la entidad se conserva sin cambios
       } else {
+              const parentEntity = defaultParentId
+                ? entities.find((e) => e.id === defaultParentId)
+                : null
+              const effectiveRegime =
+                (parentEntity?.regime_id as "PRESUPUESTADA" | "EMPRESARIAL" | null) ??
+                (defaultRegime as "PRESUPUESTADA" | "EMPRESARIAL" | null) ??
+                "PRESUPUESTADA"
               reset({
                 name: "",
                 entity_type: defaultEntityType,
-                regime_id: defaultRegime as "PRESUPUESTADA" | "EMPRESARIAL" | null,
+                regime_id: effectiveRegime,
                 is_active: true,
                 description: null,
                 is_sitecorp_account: false,
@@ -165,7 +175,7 @@ export const OrganizationEntityDialog = ({
               })
             }
     }
-  }, [open, editingEntity, reset, defaultEntityType, defaultParentId, defaultRegime])
+  }, [open, editingEntity, entities, reset, defaultEntityType, defaultParentId, defaultRegime])
 
   // El catálogo de regímenes se lee al abrir el diálogo (catálogo GLOBAL: nunca se filtra
   // por cliente). Si la lectura falla se avisa y el selector queda vacío: jamás se
@@ -316,6 +326,25 @@ export const OrganizationEntityDialog = ({
     }
   }, [watchedEntityType, watchedParentId, filteredParentEntities, setValue])
 
+  // Al seleccionar una entidad superior en modo creación, hereda su régimen por defecto (M9)
+  React.useEffect(() => {
+    if (editingEntity || !watchedParentId) return
+    const selectedParent = entities.find((e) => e.id === watchedParentId)
+    if (
+      selectedParent?.regime_id === "PRESUPUESTADA" ||
+      selectedParent?.regime_id === "EMPRESARIAL"
+    ) {
+      setValue("regime_id", selectedParent.regime_id)
+    }
+  }, [editingEntity, watchedParentId, entities, setValue])
+
+  const availableTypeOptions = React.useMemo(() => {
+    if (!editingEntity && lockEntityType) {
+      return ENTITY_TYPE_OPTIONS.filter((opt) => opt.value === defaultEntityType)
+    }
+    return ENTITY_TYPE_OPTIONS
+  }, [editingEntity, lockEntityType, defaultEntityType])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl rounded-2xl">
@@ -354,11 +383,12 @@ export const OrganizationEntityDialog = ({
               <label className="text-sm font-medium text-ink">Tipo *</label>
               <SiteCorpSelect
                 value={watch("entity_type")}
+                disabled={!editingEntity && lockEntityType}
                 onValueChange={(value) =>
                   setValue("entity_type", value as OrganizationEntityFormDataZod["entity_type"])
                 }
               >
-                {ENTITY_TYPE_OPTIONS.map((opt) => (
+                {availableTypeOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

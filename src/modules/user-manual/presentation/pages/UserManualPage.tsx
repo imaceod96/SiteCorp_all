@@ -85,18 +85,32 @@ export const UserManualPage: React.FC = () => {
     }
   }
 
-  // Filtrado de secciones
+  // Filtrado de secciones (incluye búsqueda profunda en elementos, flujos y reglas D8/D9)
   const filteredSections = React.useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
     return baseSections.filter((sec) => {
       const matchesCategory =
         selectedCategory === "all" || sec.category === selectedCategory
-      const matchesSearch =
-        searchTerm.trim() === "" ||
-        sec.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sec.subtitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sec.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (sec.route && sec.route.toLowerCase().includes(searchTerm.toLowerCase()))
-      return matchesCategory && matchesSearch
+      if (!matchesCategory) return false
+      if (q === "") return true
+      return (
+        sec.title.toLowerCase().includes(q) ||
+        sec.subtitle.toLowerCase().includes(q) ||
+        sec.purpose.toLowerCase().includes(q) ||
+        sec.description.toLowerCase().includes(q) ||
+        (sec.route && sec.route.toLowerCase().includes(q)) ||
+        sec.keyElements.some(
+          (el) =>
+            el.name.toLowerCase().includes(q) ||
+            el.description.toLowerCase().includes(q)
+        ) ||
+        sec.workflows.some(
+          (wf) =>
+            wf.title.toLowerCase().includes(q) ||
+            wf.steps.some((st) => st.toLowerCase().includes(q))
+        ) ||
+        sec.businessRules.some((rule) => rule.toLowerCase().includes(q))
+      )
     })
   }, [baseSections, selectedCategory, searchTerm])
 
@@ -104,6 +118,11 @@ export const UserManualPage: React.FC = () => {
     if (isEntityMode) {
       return [
         { id: "all", label: "Todas las Vistas de Entidad", count: baseSections.length },
+        {
+          id: "configuracion",
+          label: "Configuración Inicial (5 Pasos)",
+          count: baseSections.filter((s) => s.category === "configuracion").length,
+        },
         {
           id: "operativa",
           label: "Operación de Personal",
@@ -122,6 +141,11 @@ export const UserManualPage: React.FC = () => {
         id: "global",
         label: "Administración Global",
         count: baseSections.filter((s) => s.category === "global").length,
+      },
+      {
+        id: "configuracion",
+        label: "Configuración Inicial (5 Pasos)",
+        count: baseSections.filter((s) => s.category === "configuracion").length,
       },
       {
         id: "operativa",
@@ -224,8 +248,8 @@ export const UserManualPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Guía en 5 Pasos para Configuración Inicial de Entidad (Exclusivo Gestores) */}
-        {!isEntityMode && (
+        {/* Guía en 5 Pasos para Configuración Inicial de Entidad (Disponible en Gestores y Entidad) */}
+        {(
           <div className="rounded-2xl border-2 border-indigo-200 bg-linear-to-b from-indigo-50/70 to-white p-6 shadow-sm space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-indigo-100">
               <div className="flex items-center gap-2.5">

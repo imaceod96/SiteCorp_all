@@ -148,6 +148,7 @@ export {
 
 // --- Funciones de infraestructura: catálogos ---
 export {
+  deduplicateOccupationalCategories,
   fetchOccupationalCategories,
   occupationalCategoryLabel,
   hasOccupationalCategory,
@@ -290,9 +291,11 @@ export type { TenureScaleUnit } from "./domain/entities"
 export {
   EMPTY_TENURE_FORM,
   MONTHS_PER_YEAR,
+  formatTenureMonths,
   formatTenureRange,
   tenureFormToValues,
   tenureRangeToForm,
+  validateTenureScaleContinuity,
 } from "./domain/tenure-scale.rules"
 
 // --- Escala de antigüedad: casos de uso ---

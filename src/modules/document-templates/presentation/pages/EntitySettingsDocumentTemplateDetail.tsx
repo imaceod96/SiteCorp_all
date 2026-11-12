@@ -18,6 +18,8 @@ import {
   fetchDocumentTemplateTypes,
   reanalyzeTemplateFile,
   registerTemplateFile,
+  TEMPLATE_TYPE_USES_XLSX,
+  templatePlaceholderExamplesForType,
   validateTemplateVersion,
   type DocumentTemplate,
   type DocumentTemplateVersion,
@@ -352,40 +354,68 @@ const EntitySettingsDocumentTemplateDetail = () => {
         </SiteCorpAlert>
       )}
 
-      <SiteCorpCard title="Cómo configurar la plantilla" description="El documento no se redacta en SiteCorp: se prepara en Word.">
-        <ol className="list-inside list-decimal space-y-1 text-sm text-muted-foreground">
-          <li>Descargue el documento original de esta versión.</li>
-          <li>Ábralo en Word.</li>
-          <li>Identifique únicamente los datos que cambian en cada contrato (nombres, fechas, importes…).</li>
-          <li>Copie desde el catálogo inferior las variables correspondientes.</li>
-          <li>Sustituya esos datos por los marcadores, por ejemplo:</li>
-        </ol>
-        <div className="mt-3 space-y-2 rounded-xl border border-border bg-muted/30 p-3 text-sm">
-          <p className="text-muted-foreground">
-            <span className="font-medium text-ink">Antes:</span> D. Juan Pérez García, trabajador con
-            CI 90010112345
-          </p>
-          <p className="text-muted-foreground">
-            <span className="font-medium text-ink">Después:</span> D.{" "}
-            <code className="font-mono text-ink">{"{{worker.full_name}}"}</code>, trabajador con CI{" "}
-            <code className="font-mono text-ink">{"{{worker.identification}}"}</code>
-          </p>
-        </div>
-        <ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-muted-foreground" start={6}>
-          <li>Guarde el documento como DOCX conservando todo el formato legal y de firma.</li>
-          <li>Súbalo como documento configurado y analícelo: la plantilla quedará lista para activar.</li>
-        </ol>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Formatos admitidos: .doc y .docx. El archivo siempre se conserva en su formato original,
-          pero el análisis automático de variables requiere un documento .docx: si guarda el
-          configurado como .doc, SiteCorp lo almacenará, informará de su estado y no permitirá
-          activar la plantilla hasta disponer de una versión analizable.
-        </p>
-        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-          <ListChecks className="h-3.5 w-3.5" />
-          Sólo se exigen las variables que el documento configurado contiene realmente.
-        </div>
-      </SiteCorpCard>
+      {(() => {
+        const usesXlsx = TEMPLATE_TYPE_USES_XLSX(template.document_type_code)
+        const examples = templatePlaceholderExamplesForType(template.document_type_code)
+        return (
+          <SiteCorpCard
+            title="Cómo configurar la plantilla"
+            description={
+              usesXlsx
+                ? "La plantilla no se diseña en SiteCorp: se prepara en Excel (.xlsx)."
+                : "El documento no se redacta en SiteCorp: se prepara en Word."
+            }
+          >
+            <ol className="list-inside list-decimal space-y-1 text-sm text-muted-foreground">
+              <li>
+                {usesXlsx
+                  ? "Descargue la plantilla Excel original de esta versión."
+                  : "Descargue el documento original de esta versión."}
+              </li>
+              <li>{usesXlsx ? "Ábrala en Excel." : "Ábralo en Word."}</li>
+              <li>
+                {usesXlsx
+                  ? "Identifique las celdas cuyos datos cambian en cada movimiento (nombres, áreas, cargos, fechas…)."
+                  : "Identifique únicamente los datos que cambian en cada documento (nombres, fechas, importes…)."}
+              </li>
+              <li>Copie desde el catálogo inferior las variables correspondientes.</li>
+              <li>Sustituya esos datos por los marcadores del catálogo, por ejemplo:</li>
+            </ol>
+            <div className="mt-3 space-y-2 rounded-xl border border-border bg-muted/30 p-3 text-sm">
+              <p className="text-muted-foreground">
+                <span className="font-medium text-ink">Antes:</span> {examples.beforeText}
+              </p>
+              <p className="text-muted-foreground">
+                <span className="font-medium text-ink">Después:</span> {examples.afterPrefix}
+                <code className="font-mono text-ink">{examples.primary}</code>
+                {examples.afterMid}
+                <code className="font-mono text-ink">{examples.secondary}</code>
+              </p>
+            </div>
+            <ol className="mt-3 list-inside list-decimal space-y-1 text-sm text-muted-foreground" start={6}>
+              <li>
+                {usesXlsx
+                  ? "Guarde la hoja de cálculo como .xlsx conservando todo el formato oficial."
+                  : "Guarde el documento como DOCX conservando todo el formato legal y de firma."}
+              </li>
+              <li>
+                {usesXlsx
+                  ? "Súbala como documento configurado y analícela: la plantilla quedará lista para activar."
+                  : "Súbalo como documento configurado y analícelo: la plantilla quedará lista para activar."}
+              </li>
+            </ol>
+            <p className="mt-3 text-xs text-muted-foreground">
+              {usesXlsx
+                ? "Formato admitido: .xlsx. El archivo original siempre se conserva intacto; el análisis automático de variables se ejecuta sobre la plantilla Excel (.xlsx) configurada."
+                : "Formatos admitidos: .doc y .docx. El archivo siempre se conserva en su formato original, pero el análisis automático de variables requiere un documento .docx: si guarda el configurado como .doc, SiteCorp lo almacenará, informará de su estado y no permitirá activar la plantilla hasta disponer de una versión analizable."}
+            </p>
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <ListChecks className="h-3.5 w-3.5" />
+              Sólo se exigen las variables que el documento configurado contiene realmente.
+            </div>
+          </SiteCorpCard>
+        )
+      })()}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
@@ -410,6 +440,7 @@ const EntitySettingsDocumentTemplateDetail = () => {
           <DocumentTemplateVersionsPanel
             versions={template.versions}
             selectedVersionId={selectedVersionId}
+            validation={validation}
             canManage={canManage}
             busy={busy}
             onSelect={handleSelectVersion}

@@ -37,30 +37,34 @@ export async function selectSalaryScaleById(scaleId: string): Promise<SalaryScal
 }
 
 /** Escala presupuestada global de SiteCorp. */
-export async function selectGlobalPresupuestadaScale(): Promise<SalaryScale> {
+export async function selectGlobalPresupuestadaScale(): Promise<SalaryScale | null> {
   const { data, error } = await supabase
     .from("salary_scales")
     .select("*")
-    .eq("scope_type", "PRESUPUESTADA_GLOBAL")
+    .in("scope_type", ["PRESUPUESTADA_GLOBAL", "GLOBAL"])
     .eq("is_active", true)
-    .single()
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   if (error) throw error
-  return data as SalaryScale
+  return (data as SalaryScale | null) ?? null
 }
 
 /** Escala empresarial de la entidad (sin fallback a la presupuestada). */
-export async function selectEntityEmpresarialScale(entityId: string): Promise<SalaryScale> {
+export async function selectEntityEmpresarialScale(entityId: string): Promise<SalaryScale | null> {
   const { data, error } = await supabase
     .from("salary_scales")
     .select("*")
     .eq("scope_type", "EMPRESARIAL_ENTITY")
     .eq("organization_entity_id", entityId)
     .eq("is_active", true)
-    .single()
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   if (error) throw error
-  return data as SalaryScale
+  return (data as SalaryScale | null) ?? null
 }
 
 /** Escala presupuestada global: no pertenece a ninguna entidad ni workspace. */

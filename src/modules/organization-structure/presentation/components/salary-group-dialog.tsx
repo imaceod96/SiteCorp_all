@@ -24,6 +24,7 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
   const [salary, setSalary] = React.useState("")
   const [effectiveFrom, setEffectiveFrom] = React.useState("")
   const [salaryError, setSalaryError] = React.useState("")
+  const [dateError, setDateError] = React.useState("")
 
   const validateSalary = (value: string): string => {
     if (!value.trim()) return "El salario es obligatorio"
@@ -44,12 +45,17 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
     }
     setSalaryError("")
 
-    if (!effectiveFrom.trim()) return
+    if (!effectiveFrom.trim()) {
+      setDateError("La fecha de vigencia es obligatoria")
+      return
+    }
+    setDateError("")
 
     await onSubmit(salary.trim(), effectiveFrom)
     setSalary("")
     setEffectiveFrom("")
     setSalaryError("")
+    setDateError("")
     onOpenChange(false)
   }
 
@@ -57,6 +63,7 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
     setSalary("")
     setEffectiveFrom("")
     setSalaryError("")
+    setDateError("")
     onOpenChange(false)
   }
 
@@ -64,9 +71,8 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
+          <DialogTitle className="text-lg">
             Añadir grupo salarial
-            <X className="ml-auto h-4 w-4 text-muted-foreground cursor-pointer hover:text-ink" onClick={handleClose} />
           </DialogTitle>
           <DialogDescription>
             Ingrese el salario y la vigencia del nuevo grupo salarial
@@ -77,10 +83,16 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
             <label className="text-xs text-muted-foreground">Salario *</label>
             <SiteCorpInput
               type="number"
+              step="0.01"
+              min="0.01"
               placeholder="Monto (mayor que 0)"
               value={salary}
               onChange={(e) => {
                 setSalary(e.target.value)
+                if (salaryError) setSalaryError("")
+              }}
+              onInput={(e) => {
+                setSalary((e.target as HTMLInputElement).value)
                 if (salaryError) setSalaryError("")
               }}
               disabled={isLoading}
@@ -95,16 +107,26 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
             <SiteCorpInput
               type="date"
               value={effectiveFrom}
-              onChange={(e) => setEffectiveFrom(e.target.value)}
+              onChange={(e) => {
+                setEffectiveFrom(e.target.value)
+                if (dateError) setDateError("")
+              }}
+              onInput={(e) => {
+                setEffectiveFrom((e.target as HTMLInputElement).value)
+                if (dateError) setDateError("")
+              }}
               disabled={isLoading}
               required
             />
+            {dateError && (
+              <p className="text-xs text-sitecorp-danger">{dateError}</p>
+            )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <SiteCorpButton variant="outline" type="button" onClick={handleClose} disabled={isLoading}>
               Cancelar
             </SiteCorpButton>
-            <SiteCorpButton type="submit" disabled={isLoading || !salary || !effectiveFrom}>
+            <SiteCorpButton type="submit" disabled={isLoading}>
               {isLoading ? "Guardando..." : "Guardar"}
             </SiteCorpButton>
           </div>
