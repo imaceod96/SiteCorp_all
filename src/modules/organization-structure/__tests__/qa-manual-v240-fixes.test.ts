@@ -17,18 +17,24 @@ describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad",
         organization_entity_id: "entity-qa",
         name: "Dirección General",
         code: "AREA-01",
+        description: null,
         parent_area_id: null,
         hierarchy_order: 1,
         is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
       },
       {
         id: "area-other-entity",
         organization_entity_id: "entity-other",
         name: "Recursos Humanos",
         code: "AREA-02",
+        description: null,
         parent_area_id: null,
         hierarchy_order: 1,
         is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
       },
     ]
 
@@ -99,11 +105,12 @@ describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad",
     it("G6: formatea por separado los meses de Desde y Hasta sin concatenar el rango completo", () => {
       const range: TenureScaleRange = {
         id: "r1",
-        organization_entity_id: "entity-qa",
         from_months: 12,
         to_months: 60,
         amount: 250,
         is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
       }
       expect(formatTenureMonths(range.from_months)).toBe("1 año")
       expect(formatTenureMonths(range.to_months!)).toBe("5 años")
@@ -114,11 +121,12 @@ describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad",
       const existing: TenureScaleRange[] = [
         {
           id: "r1",
-          organization_entity_id: "entity-qa",
           from_months: 12,
           to_months: 60,
           amount: 250,
           is_active: true,
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
         },
       ]
 
@@ -148,11 +156,12 @@ describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad",
         ...existing,
         {
           id: "r2",
-          organization_entity_id: "entity-qa",
           from_months: 60,
           to_months: null,
           amount: 500,
           is_active: true,
+          created_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
         },
       ]
       const duplicateOpen = validateTenureScaleContinuity(

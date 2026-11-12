@@ -130,7 +130,7 @@ const DocumentTemplateVersionsPanel = ({
                           !version.configured_file_path
                             ? "Debe cargar y analizar el documento configurado antes de activar la versión."
                             : selected && validation && !validation.ready
-                              ? validation.errors[0] || "Corrija las observaciones de validación antes de activar."
+                              ? validation.warnings[0] || "Corrija las observaciones de validación antes de activar."
                               : undefined
                         }
                         onClick={() => onActivate(version)}
