@@ -179,6 +179,7 @@ export function groupEntityPermissions(
 export const PLATFORM_CATEGORY_ORDER = [
   "CLIENTES",
   "ORGANIZACIONES",
+  "ENTIDADES (ACCESO INTERNO)",
   "PLANES",
   "USUARIOS",
   "CANDIDATOS",
@@ -201,6 +202,10 @@ export const PLATFORM_PERMISSION_LABELS: Record<string, string> = {
   "organizations.view_all": "Ver todas las organizaciones",
   "organizations.manage_all": "Gestionar todas las organizaciones",
   "organizations.delete": "Eliminar organizaciones",
+  "entity_settings.view": "Ver configuraciones internas de las entidades",
+  "entity_settings.manage": "Gestionar configuraciones internas de las entidades",
+  "entity_modules.view": "Ver módulos operativos dentro de las entidades (según plan)",
+  "entity_modules.manage": "Gestionar módulos operativos dentro de las entidades (según plan)",
   "entity_plans.view": "Ver planes de entidades",
   "entity_plans.manage": "Gestionar planes de entidades",
   "platform_candidates.view": "Ver bolsa general de candidatos",

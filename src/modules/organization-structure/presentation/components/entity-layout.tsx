@@ -70,11 +70,52 @@ const EntityLayout = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => {
-  const { isPlatformUser } = useAuth()
+  const { isPlatformUser, isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
   const { clearCurrentCompanyClient } = useCurrentCompanyClient()
   const { currentEntity, activeEntityId, clearCurrentEntity } = useCurrentEntity()
   const navigate = useNavigate()
   const location = useLocation()
+
+  const [platformEntityCaps, setPlatformEntityCaps] = React.useState<{
+    ready: boolean
+    canSettings: boolean
+    canModules: boolean
+  }>(() => ({
+    ready: !isPlatformUser || isPlatformSuperAdmin,
+    canSettings: isPlatformSuperAdmin,
+    canModules: isPlatformSuperAdmin,
+  }))
+
+  React.useEffect(() => {
+    if (!isPlatformUser || isPlatformSuperAdmin) {
+      setPlatformEntityCaps({
+        ready: true,
+        canSettings: true,
+        canModules: true,
+      })
+      return
+    }
+
+    let cancelled = false
+    void Promise.all([
+      hasPlatformPermission("entity_settings.view"),
+      hasPlatformPermission("entity_settings.manage"),
+      hasPlatformPermission("entity_modules.view"),
+      hasPlatformPermission("entity_modules.manage"),
+    ]).then(([settingsView, settingsManage, modulesView, modulesManage]) => {
+      if (!cancelled) {
+        setPlatformEntityCaps({
+          ready: true,
+          canSettings: settingsView || settingsManage,
+          canModules: modulesView || modulesManage,
+        })
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isPlatformUser, isPlatformSuperAdmin, hasPlatformPermission])
 
   const handleReturnToAdmin = () => {
     clearCurrentCompanyClient()
@@ -97,12 +138,28 @@ const EntityLayout = React.forwardRef<
   // Cada elemento del menú aparece según la combinación obligatoria:
   // 1. Módulo habilitado en el plan de la entidad (§7)
   // 2. Permiso interno del usuario en la entidad actual (§8)
+  // 3. Para usuarios de plataforma no SuperAdmin, permiso explícito de plataforma
+  //    (entity_settings.* para Ajustes / entity_modules.* para módulos operativos)
   const isNavEntryActive = React.useCallback(
     (item: EntityNavLink): boolean => {
       if (!isModuleEnabledInPlan(item.key, entityPlan)) return false
+      if (isPlatformUser && !isPlatformSuperAdmin) {
+        if (!platformEntityCaps.ready) return item.key === "summary"
+        if (item.key === "settings" && !platformEntityCaps.canSettings) {
+          return false
+        }
+        if (
+          item.key !== "summary" &&
+          item.key !== "settings" &&
+          item.key !== "manual" &&
+          !platformEntityCaps.canModules
+        ) {
+          return false
+        }
+      }
       return isVisible(item, entityPermissions)
     },
-    [entityPlan, entityPermissions]
+    [entityPlan, entityPermissions, isPlatformUser, isPlatformSuperAdmin, platformEntityCaps]
   )
 
   // Elementos visibles según plan activo Y permisos reales, preservando el orden definitivo.

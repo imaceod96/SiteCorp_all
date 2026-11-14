@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
@@ -92,6 +93,7 @@ import { PositionForm, type PositionJobOption, type PositionEditingData } from "
 type StatusFilter = "active" | "inactive" | "all"
 
 const EntitySettingsStaffing = () => {
+  const { isPlatformUser, isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
   const entityId = useActiveEntityId()
   const navigate = useNavigate()
 
@@ -159,6 +161,19 @@ const EntitySettingsStaffing = () => {
     }
 
     try {
+      if (isPlatformUser && !isPlatformSuperAdmin) {
+        const [canViewSettings, canManageSettings] = await Promise.all([
+          hasPlatformPermission("entity_settings.view"),
+          hasPlatformPermission("entity_settings.manage"),
+        ])
+        if (!canViewSettings && !canManageSettings) {
+          setJobs([])
+          setPositions([])
+          setError("No tiene permiso para ver la configuración de plantilla de esta entidad")
+          return
+        }
+      }
+
       // Caso de uso del dominio: permisos, entidad, áreas, cargos con su grupo salarial,
       // puestos con su cargo y horario, escala aplicable e importes vigentes por grupo.
       const workspace = await loadStaffingConfiguration(entityId)
@@ -191,7 +206,7 @@ const EntitySettingsStaffing = () => {
         setLoading(false)
       }
     }
-  }, [entityId])
+  }, [entityId, isPlatformUser, isPlatformSuperAdmin, hasPlatformPermission])
 
   React.useEffect(() => {
     loadData(false)
