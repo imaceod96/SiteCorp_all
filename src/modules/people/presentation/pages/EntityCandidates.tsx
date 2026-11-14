@@ -277,7 +277,7 @@ const EntityCandidates = () => {
 
   if (!entityId) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Candidatos"
           description="Gestión de candidatos y procesos de selección"
@@ -304,7 +304,7 @@ const EntityCandidates = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Candidatos"
           description="Gestión de candidatos y procesos de selección"
@@ -316,7 +316,7 @@ const EntityCandidates = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Candidatos"
           description="Gestión de candidatos y procesos de selección"
@@ -327,17 +327,17 @@ const EntityCandidates = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <SiteCorpPageHeader
-          title="Candidatos"
-          description={`Listado de candidatos para ${currentEntity?.name}`}
-        />
-        <SiteCorpButton onClick={() => setFormOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo candidato
-        </SiteCorpButton>
-      </div>
+    <div className="space-y-6 p-4 sm:p-6">
+      <SiteCorpPageHeader
+        title="Candidatos"
+        description={`Listado de candidatos para ${currentEntity?.name}`}
+        actions={
+          <SiteCorpButton onClick={() => setFormOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nuevo candidato
+          </SiteCorpButton>
+        }
+      />
 
       {/* Success alert */}
       {formSuccess && (
@@ -409,7 +409,7 @@ const EntityCandidates = () => {
                           <div>
                             <button
                               className="text-left hover:underline"
-                              onClick={() => navigate(`/entity/${entityId}/candidates/${candidate.id}`)}
+                              onClick={() => navigate(`/candidates/${candidate.id}`)}
                             >
                               <p className="text-sm font-medium text-ink cursor-pointer">
                                 {candidate.first_name}
@@ -470,14 +470,14 @@ const EntityCandidates = () => {
                         <SiteCorpButton
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate(`/entity/${entityId}/candidates/${candidate.id}`)}
+                          onClick={() => navigate(`/candidates/${candidate.id}`)}
                         >
                           <Eye className="mr-1 h-3 w-3" /> Ver
                         </SiteCorpButton>
                         <SiteCorpButton
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate(`/entity/${entityId}/candidates/${candidate.id}/edit`)}
+                          onClick={() => navigate(`/candidates/${candidate.id}/edit`)}
                         >
                           <Edit3 className="mr-1 h-3 w-3" />
                         </SiteCorpButton>

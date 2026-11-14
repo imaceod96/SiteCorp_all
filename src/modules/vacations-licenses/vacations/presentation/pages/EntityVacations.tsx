@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -44,7 +45,7 @@ const formatDate = (value: string | null) => {
 }
 
 const EntityVacations = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { has, loading: permissionsLoading } = useEntityPermissions(entityId)
@@ -181,12 +182,12 @@ const EntityVacations = () => {
   ]
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Vacaciones"
         description="Gestión de saldos, devengos y períodos de vacaciones de los trabajadores."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <SiteCorpButton
               variant="outline"
               type="button"
@@ -303,8 +304,8 @@ const EntityVacations = () => {
             <>
               {/* Desktop */}
               <SiteCorpCard className="hidden xl:block">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="w-full min-w-0 overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-semibold">Trabajador</th>
@@ -373,7 +374,7 @@ const EntityVacations = () => {
                                 variant="outline"
                                 type="button"
                                 onClick={() =>
-                                  navigate(`/entity/${entityId}/staffing/workers/${row.worker_id}`)
+                                  navigate(`/staffing/workers/${row.worker_id}`)
                                 }
                               >
                                 <Eye className="mr-1 h-3.5 w-3.5" /> Ver
@@ -454,7 +455,7 @@ const EntityVacations = () => {
                           variant="outline"
                           type="button"
                           onClick={() =>
-                            navigate(`/entity/${entityId}/staffing/workers/${row.worker_id}`)
+                            navigate(`/staffing/workers/${row.worker_id}`)
                           }
                         >
                           <Eye className="mr-1 h-3.5 w-3.5" /> Ver

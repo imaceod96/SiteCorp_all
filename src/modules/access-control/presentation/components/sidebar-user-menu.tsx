@@ -20,6 +20,7 @@ interface SidebarUserMenuProps {
    * solo se ofrece "Cerrar sesión".
    */
   accountPath?: string | null
+  compact?: boolean
   className?: string
 }
 
@@ -31,7 +32,7 @@ interface SidebarUserMenuProps {
  * la cuenta, cambiar contraseña y cerrar sesión. No cambia de contexto: la cuenta
  * personal pertenece al usuario, no a la entidad.
  */
-export function SidebarUserMenu({ accountPath = null, className }: SidebarUserMenuProps) {
+export function SidebarUserMenu({ accountPath = null, compact = false, className }: SidebarUserMenuProps) {
   const { user, profile, avatarUrl, logout } = useAuth()
   const navigate = useNavigate()
 
@@ -77,12 +78,14 @@ export function SidebarUserMenu({ accountPath = null, className }: SidebarUserMe
         <button
           type="button"
           title={displayName}
+          aria-label={displayName}
           className={cn(
-            "flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted",
+            "flex items-center rounded-lg text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-muted",
+            compact ? "mx-auto h-10 w-10 justify-center p-0" : "w-full gap-3 px-2 py-2",
             className,
           )}
         >
-          <Avatar className="h-9 w-9">
+          <Avatar className="h-9 w-9 shrink-0">
             {/*
               La imagen se pinta con la URL FIRMADA del contexto, nunca con la ruta guardada
               en `profiles.avatar_url`: el bucket de avatares es privado.
@@ -92,17 +95,21 @@ export function SidebarUserMenu({ accountPath = null, className }: SidebarUserMe
               {initials}
             </AvatarFallback>
           </Avatar>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-ink">{displayName}</span>
-            {name && email ? (
-              <span className="block truncate text-xs text-muted-foreground">{email}</span>
-            ) : null}
-          </span>
-          <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          {!compact && (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium text-ink">{displayName}</span>
+                {name && email ? (
+                  <span className="block truncate text-xs text-muted-foreground">{email}</span>
+                ) : null}
+              </span>
+              <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </>
+          )}
         </button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="start" side="top" className="w-60">
+      <DropdownMenuContent align="start" side={compact ? "right" : "top"} className="w-60">
         <DropdownMenuLabel className="min-w-0">
           <span className="block truncate text-sm font-medium">{displayName}</span>
           {email ? <span className="block truncate text-xs font-normal text-muted-foreground">{email}</span> : null}

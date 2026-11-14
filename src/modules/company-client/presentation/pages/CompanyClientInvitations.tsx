@@ -131,7 +131,7 @@ const CompanyClientInvitations = () => {
     expires_at: new Date(inv.expires_at ?? 0).toLocaleDateString("es-ES"),
     created_at: new Date(inv.created_at).toLocaleDateString("es-ES"),
     actions: (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {inv.status === "pending" && (
           <>
             <SiteCorpButton size="sm" variant="outline" onClick={() => resendInvitation(inv.id)}>
@@ -147,7 +147,7 @@ const CompanyClientInvitations = () => {
   }))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Invitaciones"
         description={`Gestión de invitaciones para ${currentCompanyClient?.name || "este cliente"}`}

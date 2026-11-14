@@ -128,7 +128,7 @@ export const RepresentativeSelect = ({
             </p>
             {canManage && (
               <Link
-                to={`/entity/${entityId}/settings/contract-data`}
+                to="/settings/contract-data"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-sitecorp-primary underline-offset-2 hover:underline"
               >
                 <Settings2 className="h-3.5 w-3.5" />

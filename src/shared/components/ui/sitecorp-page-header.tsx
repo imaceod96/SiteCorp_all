@@ -19,8 +19,8 @@ const SiteCorpPageHeader = React.forwardRef<
       className={cn("flex flex-col gap-4 md:flex-row md:items-center md:justify-between", className)}
       {...props}
     >
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-ink">
+      <div className="min-w-0">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-ink break-words">
           {title}
         </h1>
         {description && (
@@ -29,7 +29,7 @@ const SiteCorpPageHeader = React.forwardRef<
           </p>
         )}
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   )
 })

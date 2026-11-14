@@ -65,7 +65,7 @@ const EntitySettingsUsers = () => {
 
   if (!currentEntity) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Usuarios"
           description="Usuarios con acceso a la entidad organizativa"
@@ -124,14 +124,14 @@ const EntitySettingsUsers = () => {
   const inheritedRows = rows.filter((row) => !row.is_direct)
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Usuarios"
         description={`Usuarios con acceso a ${currentEntity.name}. El rol define qué pueden hacer; el alcance define dónde.`}
       />
 
       <SiteCorpAlert type="info" title="Contexto actual">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <span>Entidad actual:</span>
           <strong className="text-ink">{currentEntity.name}</strong>
           <SiteCorpStatusBadge status="neutral">

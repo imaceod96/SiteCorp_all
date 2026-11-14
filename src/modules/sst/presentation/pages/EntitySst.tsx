@@ -1,6 +1,5 @@
 import * as React from "react"
-import { useParams } from "react-router-dom"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -38,7 +37,7 @@ const SST_TABS: { key: SstMainTab; label: string }[] = [
 ]
 
 const EntitySst: React.FC = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId() ?? undefined
   const { currentEntity } = useCurrentEntity()
   const { has: hasEntityPermission } = useEntityPermissions(entityId)
 
@@ -81,7 +80,7 @@ const EntitySst: React.FC = () => {
 
   if (!entityId) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Seguridad y Salud en el Trabajo (SST)"
           description="No se indicó una entidad válida"
@@ -95,7 +94,7 @@ const EntitySst: React.FC = () => {
 
   if (loading || !overview) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title={`SST — ${currentEntity?.name ?? "Entidad"}`}
           description="Cargando información de Seguridad y Salud en el Trabajo..."
@@ -132,7 +131,7 @@ const EntitySst: React.FC = () => {
   ).length
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title={`Seguridad y Salud en el Trabajo (SST) — ${currentEntity?.name ?? "Entidad"}`}
         description="Gestión de prevención de riesgos laborales, capacitaciones de seguridad por cargo, equipos de protección personal (EPP), inspecciones, salud ocupacional y cumplimiento normativo exclusivo de esta entidad."

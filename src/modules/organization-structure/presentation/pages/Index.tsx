@@ -7,7 +7,7 @@ import { ArrowRight, Building2, Users, Briefcase } from "lucide-react"
 
 const Index = () => {
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Panel de control"
         description="Bienvenido a SiteCorp, tu plataforma de gestión de RRHH"
@@ -47,7 +47,7 @@ const Index = () => {
         </SiteCorpCard>
       </div>
 
-      <div className="mt-8 flex gap-3">
+      <div className="mt-8 flex flex-wrap gap-3">
         <Link
           to="/organization"
           className="inline-flex items-center gap-2 rounded-md bg-sitecorp-primary px-4 py-2 text-sm font-medium text-white hover:bg-sitecorp-primary-dark"

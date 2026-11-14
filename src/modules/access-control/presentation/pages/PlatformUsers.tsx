@@ -351,7 +351,7 @@ const PlatformUsers = () => {
     ),
     created_at: new Date(user.created_at ?? "").toLocaleDateString("es-ES"),
     actions: (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SiteCorpButton size="sm" variant="outline" onClick={() => startEdit(user)}>
           <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
         </SiteCorpButton>
@@ -415,7 +415,7 @@ const PlatformUsers = () => {
   }))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Usuarios de plataforma"
         description="Gestión de administradores y operadores de SiteCorp (sin asignación organizacional)"
@@ -528,7 +528,7 @@ const PlatformUsers = () => {
               </>
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <SiteCorpButton type="submit" className="w-full justify-center">
                 {editingUser ? "Guardar cambios" : "Crear usuario de plataforma"}
               </SiteCorpButton>

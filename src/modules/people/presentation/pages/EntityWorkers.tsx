@@ -1,5 +1,6 @@
 import * as React from "react"
-import { Link, useParams, useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -39,7 +40,7 @@ const toOptions = (rows: CatalogRow[]) =>
   rows.map((row) => ({ value: row.id, label: row.name })).sort((a, b) => a.label.localeCompare(b.label))
 
 const EntityWorkers = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
 
   const [workers, setWorkers] = React.useState<PersonDirectoryWorker[]>([])
@@ -181,7 +182,7 @@ const EntityWorkers = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Trabajadores" description="Cargando personas..." />
         <SiteCorpLoading rows={4} />
       </div>
@@ -190,7 +191,7 @@ const EntityWorkers = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Trabajadores"
           description="Personas que actualmente trabajan en esta entidad."
@@ -199,7 +200,7 @@ const EntityWorkers = () => {
           {error}
         </SiteCorpAlert>
         <div className="flex justify-end">
-          <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/summary`)}>
+          <SiteCorpButton variant="outline" onClick={() => navigate("/home")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
           </SiteCorpButton>
         </div>
@@ -208,7 +209,7 @@ const EntityWorkers = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Trabajadores"
         description="Directorio de las personas que actualmente pertenecen a esta entidad. No depende de la Plantilla ni del Puesto."
@@ -266,7 +267,7 @@ const EntityWorkers = () => {
                 return (
                   <Link
                     key={w.id}
-                    to={`/entity/${entityId}/workers/${w.id}`}
+                    to={`/workers/${w.id}`}
                     className="flex flex-col gap-2 rounded-xl border border-border bg-white p-4 transition-colors hover:border-sitecorp-primary/40 hover:bg-sitecorp-primary/5 lg:flex-row lg:items-center lg:justify-between"
                   >
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">

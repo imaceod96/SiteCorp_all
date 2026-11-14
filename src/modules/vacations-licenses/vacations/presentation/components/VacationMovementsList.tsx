@@ -42,8 +42,8 @@ const VacationMovementsList = ({ movements }: { movements: VacationMovement[] })
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="w-full min-w-0 overflow-x-auto">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-semibold">Fecha</th>

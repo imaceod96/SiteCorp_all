@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link, useParams, useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -16,7 +16,7 @@ import {
   type PersonReentryWorker,
   type PersonSeparation,
 } from "@/modules/people"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
 
 /**
@@ -33,7 +33,7 @@ import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
  */
 
 const EntityReentries = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
 
@@ -142,7 +142,7 @@ const EntityReentries = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Reingresos" description="Cargando trabajadores dados de baja..." />
         <SiteCorpLoading rows={4} />
       </div>
@@ -151,7 +151,7 @@ const EntityReentries = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Reingresos"
           description="Trabajadores dados de baja que pueden reincorporarse."
@@ -160,7 +160,7 @@ const EntityReentries = () => {
           {error}
         </SiteCorpAlert>
         <div className="flex justify-end">
-          <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/summary`)}>
+          <SiteCorpButton variant="outline" onClick={() => navigate("/home")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
           </SiteCorpButton>
         </div>
@@ -169,7 +169,7 @@ const EntityReentries = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Reingresos"
         description="Personas dadas de baja en esta entidad. Su expediente completo se conserva y puede reingresarse sin crear un nuevo trabajador."
@@ -229,7 +229,7 @@ const EntityReentries = () => {
                   >
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
                       <Link
-                        to={`/entity/${entityId}/workers/${w.id}`}
+                        to={`/workers/${w.id}`}
                         className="text-sm font-medium text-ink underline-offset-2 hover:text-sitecorp-primary hover:underline"
                       >
                         {personFullName(w)}
@@ -260,7 +260,7 @@ const EntityReentries = () => {
                       <SiteCorpButton
                         variant="outline"
                         size="sm"
-                        onClick={() => navigate(`/entity/${entityId}/workers/${w.id}`)}
+                        onClick={() => navigate(`/workers/${w.id}`)}
                       >
                         Ver expediente
                       </SiteCorpButton>

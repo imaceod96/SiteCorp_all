@@ -171,8 +171,8 @@ export default function WorkerMedicalCertificatesTab({
               {selectedYear ? ` en ${selectedYear}` : ""}.
             </SiteCorpAlert>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="w-full min-w-0 overflow-x-auto">
+              <table className="w-full min-w-[540px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs text-muted-foreground">
                     <th className="pb-3 font-medium">Fecha de salida</th>

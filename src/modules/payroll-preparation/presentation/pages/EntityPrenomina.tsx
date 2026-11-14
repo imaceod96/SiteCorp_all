@@ -1,6 +1,5 @@
 import * as React from "react"
-import { useParams } from "react-router-dom"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -117,7 +116,7 @@ const ClaDetail = ({ entry, currency }: { entry: PrenominaWorkerEntry; currency:
 }
 
 const EntityPrenomina = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const { currentEntity } = useCurrentEntity()
   const { permissions, loading: permissionsLoading } = useEntityPermissions(entityId)
 
@@ -432,7 +431,7 @@ const EntityPrenomina = () => {
 
   if (!canView) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Prenómina" description="Preparación mensual del pago de trabajadores" />
         <SiteCorpAlert type="info">No tiene permiso para ver la prenómina de esta entidad.</SiteCorpAlert>
       </div>
@@ -442,7 +441,7 @@ const EntityPrenomina = () => {
   const readOnly = isPeriodClosed(period?.status)
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Prenómina"
         description={`Preparación mensual del pago · ${entityName}`}

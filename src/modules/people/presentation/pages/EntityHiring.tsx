@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useParams, useNavigate, Link } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -40,7 +41,7 @@ import {
 } from "@/modules/people"
 
 const EntityHiring = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
 
   const [positions, setPositions] = React.useState<StaffingPosition[]>([])
@@ -196,7 +197,7 @@ const EntityHiring = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Contratación"
           description="Cargando puestos con vacantes de la entidad..."
@@ -208,7 +209,7 @@ const EntityHiring = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Contratación"
           description="Cubra las vacantes de la plantilla autorizada de la entidad."
@@ -217,7 +218,7 @@ const EntityHiring = () => {
           {error}
         </SiteCorpAlert>
         <div className="flex justify-end">
-          <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/summary`)}>
+          <SiteCorpButton variant="outline" onClick={() => navigate("/home")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
           </SiteCorpButton>
         </div>
@@ -247,7 +248,7 @@ const EntityHiring = () => {
   ]
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Contratación"
         description="Cubra las vacantes de la plantilla autorizada de la entidad incorporando trabajadores."
@@ -258,7 +259,7 @@ const EntityHiring = () => {
           <span className="flex flex-wrap items-center gap-2">
             La contratación se registró correctamente y la ocupación del puesto fue actualizada.
             <Link
-              to={`/entity/${entityId}/staffing/workers/${hiredWorkerId}`}
+              to={`/staffing/workers/${hiredWorkerId}`}
               className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
             >
               Ver expediente del trabajador <ArrowUpRight className="h-3.5 w-3.5" />
@@ -296,7 +297,7 @@ const EntityHiring = () => {
             <p className="mb-4 text-sm text-muted-foreground">
               Configure la estructura de plantilla de la entidad para poder contratar.
             </p>
-            <SiteCorpButton onClick={() => navigate(`/entity/${entityId}/settings/staffing`)}>
+            <SiteCorpButton onClick={() => navigate("/settings/staffing")}>
               <Settings className="mr-2 h-4 w-4" /> Configurar plantilla
             </SiteCorpButton>
           </div>
@@ -450,7 +451,7 @@ const EntityHiring = () => {
                               className="flex flex-wrap items-center gap-x-3 gap-y-1"
                             >
                               <Link
-                                to={`/entity/${entityId}/staffing/workers/${o.workerId}`}
+                                to={`/staffing/workers/${o.workerId}`}
                                 className="text-sm text-sitecorp-primary underline-offset-2 hover:underline"
                               >
                                 {o.name}

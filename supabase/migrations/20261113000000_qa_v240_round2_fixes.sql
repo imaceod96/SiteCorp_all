@@ -1,19 +1,21 @@
 -- =============================================================================
 -- Migración: Correcciones QA Ronda 2 (v2.4.0)
 -- =============================================================================
--- 1. Corrige `public.save_position_with_schedule`:
+-- 1. Limpieza idempotente de restos de `code` en áreas, cargos y puestos,
+--    incluyendo funciones huérfanas `generate_area_code` / `generate_job_code`.
+-- 2. Corrige `public.save_position_with_schedule`:
 --    - Elimina la inserción errónea de `company_client_id` (columna inexistente en
 --      `organization_positions` y `position_schedule_segments`).
---    - Incluye `position_order` obligatorio en `INSERT INTO public.organization_positions`
---      calculando el siguiente orden correlativo por entidad y cargo.
---    - Incluye `crosses_midnight` obligatorio en `INSERT INTO public.position_schedule_segments`
---      calculado según `end_time < start_time`.
---    - Limpia de forma idempotente cualquier resto de columna/triggers `code` o
---      sobrecargas antiguas de `save_position_with_schedule`.
--- 2. Sincroniza de forma idempotente `public.document_variables` con todo el
---    catálogo oficial (`c.*`, `a.*`, `s.*`, `r.*`, `m.*` y `worker.full_name`)
---    para que `activate_document_template_version` valide las mismas variables
---    que el cliente.
+--    - Incluye `position_order` obligatorio en `INSERT INTO public.organization_positions`.
+--    - Incluye `crosses_midnight` obligatorio en `INSERT INTO public.position_schedule_segments`.
+-- 3. Corrige RPCs residuales en producción que aún leían columnas `code` eliminadas:
+--    - `capture_contract_structure_snapshot(uuid, date)` (`v_position.code` -> `NULL::text`)
+--    - `contract_condition_set(uuid, date)` (`v_position.code` -> `NULL::text`)
+--    - `contract_formalized_conditions(uuid)` (`pos.code` -> `NULL::text`)
+--    - `entity_positions_anexo14(uuid, boolean, uuid, uuid)` (`ar.code::text` -> `NULL::text`)
+-- 4. Reclasifica el análisis cacheado (`document_template_versions.analysis`) de
+--    plantillas en borrador ya analizadas contra el catálogo `document_variables`
+--    actualizado para que puedan activarse sin bloqueo falso.
 -- =============================================================================
 
 BEGIN;
@@ -45,6 +47,9 @@ BEGIN
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I;', rec.trigger_name, rec.table_name);
   END LOOP;
 END $$;
+
+DROP FUNCTION IF EXISTS public.generate_area_code(uuid, text) CASCADE;
+DROP FUNCTION IF EXISTS public.generate_job_code(uuid, text, text) CASCADE;
 
 ALTER TABLE public.organization_areas
   DROP CONSTRAINT IF EXISTS organization_areas_organization_entity_id_code_unique,
@@ -324,248 +329,273 @@ REVOKE ALL ON FUNCTION public.save_position_with_schedule(uuid, uuid, uuid, text
 GRANT EXECUTE ON FUNCTION public.save_position_with_schedule(uuid, uuid, uuid, text, text, integer, text, numeric, numeric, numeric, integer, text, jsonb) TO authenticated, service_role;
 
 -- -----------------------------------------------------------------------------
--- 3. Sincronización completa e idempotente de `public.document_variables`
+-- 3. Corregir funciones residuales que aún referenciaban `.code` eliminado
 -- -----------------------------------------------------------------------------
 DO $$
+DECLARE
+  rec record;
+  v_def text;
+  v_new_def text;
+BEGIN
+  FOR rec IN
+    SELECT p.oid, p.proname
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'public'
+      AND p.prokind = 'f'
+      AND p.proname IN (
+        'capture_contract_structure_snapshot',
+        'contract_condition_set',
+        'contract_formalized_conditions',
+        'entity_positions_anexo14'
+      )
+  LOOP
+    v_def := pg_get_functiondef(rec.oid);
+    v_new_def := v_def;
+
+    -- Quitar `v_position.code` en `capture_contract_structure_snapshot` y `contract_condition_set`
+    v_new_def := replace(
+      v_new_def,
+      'nullif(btrim(coalesce(v_position.code, '''')), '''')',
+      'NULL::text'
+    );
+    v_new_def := replace(v_new_def, 'v_position.code', 'NULL::text');
+
+    -- Quitar `pos.code` en `contract_formalized_conditions`
+    v_new_def := regexp_replace(
+      v_new_def,
+      'SELECT\s+pos\.code,\s*pos\.break_minutes\s+INTO',
+      'SELECT NULL::text, pos.break_minutes INTO',
+      'gi'
+    );
+
+    -- Quitar `ar.code` en `entity_positions_anexo14`
+    v_new_def := regexp_replace(
+      v_new_def,
+      '\m(ar|a)\.code(?:::text)?\s+AS\s+area_code\M',
+      'NULL::text AS area_code',
+      'gi'
+    );
+
+    IF v_new_def <> v_def THEN
+      EXECUTE v_new_def;
+    END IF;
+  END LOOP;
+END $$;
+
+-- -----------------------------------------------------------------------------
+-- 4. Reclasificar análisis cacheados de versiones DRAFT contra el catálogo oficial
+-- -----------------------------------------------------------------------------
+DO $$
+DECLARE
+  rec record;
+  v_recognized jsonb;
+  v_unknown jsonb;
+  v_incompatible jsonb;
+  v_required jsonb;
+  v_warnings jsonb;
 BEGIN
   IF EXISTS (
-    SELECT 1
-      FROM information_schema.tables
-     WHERE table_schema = 'public'
-       AND table_name = 'document_variables'
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'document_template_versions'
   ) THEN
-    INSERT INTO public.document_variables (key, label, category, document_types, data_type, kind, description, is_active)
-    VALUES
-      -- Legacy / Internas comunes (incluye worker.full_name en los 5 tipos)
-      ('entity.name', 'Nombre de la entidad', 'Entidad', ARRAY['CONTRACT','ADDENDUM','SC_4_04'], 'text', 'SOURCE', 'Snapshot contractual de la entidad firmante.', true),
-      ('entity.organism', 'Organismo', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Organismo al que pertenece la entidad (snapshot).', true),
-      ('entity.branch', 'Rama', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Rama de la entidad (snapshot).', true),
-      ('entity.labor_code', 'Código laboral/organizacional', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Código de identificación laboral (snapshot).', true),
-      ('entity.address', 'Dirección de la entidad', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Dirección de la entidad (snapshot).', true),
-      ('entity.province', 'Provincia de la entidad', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Provincia de la entidad (snapshot).', true),
-      ('entity.municipality', 'Municipio de la entidad', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Municipio de la entidad (snapshot).', true),
-      ('entity.revolution_year', 'Año de la Revolución', 'Entidad', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Valor institucional configurado por entidad y preservado en el documento.', true),
-      ('representative.name', 'Nombre del representante', 'Representante', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Representante histórico que suscribió el documento (snapshot).', true),
-      ('representative.position', 'Cargo del representante', 'Representante', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Cargo del representante histórico (snapshot).', true),
-      ('worker.full_name', 'Nombre completo', 'Trabajador', ARRAY['CONTRACT','ADDENDUM','SC_4_04','RESOLUTION','PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Nombre y apellidos del trabajador.', true),
-      ('worker.identification', 'Carné de identidad', 'Trabajador', ARRAY['CONTRACT','ADDENDUM','SC_4_04','RESOLUTION','PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Carné de identidad del trabajador.', true),
-      ('worker.birth_date', 'Fecha de nacimiento', 'Trabajador', ARRAY['CONTRACT','ADDENDUM'], 'date', 'SOURCE', 'Fecha de nacimiento del trabajador.', true),
-      ('worker.profession', 'Profesión u oficio', 'Trabajador', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Profesión u oficio (dato profesional, no nivel de estudios).', true),
-      ('worker.address', 'Dirección del trabajador', 'Trabajador', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Dirección particular del trabajador.', true),
-      ('worker.province', 'Provincia del trabajador', 'Trabajador', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Provincia de residencia del trabajador.', true),
-      ('worker.municipality', 'Municipio del trabajador', 'Trabajador', ARRAY['CONTRACT','ADDENDUM'], 'text', 'SOURCE', 'Municipio de residencia del trabajador.', true),
-      ('job.name', 'Cargo', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Cargo del trabajador según condiciones formalizadas vigentes.', true),
-      ('job.salary_group', 'Grupo salarial', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Grupo salarial en números romanos (p. ej. XII).', true),
-      ('job.occupational_category', 'Categoría ocupacional', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Categoría ocupacional del cargo.', true),
-      ('position.name', 'Puesto de trabajo', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Puesto que ocupa el trabajador.', true),
-      ('position.code', 'Código del puesto', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Código del puesto formalizado (tras anexos de cambio de puesto).', true),
-      ('position.work_location', 'Lugar de trabajo', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Lugar de trabajo según condiciones formalizadas.', true),
-      ('schedule.daily_hours', 'Horas diarias', 'Jornada', ARRAY['CONTRACT'], 'hours', 'SOURCE', 'Horas de trabajo al día.', true),
-      ('schedule.weekly_hours', 'Horas semanales', 'Jornada', ARRAY['CONTRACT'], 'hours', 'SOURCE', 'Horas de trabajo a la semana.', true),
-      ('schedule.monthly_hours', 'Horas mensuales', 'Jornada', ARRAY['CONTRACT'], 'hours', 'SOURCE', 'Horas de trabajo al mes.', true),
-      ('schedule.text', 'Horario', 'Jornada', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Horario / jornada en texto (del puesto o sus segmentos).', true),
-      ('schedule.break', 'Descanso', 'Jornada', ARRAY['CONTRACT'], 'integer', 'SOURCE', 'Minutos de descanso dentro de la jornada.', true),
-      ('contract.type', 'Tipo de contrato', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Nombre del tipo de contrato (determinado / indeterminado).', true),
-      ('contract.start_date', 'Fecha de inicio', 'Contrato', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de inicio del contrato.', true),
-      ('contract.end_date', 'Fecha de fin', 'Contrato', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de fin prevista (contrato por tiempo determinado).', true),
-      ('contract.duration', 'Duración', 'Contrato', ARRAY['CONTRACT'], 'text', 'CALCULATED', 'Duración calculada a partir de la fecha de inicio y la fecha de término (p. ej. «6 meses»).', true),
-      ('contract.signature_date', 'Fecha de firma', 'Contrato', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de firma del contrato.', true),
-      ('contract.signature_day', 'Día de firma', 'Contrato', ARRAY['CONTRACT'], 'integer', 'CALCULATED', 'Día de la fecha de firma (calculado, no se persiste).', true),
-      ('contract.signature_month', 'Mes de firma', 'Contrato', ARRAY['CONTRACT'], 'text', 'CALCULATED', 'Mes de la fecha de firma en español (calculado, no se persiste).', true),
-      ('contract.signature_year', 'Año de firma', 'Contrato', ARRAY['CONTRACT'], 'integer', 'CALCULATED', 'Año de la fecha de firma (calculado, no se persiste).', true),
-      ('contract.signature_place', 'Lugar de firma', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Lugar/municipio de firma.', true),
-      ('contract.payment_method', 'Forma de pago', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Forma de pago (A tiempo / A rendimiento), incluidos anexos formalizados.', true),
-      ('contract.payment_schedule', 'Día / momento de pago', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Día o momento de pago (p. ej. «Día 10 de cada mes»), incluidos anexos formalizados.', true),
-      ('compensation.base_salary', 'Salario de escala', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Salario de escala formalizado vigente.', true),
-      ('compensation.additional_payments', 'Pagos adicionales', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Suma de pagos adicionales formalizados.', true),
-      ('compensation.abnormal_conditions_payments', 'Pagos por condiciones anormales', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Suma de pagos por condiciones laborales anormales.', true),
-      ('compensation.other_payments', 'Otros pagos', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Suma de otros pagos del contrato.', true),
-      ('compensation.total', 'Total contractual', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Total contractual formalizado (salario + conceptos).', true),
-      ('compensation.currency', 'Moneda', 'Retribución', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Moneda de la retribución (p. ej. CUP).', true),
-      ('addendum.number', 'Número de anexo', 'Anexo', ARRAY['ADDENDUM'], 'integer', 'SOURCE', 'Numeración secuencial del anexo dentro del contrato.', true),
-      ('addendum.reason', 'Motivo del anexo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Motivo legible del anexo.', true),
-      ('addendum.effective_date', 'Fecha efectiva', 'Anexo', ARRAY['ADDENDUM'], 'date', 'SOURCE', 'Fecha desde la cual aplican las nuevas condiciones.', true),
-      ('addendum.signature_date', 'Fecha de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'date', 'SOURCE', 'Fecha de firma del anexo.', true),
-      ('addendum.signature_day', 'Día de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'integer', 'CALCULATED', 'Día de la fecha de firma del anexo (calculado).', true),
-      ('addendum.signature_month', 'Mes de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'CALCULATED', 'Mes de la fecha de firma del anexo en español (calculado).', true),
-      ('addendum.signature_year', 'Año de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'integer', 'CALCULATED', 'Año de la fecha de firma del anexo (calculado).', true),
-      ('addendum.signature_place', 'Lugar de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Lugar de firma del anexo.', true),
-      ('addendum.previous.job', 'Cargo anterior', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Cargo anterior según el snapshot del anexo.', true),
-      ('addendum.previous.salary_group', 'Grupo salarial anterior', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Grupo salarial anterior según el snapshot del anexo.', true),
-      ('addendum.previous.occupational_category', 'Categoría ocupacional anterior', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Categoría ocupacional anterior según el snapshot.', true),
-      ('addendum.previous.salary', 'Salario anterior', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Salario anterior según el snapshot del anexo.', true),
-      ('addendum.new.job', 'Cargo nuevo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Cargo nuevo según el snapshot del anexo.', true),
-      ('addendum.new.salary_group', 'Grupo salarial nuevo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Grupo salarial nuevo según el snapshot del anexo.', true),
-      ('addendum.new.occupational_category', 'Categoría ocupacional nueva', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Categoría ocupacional nueva según el snapshot.', true),
-      ('addendum.new.salary', 'Salario nuevo', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Salario nuevo según el snapshot del anexo.', true),
-      ('addendum.new.other_payments', 'Otros pagos nuevos', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Otros pagos según el lado «después» del anexo.', true),
-      ('addendum.new.total', 'Total nuevo', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Total contractual nuevo según el anexo.', true),
-      -- SC-4-04 legacy/internas
-      ('sc404.fecha_desde', 'SC-4-04 · Fecha desde', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Inicio del período en formato DD/MM/AA (fecha de inicio de vacaciones o fecha de salida del certificado médico).', true),
-      ('sc404.fecha_hasta', 'SC-4-04 · Fecha hasta', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Último día del período en formato DD/MM/AA (fecha de término en vacaciones; vacío en certificado médico).', true),
-      ('sc404.dias', 'SC-4-04 · Días', 'SC-4-04', ARRAY['SC_4_04'], 'integer', 'SOURCE', 'Vacaciones: días naturales del período. Certificado médico: cantidad de días otorgados.', true),
-      ('sc404.incorporacion_dia', 'SC-4-04 · Día de incorporación', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Día (1–31) de la fecha de reincorporación laboral.', true),
-      ('sc404.incorporacion_mes', 'SC-4-04 · Mes de incorporación', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Mes numérico (1–12) de la fecha de incorporación.', true),
-      ('sc404.incorporacion_anio', 'SC-4-04 · Año de incorporación', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Año en dos dígitos (AA) de la fecha de incorporación.', true),
-      ('certificado.es_licencia_subsidio', 'Marcador Licencia/Subsidio', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Devuelve «X» cuando el origen es un certificado médico; vacío para vacaciones.', true),
-      ('certificado.fecha_salida', 'Certificado · Fecha de salida', 'Certificado médico', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Fecha de salida del certificado médico en DD/MM/AA.', true),
-      ('certificado.fecha_reincorporacion', 'Certificado · Fecha de reincorporación', 'Certificado médico', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Fecha de reincorporación del certificado médico en DD/MM/AA.', true),
-      ('certificado.dias', 'Certificado · Días', 'Certificado médico', ARRAY['SC_4_04'], 'integer', 'SOURCE', 'Cantidad de días explícita del certificado médico.', true),
-      ('vacaciones.fecha_desde', 'Vacaciones · Fecha desde', 'Vacaciones', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Fecha de inicio del período de vacaciones en DD/MM/AA.', true),
-      ('vacaciones.fecha_hasta', 'Vacaciones · Fecha hasta', 'Vacaciones', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Fecha de término del período de vacaciones en DD/MM/AA.', true),
-      ('vacaciones.dias_naturales', 'Vacaciones · Días naturales', 'Vacaciones', ARRAY['SC_4_04'], 'integer', 'SOURCE', 'Días naturales del período (hasta − desde + 1).', true),
-      ('vacaciones.dias_consumidos', 'Vacaciones · Días consumidos', 'Vacaciones', ARRAY['SC_4_04'], 'integer', 'SOURCE', 'Días descontados del saldo vacacional.', true),
-      ('vacaciones.reincorporacion', 'Vacaciones · Incorporación', 'Vacaciones', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Primer día hábil posterior al período según el horario del puesto (DD/MM/AA).', true),
-      ('area.name', 'Área', 'Cargo y Puesto', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Área del puesto de la asignación vigente al período.', true),
-      ('entity.code', 'Código de la entidad', 'Entidad', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Código interno de la entidad del trabajador.', true),
-      ('documento.fecha_emision', 'Fecha de emisión del documento', 'Documento', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Fecha en que se emite el documento, en DD/MM/AA.', true),
-      -- SC-4-04 catálogo visible s.* (16 variables)
-      ('s.fem', 'SC-4-04 · Fecha de emisión', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Fecha (día de la generación) en que se emite el documento, en DD/MM/AA.', true),
-      ('s.ent', 'SC-4-04 · Nombre de la entidad', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Nombre de la entidad del trabajador.', true),
-      ('s.cod', 'SC-4-04 · Código de la entidad', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Código interno de la entidad del trabajador.', true),
-      ('s.nom', 'SC-4-04 · Nombre del trabajador', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Nombre o nombres del trabajador, sin apellidos.', true),
-      ('s.ap1', 'SC-4-04 · Primer apellido', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Primer apellido del trabajador.', true),
-      ('s.ap2', 'SC-4-04 · Segundo apellido', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Segundo apellido del trabajador.', true),
-      ('s.ci', 'SC-4-04 · Carné de identidad', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Carné de identidad del trabajador.', true),
-      ('s.area', 'SC-4-04 · Área', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Área del puesto de la asignación vigente al período.', true),
-      ('s.f_des', 'SC-4-04 · Fecha desde', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Inicio del período en formato DD/MM/AA (fecha de inicio de vacaciones o fecha de salida del certificado médico).', true),
-      ('s.f_has', 'SC-4-04 · Fecha hasta', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'SOURCE', 'Último día del período en formato DD/MM/AA (fecha de término en vacaciones; vacío en certificado médico).', true),
-      ('s.dias', 'SC-4-04 · Días', 'SC-4-04', ARRAY['SC_4_04'], 'integer', 'SOURCE', 'Vacaciones: días naturales del período. Certificado médico: cantidad de días otorgados.', true),
-      ('s.inc_d', 'SC-4-04 · Día de incorporación', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Día (1–31) de la fecha de reincorporación laboral.', true),
-      ('s.inc_m', 'SC-4-04 · Mes de incorporación', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Mes numérico (1–12) de la fecha de incorporación.', true),
-      ('s.inc_a', 'SC-4-04 · Año de incorporación', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Año en dos dígitos (AA) de la fecha de incorporación.', true),
-      ('s.vac', 'SC-4-04 · Marca de vacaciones', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Devuelve «X» cuando el origen es un período de vacaciones; vacío para certificado médico.', true),
-      ('s.lic', 'SC-4-04 · Marca de licencia/subsidio', 'SC-4-04', ARRAY['SC_4_04'], 'text', 'CALCULATED', 'Devuelve «X» cuando el origen es un certificado médico; vacío para vacaciones.', true),
-      -- Contrato catálogo visible c.* (45 variables)
-      ('c.ent', 'Contrato · Nombre de la entidad', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Nombre de la entidad firmante.', true),
-      ('c.org', 'Contrato · Organismo', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Organismo al que pertenece la entidad.', true),
-      ('c.ram', 'Contrato · Rama', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Rama de actividad de la entidad.', true),
-      ('c.cod', 'Contrato · Código laboral', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Código de identificación laboral de la entidad.', true),
-      ('c.dir', 'Contrato · Dirección de la entidad', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Dirección oficial de la entidad.', true),
-      ('c.prov', 'Contrato · Provincia de la entidad', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Provincia de la entidad.', true),
-      ('c.mun', 'Contrato · Municipio de la entidad', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Municipio de la entidad.', true),
-      ('c.rev', 'Contrato · Año de la Revolución', 'Entidad', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Valor institucional configurado por la entidad para el encabezado oficial.', true),
-      ('c.rep_nom', 'Contrato · Nombre del representante', 'Representante', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Nombre completo del representante que suscribe el documento.', true),
-      ('c.rep_cargo', 'Contrato · Cargo del representante', 'Representante', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Cargo del representante que suscribe el documento.', true),
-      ('c.nom', 'Contrato · Nombre completo', 'Trabajador', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Nombre y apellidos del trabajador.', true),
-      ('c.ci', 'Contrato · Carné de identidad', 'Trabajador', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Carné de identidad del trabajador.', true),
-      ('c.nac', 'Contrato · Fecha de nacimiento', 'Trabajador', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de nacimiento del trabajador.', true),
-      ('c.prof', 'Contrato · Profesión u oficio', 'Trabajador', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Profesión u oficio del trabajador.', true),
-      ('c.dir_trab', 'Contrato · Dirección del trabajador', 'Trabajador', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Dirección particular del trabajador.', true),
-      ('c.prov_trab', 'Contrato · Provincia del trabajador', 'Trabajador', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Provincia de residencia del trabajador.', true),
-      ('c.mun_trab', 'Contrato · Municipio del trabajador', 'Trabajador', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Municipio de residencia del trabajador.', true),
-      ('c.cargo', 'Contrato · Cargo', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Cargo del trabajador según condiciones formalizadas vigentes.', true),
-      ('c.grupo', 'Contrato · Grupo salarial', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Grupo salarial en números romanos (p. ej. XII).', true),
-      ('c.cat_ocup', 'Contrato · Categoría ocupacional', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Categoría ocupacional del cargo.', true),
-      ('c.puesto', 'Contrato · Puesto de trabajo', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Puesto que ocupa el trabajador.', true),
-      ('c.cod_puesto', 'Contrato · Código del puesto', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Código del puesto formalizado.', true),
-      ('c.lug_trab', 'Contrato · Lugar de trabajo', 'Cargo y Puesto', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Lugar de trabajo según condiciones formalizadas.', true),
-      ('c.horas_dia', 'Contrato · Horas diarias', 'Jornada', ARRAY['CONTRACT'], 'hours', 'SOURCE', 'Horas de trabajo al día.', true),
-      ('c.horas_sem', 'Contrato · Horas semanales', 'Jornada', ARRAY['CONTRACT'], 'hours', 'SOURCE', 'Horas de trabajo a la semana.', true),
-      ('c.horas_mes', 'Contrato · Horas mensuales', 'Jornada', ARRAY['CONTRACT'], 'hours', 'SOURCE', 'Horas de trabajo al mes.', true),
-      ('c.horario', 'Contrato · Horario', 'Jornada', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Horario o régimen de jornada en texto.', true),
-      ('c.descanso', 'Contrato · Descanso', 'Jornada', ARRAY['CONTRACT'], 'integer', 'SOURCE', 'Minutos de descanso dentro de la jornada.', true),
-      ('c.tipo', 'Contrato · Tipo de contrato', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Nombre del tipo de contrato (determinado / indeterminado).', true),
-      ('c.inicio', 'Contrato · Fecha de inicio', 'Contrato', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de inicio del contrato.', true),
-      ('c.fin', 'Contrato · Fecha de fin', 'Contrato', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de fin prevista (contrato por tiempo determinado).', true),
-      ('c.duracion', 'Contrato · Duración', 'Contrato', ARRAY['CONTRACT'], 'text', 'CALCULATED', 'Duración calculada a partir de la fecha de inicio y la fecha de término (p. ej. «6 meses»).', true),
-      ('c.firma', 'Contrato · Fecha de firma', 'Contrato', ARRAY['CONTRACT'], 'date', 'SOURCE', 'Fecha de firma del contrato.', true),
-      ('c.firma_dia', 'Contrato · Día de firma', 'Contrato', ARRAY['CONTRACT'], 'integer', 'CALCULATED', 'Día de la fecha de firma.', true),
-      ('c.firma_mes', 'Contrato · Mes de firma', 'Contrato', ARRAY['CONTRACT'], 'text', 'CALCULATED', 'Mes de la fecha de firma en español.', true),
-      ('c.firma_anio', 'Contrato · Año de firma', 'Contrato', ARRAY['CONTRACT'], 'integer', 'CALCULATED', 'Año de la fecha de firma.', true),
-      ('c.lugar_firma', 'Contrato · Lugar de firma', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Lugar o municipio de firma.', true),
-      ('c.formaPago', 'Contrato · Forma de pago', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Forma de pago (A tiempo / A rendimiento).', true),
-      ('c.momentoPago', 'Contrato · Día / momento de pago', 'Contrato', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Día o momento de pago (p. ej. «Día 10 de cada mes»).', true),
-      ('c.salario', 'Contrato · Salario de escala', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Salario de escala formalizado vigente.', true),
-      ('c.pagos_adic', 'Contrato · Pagos adicionales', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Suma de pagos adicionales formalizados.', true),
-      ('c.cond_anorm', 'Contrato · Pagos por condiciones anormales', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Suma de pagos por condiciones laborales anormales.', true),
-      ('c.otros_pagos', 'Contrato · Otros pagos', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Suma de otros pagos del contrato.', true),
-      ('c.total', 'Contrato · Total contractual', 'Retribución', ARRAY['CONTRACT'], 'amount', 'SOURCE', 'Total contractual formalizado (salario + conceptos).', true),
-      ('c.moneda', 'Contrato · Moneda', 'Retribución', ARRAY['CONTRACT'], 'text', 'SOURCE', 'Moneda de la retribución (p. ej. CUP).', true),
-      -- Anexo catálogo visible a.* (40 variables)
-      ('a.ent', 'Anexo · Nombre de la entidad', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Nombre de la entidad firmante.', true),
-      ('a.org', 'Anexo · Organismo', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Organismo al que pertenece la entidad.', true),
-      ('a.ram', 'Anexo · Rama', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Rama de actividad de la entidad.', true),
-      ('a.cod', 'Anexo · Código laboral', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Código de identificación laboral de la entidad.', true),
-      ('a.dir', 'Anexo · Dirección de la entidad', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Dirección oficial de la entidad.', true),
-      ('a.prov', 'Anexo · Provincia de la entidad', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Provincia de la entidad.', true),
-      ('a.mun', 'Anexo · Municipio de la entidad', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Municipio de la entidad.', true),
-      ('a.rev', 'Anexo · Año de la Revolución', 'Entidad', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Valor institucional configurado por la entidad.', true),
-      ('a.rep_nom', 'Anexo · Nombre del representante', 'Representante', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Nombre completo del representante que suscribe el anexo.', true),
-      ('a.rep_cargo', 'Anexo · Cargo del representante', 'Representante', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Cargo del representante que suscribe el anexo.', true),
-      ('a.nom', 'Anexo · Nombre completo', 'Trabajador', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Nombre y apellidos del trabajador.', true),
-      ('a.ci', 'Anexo · Carné de identidad', 'Trabajador', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Carné de identidad del trabajador.', true),
-      ('a.nac', 'Anexo · Fecha de nacimiento', 'Trabajador', ARRAY['ADDENDUM'], 'date', 'SOURCE', 'Fecha de nacimiento del trabajador.', true),
-      ('a.prof', 'Anexo · Profesión u oficio', 'Trabajador', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Profesión u oficio del trabajador.', true),
-      ('a.dir_trab', 'Anexo · Dirección del trabajador', 'Trabajador', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Dirección particular del trabajador.', true),
-      ('a.prov_trab', 'Anexo · Provincia del trabajador', 'Trabajador', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Provincia de residencia del trabajador.', true),
-      ('a.mun_trab', 'Anexo · Municipio del trabajador', 'Trabajador', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Municipio de residencia del trabajador.', true),
-      ('a.num', 'Anexo · Número de anexo', 'Anexo', ARRAY['ADDENDUM'], 'integer', 'SOURCE', 'Numeración secuencial del anexo dentro del contrato.', true),
-      ('a.motivo', 'Anexo · Motivo del anexo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Motivo legible del anexo.', true),
-      ('a.efectiva', 'Anexo · Fecha efectiva', 'Anexo', ARRAY['ADDENDUM'], 'date', 'SOURCE', 'Fecha desde la cual aplican las nuevas condiciones.', true),
-      ('a.firma', 'Anexo · Fecha de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'date', 'SOURCE', 'Fecha de firma del anexo.', true),
-      ('a.firma_dia', 'Anexo · Día de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'integer', 'CALCULATED', 'Día de la fecha de firma del anexo.', true),
-      ('a.firma_mes', 'Anexo · Mes de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'CALCULATED', 'Mes de la fecha de firma del anexo en español.', true),
-      ('a.firma_anio', 'Anexo · Año de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'integer', 'CALCULATED', 'Año de la fecha de firma del anexo.', true),
-      ('a.lugar_firma', 'Anexo · Lugar de firma del anexo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Lugar de firma del anexo.', true),
-      ('a.ant_cargo', 'Anexo · Cargo anterior', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Cargo anterior del trabajador.', true),
-      ('a.ant_grupal', 'Anexo · Grupo salarial anterior', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Grupo salarial anterior del trabajador.', true),
-      ('a.ant_cat', 'Anexo · Categoría ocupacional anterior', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Categoría ocupacional anterior.', true),
-      ('a.ant_salario', 'Anexo · Salario anterior', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Salario anterior del trabajador.', true),
-      ('a.nue_cargo', 'Anexo · Cargo nuevo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Cargo nuevo del trabajador.', true),
-      ('a.nue_grupal', 'Anexo · Grupo salarial nuevo', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Grupo salarial nuevo del trabajador.', true),
-      ('a.nue_cat', 'Anexo · Categoría ocupacional nueva', 'Anexo', ARRAY['ADDENDUM'], 'text', 'SOURCE', 'Categoría ocupacional nueva.', true),
-      ('a.nue_salario', 'Anexo · Salario nuevo', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Salario nuevo del trabajador.', true),
-      ('a.nue_otros', 'Anexo · Otros pagos nuevos', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Otros pagos nuevos del anexo.', true),
-      ('a.nue_total', 'Anexo · Total nuevo', 'Anexo', ARRAY['ADDENDUM'], 'amount', 'SOURCE', 'Total contractual nuevo según el anexo.', true),
-      -- Resolución catálogo visible r.* (13 variables)
-      ('r.nom', 'Resolución · Nombre completo', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Nombre y apellidos del trabajador.', true),
-      ('r.car', 'Resolución · Cargo', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Cargo destino que pasa a ocupar el trabajador.', true),
-      ('r.ent', 'Resolución · Nombre de la entidad', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Entidad que emite la Resolución.', true),
-      ('r.emp', 'Resolución · Empresa', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Empresa a la que pertenece la UEB (vacío si la entidad no es UEB).', true),
-      ('r.sal', 'Resolución · Salario', 'Resolución', ARRAY['RESOLUTION'], 'amount', 'SOURCE', 'Salario correspondiente al nuevo Cargo.', true),
-      ('r.ge', 'Resolución · Grupo Escala', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Grupo Escala del nuevo Cargo (valor en números romanos, p. ej. XI).', true),
-      ('r.fun', 'Resolución · Funciones / contenido de trabajo', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Funciones y contenido de trabajo del nuevo Cargo.', true),
-      ('r.mun', 'Resolución · Municipio', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Municipio donde se firma la Resolución.', true),
-      ('r.dia', 'Resolución · Día de firma', 'Resolución', ARRAY['RESOLUTION'], 'text', 'CALCULATED', 'Día de la fecha de Resolución.', true),
-      ('r.mes', 'Resolución · Mes de firma', 'Resolución', ARRAY['RESOLUTION'], 'text', 'CALCULATED', 'Mes de la fecha de Resolución en español.', true),
-      ('r.ano', 'Resolución · Año de firma', 'Resolución', ARRAY['RESOLUTION'], 'text', 'CALCULATED', 'Año de la fecha de Resolución.', true),
-      ('r.rev', 'Resolución · Año de la Revolución', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Año de la Revolución configurado en la información contractual.', true),
-      ('r.rep', 'Resolución · Representante', 'Resolución', ARRAY['RESOLUTION'], 'text', 'SOURCE', 'Persona representante a nombre de quien se emite la Resolución.', true),
-      -- Movimiento de Nómina catálogo visible m.* (23 variables)
-      ('m.org', 'Movimiento · Organismo', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Organismo al que pertenece la entidad.', true),
-      ('m.emp', 'Movimiento · Empresa', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Empresa según la jerarquía organizativa.', true),
-      ('m.uni', 'Movimiento · Unidad', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Unidad Empresarial de Base (UEB). Vacío si la entidad no es una UEB.', true),
-      ('m.exp', 'Movimiento · Expediente', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Número de identificación del trabajador (11 dígitos).', true),
-      ('m.dia', 'Movimiento · Día', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'integer', 'CALCULATED', 'Día de la fecha efectiva del movimiento laboral.', true),
-      ('m.mes', 'Movimiento · Mes', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'CALCULATED', 'Mes de la fecha efectiva del movimiento (nombre en español).', true),
-      ('m.ano', 'Movimiento · Año', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'integer', 'CALCULATED', 'Año de la fecha efectiva del movimiento.', true),
-      ('m.nom', 'Movimiento · Nombre', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Nombre o nombres del trabajador.', true),
-      ('m.ap1', 'Movimiento · Primer apellido', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Primer apellido del trabajador.', true),
-      ('m.ap2', 'Movimiento · Segundo apellido', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Segundo apellido del trabajador.', true),
-      ('m.sex_m', 'Movimiento · Sexo masculino', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'CALCULATED', 'Devuelve «X» si el trabajador es masculino; vacío en caso contrario.', true),
-      ('m.sex_f', 'Movimiento · Sexo femenino', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'CALCULATED', 'Devuelve «X» si el trabajador es femenino; vacío en caso contrario.', true),
-      ('m.alta', 'Movimiento · Alta', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'CALCULATED', 'Devuelve «X» en una nueva contratación; vacío en el resto.', true),
-      ('m.reu', 'Movimiento · Reubicación', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'CALCULATED', 'Devuelve «X» en un cambio de puesto y/o cambio salarial efectivo; vacío en el resto.', true),
-      ('m.baja', 'Movimiento · Baja', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'CALCULATED', 'Devuelve «X» al dar de baja al trabajador; vacío en el resto.', true),
-      ('m.area_act', 'Movimiento · Área actual', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Área actual/anterior (en Alta, el área de incorporación).', true),
-      ('m.cargo_act', 'Movimiento · Cargo actual', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Cargo actual/anterior (en Alta, el cargo de incorporación).', true),
-      ('m.area_nva', 'Movimiento · Área nueva', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Área nueva/posterior. Vacío en Alta y Baja.', true),
-      ('m.cargo_nvo', 'Movimiento · Cargo nuevo', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Cargo nuevo/posterior. Vacío en Alta y Baja.', true),
-      ('m.ge_act', 'Movimiento · Grupo Escala actual', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Grupo Escala actual/anterior (número romano).', true),
-      ('m.sal_act', 'Movimiento · Salario actual', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'amount', 'SOURCE', 'Salario actual/anterior.', true),
-      ('m.ge_nvo', 'Movimiento · Grupo Escala nuevo', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'text', 'SOURCE', 'Grupo Escala nuevo/posterior. Vacío en Alta y Baja.', true),
-      ('m.sal_nvo', 'Movimiento · Salario nuevo', 'Movimiento de Nómina', ARRAY['PAYROLL_MOVEMENT'], 'amount', 'SOURCE', 'Salario nuevo/posterior. Vacío en Alta y Baja.', true)
-    ON CONFLICT (key) DO UPDATE
-      SET label          = EXCLUDED.label,
-          category       = EXCLUDED.category,
-          document_types = EXCLUDED.document_types,
-          data_type      = EXCLUDED.data_type,
-          kind           = EXCLUDED.kind,
-          description    = EXCLUDED.description,
-          is_active      = true;
+    FOR rec IN
+      SELECT id, document_type_code, analysis
+      FROM public.document_template_versions
+      WHERE status = 'DRAFT'
+        AND analysis IS NOT NULL
+    LOOP
+      SELECT
+        coalesce(jsonb_agg(jsonb_build_object('key', x.key, 'count', x.count, 'split_runs', x.split_runs) ORDER BY x.sort_order) FILTER (WHERE x.state = 'RECOGNIZED'), '[]'::jsonb),
+        coalesce(jsonb_agg(jsonb_build_object('key', x.key, 'count', x.count) ORDER BY x.sort_order) FILTER (WHERE x.state = 'UNKNOWN'), '[]'::jsonb),
+        coalesce(jsonb_agg(jsonb_build_object('key', x.key, 'label', x.label, 'count', x.count) ORDER BY x.sort_order) FILTER (WHERE x.state = 'INCOMPATIBLE'), '[]'::jsonb),
+        coalesce(jsonb_agg(to_jsonb(x.key) ORDER BY x.sort_order) FILTER (WHERE x.state = 'RECOGNIZED'), '[]'::jsonb)
+      INTO v_recognized, v_unknown, v_incompatible, v_required
+      FROM (
+        SELECT
+          o.occ->>'key' AS key,
+          coalesce((o.occ->>'count')::integer, 0) AS count,
+          coalesce((o.occ->>'split_runs')::integer, 0) AS split_runs,
+          coalesce((o.occ->>'sort_order')::integer, 0) AS sort_order,
+          d.label AS label,
+          CASE
+            WHEN d.key IS NULL THEN 'UNKNOWN'
+            WHEN rec.document_type_code = ANY(d.document_types) THEN 'RECOGNIZED'
+            ELSE 'INCOMPATIBLE'
+          END AS state
+        FROM jsonb_array_elements(coalesce(rec.analysis->'occurrences', '[]'::jsonb)) AS o(occ)
+        LEFT JOIN public.document_variables d ON d.key = o.occ->>'key'
+        WHERE coalesce(btrim(o.occ->>'key'), '') <> ''
+      ) AS x;
+
+      SELECT coalesce(jsonb_agg(w.val), '[]'::jsonb)
+        INTO v_warnings
+        FROM jsonb_array_elements(coalesce(rec.analysis->'warnings', '[]'::jsonb)) AS w(val)
+       WHERE NOT (jsonb_array_length(v_required) > 0 AND w.val::text ILIKE '%no contiene variables dinámicas%');
+
+      UPDATE public.document_template_versions
+         SET analysis = rec.analysis || jsonb_build_object(
+               'recognized', v_recognized,
+               'required_variables', v_required,
+               'unknown_variables', v_unknown,
+               'incompatible_variables', v_incompatible,
+               'warnings', v_warnings
+             ),
+             updated_at = now()
+       WHERE id = rec.id;
+    END LOOP;
   END IF;
 END $$;
+
+-- -----------------------------------------------------------------------------
+-- 5. Eliminar sobrecarga ambigua de `public.validate_hiring_readiness`
+--    (dos firmas con los mismos 10 nombres de parámetro en distinto orden
+--    causaban error 42725 en PostgREST al invocar por nombre). Se conserva el
+--    orden posicional usado por `hire_candidate` / `reincorporate_worker` /
+--    `create_worker_pluriemploy` con el chequeo de autorización S3 completo.
+-- -----------------------------------------------------------------------------
+DROP FUNCTION IF EXISTS public.validate_hiring_readiness(
+  uuid, uuid, uuid, uuid, date, date, date, text, uuid, uuid
+) CASCADE;
+
+CREATE OR REPLACE FUNCTION public.validate_hiring_readiness(
+  p_candidate_id uuid DEFAULT NULL::uuid,
+  p_worker_id uuid DEFAULT NULL::uuid,
+  p_position_id uuid DEFAULT NULL::uuid,
+  p_signature_date date DEFAULT NULL::date,
+  p_contract_type_id uuid DEFAULT NULL::uuid,
+  p_signature_place text DEFAULT NULL::text,
+  p_payment_method_id uuid DEFAULT NULL::uuid,
+  p_representative_assignment_id uuid DEFAULT NULL::uuid,
+  p_contract_start_date date DEFAULT NULL::date,
+  p_contract_end_date date DEFAULT NULL::date
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public', 'auth'
+AS $function$
+DECLARE
+  v_missing jsonb := '[]'::jsonb;
+  v_sections jsonb;
+  v_pos public.organization_positions%ROWTYPE;
+  v_entity_id uuid;
+  v_card jsonb;
+  v_pending jsonb;
+  v_item text;
+  v_section text;
+  v_type_code text;
+  v_start date;
+  v_auth_entity uuid;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'No autenticado'; END IF;
+
+  -- S3: autorización por identidad y ámbito organizativo (plaza -> trabajador -> candidato)
+  IF p_position_id IS NOT NULL THEN
+    SELECT p.organization_entity_id INTO v_auth_entity FROM public.organization_positions p WHERE p.id = p_position_id;
+  END IF;
+  IF v_auth_entity IS NULL AND p_worker_id IS NOT NULL THEN
+    SELECT w.organization_entity_id INTO v_auth_entity FROM public.workers w WHERE w.id = p_worker_id;
+  END IF;
+  IF v_auth_entity IS NULL AND p_candidate_id IS NOT NULL THEN
+    SELECT c.organization_entity_id INTO v_auth_entity FROM public.candidates c WHERE c.id = p_candidate_id;
+  END IF;
+
+  IF v_auth_entity IS NOT NULL AND NOT (public.can_access_entity(v_auth_entity, NULL) OR public.has_platform_permission('salary.manage')) THEN
+    RAISE EXCEPTION 'Permiso denegado: sin autoridad sobre la entidad de la contratación';
+  END IF;
+
+  -- Puesto: resuelve la entidad y valida estructura del puesto (incluye cargo)
+  IF p_position_id IS NOT NULL THEN
+    SELECT * INTO v_pos FROM public.organization_positions WHERE id = p_position_id;
+    IF FOUND THEN
+      v_entity_id := v_pos.organization_entity_id;
+      v_card := public.validate_position_contract_readiness(p_position_id);
+      v_missing := v_missing || (v_card->'missing');
+    ELSE
+      v_missing := v_missing || jsonb_build_object('code','position','label','Puesto','source','position','sourceId',p_position_id,'section','Puesto');
+    END IF;
+  ELSE
+    v_missing := v_missing || jsonb_build_object('code','position','label','Puesto','source','position','sourceId',NULL,'section','Puesto');
+  END IF;
+
+  -- Datos personales: el trabajador es la fuente de verdad en reincorporaciones
+  IF p_worker_id IS NOT NULL THEN
+    v_card := public.validate_worker_contract_readiness(p_worker_id);
+    v_missing := v_missing || (v_card->'missing');
+  ELSIF p_candidate_id IS NOT NULL THEN
+    v_card := public.validate_candidate_contract_readiness(p_candidate_id);
+    v_missing := v_missing || (v_card->'missing');
+  END IF;
+
+  -- Entidad contractual
+  IF v_entity_id IS NOT NULL THEN
+    v_card := public.validate_entity_contract_readiness(v_entity_id);
+    v_missing := v_missing || (v_card->'missing');
+  END IF;
+
+  -- Condiciones contractuales (escala salarial, firma, pago, representante vigente)
+  IF v_entity_id IS NOT NULL THEN
+    v_pending := public.pending_contract_formalization(
+      v_entity_id, p_position_id, p_signature_date, p_signature_place,
+      p_payment_method_id, p_representative_assignment_id
+    );
+    FOR v_item IN SELECT jsonb_array_elements_text(COALESCE(v_pending->'blocking','[]'::jsonb)) LOOP
+      v_section := CASE
+        WHEN v_item ILIKE '%representante%' THEN 'Representante'
+        WHEN v_item ILIKE '%Entidad%' THEN 'Entidad'
+        ELSE 'Contrato'
+      END;
+      v_missing := v_missing || jsonb_build_object(
+        'code','contract.pending','label',v_item,'source','contract','sourceId',NULL,'section',v_section);
+    END LOOP;
+  END IF;
+
+  -- Tipo de contrato / fechas
+  IF p_contract_type_id IS NULL THEN
+    v_missing := v_missing || jsonb_build_object('code','contract.type','label','Tipo de contrato','source','contract','sourceId',NULL,'section','Contrato');
+  ELSE
+    SELECT code INTO v_type_code FROM public.employment_contract_types WHERE id = p_contract_type_id AND is_active = true;
+    IF v_type_code IS NULL THEN
+      v_missing := v_missing || jsonb_build_object('code','contract.type','label','Tipo de contrato válido','source','contract','sourceId',NULL,'section','Contrato');
+    END IF;
+  END IF;
+
+  v_start := COALESCE(p_contract_start_date, p_signature_date);
+  IF v_start IS NULL THEN
+    v_missing := v_missing || jsonb_build_object('code','contract.start_date','label','Fecha de inicio','source','contract','sourceId',NULL,'section','Contrato');
+  END IF;
+
+  IF v_type_code = 'DETERMINADO' THEN
+    IF p_contract_end_date IS NULL THEN
+      v_missing := v_missing || jsonb_build_object('code','contract.end_date','label','Fecha de fin (contrato determinado)','source','contract','sourceId',NULL,'section','Contrato');
+    ELSIF v_start IS NOT NULL AND p_contract_end_date <= v_start THEN
+      v_missing := v_missing || jsonb_build_object('code','contract.end_date_order','label','Fecha de fin posterior al inicio','source','contract','sourceId',NULL,'section','Contrato');
+    END IF;
+  ELSIF p_contract_end_date IS NOT NULL AND v_start IS NOT NULL AND p_contract_end_date <= v_start THEN
+    v_missing := v_missing || jsonb_build_object('code','contract.end_date_order','label','Fecha de fin posterior al inicio','source','contract','sourceId',NULL,'section','Contrato');
+  END IF;
+
+  -- Agrupar por sección (orden contractual)
+  SELECT COALESCE(jsonb_agg(sec ORDER BY ord), '[]'::jsonb) INTO v_sections
+  FROM (
+    SELECT s AS label, o AS ord,
+           jsonb_build_object(
+             'key', s,
+             'label', s,
+             'ready', NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_missing) e WHERE e->>'section' = s),
+             'missing', COALESCE((SELECT jsonb_agg(e) FROM jsonb_array_elements(v_missing) e WHERE e->>'section' = s), '[]'::jsonb)
+           ) AS sec
+    FROM (VALUES ('Entidad',1),('Representante',2),('Candidato',3),('Trabajador',4),('Cargo',5),('Puesto',6),('Contrato',7)) AS t(s,o)
+  ) q;
+
+  RETURN jsonb_build_object('ready', jsonb_array_length(v_missing) = 0, 'missing', v_missing, 'sections', v_sections);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.validate_hiring_readiness(uuid, uuid, uuid, date, uuid, text, uuid, uuid, date, date) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.validate_hiring_readiness(uuid, uuid, uuid, date, uuid, text, uuid, uuid, date, date) TO authenticated, service_role;
 
 NOTIFY pgrst, 'reload schema';
 

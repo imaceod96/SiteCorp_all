@@ -1,8 +1,8 @@
 import * as React from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { loadEntityPermissionSafe } from "@/modules/access-control"
 import { fetchEntityName } from "@/modules/organization-structure"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -30,9 +30,7 @@ import { FileText, Plus, ArrowRight, Download, FilePlus2, PowerOff } from "lucid
  */
 
 const EntitySettingsDocumentTemplates = () => {
-  const { entityId: routeEntityId } = useParams<{ entityId: string }>()
-  const { currentEntity } = useCurrentEntity()
-  const entityId = routeEntityId || currentEntity?.id || ""
+  const entityId = useActiveEntityId() || ""
   const navigate = useNavigate()
 
   const [loading, setLoading] = React.useState(true)
@@ -131,7 +129,7 @@ const EntitySettingsDocumentTemplates = () => {
       const created = await createDocumentTemplateVersion(template.id, null)
       showSuccess(`Versión ${created.version_number} creada como borrador.`)
       setBusyLabel(null)
-      navigate(`/entity/${entityId}/settings/document-templates/${template.id}`)
+      navigate(`/settings/document-templates/${template.id}`)
     } catch (err) {
       setBusyLabel(null)
       showError(err instanceof Error ? err.message : "No se pudo crear la versión.")
@@ -149,7 +147,7 @@ const EntitySettingsDocumentTemplates = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {header}
         <SiteCorpLoading rows={5} />
       </div>
@@ -158,7 +156,7 @@ const EntitySettingsDocumentTemplates = () => {
 
   if (notAllowed) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {header}
         <SiteCorpAlert type="danger">{notAllowed}</SiteCorpAlert>
       </div>
@@ -166,7 +164,7 @@ const EntitySettingsDocumentTemplates = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {header}
 
       {busyLabel && <SiteCorpAlert type="info">{busyLabel}</SiteCorpAlert>}
@@ -258,7 +256,7 @@ const EntitySettingsDocumentTemplates = () => {
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            navigate(`/entity/${entityId}/settings/document-templates/${template.id}`)
+                            navigate(`/settings/document-templates/${template.id}`)
                           }
                         >
                           Abrir
@@ -310,7 +308,7 @@ const EntitySettingsDocumentTemplates = () => {
         onOpenChange={setShowCreate}
         entityId={entityId}
         onCreated={async (createdTemplateId) => {
-          navigate(`/entity/${entityId}/settings/document-templates/${createdTemplateId}`)
+          navigate(`/settings/document-templates/${createdTemplateId}`)
         }}
       />
     </div>

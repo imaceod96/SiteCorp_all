@@ -87,7 +87,7 @@ const CompanyClientRoles = () => {
   const selectedEntity = entities.find((entity) => entity.id === selectedEntityId)
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Roles y permisos"
         description={`Roles de organización para ${currentCompanyClient?.name || "el cliente actual"}`}

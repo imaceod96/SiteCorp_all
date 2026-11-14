@@ -71,7 +71,7 @@ export const CurrentContractSummary: React.FC<CurrentContractSummaryProps> = ({
 
   return (
     <SiteCorpCard className={className}>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-lg font-semibold text-ink">Contrato vigente</h3>

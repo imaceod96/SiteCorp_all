@@ -16,7 +16,7 @@ import { Building2, Shield } from "lucide-react"
  */
 const RolesPermissions = () => {
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Roles y permisos de plataforma"
         description="Gestión global de los roles y permisos de la plataforma SiteCorp"

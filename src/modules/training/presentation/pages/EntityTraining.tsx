@@ -1,6 +1,6 @@
 import * as React from "react"
-import { Link, useParams } from "react-router-dom"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { Link } from "react-router-dom"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -100,7 +100,7 @@ const statusBadgeVariant = (
 }
 
 const EntityTraining: React.FC = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId() ?? undefined
   const { currentEntity } = useCurrentEntity()
   const { has: hasEntityPermission } = useEntityPermissions(entityId)
   const { toast } = useToast()
@@ -700,7 +700,7 @@ const EntityTraining: React.FC = () => {
 
   if (!entityId) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Capacitación" description="No se indicó una entidad" />
         <SiteCorpAlert type="danger" title="Entidad no encontrada">
           Selecciona una entidad válida para gestionar su módulo de Capacitación.
@@ -710,7 +710,7 @@ const EntityTraining: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title={`Capacitación — ${currentEntity?.name ?? "Entidad"}`}
         description="Calendario anual de capacitaciones, carpetas por área organizativa, temas, documentos Word/PDF y registro de participantes."
@@ -1016,8 +1016,8 @@ const EntityTraining: React.FC = () => {
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Detalle cronológico de sesiones en {selectedYear} ({filteredYearSessions.length})
                   </h3>
-                  <div className="overflow-x-auto rounded-xl border border-border">
-                    <table className="w-full border-collapse text-left text-sm">
+                  <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-border">
+                    <table className="w-full min-w-[760px] border-collapse text-left text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           <th className="px-4 py-2.5">Fecha</th>
@@ -1133,7 +1133,7 @@ const EntityTraining: React.FC = () => {
                     de Plantilla.
                   </p>
                   <div className="mt-4">
-                    <Link to={`/entity/${entityId}/settings/staffing`}>
+                    <Link to="/settings/staffing">
                       <SiteCorpButton size="sm" variant="outline">
                         Ir a Configuración de Plantilla
                       </SiteCorpButton>
@@ -1758,7 +1758,7 @@ const EntityTraining: React.FC = () => {
                 {/* Selector de estado de la sesión */}
                 <div className="space-y-2">
                   <Label>Estado de la sesión</Label>
-                  <div className="grid grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     {(
                       [
                         {
@@ -1915,7 +1915,7 @@ const EntityTraining: React.FC = () => {
                               </div>
 
                               <Link
-                                to={`/entity/${entityId}/workers/${w.id}?tab=informacion-adicional`}
+                                to={`/workers/${w.id}?tab=informacion-adicional`}
                                 onClick={(e) => e.stopPropagation()}
                                 className="text-xs font-medium text-sitecorp-primary hover:underline"
                               >
@@ -1930,7 +1930,7 @@ const EntityTraining: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center justify-between border-t border-border bg-muted/20 px-6 py-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-muted/20 px-4 py-4 sm:px-6">
                 {canManage ? (
                   <button
                     type="button"

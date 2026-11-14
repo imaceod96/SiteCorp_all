@@ -246,7 +246,7 @@ export const AdminEntityPlans: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Gestión de Planes por Entidad"
         description="Administra individualmente qué paquetes y módulos de la plataforma SiteCorp tiene habilitados cada cuenta cliente."
@@ -545,7 +545,7 @@ export const AdminEntityPlans: React.FC = () => {
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {hasChanges && (
                         <SiteCorpButton
                           type="button"

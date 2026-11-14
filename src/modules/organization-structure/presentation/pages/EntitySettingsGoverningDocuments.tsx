@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useParams } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { useAuth } from "@/contexts/AuthContext"
 import {
   downloadGoverningDocument,
@@ -46,7 +46,7 @@ import {
  */
 
 const EntitySettingsGoverningDocuments = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const { user } = useAuth()
   const { permissions, loading: permissionsLoading } = useEntityPermissions(entityId)
 
@@ -211,7 +211,7 @@ const EntitySettingsGoverningDocuments = () => {
 
   if (!canView) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Documentos rectores"
           description="Documentos rectores de la entidad"
@@ -224,7 +224,7 @@ const EntitySettingsGoverningDocuments = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Documentos rectores"
         description={`Documentos rectores de ${entityName || "esta entidad"}`}

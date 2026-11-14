@@ -6,6 +6,10 @@ import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { cn } from "@/lib/utils"
 import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
 import {
+  ResponsiveAppShell,
+  type ResponsiveShellRenderState,
+} from "@/shared/components/responsive-app-shell"
+import {
   LayoutDashboard,
   Users,
   UserCheck,
@@ -39,22 +43,22 @@ import { EntitySwitcher } from "./entity-switcher"
 
 /** Iconos de los elementos del menú (la estructura está en ENTITY_NAV). */
 const navIcons: Record<string, React.ReactNode> = {
-  summary: <LayoutDashboard className="h-5 w-5" />,
-  personas: <Users className="h-5 w-5" />,
-  candidates: <Users className="h-5 w-5" />,
-  workers: <UserCheck className="h-5 w-5" />,
-  reentries: <Undo2 className="h-5 w-5" />,
-  staffing: <Briefcase className="h-5 w-5" />,
-  hiring: <FileSignature className="h-5 w-5" />,
-  training: <GraduationCap className="h-5 w-5" />,
-  sst: <ShieldCheck className="h-5 w-5" />,
-  prenomina: <Calculator className="h-5 w-5" />,
-  vacations: <Palmtree className="h-5 w-5" />,
-  "medical-certificates": <HeartPulse className="h-5 w-5" />,
-  "pending-documents": <FileArchive className="h-5 w-5" />,
-  "contract-alerts": <CalendarClock className="h-5 w-5" />,
-  settings: <Settings className="h-5 w-5" />,
-  manual: <BookOpen className="h-5 w-5" />,
+  summary: <LayoutDashboard className="h-5 w-5 shrink-0" />,
+  personas: <Users className="h-5 w-5 shrink-0" />,
+  candidates: <Users className="h-5 w-5 shrink-0" />,
+  workers: <UserCheck className="h-5 w-5 shrink-0" />,
+  reentries: <Undo2 className="h-5 w-5 shrink-0" />,
+  staffing: <Briefcase className="h-5 w-5 shrink-0" />,
+  hiring: <FileSignature className="h-5 w-5 shrink-0" />,
+  training: <GraduationCap className="h-5 w-5 shrink-0" />,
+  sst: <ShieldCheck className="h-5 w-5 shrink-0" />,
+  prenomina: <Calculator className="h-5 w-5 shrink-0" />,
+  vacations: <Palmtree className="h-5 w-5 shrink-0" />,
+  "medical-certificates": <HeartPulse className="h-5 w-5 shrink-0" />,
+  "pending-documents": <FileArchive className="h-5 w-5 shrink-0" />,
+  "contract-alerts": <CalendarClock className="h-5 w-5 shrink-0" />,
+  settings: <Settings className="h-5 w-5 shrink-0" />,
+  manual: <BookOpen className="h-5 w-5 shrink-0" />,
 }
 
 const isVisible = (entry: EntityNavEntry, permissions: string[]): boolean => {
@@ -68,7 +72,7 @@ const EntityLayout = React.forwardRef<
 >(({ className, ...props }, ref) => {
   const { isPlatformUser } = useAuth()
   const { clearCurrentCompanyClient } = useCurrentCompanyClient()
-  const { currentEntity, clearCurrentEntity } = useCurrentEntity()
+  const { currentEntity, activeEntityId, clearCurrentEntity } = useCurrentEntity()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -78,7 +82,7 @@ const EntityLayout = React.forwardRef<
     navigate("/admin")
   }
 
-  const entityId = currentEntity?.id
+  const entityId = currentEntity?.id ?? activeEntityId ?? null
 
   // Los módulos internos solo existen cuando la entidad es Cuenta SiteCorp
   const modulesEnabled = hasSiteCorpAccount(currentEntity)
@@ -134,21 +138,44 @@ const EntityLayout = React.forwardRef<
   const toggleGroup = (key: string) =>
     setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
 
-  const renderLink = (item: EntityNavLink) => {
-    const active = location.pathname.startsWith(item.path(entityId as string))
+  const isRouteActive = React.useCallback(
+    (path: string) => {
+      if (path === "/home") {
+        return (
+          location.pathname === "/home" ||
+          location.pathname === "/" ||
+          location.pathname === "/summary"
+        )
+      }
+      return location.pathname.startsWith(path)
+    },
+    [location.pathname]
+  )
+
+  const renderLink = (item: EntityNavLink, shell: ResponsiveShellRenderState) => {
+    const targetPath = item.path(entityId ?? undefined)
+    const active = isRouteActive(targetPath)
     return (
       <Link
         key={item.key}
-        to={item.path(entityId as string)}
+        to={targetPath}
+        title={item.label}
+        aria-label={item.label}
+        onClick={() => {
+          if (!shell.isDesktop) shell.collapseSidebar()
+        }}
         className={cn(
-          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+          "flex items-center rounded-lg text-sm font-medium transition-colors",
+          shell.collapsed
+            ? "mx-auto h-10 w-10 justify-center p-0"
+            : "gap-3 px-3 py-2.5",
           active
             ? "bg-sitecorp-primary/10 text-sitecorp-primary"
             : "text-ink hover:bg-muted hover:text-ink"
         )}
       >
-        {navIcons[item.key] || <Settings className="h-5 w-5" />}
-        <span className="flex-1">{item.label}</span>
+        {navIcons[item.key] || <Settings className="h-5 w-5 shrink-0" />}
+        {!shell.collapsed && <span className="flex-1 truncate">{item.label}</span>}
       </Link>
     )
   }
@@ -159,97 +186,120 @@ const EntityLayout = React.forwardRef<
   const showGlobalAdminReturn = isPlatformUser
 
   return (
-    <div
+    <ResponsiveAppShell
       ref={ref}
-      className={cn("flex h-screen w-full overflow-hidden", className)}
+      className={className}
       {...props}
-    >
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border bg-card">
-        {/* Logo / Brand & Selector de Entidad */}
-        <div className="flex h-16 shrink-0 items-center border-b border-border px-4">
-          <div className="flex min-w-0 w-full items-center gap-2.5">
-            <SiteCorpBrand variant="isotype" size="sm" />
-            <div className="min-w-0 flex-1">
-              <EntitySwitcher />
-            </div>
+      renderHeader={() => (
+        <div className="flex min-w-0 w-full items-center gap-2.5">
+          <SiteCorpBrand variant="isotype" size="sm" />
+          <div className="min-w-0 flex-1">
+            <EntitySwitcher />
           </div>
         </div>
+      )}
+      renderNav={(shell) => (
+        <div className={cn(shell.collapsed ? "space-y-1.5" : "space-y-1")}>
+          {entityId && modulesEnabled && (
+            <>
+              {visibleNav.map((entry) => {
+                if (entry.kind === "link") return renderLink(entry, shell)
 
-        {/* Navigation (scrollable) */}
-        <nav className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-1">
-            {entityId && modulesEnabled && (
-              <>
-                {visibleNav.map((entry) => {
-                  if (entry.kind === "link") return renderLink(entry)
+                const isOpen = !!openGroups[entry.key]
+                const containsActive = entry.items.some((item) =>
+                  isRouteActive(item.path(entityId))
+                )
 
-                  const isOpen = !!openGroups[entry.key]
-                  const containsActive = entry.items.some((item) =>
-                    location.pathname.startsWith(item.path(entityId))
-                  )
+                if (shell.collapsed) {
                   return (
-                    <div key={entry.key} className="space-y-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleGroup(entry.key)}
-                        aria-expanded={isOpen}
-                        className={cn(
-                          "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                          containsActive
-                            ? "text-sitecorp-primary"
-                            : "text-ink hover:bg-muted hover:text-ink"
-                        )}
-                      >
-                        {navIcons[entry.key] || <Users className="h-5 w-5" />}
-                        <span className="flex-1 text-left">{entry.label}</span>
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </button>
-                      {isOpen && (
-                        <div className="ml-4 space-y-1 border-l border-border pl-2">
-                          {entry.items.map((item) => renderLink(item))}
-                        </div>
+                    <button
+                      key={entry.key}
+                      type="button"
+                      title={entry.label}
+                      aria-label={entry.label}
+                      onClick={() => {
+                        shell.expandSidebar()
+                        setOpenGroups((prev) => ({ ...prev, [entry.key]: true }))
+                      }}
+                      className={cn(
+                        "mx-auto flex h-10 w-10 items-center justify-center rounded-lg transition-colors",
+                        containsActive
+                          ? "bg-sitecorp-primary/10 text-sitecorp-primary"
+                          : "text-ink hover:bg-muted hover:text-ink"
                       )}
-                    </div>
+                    >
+                      {navIcons[entry.key] || <Users className="h-5 w-5 shrink-0" />}
+                    </button>
                   )
-                })}
-              </>
-            )}
+                }
 
-            {entityId && !modulesEnabled && (
-              <p className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                Esta entidad no tiene habilitados los módulos internos de SiteCorp.
-              </p>
-            )}
-          </div>
-        </nav>
+                return (
+                  <div key={entry.key} className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(entry.key)}
+                      aria-expanded={isOpen}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                        containsActive
+                          ? "text-sitecorp-primary"
+                          : "text-ink hover:bg-muted hover:text-ink"
+                      )}
+                    >
+                      {navIcons[entry.key] || <Users className="h-5 w-5 shrink-0" />}
+                      <span className="flex-1 text-left truncate">{entry.label}</span>
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4 shrink-0" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 shrink-0" />
+                      )}
+                    </button>
+                    {isOpen && (
+                      <div className="ml-4 space-y-1 border-l border-border pl-2">
+                        {entry.items.map((item) => renderLink(item, shell))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </>
+          )}
 
-        {/* Footer fijo (no desaparece aunque la navegación tenga scroll) */}
-        <div className="shrink-0 space-y-2 border-t border-border p-3">
+          {entityId && !modulesEnabled && !shell.collapsed && (
+            <p className="rounded-lg border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Esta entidad no tiene habilitados los módulos internos de SiteCorp.
+            </p>
+          )}
+        </div>
+      )}
+      renderFooter={(shell) => (
+        <div className={cn(shell.collapsed ? "space-y-1.5" : "space-y-2")}>
           {showGlobalAdminReturn && (
             <button
               type="button"
               onClick={handleReturnToAdmin}
               title="Regresar a Administración Global"
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Regresar a Administración Global"
+              className={cn(
+                "flex items-center rounded-lg text-sm font-medium text-ink transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                shell.collapsed ? "mx-auto h-10 w-10 justify-center p-0" : "w-full gap-2 px-3 py-2"
+              )}
             >
               <ArrowLeft className="h-4 w-4 shrink-0" />
-              <span className="truncate">Regresar a Administración Global</span>
+              {!shell.collapsed && (
+                <span className="truncate">Regresar a Administración Global</span>
+              )}
             </button>
           )}
-          <SidebarUserMenu accountPath={isPlatformUser ? "/admin/account" : null} />
+          <SidebarUserMenu
+            accountPath={isPlatformUser ? "/admin/account" : null}
+            compact={shell.collapsed}
+          />
         </div>
-      </div>
-
-      {/* Main content */}
-      <main className="ml-64 flex-1 overflow-y-auto bg-sitecorp-background">
-        <Outlet />
-      </main>
-    </div>
+      )}
+    >
+      <Outlet />
+    </ResponsiveAppShell>
   )
 })
 

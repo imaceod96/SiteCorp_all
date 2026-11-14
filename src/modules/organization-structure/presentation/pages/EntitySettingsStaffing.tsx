@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -91,7 +92,7 @@ import { PositionForm, type PositionJobOption, type PositionEditingData } from "
 type StatusFilter = "active" | "inactive" | "all"
 
 const EntitySettingsStaffing = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
 
   const [areas, setAreas] = React.useState<OrganizationArea[]>([])
@@ -534,7 +535,7 @@ const EntitySettingsStaffing = () => {
     }
   }
 
-  const renderNode = (node: AreaNode): React.ReactNode => {
+  const renderNode = (node: AreaNode, depth = 0): React.ReactNode => {
     const hasChildren = node.children.length > 0
     const isExpanded = expanded.has(node.id)
 
@@ -644,8 +645,8 @@ const EntitySettingsStaffing = () => {
         </div>
 
         {hasChildren && isExpanded && (
-          <div className="ml-4 border-l border-border pl-2">
-            {node.children.map(child => renderNode(child))}
+          <div className={cn("border-l border-border pl-2", depth < 3 ? "ml-2.5 sm:ml-4" : "ml-1.5 sm:ml-3")}>
+            {node.children.map(child => renderNode(child, depth + 1))}
           </div>
         )}
       </div>
@@ -654,7 +655,7 @@ const EntitySettingsStaffing = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Configuración de plantilla"
           description="Cargando estructura de áreas, cargos y puestos..."
@@ -666,7 +667,7 @@ const EntitySettingsStaffing = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Configuración de plantilla"
           description="Define la estructura organizativa y los puestos autorizados de esta entidad."
@@ -675,7 +676,7 @@ const EntitySettingsStaffing = () => {
           {error}
         </SiteCorpAlert>
         <div className="flex justify-end">
-          <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/settings`)}>
+          <SiteCorpButton variant="outline" onClick={() => navigate("/settings")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver a ajustes
           </SiteCorpButton>
         </div>
@@ -684,12 +685,12 @@ const EntitySettingsStaffing = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
               title="Configuración de plantilla"
               description="Define la estructura organizativa y los puestos autorizados de esta entidad."
               actions={
-                <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/settings`)}>
+                <SiteCorpButton variant="outline" onClick={() => navigate("/settings")}>
                   <ArrowLeft className="mr-2 h-4 w-4" /> Volver a ajustes
                 </SiteCorpButton>
               }
@@ -720,7 +721,7 @@ const EntitySettingsStaffing = () => {
                   Define la estructura interna de áreas y subáreas de esta entidad.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <SiteCorpSelect
                   value={statusFilter}
                   onValueChange={(value) => setStatusFilter(value as StatusFilter)}

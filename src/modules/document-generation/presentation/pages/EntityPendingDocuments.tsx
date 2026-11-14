@@ -10,7 +10,7 @@
  */
 
 import * as React from "react"
-import { useParams } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -56,7 +56,7 @@ const statusMeta = (status: PendingBatch["status"]) => {
 }
 
 const EntityPendingDocuments = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId() ?? undefined
   const { has, loading: permissionsLoading } = useEntityPermissions(entityId)
   const canView = has(["workers.view", "workers.manage"])
   const canManage = has(["workers.manage"])
@@ -154,7 +154,7 @@ const EntityPendingDocuments = () => {
 
   if (!canView) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Documentos pendientes" />
         <SiteCorpAlert type="warning">
           No tiene permiso para ver los documentos de esta entidad.
@@ -164,7 +164,7 @@ const EntityPendingDocuments = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Documentos pendientes"
         description="Documentos generados por movimientos masivos disponibles para descarga."
@@ -185,7 +185,7 @@ const EntityPendingDocuments = () => {
         </SiteCorpCard>
       ) : (
         <SiteCorpCard>
-          <div className="overflow-x-auto">
+          <div className="w-full min-w-0 overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">

@@ -607,7 +607,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
 
             <div className="flex flex-wrap items-center gap-2">
               <Link
-                to={`/entity/${entityId}/training`}
+                to="/training"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-sitecorp-primary transition-colors hover:bg-muted/40"
               >
                 <BookOpen className="h-4 w-4" />
@@ -615,7 +615,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
               <Link
-                to={`/entity/${entityId}/sst`}
+                to="/sst"
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-sitecorp-primary transition-colors hover:bg-muted/40"
               >
                 <ShieldCheck className="h-4 w-4" />

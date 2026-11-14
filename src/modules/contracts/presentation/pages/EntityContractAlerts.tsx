@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -73,7 +74,7 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
   ChangeContractDialog,
   SeparateWorkerDialog,
 }) => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { has, loading: permissionsLoading } = useEntityPermissions(entityId)
@@ -315,7 +316,7 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Vencimientos de contratos"
         description="Contratos por tiempo determinado de esta entidad que requieren seguimiento."
@@ -473,8 +474,8 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
             <>
               {/* Desktop */}
               <SiteCorpCard className="hidden lg:block">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="w-full min-w-0 overflow-x-auto">
+                  <table className="w-full min-w-[880px] text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         <th className="px-3 py-2 font-semibold">Trabajador</th>
@@ -548,7 +549,7 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
                                   variant="outline"
                                   type="button"
                                   onClick={() =>
-                                    navigate(`/entity/${entityId}/staffing/workers/${row.worker_id}`)
+                                    navigate(`/staffing/workers/${row.worker_id}`)
                                   }
                                 >
                                   <Eye className="mr-1 h-3.5 w-3.5" /> Ver trabajador
@@ -631,7 +632,7 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
                             variant="outline"
                             type="button"
                             onClick={() =>
-                              navigate(`/entity/${entityId}/staffing/workers/${row.worker_id}`)
+                              navigate(`/staffing/workers/${row.worker_id}`)
                             }
                           >
                             <Eye className="mr-1 h-3.5 w-3.5" /> Ver trabajador

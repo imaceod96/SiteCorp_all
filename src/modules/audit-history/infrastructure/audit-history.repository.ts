@@ -1,4 +1,5 @@
 import { supabase, type SupabaseMutationInterceptPayload } from "@/lib/supabase"
+import { readStoredActiveEntityId } from "@/contexts/CurrentEntityContext"
 import type {
   AuditEntityOption,
   AuditEvent,
@@ -1140,7 +1141,17 @@ export function extractEntityIdFromPathname(pathname: string): string | null {
 
 function currentWindowEntityId(): string | null {
   if (typeof window === "undefined" || !window.location?.pathname) return null
-  return extractEntityIdFromPathname(window.location.pathname)
+  const fromPath = extractEntityIdFromPathname(window.location.pathname)
+  if (fromPath) return fromPath
+  if (
+    window.location.pathname === "/admin" ||
+    window.location.pathname.startsWith("/admin/") ||
+    window.location.pathname === "/organization" ||
+    window.location.pathname.startsWith("/organization/")
+  ) {
+    return null
+  }
+  return readStoredActiveEntityId()
 }
 
 export function extractMutationErrorSummary(

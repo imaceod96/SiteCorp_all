@@ -130,7 +130,7 @@ export const PendingEmploymentRegistryBanner: React.FC<
         </div>
 
         <div className="shrink-0">
-          <Link to={`/entity/${entityId}/settings/altas-bajas`}>
+          <Link to="/settings/altas-bajas">
             <SiteCorpButton size="sm" variant="outline" className="bg-white">
               <ClipboardList className="mr-1.5 h-4 w-4 text-sitecorp-primary" />
               Revisar datos

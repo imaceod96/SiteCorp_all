@@ -273,7 +273,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
           </div>
 
           {/* Matriz de Riesgos 3 x 4 */}
-          <div className="overflow-x-auto rounded-xl border border-border bg-muted/10 p-4">
+          <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-border bg-muted/10 p-4">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Matriz Probabilidad × Severidad
@@ -289,7 +289,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
               )}
             </div>
 
-            <div className="grid grid-cols-5 gap-2 text-xs">
+            <div className="grid min-w-[560px] grid-cols-5 gap-2 text-xs">
               <div className="flex items-center justify-center rounded-lg bg-muted p-2 font-semibold text-muted-foreground">
                 Probabilidad \ Severidad
               </div>
@@ -353,8 +353,8 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
               No hay riesgos registrados para el filtro actual en esta entidad.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full border-collapse text-left text-sm">
+            <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[680px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <th className="px-4 py-3">Peligro / Factor de riesgo</th>
@@ -490,8 +490,8 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
               No hay medidas preventivas o correctivas registradas en esta entidad.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full border-collapse text-left text-sm">
+            <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[680px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     <th className="px-4 py-3">Medida / Acción</th>
