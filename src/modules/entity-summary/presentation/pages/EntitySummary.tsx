@@ -1,6 +1,6 @@
 import * as React from "react"
-import { Link, useParams } from "react-router-dom"
-import { useCurrentEntity, type OrganizationEntityRow } from "@/contexts/CurrentEntityContext"
+import { Link } from "react-router-dom"
+import { useActiveEntityId, useCurrentEntity, type OrganizationEntityRow } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
@@ -380,7 +380,7 @@ const VistaGeneral: React.FC<VistaGeneralProps> = ({
             </div>
             <div className="mt-3">
               <Link
-                to={`/entity/${entityId}/candidates`}
+                to="/candidates"
                 className="inline-flex items-center gap-1 text-sm font-medium text-sitecorp-primary hover:underline"
               >
                 Ver candidatos <ArrowUpRight className="h-4 w-4" />
@@ -414,7 +414,7 @@ const VistaGeneral: React.FC<VistaGeneralProps> = ({
               {/* §42: tarjeta cliqueable → abre la página existente de Vencimientos */}
               {summary.permissions.alerts ? (
                 <Link
-                  to={`/entity/${entityId}/contracts/alerts`}
+                  to="/contracts/alerts"
                   className="group flex flex-col rounded-xl border border-sitecorp-primary/30 bg-sitecorp-primary/5 p-3 transition-colors hover:bg-sitecorp-primary/10"
                 >
                   <p className="text-xs text-muted-foreground">Próximos a vencer</p>
@@ -588,7 +588,7 @@ const Reports: React.FC<ReportsProps> = ({ summary }) => {
 // --- Página ----------------------------------------------------------------
 
 const EntitySummary = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const { currentEntity } = useCurrentEntity()
   const summary = useEntitySummaryDashboard(entityId)
 
@@ -596,7 +596,7 @@ const EntitySummary = () => {
 
   if (!entityId) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Resumen" description="No se indicó una entidad" />
         <SiteCorpAlert type="danger" title="Entidad no encontrada">
           La ruta no incluye una entidad válida.
@@ -612,10 +612,10 @@ const EntitySummary = () => {
     summary.scope === "descendants" ? "Entidad + descendientes" : "Esta entidad"
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
-        title={`Resumen — ${currentEntity?.name ?? "Entidad"}`}
-        description={`${entityType}${currentEntity?.code ? ` • ${currentEntity.code}` : ""}`}
+        title={`Resumen — ${currentEntity?.name ?? "Inicio"}`}
+        description={entityType}
       />
 
       {/* Selector de ámbito (fuera de las pestañas: afecta a toda la vista) */}
@@ -642,7 +642,7 @@ const EntitySummary = () => {
                 summary.scope === "descendants"
                   ? "bg-sitecorp-primary text-white"
                   : "text-ink hover:bg-muted"
-              )}
+            )}
             >
               Entidad + descendientes
             </button>
@@ -658,7 +658,7 @@ const EntitySummary = () => {
 
       {/* Pestañas internas del módulo Resumen */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as SummaryTab)}>
-        <TabsList className="inline-flex w-full justify-start rounded-xl border border-border bg-card p-1">
+        <TabsList className="flex h-auto w-full justify-start overflow-x-auto rounded-xl border border-border bg-card p-1">
           {TABS.map((tab) => (
             <TabsTrigger
               key={tab.key}

@@ -1,2 +1,2 @@
 export { CurrentEntityProvider } from "@/contexts/CurrentEntityProvider"
-export { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+export { useCurrentEntity, useActiveEntityId } from "@/contexts/CurrentEntityContext"

@@ -78,7 +78,7 @@ export const PendingInitialTrainingBanner: React.FC<PendingInitialTrainingBanner
 
           {showTrainingModuleLink && (
             <Link
-              to={`/entity/${entityId}/training`}
+              to="/training"
               className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-medium text-sitecorp-primary shadow-sm transition-colors hover:bg-muted/40"
             >
               <GraduationCap className="h-4 w-4" />
@@ -129,7 +129,7 @@ export const PendingInitialTrainingBanner: React.FC<PendingInitialTrainingBanner
 
               <div className="shrink-0">
                 <Link
-                  to={`/entity/${entityId}/workers/${item.worker_id}?tab=informacion-adicional`}
+                  to={`/workers/${item.worker_id}?tab=informacion-adicional`}
                 >
                   <SiteCorpButton size="sm" variant="outline">
                     <GraduationCap className="mr-1.5 h-4 w-4 text-sitecorp-primary" />

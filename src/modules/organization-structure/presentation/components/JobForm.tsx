@@ -467,7 +467,7 @@ export const JobForm: React.FC<JobFormProps> = ({
               </p>
               <button
                 type="button"
-                onClick={() => navigate(`/entity/${entityId}/settings/salary`)}
+                onClick={() => navigate("/settings/salary")}
                 className="text-xs font-medium text-sitecorp-primary underline underline-offset-2 hover:opacity-80"
               >
                 Ir a Ajustes → Escala salarial

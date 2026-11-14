@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
+import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
@@ -67,6 +68,7 @@ export interface GroupedPoolCandidate {
 
 export default function AdminCandidates() {
   const navigate = useNavigate()
+  const { enterEntityWorkspace } = useCurrentEntity()
 
   const [candidates, setCandidates] = React.useState<AdminCandidateItem[]>([])
   const [entities, setEntities] = React.useState<EntityRow[]>([])
@@ -411,7 +413,7 @@ export default function AdminCandidates() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Bolsa de Candidatos Global"
         description="Gestión centralizada del talento humano postulado en todas las entidades de la plataforma"
@@ -421,8 +423,8 @@ export default function AdminCandidates() {
       {actionSuccess && <SiteCorpAlert type="success">{actionSuccess}</SiteCorpAlert>}
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border shadow-sm">
-        <div className="flex flex-wrap items-center gap-3 flex-1">
-          <div className="relative min-w-[240px] flex-1">
+        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+          <div className="relative min-w-0 w-full sm:min-w-[240px] sm:flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <SiteCorpInput
               placeholder="Buscar por nombre, carnet o profesión..."
@@ -432,7 +434,7 @@ export default function AdminCandidates() {
             />
           </div>
 
-          <div className="w-[220px]">
+          <div className="w-full sm:w-[220px]">
             <SiteCorpSelect
               value={selectedAreaId}
               onValueChange={(val) => setSelectedAreaId(val)}
@@ -447,7 +449,7 @@ export default function AdminCandidates() {
             </SiteCorpSelect>
           </div>
 
-          <div className="w-[220px]">
+          <div className="w-full sm:w-[220px]">
             <SiteCorpSelect
               value={selectedEntityId}
               onValueChange={(val) => setSelectedEntityId(val)}
@@ -466,7 +468,7 @@ export default function AdminCandidates() {
 
         <SiteCorpButton
           onClick={() => setCreateDialogOpen(true)}
-          className="inline-flex items-center gap-2 bg-sitecorp-primary text-white hover:bg-sitecorp-primary-dark"
+          className="inline-flex w-full sm:w-auto items-center justify-center gap-2 bg-sitecorp-primary text-white hover:bg-sitecorp-primary-dark"
         >
           <UserPlus className="h-4 w-4" />
           Nuevo Candidato en Bolsa
@@ -489,8 +491,8 @@ export default function AdminCandidates() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-border bg-muted/50 text-xs font-semibold text-muted-foreground">
                   <th className="py-3 px-4">Candidato</th>
@@ -585,11 +587,10 @@ export default function AdminCandidates() {
                           <SiteCorpButton
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              navigate(
-                                `/entity/${firstRecord.organization_entity_id}/candidates/${firstRecord.id}`
-                              )
-                            }
+                            onClick={() => {
+                              enterEntityWorkspace(firstRecord.organization_entity_id)
+                              navigate(`/candidates/${firstRecord.id}`)
+                            }}
                             title="Ver expediente completo"
                           >
                             <Eye className="h-4 w-4 mr-1" />

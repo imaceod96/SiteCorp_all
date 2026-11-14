@@ -427,7 +427,7 @@ const AdminDocuments = () => {
 
   if (!isPlatformSuperAdmin) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Documentos"
           description="Documentos globales de SiteCorp"
@@ -472,7 +472,7 @@ const AdminDocuments = () => {
       </span>
     ),
     actions: (
-      <div className="flex items-center justify-end gap-1">
+      <div className="flex flex-wrap items-center justify-end gap-1">
         {isViewableDocument(document.mime_type, document.file_name) && (
           <SiteCorpButton
             type="button"
@@ -530,7 +530,7 @@ const AdminDocuments = () => {
   }))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Documentos"
         description="Carpetas y documentos globales de SiteCorp"

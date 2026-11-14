@@ -59,7 +59,7 @@ const EntitySettingsRoles = () => {
 
   if (!currentEntity) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Roles y permisos"
           description="Roles internos de la entidad organizativa"
@@ -72,7 +72,7 @@ const EntitySettingsRoles = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Roles y permisos"
         description={`Roles internos de ${currentEntity.name}. Son propios de esta entidad y no afectan a otras entidades del mismo cliente.`}

@@ -12,7 +12,8 @@
  */
 
 import * as React from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -49,7 +50,7 @@ const formatDate = (value: string | null | undefined) => {
 }
 
 const EntityMedicalCertificates = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const { toast } = useToast()
   const { has, loading: permissionsLoading } = useEntityPermissions(entityId)
@@ -175,12 +176,12 @@ const EntityMedicalCertificates = () => {
   ]
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Licencias / Certificados Médicos"
         description="Gestión de los certificados médicos de los trabajadores de la entidad. Cada certificado es un evento del historial del trabajador; no existen saldos ni acumulaciones."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <SiteCorpButton
               variant="outline"
               type="button"
@@ -288,8 +289,8 @@ const EntityMedicalCertificates = () => {
                   No hay certificados médicos registrados para este período.
                 </SiteCorpAlert>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="w-full min-w-0 overflow-x-auto">
+                  <table className="w-full min-w-[700px] text-sm">
                     <thead>
                       <tr className="border-b border-border text-left text-xs text-muted-foreground">
                         <th className="pb-3 font-medium">Trabajador</th>
@@ -309,9 +310,7 @@ const EntityMedicalCertificates = () => {
                             <button
                               type="button"
                               onClick={() =>
-                                navigate(
-                                  `/entity/${entityId}/staffing/workers/${row.worker_id}`
-                                )
+                                navigate(`/staffing/workers/${row.worker_id}`)
                               }
                               className="font-medium text-sitecorp-primary hover:underline"
                             >

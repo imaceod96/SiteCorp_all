@@ -126,7 +126,7 @@ export const ContractualTimeline: React.FC<ContractualTimelineProps> = ({
 
   return (
     <SiteCorpCard className={className}>
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <h3 className="text-lg font-semibold text-ink">Histórico contractual</h3>
         <p className="mb-4 text-sm text-muted-foreground">
           Contrato inicial y anexos en orden cronológico de vigencia

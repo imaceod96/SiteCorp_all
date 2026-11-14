@@ -1,6 +1,5 @@
 import * as React from "react"
-import { useParams } from "react-router-dom"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -50,9 +49,7 @@ const shiftIsoDate = (isoDate: string, days: number): string => {
 }
 
 const EntitySettingsContractData = () => {
-  const { entityId: routeEntityId } = useParams<{ entityId: string }>()
-  const { currentEntity } = useCurrentEntity()
-  const entityId = routeEntityId || currentEntity?.id || ""
+  const entityId = useActiveEntityId() || ""
 
   const [loading, setLoading] = React.useState(true)
   const [notAllowed, setNotAllowed] = React.useState<string | null>(null)
@@ -148,7 +145,7 @@ const EntitySettingsContractData = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Datos contractuales"
           description="Información contractual de la entidad y representantes autorizados"
@@ -160,7 +157,7 @@ const EntitySettingsContractData = () => {
 
   if (notAllowed) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Datos contractuales"
           description="Información contractual de la entidad y representantes autorizados"
@@ -173,7 +170,7 @@ const EntitySettingsContractData = () => {
   const municipalityOptions = cubaMunicipalityOptions(contractData.province, contractData.municipality)
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Datos contractuales"
         description={`Información contractual de ${entityName || "la entidad"} y representantes autorizados`}

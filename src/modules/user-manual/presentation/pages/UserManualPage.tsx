@@ -35,10 +35,14 @@ import {
 } from "lucide-react"
 import { useLocation } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 
 export const UserManualPage: React.FC = () => {
   const location = useLocation()
-  const isEntityMode = location.pathname.startsWith("/entity/")
+  const { activeEntityId } = useCurrentEntity()
+  const isEntityMode =
+    location.pathname.startsWith("/entity/") ||
+    (Boolean(activeEntityId) && !location.pathname.startsWith("/admin"))
   const mode: "gestor" | "entity" = isEntityMode ? "entity" : "gestor"
 
   const baseSections = React.useMemo(() => {
@@ -234,7 +238,7 @@ export const UserManualPage: React.FC = () => {
             <div className="pt-2 flex flex-wrap gap-4 text-xs text-slate-300">
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                <span>Nivel Global (/admin) y Nivel Entidad (/entity)</span>
+                <span>Nivel Global (/admin) y Espacio de Entidad (/home)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-400" />

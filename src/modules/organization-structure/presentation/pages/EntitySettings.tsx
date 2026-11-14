@@ -26,14 +26,14 @@ const EntitySettings = () => {
         title: "Usuarios",
         description: "Gestiona el acceso de usuarios a esta entidad.",
         icon: Users,
-        href: `/entity/${currentEntity?.id}/settings/users`,
+        href: "/settings/users",
         permissions: ["users.view", "users.manage"],
       },
       {
         title: "Roles y permisos",
         description: "Roles internos propios de esta entidad y sus capacidades.",
         icon: Shield,
-        href: `/entity/${currentEntity?.id}/settings/roles`,
+        href: "/settings/roles",
         // Consultar/administrar los roles de otros usuarios exige gestión de roles:
         // `roles.view` no habilita esta sección.
         permissions: ["roles.manage"],
@@ -42,14 +42,14 @@ const EntitySettings = () => {
         title: "Escala salarial",
         description: "Consulta o gestiona la escala salarial empresarial de esta entidad.",
         icon: Scale,
-        href: `/entity/${currentEntity?.id}/settings/salary`,
+        href: "/settings/salary",
         permissions: ["salary.view", "salary.manage"],
       },
       {
         title: "Escala de pago de antigüedad",
         description: "Configura los tramos de pago por antigüedad de esta entidad.",
         icon: Briefcase,
-        href: `/entity/${currentEntity?.id}/settings/tenure-scale`,
+        href: "/settings/tenure-scale",
         permissions: ["tenure_scale.view", "tenure_scale.manage"],
       },
       {
@@ -57,14 +57,14 @@ const EntitySettings = () => {
         description:
           "Configura las áreas, cargos y puestos que conforman la estructura de plantilla de la entidad.",
         icon: Network,
-        href: `/entity/${currentEntity?.id}/settings/staffing`,
+        href: "/settings/staffing",
         permissions: ["staffing.view", "staffing.manage"],
       },
       {
         title: "Carga inicial de trabajadores",
         description: "Descarga la plantilla Excel, valida filas y carga trabajadores históricos.",
         icon: FileSpreadsheet,
-        href: `/entity/${currentEntity?.id}/settings/initial-import`,
+        href: "/settings/initial-import",
         permissions: ["workers.manage"],
       },
       {
@@ -72,7 +72,7 @@ const EntitySettings = () => {
         description:
           "Registro histórico centralizado de altas, bajas definitivas y reincorporaciones laborales, y exportación al modelo oficial.",
         icon: ArrowUpDown,
-        href: `/entity/${currentEntity?.id}/settings/altas-bajas`,
+        href: "/settings/altas-bajas",
         permissions: ["workers.view", "workers.manage"],
       },
       {
@@ -80,7 +80,7 @@ const EntitySettings = () => {
         description:
           "Datos contractuales de la entidad y representantes autorizados para la formalización de contratos.",
         icon: ClipboardList,
-        href: `/entity/${currentEntity?.id}/settings/contract-data`,
+        href: "/settings/contract-data",
         permissions: ["contract_data.view", "contract_data.manage"],
       },
       {
@@ -88,7 +88,7 @@ const EntitySettings = () => {
         description:
           "Gestiona las plantillas Word (.doc y .docx) de los contratos y anexos de esta entidad, sus versiones y las variables documentales que utilizan.",
         icon: FileType2,
-        href: `/entity/${currentEntity?.id}/settings/document-templates`,
+        href: "/settings/document-templates",
         permissions: ["document_templates.view", "document_templates.manage"],
       },
       {
@@ -96,7 +96,7 @@ const EntitySettings = () => {
         description:
           "Registra y consulta los documentos rectores de esta entidad (nombre y archivo).",
         icon: FileText,
-        href: `/entity/${currentEntity?.id}/settings/governing-documents`,
+        href: "/settings/governing-documents",
         permissions: ["organization.view", "organization.manage"],
       },
       {
@@ -104,11 +104,11 @@ const EntitySettings = () => {
         description:
           "Guía oficial de operación de personal, plantilla, nómina, SST y contratos.",
         icon: BookOpen,
-        href: `/entity/${currentEntity?.id}/manual`,
+        href: "/manual",
         permissions: [],
       },
     ],
-    [currentEntity?.id]
+    []
   )
 
   const visibleItems = settingsItems.filter(
@@ -116,7 +116,7 @@ const EntitySettings = () => {
   )
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Ajustes"
         description={`Administración y configuración de ${currentEntity?.name || "esta entidad"}`}

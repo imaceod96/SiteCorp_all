@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Link, useNavigate, useParams } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import {
   AlertTriangle,
   ArrowLeft,
@@ -14,7 +14,7 @@ import {
   Search,
   X,
 } from "lucide-react"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -66,7 +66,7 @@ const INITIAL_FILTERS: EmploymentRegistryFilterState = {
 }
 
 const EntitySettingsEmploymentRegistry: React.FC = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
   const { permissions, loading: permissionsLoading } = useEntityPermissions(entityId)
@@ -279,7 +279,7 @@ const EntitySettingsEmploymentRegistry: React.FC = () => {
 
   if (permissionsLoading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Altas y Bajas"
           description="Verificando permisos de acceso..."
@@ -291,14 +291,14 @@ const EntitySettingsEmploymentRegistry: React.FC = () => {
 
   if (!canViewRegistry) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Altas y Bajas"
           description={`Registro laboral histórico de ${currentEntity?.name || "esta entidad"}`}
           actions={
             <SiteCorpButton
               variant="outline"
-              onClick={() => navigate(`/entity/${entityId}/settings`)}
+              onClick={() => navigate("/settings")}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Volver a Ajustes
@@ -317,7 +317,7 @@ const EntitySettingsEmploymentRegistry: React.FC = () => {
   const endIndex = Math.min(page * pageSize, filteredPeriods.length)
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Altas y Bajas"
         description={`Registro histórico centralizado de altas, bajas definitivas y reincorporaciones de ${currentEntity?.name || "esta entidad"}`}
@@ -325,7 +325,7 @@ const EntitySettingsEmploymentRegistry: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <SiteCorpButton
               variant="outline"
-              onClick={() => navigate(`/entity/${entityId}/settings`)}
+              onClick={() => navigate("/settings")}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Volver a Ajustes
@@ -647,7 +647,7 @@ const EntitySettingsEmploymentRegistry: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="overflow-x-auto">
+            <div className="w-full min-w-0 overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -768,7 +768,7 @@ const EntitySettingsEmploymentRegistry: React.FC = () => {
                         <TableCell>
                           <div className="space-y-0.5">
                             <Link
-                              to={`/entity/${entityId}/workers/${row.workerId}`}
+                              to={`/workers/${row.workerId}`}
                               className="text-sm font-medium text-ink hover:text-sitecorp-primary hover:underline"
                             >
                               {row.workerFullName}

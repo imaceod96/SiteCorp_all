@@ -599,8 +599,8 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <table className="w-full border-collapse text-left text-sm">
+          <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[680px] border-collapse text-left text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/40 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <th className="px-4 py-3">Cargo en la entidad</th>

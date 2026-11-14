@@ -6,8 +6,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom"
 import { AuthProvider, useAuth } from "@/app/providers"
 import { CurrentCompanyClientProvider } from "@/app/providers"
-import { CurrentEntityProvider } from "@/app/providers"
+import { CurrentEntityProvider, useCurrentEntity } from "@/app/providers"
 import { SalaryProvider } from "@/app/providers"
+import { resolveLegacyEntityPath } from "@/modules/organization-structure"
 import { PlatformAdminLayout } from "@/modules/access-control/presentation/components/platform-admin-layout"
 import EntityRouteWrapper from "@/modules/access-control/presentation/components/entity-route-wrapper"
 import { CompanyClientLayout } from "@/modules/company-client/presentation/components/company-client-layout"
@@ -187,9 +188,20 @@ const PasswordRequirementErrorScreen = ({
   </div>
 )
 
-const EntityPanelRedirect = () => {
-  const { entityId } = useParams<{ entityId: string }>()
-  return <Navigate to={`/entity/${entityId}/summary`} replace />
+const LegacyEntityRouteBridge = () => {
+  const { entityId, "*": splat = "" } = useParams<{ entityId: string; "*": string }>()
+  const { enterEntityWorkspace } = useCurrentEntity()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  React.useEffect(() => {
+    if (!entityId) return
+    enterEntityWorkspace(entityId)
+    const cleanPath = resolveLegacyEntityPath(splat)
+    navigate(`${cleanPath}${location.search}${location.hash}`, { replace: true })
+  }, [entityId, splat, location.search, location.hash, enterEntityWorkspace, navigate])
+
+  return <LoadingScreen />
 }
 
 const AppRoutes = () => {
@@ -205,6 +217,7 @@ const AppRoutes = () => {
     isPlatformUser,
     isProfileActive,
   } = useAuth()
+  const { activeEntityId } = useCurrentEntity()
   const location = useLocation()
 
   if (authLoading) {
@@ -245,28 +258,53 @@ const AppRoutes = () => {
     )
   }
 
+  // Compatibilidad retroactiva: cualquier enlace /entity/:entityId/* activa la entidad en
+  // sesión y reemplaza la URL por la ruta limpia del espacio de trabajo (/home, /workers, etc.).
   if (location.pathname.startsWith("/entity/")) {
     return (
       <Routes>
+        <Route path="/entity/:entityId/*" element={<LegacyEntityRouteBridge />} />
+        <Route path="/entity/:entityId" element={<LegacyEntityRouteBridge />} />
+      </Routes>
+    )
+  }
+
+  const isAdminPath =
+    location.pathname === "/admin" || location.pathname.startsWith("/admin/")
+  const isOrganizationPath =
+    location.pathname === "/organization" || location.pathname.startsWith("/organization/")
+  const isTenantPath = location.pathname.startsWith("/tenant/")
+
+  const shouldRenderEntityWorkspace =
+    Boolean(activeEntityId) &&
+    !isAdminPath &&
+    !isOrganizationPath &&
+    (!isTenantPath || isPlatformUser)
+
+  if (shouldRenderEntityWorkspace) {
+    return (
+      <Routes>
         <Route element={<EntityRouteWrapper />}>
-          <Route path="/entity/:entityId/summary" element={<EntitySummary />} />
-          <Route path="/entity/:entityId/panel" element={<EntityPanelRedirect />} />
-          <Route path="/entity/:entityId/candidates" element={<EntityCandidates />} />
-          <Route path="/entity/:entityId/payroll-preparation" element={<EntityPrenomina />} />
-          <Route path="/entity/:entityId/candidates/:candidateId" element={<CandidateDetail />} />
-          <Route path="/entity/:entityId/candidates/:candidateId/edit" element={<CandidateEdit />} />
-          <Route path="/entity/:entityId/workers" element={<EntityWorkers />} />
-          <Route path="/entity/:entityId/workers/:workerId" element={<WorkerDetail />} />
-          <Route path="/entity/:entityId/reentries" element={<EntityReentries />} />
-          <Route path="/entity/:entityId/staffing" element={<EntityStaffing />} />
-          <Route path="/entity/:entityId/staffing/workers/:workerId" element={<WorkerDetail />} />
-          <Route path="/entity/:entityId/hiring" element={<EntityHiring />} />
-          <Route path="/entity/:entityId/training" element={<EntityTraining />} />
-          <Route path="/entity/:entityId/sst" element={<EntitySst />} />
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<EntitySummary />} />
+          <Route path="/summary" element={<Navigate to="/home" replace />} />
+          <Route path="/panel" element={<Navigate to="/home" replace />} />
+          <Route path="/candidates" element={<EntityCandidates />} />
+          <Route path="/payroll-preparation" element={<EntityPrenomina />} />
+          <Route path="/candidates/:candidateId" element={<CandidateDetail />} />
+          <Route path="/candidates/:candidateId/edit" element={<CandidateEdit />} />
+          <Route path="/workers" element={<EntityWorkers />} />
+          <Route path="/workers/:workerId" element={<WorkerDetail />} />
+          <Route path="/reentries" element={<EntityReentries />} />
+          <Route path="/staffing" element={<EntityStaffing />} />
+          <Route path="/staffing/workers/:workerId" element={<WorkerDetail />} />
+          <Route path="/hiring" element={<EntityHiring />} />
+          <Route path="/training" element={<EntityTraining />} />
+          <Route path="/sst" element={<EntitySst />} />
           {/* Composición modular: la página de vencimientos (Contratos) recibe los
               diálogos de acciones laborales que pertenecen a Personas. */}
           <Route
-            path="/entity/:entityId/contracts/alerts"
+            path="/contracts/alerts"
             element={
               <EntityContractAlerts
                 ChangeContractDialog={ChangeContractDialog}
@@ -274,24 +312,25 @@ const AppRoutes = () => {
               />
             }
           />
-          <Route path="/entity/:entityId/vacations" element={<EntityVacations />} />
-          <Route path="/entity/:entityId/medical-certificates" element={<EntityMedicalCertificates />} />
-          <Route path="/entity/:entityId/documents/pending" element={<EntityPendingDocuments />} />
-          <Route path="/entity/:entityId/settings" element={<EntitySettings />} />
-          <Route path="/entity/:entityId/settings/staffing" element={<EntitySettingsStaffing />} />
-          <Route path="/entity/:entityId/settings/initial-import" element={<EntitySettingsInitialImport />} />
-          <Route path="/entity/:entityId/settings/altas-bajas" element={<EntitySettingsEmploymentRegistry />} />
-          <Route path="/entity/:entityId/settings/employment-registry" element={<EntitySettingsEmploymentRegistry />} />
-          <Route path="/entity/:entityId/settings/users" element={<EntitySettingsUsers />} />
-          <Route path="/entity/:entityId/settings/roles" element={<EntitySettingsRoles />} />
-          <Route path="/entity/:entityId/settings/salary" element={<EntitySettingsSalary />} />
-          <Route path="/entity/:entityId/settings/tenure-scale" element={<EntitySettingsTenureScale />} />
-          <Route path="/entity/:entityId/settings/governing-documents" element={<EntitySettingsGoverningDocuments />} />
-          <Route path="/entity/:entityId/settings/contract-data" element={<EntitySettingsContractData />} />
-          <Route path="/entity/:entityId/settings/document-templates" element={<EntitySettingsDocumentTemplates />} />
-          <Route path="/entity/:entityId/settings/document-templates/:templateId" element={<EntitySettingsDocumentTemplateDetail />} />
-          <Route path="/entity/:entityId/manual" element={<UserManualPage />} />
-          <Route path="/entity/:entityId/settings/manual" element={<UserManualPage />} />
+          <Route path="/vacations" element={<EntityVacations />} />
+          <Route path="/medical-certificates" element={<EntityMedicalCertificates />} />
+          <Route path="/documents/pending" element={<EntityPendingDocuments />} />
+          <Route path="/settings" element={<EntitySettings />} />
+          <Route path="/settings/staffing" element={<EntitySettingsStaffing />} />
+          <Route path="/settings/initial-import" element={<EntitySettingsInitialImport />} />
+          <Route path="/settings/altas-bajas" element={<EntitySettingsEmploymentRegistry />} />
+          <Route path="/settings/employment-registry" element={<EntitySettingsEmploymentRegistry />} />
+          <Route path="/settings/users" element={<EntitySettingsUsers />} />
+          <Route path="/settings/roles" element={<EntitySettingsRoles />} />
+          <Route path="/settings/salary" element={<EntitySettingsSalary />} />
+          <Route path="/settings/tenure-scale" element={<EntitySettingsTenureScale />} />
+          <Route path="/settings/governing-documents" element={<EntitySettingsGoverningDocuments />} />
+          <Route path="/settings/contract-data" element={<EntitySettingsContractData />} />
+          <Route path="/settings/document-templates" element={<EntitySettingsDocumentTemplates />} />
+          <Route path="/settings/document-templates/:templateId" element={<EntitySettingsDocumentTemplateDetail />} />
+          <Route path="/manual" element={<UserManualPage />} />
+          <Route path="/settings/manual" element={<UserManualPage />} />
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Route>
       </Routes>
     )

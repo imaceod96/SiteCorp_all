@@ -52,8 +52,8 @@ const VacationPeriodsList = ({
         </div>
       ) : (
         <>
-          <div className="hidden overflow-x-auto lg:block">
-            <table className="w-full text-sm">
+          <div className="hidden w-full min-w-0 overflow-x-auto lg:block">
+            <table className="w-full min-w-[680px] text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs text-muted-foreground">
                   <th className="px-3 py-2 font-semibold">Inicio</th>

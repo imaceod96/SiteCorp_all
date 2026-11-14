@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
@@ -147,7 +148,8 @@ import type {
 type Catalog = CatalogRow
 
 const WorkerDetail = () => {
-  const { entityId, workerId } = useParams<{ entityId: string; workerId: string }>()
+  const { workerId } = useParams<{ workerId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialTab = searchParams.get("tab") || "resumen"
@@ -784,7 +786,7 @@ const WorkerDetail = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Detalles del trabajador" description="Cargando..." />
         <SiteCorpAlert type="info">Cargando...</SiteCorpAlert>
       </div>
@@ -793,7 +795,7 @@ const WorkerDetail = () => {
 
   if (error || !worker) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Detalles del trabajador" />
         <SiteCorpAlert type="danger" title="Error">
           {error || "Trabajador no encontrado"}
@@ -806,7 +808,7 @@ const WorkerDetail = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Detalles del trabajador"
         actions={

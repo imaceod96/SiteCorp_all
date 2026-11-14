@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useParams } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { linkMigratedWorker } from "@/modules/people/application/worker-migration.commands"
 import { fetchEntityPositionHierarchy } from "@/modules/organization-structure"
 import type { WorkerPositionOption } from "@/modules/people/presentation/components/WorkerForm"
@@ -28,7 +28,7 @@ interface SuggestedPosition {
 }
 
 export function LinkWorkerToPositionDialog({ workerId, positions, onSuccess, onCancel }: Props) {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const [positionId, setPositionId] = React.useState("")
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState("")

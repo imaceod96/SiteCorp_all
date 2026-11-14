@@ -41,7 +41,7 @@ function getEntityIcon(type: string) {
 }
 
 export function EntitySwitcher({ className }: EntitySwitcherProps) {
-  const { currentEntity, setCurrentEntity } = useCurrentEntity()
+  const { currentEntity, enterEntityWorkspace } = useCurrentEntity()
   const { hierarchicalList, canSwitch, isLoading } = useAccessibleEntities()
   const [isOpen, setIsOpen] = React.useState(false)
   const [searchQuery, setSearchQuery] = React.useState("")
@@ -64,28 +64,30 @@ export function EntitySwitcher({ className }: EntitySwitcherProps) {
     )
   }, [hierarchicalList, searchQuery])
 
-  // Cambio de entidad preservando la subruta activa si es posible
+  // Cambio de entidad preservando la subruta limpia activa (evita mantener IDs de registros de otra entidad)
   const handleSelectEntity = (selectedEntity: OrganizationEntity) => {
     if (selectedEntity.id === currentEntity?.id) {
       setIsOpen(false)
       return
     }
 
-    // Actualizar entidad en contexto
-    setCurrentEntity(selectedEntity as OrganizationEntityRow)
+    enterEntityWorkspace(selectedEntity as OrganizationEntityRow)
     setIsOpen(false)
     setSearchQuery("")
 
-    // Calcular la nueva ruta preservando la subsección activa
     const currentPath = location.pathname
-    if (currentEntity && currentPath.includes(`/entity/${currentEntity.id}`)) {
-      const newPath = currentPath.replace(
-        `/entity/${currentEntity.id}`,
-        `/entity/${selectedEntity.id}`
-      )
-      navigate(newPath)
-    } else {
-      navigate(`/entity/${selectedEntity.id}/summary`)
+    if (currentPath.startsWith("/workers/")) {
+      navigate("/workers")
+    } else if (currentPath.startsWith("/staffing/workers/")) {
+      navigate("/staffing")
+    } else if (currentPath.startsWith("/candidates/")) {
+      navigate("/candidates")
+    } else if (currentPath.startsWith("/settings/document-templates/")) {
+      navigate("/settings/document-templates")
+    } else if (currentPath.startsWith("/entity/")) {
+      navigate("/home")
+    } else if (!currentPath || currentPath === "/") {
+      navigate("/home")
     }
   }
 
@@ -159,7 +161,7 @@ export function EntitySwitcher({ className }: EntitySwitcherProps) {
         align="start"
         side="bottom"
         sideOffset={6}
-        className="w-80 p-0 shadow-lg border-border"
+        className="w-[min(20rem,calc(100vw-1.5rem))] p-0 shadow-lg border-border"
       >
         {/* Cabecera del desplegable */}
         <div className="border-b border-border bg-card px-3 py-2.5">

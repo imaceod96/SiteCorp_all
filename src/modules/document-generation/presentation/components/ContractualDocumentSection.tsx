@@ -321,7 +321,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
                 )}
                 {precheck.blockedReason === "TEMPLATE_NONE" && (
                   <Link
-                    to={`/entity/${precheck.entityId}/settings/document-templates`}
+                    to="/settings/document-templates"
                     className="mt-2 inline-block font-medium text-sitecorp-primary hover:underline"
                   >
                     Ir a Plantillas de documentos

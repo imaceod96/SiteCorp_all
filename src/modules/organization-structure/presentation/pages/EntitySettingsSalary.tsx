@@ -220,7 +220,7 @@ const EntitySettingsSalary = () => {
 
   if (!currentEntity) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Cargando entidad..." description="Obteniendo información de la entidad organizativa" />
         <SiteCorpCard title="Cargando"><p className="text-sm text-muted-foreground">Cargando información de la entidad...</p></SiteCorpCard>
       </div>
@@ -228,7 +228,7 @@ const EntitySettingsSalary = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Escala salarial"
         description="Gestión de la escala salarial de esta entidad"
@@ -257,7 +257,7 @@ const EntitySettingsSalary = () => {
           {globalScale ? (
             <SiteCorpCard title="Escala salarial presupuestada general de SiteCorp" description="Esta escala es común para todas las entidades presupuestadas del sistema">
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-ink">Moneda: {globalScale.currency_code}</p>
                     <p className="text-xs text-muted-foreground">
@@ -290,7 +290,7 @@ const EntitySettingsSalary = () => {
                                               </p>
                                             </div>
                                           </div>
-                                          <div className="flex items-center gap-3">
+                                          <div className="flex flex-wrap items-center gap-3">
                                             {group.current_value ? (
                                               <div className="text-right">
                                                 <p className="text-sm font-medium text-ink">
@@ -366,7 +366,7 @@ const EntitySettingsSalary = () => {
             description={scale.description || `Escala salarial empresarial de ${currentEntity.name}`}
           >
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-ink">Moneda: {scale.currency_code}</p>
                   <p className="text-xs text-muted-foreground">
@@ -405,7 +405,7 @@ const EntitySettingsSalary = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       {group.current_value ? (
                         <div className="text-right">
                           <p className="text-sm font-medium text-ink">
@@ -566,9 +566,9 @@ const SalaryHistoryModal = ({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
       <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="rounded-xl border border-border bg-white p-6 shadow-lg">
+        <div className="rounded-xl border border-border bg-white p-4 sm:p-6 shadow-lg">
           <div className="flex justify-between items-start mb-4">
             <h2 className="text-xl font-bold text-ink">
               Historial salarial
@@ -674,9 +674,9 @@ const CreateEnterpriseScaleDialog = ({
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="relative w-full max-w-md">
-        <div className="rounded-xl border border-border bg-white p-6 shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+      <div className="relative w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="rounded-xl border border-border bg-white p-4 sm:p-6 shadow-lg">
           <div className="flex justify-between items-start mb-4">
             <h2 className="text-xl font-bold text-ink">
               Configurar escala salarial empresarial

@@ -355,6 +355,7 @@ export {
   ENTITY_INTERNAL_MODULES,
   ENTITY_NAV,
   contractAlertsPath,
+  resolveLegacyEntityPath,
 } from "./domain/entity-modules.catalog"
 
 // --- Documentos rectores de la entidad: tipos ---

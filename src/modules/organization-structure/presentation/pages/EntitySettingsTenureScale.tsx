@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -56,7 +57,7 @@ import { showSuccess, showError } from "@/utils/toast"
  * efectiva es de RLS y no se añade ninguna regla nueva de acceso.
  */
 const EntitySettingsTenureScale = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
 
   const [ranges, setRanges] = React.useState<TenureScaleRange[]>([])
@@ -177,7 +178,7 @@ const EntitySettingsTenureScale = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Escala de pago de antigüedad" />
         <SiteCorpAlert type="info">Cargando...</SiteCorpAlert>
       </div>
@@ -186,7 +187,7 @@ const EntitySettingsTenureScale = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Escala de pago de antigüedad" />
         <SiteCorpAlert type="danger">{error}</SiteCorpAlert>
         <SiteCorpButton variant="outline" onClick={() => navigate(-1)}>
@@ -198,7 +199,7 @@ const EntitySettingsTenureScale = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Escala de pago de antigüedad"
         description="Configure los tramos de antigüedad y sus importes asociados"
@@ -206,7 +207,6 @@ const EntitySettingsTenureScale = () => {
           <SiteCorpButton
             variant="default"
             onClick={handleOpenCreateForm}
-            className="ml-4"
           >
             <Plus className="mr-2 h-4 w-4" /> Nuevo tramo
           </SiteCorpButton>
@@ -219,8 +219,8 @@ const EntitySettingsTenureScale = () => {
         </SiteCorpAlert>
       ) : (
         <div className="space-y-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm text-left">
               <thead>
                 <tr className="border-b">
                   <th className="px-4 py-2 text-xs font-medium text-muted-foreground">
@@ -321,7 +321,7 @@ const EntitySettingsTenureScale = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Desde</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                   <SiteCorpInput
                     type="number"
                     min="0"
@@ -352,7 +352,7 @@ const EntitySettingsTenureScale = () => {
 
               <div className="space-y-2">
                 <Label>Hasta</Label>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
                   <SiteCorpInput
                     type="number"
                     min="0"

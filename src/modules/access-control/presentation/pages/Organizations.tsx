@@ -103,7 +103,7 @@ const Organizations = () => {
   const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
   const { currentCompanyClient, setCurrentCompanyClient, clearCurrentCompanyClient } =
     useCurrentCompanyClient()
-  const { clearCurrentEntity } = useCurrentEntity()
+  const { clearCurrentEntity, enterEntityWorkspace } = useCurrentEntity()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [companyClients, setCompanyClients] = React.useState<CompanyClientRecord[]>([])
@@ -430,7 +430,8 @@ const Organizations = () => {
     }
   
     const enterEntity = (entity: OrganizationEntity) => {
-      navigate(`/entity/${entity.id}/panel`)
+      enterEntityWorkspace(entity.id)
+      navigate("/home")
     }
 
   const renderEntity = (entity: OrganizationEntity, depth: number): React.ReactNode => {
@@ -444,7 +445,7 @@ const Organizations = () => {
       <div key={entity.id} className="min-w-0">
         <div
           className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-3 transition-colors hover:border-sitecorp-primary/30 sm:flex-row sm:items-center sm:justify-between"
-          style={{ marginLeft: depth === 0 ? undefined : depth * 14 }}
+          style={{ marginLeft: depth === 0 ? undefined : Math.min(depth, 4) * 10 }}
         >
           <div className="flex min-w-0 items-start gap-3">
             {hasChildren ? (
@@ -539,7 +540,7 @@ const Organizations = () => {
   ).length
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Clientes"
         description="Clientes independientes con grupos empresariales, empresas y UEB. Cada nodo puede tener su propia cuenta SiteCorp."

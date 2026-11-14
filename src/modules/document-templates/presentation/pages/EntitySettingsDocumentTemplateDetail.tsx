@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { loadEntityPermissionSafe } from "@/modules/access-control"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -37,12 +37,8 @@ import { ArrowLeft, ListChecks } from "lucide-react"
  */
 
 const EntitySettingsDocumentTemplateDetail = () => {
-  const { entityId: routeEntityId, templateId } = useParams<{
-    entityId: string
-    templateId: string
-  }>()
-  const { currentEntity } = useCurrentEntity()
-  const entityId = routeEntityId || currentEntity?.id || ""
+  const { templateId } = useParams<{ templateId: string }>()
+  const entityId = useActiveEntityId() || ""
   const navigate = useNavigate()
 
   const [loading, setLoading] = React.useState(true)
@@ -295,7 +291,7 @@ const EntitySettingsDocumentTemplateDetail = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Plantilla documental" description="Cargando plantilla…" />
         <SiteCorpLoading rows={6} />
       </div>
@@ -304,14 +300,14 @@ const EntitySettingsDocumentTemplateDetail = () => {
 
   if (notAllowed || !template) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Plantilla documental" description="Detalle de la plantilla" />
         <SiteCorpAlert type="danger">
           {notAllowed || "No se pudo cargar la plantilla documental."}
         </SiteCorpAlert>
         <SiteCorpButton
           variant="outline"
-          onClick={() => navigate(`/entity/${entityId}/settings/document-templates`)}
+          onClick={() => navigate("/settings/document-templates")}
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Volver al listado
@@ -321,7 +317,7 @@ const EntitySettingsDocumentTemplateDetail = () => {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title={template.name}
         description={typeName || template.document_type_code}
@@ -331,7 +327,7 @@ const EntitySettingsDocumentTemplateDetail = () => {
         <SiteCorpButton
           variant="outline"
           size="sm"
-          onClick={() => navigate(`/entity/${entityId}/settings/document-templates`)}
+          onClick={() => navigate("/settings/document-templates")}
         >
           <ArrowLeft className="mr-1 h-3.5 w-3.5" />
           Volver al listado

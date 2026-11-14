@@ -15,8 +15,8 @@
 export interface EntityInternalModule {
   key: string
   label: string
-  /** Ruta interna de la entidad correspondiente al módulo */
-  path: (entityId: string) => string
+  /** Ruta limpia del espacio de trabajo de la entidad */
+  path: (entityId?: string) => string
   /**
    * Permisos internos que habilitan el módulo (basta con uno). Ausente = el módulo
    * está disponible para cualquier usuario con acceso a la entidad (p. ej. Resumen).
@@ -29,53 +29,53 @@ export interface EntityInternalModule {
  * de permisos por módulo (la navegación se compone a partir de aquí).
  */
 export const ENTITY_INTERNAL_MODULES: EntityInternalModule[] = [
-  { key: "summary", label: "Resumen", path: (id) => `/entity/${id}/summary` },
+  { key: "summary", label: "Resumen", path: () => "/home" },
   {
     key: "candidates",
     label: "Candidatos",
-    path: (id) => `/entity/${id}/candidates`,
+    path: () => "/candidates",
     permissions: ["candidates.view", "candidates.manage"],
   },
   {
     key: "workers",
     label: "Trabajadores",
-    path: (id) => `/entity/${id}/workers`,
+    path: () => "/workers",
     permissions: ["workers.view", "workers.manage"],
   },
   {
     key: "reentries",
     label: "Reingresos",
-    path: (id) => `/entity/${id}/reentries`,
+    path: () => "/reentries",
     permissions: ["workers.view", "workers.manage"],
   },
   {
     key: "staffing",
     label: "Plantilla",
-    path: (id) => `/entity/${id}/staffing`,
+    path: () => "/staffing",
     permissions: ["workers.view", "workers.manage"],
   },
   {
     key: "vacations",
     label: "Vacaciones",
-    path: (id) => `/entity/${id}/vacations`,
+    path: () => "/vacations",
     permissions: ["vacations.view", "vacations.manage"],
   },
   {
     key: "medical-certificates",
     label: "Licencias y certificados",
-    path: (id) => `/entity/${id}/medical-certificates`,
+    path: () => "/medical-certificates",
     permissions: ["medical_certificates.view", "medical_certificates.manage"],
   },
   {
     key: "prenomina",
     label: "Prenómina",
-    path: (id) => `/entity/${id}/payroll-preparation`,
+    path: () => "/payroll-preparation",
     permissions: ["prenomina.view", "prenomina.manage"],
   },
   {
     key: "pending-documents",
     label: "Documentos pendientes",
-    path: (id) => `/entity/${id}/documents/pending`,
+    path: () => "/documents/pending",
     permissions: ["workers.view", "workers.manage"],
   },
   // Vencimientos YA NO es un elemento directo del sidebar (§36): su página y ruta
@@ -83,19 +83,19 @@ export const ENTITY_INTERNAL_MODULES: EntityInternalModule[] = [
   {
     key: "contract-alerts",
     label: "Vencimientos",
-    path: (id) => `/entity/${id}/contracts/alerts`,
+    path: () => "/contracts/alerts",
     permissions: ["contract_alerts.view", "workers.view", "workers.manage"],
   },
   {
     key: "hiring",
     label: "Contratación",
-    path: (id) => `/entity/${id}/hiring`,
+    path: () => "/hiring",
     permissions: ["hiring.view", "hiring.manage", "workers.view", "workers.manage"],
   },
   {
     key: "training",
     label: "Capacitación",
-    path: (id) => `/entity/${id}/training`,
+    path: () => "/training",
     permissions: [
       "training.view",
       "training.manage",
@@ -108,7 +108,7 @@ export const ENTITY_INTERNAL_MODULES: EntityInternalModule[] = [
   {
     key: "sst",
     label: "SST",
-    path: (id) => `/entity/${id}/sst`,
+    path: () => "/sst",
     permissions: [
       "sst.view",
       "sst.manage",
@@ -120,19 +120,28 @@ export const ENTITY_INTERNAL_MODULES: EntityInternalModule[] = [
       "organization.manage",
     ],
   },
-  { key: "settings", label: "Ajustes", path: (id) => `/entity/${id}/settings` },
-  { key: "manual", label: "Manual de Usuario", path: (id) => `/entity/${id}/manual` },
+  { key: "settings", label: "Ajustes", path: () => "/settings" },
+  { key: "manual", label: "Manual de Usuario", path: () => "/manual" },
 ]
 
 /** Ruta existente de Vencimientos (acceso directo permitido aunque no esté en el menú). */
-export const contractAlertsPath = (entityId: string) => `/entity/${entityId}/contracts/alerts`
+export const contractAlertsPath = (_entityId?: string) => "/contracts/alerts"
+
+/** Traduce una subruta heredada de `/entity/:entityId/*` a su URL limpia de espacio de trabajo. */
+export const resolveLegacyEntityPath = (splat: string): string => {
+  const normalized = splat.replace(/^\/+/, "").replace(/\/+$/, "")
+  if (!normalized || normalized === "summary" || normalized === "panel" || normalized === "home") {
+    return "/home"
+  }
+  return `/${normalized}`
+}
 
 /** Elemento simple del menú lateral. */
 export interface EntityNavLink {
   kind: "link"
   key: string
   label: string
-  path: (entityId: string) => string
+  path: (entityId?: string) => string
   permissions?: string[]
 }
 

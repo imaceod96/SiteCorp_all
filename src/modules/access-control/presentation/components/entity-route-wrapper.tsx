@@ -1,7 +1,7 @@
 import * as React from "react"
-import { useParams, useNavigate, useLocation } from "react-router-dom"
+import { useNavigate, useLocation, Outlet } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { canViewEntity } from "@/modules/access-control"
 import {
   SITECORP_MODULES_DISABLED_MESSAGE,
@@ -18,14 +18,13 @@ import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { EntityLayout } from "@/modules/organization-structure/presentation/components/entity-layout"
 import { useEntityPlan } from "@/modules/entity-plans"
-import { Outlet } from "react-router-dom"
 import { ShieldOff } from "lucide-react"
 
 const EntityRouteWrapper = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
+  const { isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
   const { setCurrentEntity, clearCurrentEntity } = useCurrentEntity()
 
   const [loading, setLoading] = React.useState(true)
@@ -96,7 +95,7 @@ const EntityRouteWrapper = () => {
             hasPlatformPermission("organizations.view_all"),
             hasPlatformPermission("organizations.manage_all")
           ])
-          
+
           if (viewAllPerm || manageAllPerm) {
             isAuthorized = true
           }
@@ -110,10 +109,10 @@ const EntityRouteWrapper = () => {
           throw new Error("Acceso no autorizado")
         }
 
-        // Protección de los módulos internos: además del acceso a la entidad, las rutas
-        // /entity/:entityId/* requieren que la entidad sea Cuenta SiteCorp.
+        // Protección de los módulos internos: además del acceso a la entidad, el espacio
+        // de trabajo interno requiere que la entidad sea Cuenta SiteCorp.
         if (!hasSiteCorpAccount(entity)) {
-          setCurrentEntity(null)
+          clearCurrentEntity()
           setModulesDisabled(true)
           return
         }
@@ -130,7 +129,7 @@ const EntityRouteWrapper = () => {
 
     initialLoadDone.current = false
     loadEntity()
-  }, [entityId, isPlatformSuperAdmin, hasPlatformPermission, setCurrentEntity])
+  }, [entityId, isPlatformSuperAdmin, hasPlatformPermission, setCurrentEntity, clearCurrentEntity])
 
   // Ruta externa de retorno (Organizaciones o estructura del cliente)
   React.useEffect(() => {
@@ -168,7 +167,6 @@ const EntityRouteWrapper = () => {
     let cancelled = false
 
     const revalidate = async () => {
-      // Un fallo de la lectura no cambia de estado (`null`), igual que antes.
       const siteCorpFlag = await loadEntitySiteCorpFlag(entityId)
 
       if (cancelled || siteCorpFlag === null) return
@@ -186,9 +184,14 @@ const EntityRouteWrapper = () => {
     }
   }, [entityId, location.pathname, clearCurrentEntity])
 
+  const handleExitEntity = () => {
+    clearCurrentEntity()
+    navigate(fallbackPath)
+  }
+
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Cargando entidad..."
           description="Obteniendo información de la entidad organizativa"
@@ -200,7 +203,7 @@ const EntityRouteWrapper = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Error"
           description="No se pudo cargar la entidad organizativa"
@@ -209,7 +212,7 @@ const EntityRouteWrapper = () => {
           {error}
         </SiteCorpAlert>
         <div className="flex justify-end">
-          <SiteCorpButton variant="outline" onClick={() => navigate(fallbackPath)}>
+          <SiteCorpButton variant="outline" onClick={handleExitEntity}>
             Volver a organizaciones
           </SiteCorpButton>
         </div>
@@ -219,7 +222,7 @@ const EntityRouteWrapper = () => {
 
   if (modulesDisabled) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title={SITECORP_MODULES_DISABLED_TITLE}
           description="Gestión interna no disponible para esta entidad"
@@ -233,7 +236,7 @@ const EntityRouteWrapper = () => {
               {SITECORP_MODULES_DISABLED_MESSAGE} Puedes activarla desde la edición de la entidad
               en la estructura organizativa.
             </p>
-            <SiteCorpButton variant="outline" onClick={() => navigate(fallbackPath)}>
+            <SiteCorpButton variant="outline" onClick={handleExitEntity}>
               Volver a organizaciones
             </SiteCorpButton>
           </div>
@@ -245,7 +248,7 @@ const EntityRouteWrapper = () => {
   if (planRestriction) {
     return (
       <EntityLayout>
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-4 sm:p-6">
           <SiteCorpPageHeader
             title="Módulo no disponible en el plan"
             description="Funcionalidad no contratada para esta entidad"
@@ -266,7 +269,7 @@ const EntityRouteWrapper = () => {
               <div className="pt-2">
                 <SiteCorpButton
                   variant="outline"
-                  onClick={() => navigate(`/entity/${entityId}/summary`)}
+                  onClick={() => navigate("/home")}
                 >
                   Ir al Resumen de la entidad
                 </SiteCorpButton>

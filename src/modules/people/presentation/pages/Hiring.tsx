@@ -5,7 +5,7 @@ import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 
 const Hiring = () => {
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Contratación"
         description="Gestión de plantilla y contratación"

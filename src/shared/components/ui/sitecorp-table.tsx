@@ -20,7 +20,7 @@ const SiteCorpTable = React.forwardRef<
   SiteCorpTableProps
 >(({ columns, data, className, ...props }, ref) => {
   return (
-    <div className="w-full overflow-auto">
+    <div className="w-full min-w-0 overflow-x-auto">
       <Table ref={ref} className={cn("", className)}>
         <TableHeader>
           <TableRow>

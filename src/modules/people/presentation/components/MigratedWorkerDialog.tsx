@@ -1,5 +1,5 @@
 import * as React from "react"
-import { useParams } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import {
   ciToBirthDate,
   isValidIdentification,
@@ -35,7 +35,7 @@ const EMPTY_FORM = {
 }
 
 export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const [catalogs, setCatalogs] = React.useState<Record<string, CatalogOption[]>>({})
   const [licenseCategories, setLicenseCategories] = React.useState<CatalogOption[]>([])
   const [licenseIds, setLicenseIds] = React.useState<string[]>([])

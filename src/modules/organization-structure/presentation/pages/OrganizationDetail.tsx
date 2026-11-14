@@ -2,6 +2,7 @@ import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
+import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import {
   accessRoleLabel,
   loadEntityPermission,
@@ -87,6 +88,7 @@ const OrganizationDetail = () => {
   const navigate = useNavigate()
   const { user, isPlatformSuperAdmin } = useAuth()
   const { currentCompanyClient } = useCurrentCompanyClient()
+  const { enterEntityWorkspace } = useCurrentEntity()
 
   // Primitiva estable del cliente: evita depender del objeto completo en los callbacks.
   const currentCompanyClientId = currentCompanyClient?.id
@@ -222,7 +224,7 @@ const OrganizationDetail = () => {
   
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Cargando entidad..."
           description="Obteniendo información de la entidad organizativa"
@@ -234,7 +236,7 @@ const OrganizationDetail = () => {
   
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Error"
           description="No se pudo cargar la entidad organizativa"
@@ -256,7 +258,7 @@ const OrganizationDetail = () => {
   
   if (!entity) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Entidad no encontrada"
           description="La entidad solicitada no existe o no tienes permiso para acceder a ella"
@@ -277,7 +279,7 @@ const OrganizationDetail = () => {
   }
   
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {/* Header with breadcrumbs and actions */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-col gap-2">
@@ -591,7 +593,10 @@ const OrganizationDetail = () => {
         {/* Gestionar solo cuando la entidad es Cuenta SiteCorp (módulos internos) */}
         {entity.is_sitecorp_account && (
           <SiteCorpButton
-            onClick={() => navigate(`/entity/${entity.id}/summary`)}
+            onClick={() => {
+              enterEntityWorkspace(entity.id)
+              navigate("/home")
+            }}
           >
             <LayoutDashboard className="mr-2 h-4 w-4" />
             Gestionar módulos internos

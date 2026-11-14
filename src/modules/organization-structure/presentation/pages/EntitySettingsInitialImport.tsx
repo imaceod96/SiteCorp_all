@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { Download, FileSpreadsheet, Loader2, Upload, AlertTriangle, AlertCircle, CheckCircle2, XCircle, ClipboardCheck, UserPlus } from "lucide-react"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
@@ -77,7 +78,7 @@ const describeValidationFailure = (cause: unknown, phase: "read" | "process"): V
 }
 
 const EntitySettingsInitialImport = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { permissions, loading: permissionLoading } = useEntityPermissions(entityId)
@@ -208,8 +209,8 @@ const EntitySettingsInitialImport = () => {
     }
   }
 
-  if (permissionLoading) return <div className="p-6">Cargando permisos…</div>
-  if (!allowed) return <div className="space-y-5 p-6"><SiteCorpPageHeader title="Carga inicial de trabajadores" /><SiteCorpAlert type="warning">No tiene el permiso workers.initial_import ni workers.manage.</SiteCorpAlert></div>
+  if (permissionLoading) return <div className="p-4 sm:p-6">Cargando permisos…</div>
+  if (!allowed) return <div className="space-y-5 p-4 sm:p-6"><SiteCorpPageHeader title="Carga inicial de trabajadores" /><SiteCorpAlert type="warning">No tiene el permiso workers.initial_import ni workers.manage.</SiteCorpAlert></div>
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -237,7 +238,7 @@ const EntitySettingsInitialImport = () => {
                 <div><dt className="text-sitecorp-success">Pendientes de vinculación</dt><dd className="text-xl font-semibold">{summary.pending}</dd></div>
               </dl>
             </div>
-            <Button onClick={() => navigate(`/entity/${entityId}/staffing`)}>Ir a Trabajadores</Button>
+            <Button onClick={() => navigate("/staffing")}>Ir a Trabajadores</Button>
           </div>
         </SiteCorpCard>
       )}
@@ -344,7 +345,7 @@ const EntitySettingsInitialImport = () => {
           {errorCount > 0
             ? <SiteCorpAlert type="danger">Corrige los errores antes de iniciar la migración. El lote no se ejecutará.</SiteCorpAlert>
             : incompleteCount > 0 && <SiteCorpAlert type="warning">{incompleteCount} trabajadores tienen información pendiente de completar.</SiteCorpAlert>}
-          <div className="mt-4 overflow-x-auto rounded-xl border">
+          <div className="mt-4 w-full min-w-0 overflow-x-auto rounded-xl border">
             <Table>
               <TableHeader><TableRow><TableHead>Fila</TableHead><TableHead>Identificación</TableHead><TableHead>Trabajador</TableHead><TableHead>Nacimiento</TableHead><TableHead>Incorporación</TableHead><TableHead>Estado y detalle</TableHead></TableRow></TableHeader>
               <TableBody>{preview.map((item, index) => {
@@ -370,7 +371,7 @@ const EntitySettingsInitialImport = () => {
       <SiteCorpCard className="rounded-2xl">
         <h2 className="text-lg font-semibold text-slate-900">Historial de lotes</h2>
         <p className="mb-4 text-sm text-slate-600">Los registros provienen de los trabajadores creados por cada lote de migración.</p>
-        {history.length === 0 ? <p className="text-sm text-slate-500">Todavía no hay lotes importados.</p> : <div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Lote</TableHead><TableHead>Total</TableHead><TableHead>Vinculados</TableHead><TableHead>Pendientes</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{history.map((batch) => <TableRow key={batch.batchId}><TableCell>{batch.migratedAt ? new Date(batch.migratedAt).toLocaleString("es-CU") : "—"}</TableCell><TableCell className="font-mono text-xs">{batch.batchId}</TableCell><TableCell>{batch.total}</TableCell><TableCell>{batch.linked}</TableCell><TableCell>{batch.pending}</TableCell><TableCell><Badge variant="secondary">Importado</Badge></TableCell></TableRow>)}</TableBody></Table></div>}
+        {history.length === 0 ? <p className="text-sm text-slate-500">Todavía no hay lotes importados.</p> : <div className="w-full min-w-0 overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>Fecha</TableHead><TableHead>Lote</TableHead><TableHead>Total</TableHead><TableHead>Vinculados</TableHead><TableHead>Pendientes</TableHead><TableHead>Estado</TableHead></TableRow></TableHeader><TableBody>{history.map((batch) => <TableRow key={batch.batchId}><TableCell>{batch.migratedAt ? new Date(batch.migratedAt).toLocaleString("es-CU") : "—"}</TableCell><TableCell className="font-mono text-xs">{batch.batchId}</TableCell><TableCell>{batch.total}</TableCell><TableCell>{batch.linked}</TableCell><TableCell>{batch.pending}</TableCell><TableCell><Badge variant="secondary">Importado</Badge></TableCell></TableRow>)}</TableBody></Table></div>}
       </SiteCorpCard>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>

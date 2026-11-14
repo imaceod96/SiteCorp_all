@@ -1,8 +1,9 @@
 import * as React from "react"
-import { Outlet, Link } from "react-router-dom"
+import { Outlet, Link, useLocation } from "react-router-dom"
 import { useCurrentCompanyClient } from "@/contexts/CurrentCompanyClientContext"
 import { cn } from "@/lib/utils"
 import { SiteCorpBrand } from "@/shared/components/sitecorp-brand"
+import { ResponsiveAppShell } from "@/shared/components/responsive-app-shell"
 import { SidebarUserMenu } from "@/modules/access-control/presentation/components/sidebar-user-menu"
 import { toCompanyClient } from "@/modules/company-client"
 import {
@@ -33,6 +34,7 @@ const CompanyClientLayout = React.forwardRef<
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => {
   const { currentCompanyClient } = useCurrentCompanyClient()
+  const location = useLocation()
 
   // Cliente propietario de los datos expresado con el vocabulario de dominio.
   // El mapper solo proyecta el objeto que ya expone el contexto: no consulta,
@@ -41,51 +43,58 @@ const CompanyClientLayout = React.forwardRef<
   const companyClient = currentCompanyClient ? toCompanyClient(currentCompanyClient) : null
 
   return (
-    <div
+    <ResponsiveAppShell
       ref={ref}
-      className={cn("flex h-screen w-full overflow-hidden", className)}
+      className={className}
       {...props}
-    >
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 z-40 flex h-screen w-64 flex-col border-r border-border bg-card">
-        {/* Logo / Brand */}
-        <div className="flex h-16 shrink-0 items-center border-b border-border px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <SiteCorpBrand variant="isotype" size="sm" />
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold text-ink">SiteCorp</h2>
-              <p className="truncate text-xs text-muted-foreground">{companyClient?.name || "Cliente"}</p>
-            </div>
+      renderHeader={() => (
+        <div className="flex min-w-0 items-center gap-3">
+          <SiteCorpBrand variant="isotype" size="sm" />
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-ink">SiteCorp</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              {companyClient?.name || "Cliente"}
+            </p>
           </div>
         </div>
-
-        {/* Navigation (scrollable) */}
-        <nav className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-1">
-            {companyClientNavItems.map((item) => (
+      )}
+      renderNav={(shell) => (
+        <div className={cn(shell.collapsed ? "space-y-1.5" : "space-y-1")}>
+          {companyClientNavItems.map((item) => {
+            const active =
+              item.href === "/"
+                ? location.pathname === "/"
+                : location.pathname.startsWith(item.href)
+            return (
               <Link
                 key={item.href}
                 to={item.href}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-ink hover:bg-muted hover:text-ink transition-colors"
+                title={item.label}
+                aria-label={item.label}
+                onClick={() => {
+                  if (!shell.isDesktop) shell.collapseSidebar()
+                }}
+                className={cn(
+                  "flex items-center rounded-lg text-sm font-medium transition-colors",
+                  shell.collapsed
+                    ? "mx-auto h-10 w-10 justify-center p-0"
+                    : "gap-3 px-3 py-2.5",
+                  active
+                    ? "bg-sitecorp-primary/10 text-sitecorp-primary"
+                    : "text-ink hover:bg-muted hover:text-ink"
+                )}
               >
-                <item.icon className="h-5 w-5" />
-                {item.label}
+                <item.icon className="h-5 w-5 shrink-0" />
+                {!shell.collapsed && <span className="truncate">{item.label}</span>}
               </Link>
-            ))}
-          </div>
-        </nav>
-
-        {/* Footer fijo (no desaparece aunque la navegación tenga scroll) */}
-        <div className="shrink-0 border-t border-border p-3">
-          <SidebarUserMenu />
+            )
+          })}
         </div>
-      </div>
-
-      {/* Main content */}
-      <main className="ml-64 flex-1 overflow-y-auto bg-sitecorp-background">
-        <Outlet />
-      </main>
-    </div>
+      )}
+      renderFooter={(shell) => <SidebarUserMenu compact={shell.collapsed} />}
+    >
+      <Outlet />
+    </ResponsiveAppShell>
   )
 })
 CompanyClientLayout.displayName = "CompanyClientLayout"

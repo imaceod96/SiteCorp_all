@@ -1,6 +1,6 @@
 import * as React from "react"
-import { useParams, useNavigate } from "react-router-dom"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useNavigate } from "react-router-dom"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { supabase } from "@/lib/supabase"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -209,10 +209,10 @@ const CandidateForm = ({
   onSuccess,
   onCancel,
 }: CandidateFormProps) => {
-  const { entityId: contextEntityId } = useParams<{ entityId: string }>()
+  const contextEntityId = useActiveEntityId()
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
-  const effectiveEntityId = propEntityId || contextEntityId
+  const effectiveEntityId = propEntityId || (useGlobalAreas ? undefined : contextEntityId)
   const isCreate = mode === "create"
   const inDialog = variant === "dialog"
 
@@ -595,7 +595,7 @@ const CandidateForm = ({
         } else if (onCancel) {
           onCancel()
         } else {
-          navigate(`/entity/${effectiveEntityId}/candidates/${candidateId}`)
+          navigate(`/candidates/${candidateId}`)
         }
       }, 1500)
     } catch (err) {
@@ -617,12 +617,12 @@ const CandidateForm = ({
       onCancel()
       return
     }
-    navigate(`/entity/${effectiveEntityId}/candidates/${candidateId}`)
+    navigate(`/candidates/${candidateId}`)
   }
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Cargando candidato..." description="Obteniendo información del candidato" />
         <SiteCorpLoading rows={5} />
       </div>
@@ -631,7 +631,7 @@ const CandidateForm = ({
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Error" description="No se pudo cargar el candidato" />
         <SiteCorpAlert type="danger">{error}</SiteCorpAlert>
         <div className="flex justify-end">
@@ -645,7 +645,7 @@ const CandidateForm = ({
 
   if (!isCreate && !candidate) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Candidato no encontrado" description="El candidato solicitado no existe o no tiene acceso" />
         <SiteCorpAlert type="info">El candidato puede haber sido archivado o no tiene acceso para usted.</SiteCorpAlert>
         <div className="flex justify-end">
@@ -1027,8 +1027,8 @@ const CandidateForm = ({
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <SiteCorpPageHeader
           title={isCreate ? "Nuevo candidato" : `Editar: ${candidate?.first_name} ${candidate?.first_surname}`}
           description={`${isCreate ? "Creando" : "Editando"} candidato en ${currentEntity?.name}`}

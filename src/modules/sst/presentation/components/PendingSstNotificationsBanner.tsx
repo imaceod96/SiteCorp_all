@@ -71,7 +71,7 @@ export const PendingSstNotificationsBanner: React.FC<PendingSstNotificationsBann
 
           {showSstModuleLink && (
             <Link
-              to={`/entity/${entityId}/sst`}
+              to="/sst"
               className="inline-flex items-center gap-1 rounded-lg border border-sitecorp-secondary-orange/30 bg-white px-3 py-1.5 text-xs font-medium text-sitecorp-secondary-orange transition-colors hover:bg-sitecorp-secondary-orange/10"
             >
               Ir a SST de la entidad
@@ -117,7 +117,7 @@ export const PendingSstNotificationsBanner: React.FC<PendingSstNotificationsBann
                   Fecha: {notif.effective_date}
                 </span>
                 <Link
-                  to={`/entity/${entityId}/workers/${notif.worker_id}?tab=informacion-adicional`}
+                  to={`/workers/${notif.worker_id}?tab=informacion-adicional`}
                   className="inline-flex items-center gap-1 font-medium text-sitecorp-primary hover:underline"
                 >
                   Gestionar en ficha

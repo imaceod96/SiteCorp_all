@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -113,7 +113,8 @@ const formatDurationFromDays = (totalDays: number): string => {
 }
 
 const CandidateDetail = () => {
-  const { entityId, candidateId } = useParams<{ entityId: string; candidateId: string }>()
+  const { candidateId } = useParams<{ candidateId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
   const { currentEntity } = useCurrentEntity()
 
@@ -666,7 +667,7 @@ const CandidateDetail = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Cargando candidato..."
           description="Obteniendo información del candidato"
@@ -678,7 +679,7 @@ const CandidateDetail = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Error"
           description="No se pudo cargar el candidato"
@@ -689,7 +690,7 @@ const CandidateDetail = () => {
         <div className="flex justify-end">
           <SiteCorpButton
             variant="outline"
-            onClick={() => navigate(`/entity/${entityId}/candidates`)}
+            onClick={() => navigate("/candidates")}
           >
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver a candidatos
           </SiteCorpButton>
@@ -700,7 +701,7 @@ const CandidateDetail = () => {
 
   if (!candidate) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Candidato no encontrado"
           description="El candidato solicitado no existe o no tiene acceso"
@@ -711,7 +712,7 @@ const CandidateDetail = () => {
         <div className="flex justify-end">
           <SiteCorpButton
             variant="outline"
-            onClick={() => navigate(`/entity/${entityId}/candidates`)}
+            onClick={() => navigate("/candidates")}
           >
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver a candidatos
           </SiteCorpButton>
@@ -723,7 +724,7 @@ const CandidateDetail = () => {
   const totalExperience = calculateTotalExperience()
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       {/* Header with navigation and actions */}
       <div className="flex items-center justify-between">
         <SiteCorpPageHeader
@@ -735,7 +736,7 @@ const CandidateDetail = () => {
                 <SiteCorpButton
                   variant="outline"
                   onClick={() =>
-                    navigate(`/entity/${entityId}/staffing/workers/${linkedWorker.id}`)
+                    navigate(`/staffing/workers/${linkedWorker.id}`)
                   }
                 >
                   <Briefcase className="mr-2 h-4 w-4" /> Ver trabajador
@@ -749,14 +750,14 @@ const CandidateDetail = () => {
               {hasManagePermission && (
                 <SiteCorpButton
                   variant="outline"
-                  onClick={() => navigate(`/entity/${entityId}/candidates/${candidateId}/edit`)}
+                  onClick={() => navigate(`/candidates/${candidateId}/edit`)}
                 >
                   <Edit3 className="mr-2 h-4 w-4" /> Editar candidato
                 </SiteCorpButton>
               )}
               <SiteCorpButton
                 variant="outline"
-                onClick={() => navigate(`/entity/${entityId}/candidates`)}
+                onClick={() => navigate("/candidates")}
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Volver a candidatos
               </SiteCorpButton>
@@ -793,7 +794,7 @@ const CandidateDetail = () => {
           worker: linkedWorker,
         }}
         onSuccess={(workerId) =>
-          navigate(`/entity/${entityId}/staffing/workers/${workerId}`)
+          navigate(`/staffing/workers/${workerId}`)
         }
       />
 

@@ -1,5 +1,6 @@
 import * as React from "react"
-import { useParams, useNavigate, Link } from "react-router-dom"
+import { useNavigate, Link } from "react-router-dom"
+import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
@@ -100,7 +101,7 @@ const uniqueOptions = (
  * NO es el directorio de personas: eso vive en Personas → Trabajadores.
  */
 const EntityStaffing = () => {
-  const { entityId } = useParams<{ entityId: string }>()
+  const entityId = useActiveEntityId()
   const navigate = useNavigate()
 
   const [positions, setPositions] = React.useState<StaffingPosition[]>([])
@@ -451,7 +452,7 @@ const EntityStaffing = () => {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Plantilla" description="Cargando plantilla operativa..." />
         <SiteCorpLoading rows={4} />
       </div>
@@ -460,7 +461,7 @@ const EntityStaffing = () => {
 
   if (error) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Plantilla"
           description="Estructura organizativa, capacidad, ocupación y vacantes."
@@ -469,7 +470,7 @@ const EntityStaffing = () => {
           {error}
         </SiteCorpAlert>
         <div className="flex justify-end">
-          <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/summary`)}>
+          <SiteCorpButton variant="outline" onClick={() => navigate("/home")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
           </SiteCorpButton>
         </div>
@@ -485,7 +486,7 @@ const EntityStaffing = () => {
   ]
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Plantilla"
         description="Estructura organizativa de la entidad: Área → Cargo/Puesto → capacidad autorizada, ocupación y vacantes. Es la misma estructura del Anexo14B."
@@ -541,13 +542,13 @@ const EntityStaffing = () => {
             <p className="mb-4 text-sm text-muted-foreground">
               Los trabajadores migrados sin puesto quedarán pendientes de vinculación.
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap justify-center gap-2">
               {canManage && (
                 <SiteCorpButton onClick={() => setMigrationDialogOpen(true)}>
                   <UserPlus className="mr-2 h-4 w-4" />Migrar trabajador
                 </SiteCorpButton>
               )}
-              <SiteCorpButton variant="outline" onClick={() => navigate(`/entity/${entityId}/settings/staffing`)}>
+              <SiteCorpButton variant="outline" onClick={() => navigate("/settings/staffing")}>
                 <Settings className="mr-2 h-4 w-4" />Configurar plantilla
               </SiteCorpButton>
             </div>
@@ -556,7 +557,7 @@ const EntityStaffing = () => {
             <div className="mt-5 space-y-2">
               {pendingWorkers.map(worker => (
                 <div key={worker.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3">
-                  <Link to={`/entity/${entityId}/workers/${worker.id}`} className="font-medium text-sitecorp-primary">
+                  <Link to={`/workers/${worker.id}`} className="font-medium text-sitecorp-primary">
                     {fullName(worker)}
                   </Link>
                   <Badge variant="outline">Pendiente de vinculación</Badge>
@@ -578,7 +579,7 @@ const EntityStaffing = () => {
               <SiteCorpButton
                 variant="outline"
                 size="sm"
-                onClick={() => navigate(`/entity/${entityId}/settings/staffing`)}
+                onClick={() => navigate("/settings/staffing")}
               >
                 <Settings className="mr-2 h-4 w-4" /> Configurar estructura
               </SiteCorpButton>
@@ -611,7 +612,7 @@ const EntityStaffing = () => {
                     <h4 className="text-sm font-semibold uppercase tracking-wide text-sitecorp-primary">
                       {area.areaName}
                     </h4>
-                    <div className="overflow-x-auto rounded-xl border border-border">
+                    <div className="w-full min-w-0 overflow-x-auto rounded-xl border border-border">
                       <table className="w-full min-w-[900px] text-sm">
                         <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                           <tr>
@@ -670,7 +671,7 @@ const EntityStaffing = () => {
                                     <td className="px-3 py-2">
                                       {row.worker_id ? (
                                         <Link
-                                          to={`/entity/${entityId}/workers/${row.worker_id}`}
+                                          to={`/workers/${row.worker_id}`}
                                           className="font-medium text-sitecorp-primary underline-offset-2 hover:underline"
                                         >
                                           {row.worker_name || "—"}
@@ -726,7 +727,7 @@ const EntityStaffing = () => {
               >
                 <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
                   <Link
-                    to={`/entity/${entityId}/workers/${worker.id}`}
+                    to={`/workers/${worker.id}`}
                     className="text-sm font-medium text-ink underline-offset-2 hover:text-sitecorp-primary hover:underline"
                   >
                     {fullName(worker)}

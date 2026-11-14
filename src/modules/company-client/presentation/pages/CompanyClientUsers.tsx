@@ -117,7 +117,7 @@ const CompanyClientUsers = () => {
     ),
     created_at: new Date(user.created_at).toLocaleDateString("es-ES"),
     actions: (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <SiteCorpButton size="sm" variant="outline" onClick={() => startEdit(user)}>
           <Pencil className="h-3.5 w-3.5 mr-1" /> Editar
         </SiteCorpButton>
@@ -137,7 +137,7 @@ const CompanyClientUsers = () => {
   }))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Usuarios"
         description={`Gestión de usuarios en ${currentCompanyClient?.name || "este cliente"}`}
@@ -209,7 +209,7 @@ const CompanyClientUsers = () => {
                 required
               />
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <SiteCorpButton type="submit" className="w-full justify-center">
                 Guardar
               </SiteCorpButton>

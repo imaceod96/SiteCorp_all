@@ -152,8 +152,8 @@ const Organization = () => {
       return (
         <div key={entity.id} className="space-y-2">
           <div
-            className="flex items-center gap-3 rounded-xl border border-border bg-white p-3 transition-all hover:bg-muted/50 cursor-pointer"
-            style={{ marginLeft: `${level * 24}px` }}
+            className="flex flex-col gap-3 rounded-xl border border-border bg-white p-3 transition-all hover:bg-muted/50 cursor-pointer sm:flex-row sm:items-center"
+            style={{ marginLeft: `${Math.min(level, 4) * 12}px` }}
             onClick={() => navigate(`/organization/${entity.id}`)}
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -221,7 +221,7 @@ const Organization = () => {
   }
   
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <SiteCorpPageHeader
         title="Organización"
         description="Gestión de la estructura organizativa"

@@ -208,7 +208,7 @@ const AdminHistory = () => {
 
   if (!isPlatformSuperAdmin) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
           title="Historial"
           description="Registro de auditoría de SiteCorp"
@@ -297,7 +297,7 @@ const AdminHistory = () => {
   ))
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <SiteCorpPageHeader
           title="Historial"
