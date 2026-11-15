@@ -8,6 +8,7 @@ import {
   fetchWorkerLicenseIds,
   fetchWorkerTenurePayment,
 } from "../infrastructure/worker-expediente.repository"
+import { applyDueScheduledSeparationsRpc } from "../infrastructure/worker-transitions.repository"
 import { loadEntityPermissionSafe } from "@/modules/access-control"
 import type {
   CatalogOption,
@@ -124,40 +125,52 @@ export async function loadWorkerExpedienteView(input: {
     }
   }
 
-  const worker = await fetchWorkerExpediente(input.entityId, input.workerId)
-
-  const [personCatalogs, licenseIds, catalogs, movements, tenurePayment, applicableScaleId] =
-    await Promise.all([
-      fetchPersonCatalogs(),
-      fetchWorkerLicenseIds(worker.id),
-      loadWorkerReferenceCatalogs(),
-      // La bitácora es auxiliar: si no se puede leer, la ficha sigue mostrándose.
-      (async () => {
-        try {
-          return await fetchWorkerEmploymentMovements(input.workerId)
-        } catch (error) {
-          console.warn("[people] no se pudo leer la bitácora laboral", error)
-          return [] as WorkerEmploymentMovement[]
-        }
-      })(),
-      fetchWorkerTenurePayment(input.entityId, input.workerId),
-      resolveApplicableScaleId(input.entityId),
-    ])
-
-  const applicableScaleName = applicableScaleId
-    ? await fetchSalaryScaleName(applicableScaleId)
-    : null
+  const [
+    workerBundle,
+    personCatalogs,
+    catalogs,
+    movements,
+    tenurePayment,
+    applicableScaleInfo,
+  ] = await Promise.all([
+    (async () => {
+      await applyDueScheduledSeparationsRpc({
+        entityId: input.entityId,
+        workerId: input.workerId,
+      }).catch(() => 0)
+      const fetchedWorker = await fetchWorkerExpediente(input.entityId, input.workerId)
+      const licenseIds = await fetchWorkerLicenseIds(fetchedWorker.id)
+      return { worker: fetchedWorker, licenseIds }
+    })(),
+    fetchPersonCatalogs(),
+    loadWorkerReferenceCatalogs(),
+    // La bitácora es auxiliar: si no se puede leer, la ficha sigue mostrándose.
+    (async () => {
+      try {
+        return await fetchWorkerEmploymentMovements(input.workerId)
+      } catch (error) {
+        console.warn("[people] no se pudo leer la bitácora laboral", error)
+        return [] as WorkerEmploymentMovement[]
+      }
+    })(),
+    fetchWorkerTenurePayment(input.entityId, input.workerId),
+    (async () => {
+      const scaleId = await resolveApplicableScaleId(input.entityId)
+      const scaleName = scaleId ? await fetchSalaryScaleName(scaleId) : null
+      return { scaleId, scaleName }
+    })(),
+  ])
 
   return {
     permissions,
-    worker,
+    worker: workerBundle.worker,
     catalogs,
     skinColors: personCatalogs.skinColors,
     licenseCategories: personCatalogs.licenseCategories,
-    drivingLicenseIds: licenseIds,
+    drivingLicenseIds: workerBundle.licenseIds,
     movements,
     tenurePayment,
-    applicableScaleId,
-    applicableScaleName,
+    applicableScaleId: applicableScaleInfo.scaleId,
+    applicableScaleName: applicableScaleInfo.scaleName,
   }
 }

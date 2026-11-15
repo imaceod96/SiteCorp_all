@@ -1,4 +1,6 @@
 import {
+  applyDueScheduledSeparationsRpc,
+  cancelScheduledWorkerSeparationRpc,
   changeWorkerContractRpc,
   changeWorkerPositionRpc,
   createWorkerPluriemployRpc,
@@ -22,6 +24,7 @@ import type {
   WorkerReincorporationInput,
   WorkerReincorporationWithResolutionInput,
   WorkerSeparationInput,
+  WorkerSeparationResult,
 } from "../domain/entities"
 
 /**
@@ -41,9 +44,13 @@ import type {
  * el servidor (fechas, vacantes, permisos y preparación contractual).
  */
 
-/** Baja del trabajador: libera la plaza y lo deja en Reingresos con todo su historial. */
-export async function registerWorkerSeparation(input: WorkerSeparationInput): Promise<void> {
-  await registerWorkerSeparationRpc({
+export type SeparationOutcome = WorkerSeparationResult
+
+/** Baja del trabajador: inmediata si effectiveDate <= hoy, o programada si effectiveDate > hoy. */
+export async function registerWorkerSeparation(
+  input: WorkerSeparationInput
+): Promise<SeparationOutcome> {
+  const result = await registerWorkerSeparationRpc({
     workerId: input.workerId,
     effectiveDate: input.effectiveDate,
     separationReasonId: input.separationReasonId,
@@ -51,8 +58,28 @@ export async function registerWorkerSeparation(input: WorkerSeparationInput): Pr
     targetAssignmentId: input.targetAssignmentId ?? null,
   })
 
-  const movement = TRANSITION_MOVEMENT_DOCUMENT.separation
-  if (movement) await ensureMovementDocument(input.workerId, movement, input.effectiveDate)
+  if (!result.scheduled) {
+    const movement = TRANSITION_MOVEMENT_DOCUMENT.separation
+    if (movement) await ensureMovementDocument(input.workerId, movement, input.effectiveDate)
+  }
+
+  return result
+}
+
+/** Cancela una baja futura previamente programada antes de su fecha efectiva. */
+export async function cancelScheduledWorkerSeparation(input: {
+  workerId: string
+  targetAssignmentId?: string | null
+}): Promise<void> {
+  await cancelScheduledWorkerSeparationRpc(input)
+}
+
+/** Aplica las bajas programadas cuya fecha efectiva ya llegó (<= hoy). */
+export async function applyDueScheduledSeparations(input?: {
+  entityId?: string | null
+  workerId?: string | null
+}): Promise<number> {
+  return applyDueScheduledSeparationsRpc(input)
 }
 
 export interface ReincorporationOutcome {

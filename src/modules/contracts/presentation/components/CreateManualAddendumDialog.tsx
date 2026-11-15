@@ -34,6 +34,7 @@ import {
 } from "@/modules/contracts"
 import { PLURIEMPLEO_TARGET_REQUIRED_MESSAGE } from "@/shared/config/pluriempleo"
 import { showError, showSuccess } from "@/utils/toast"
+import { extractErrorMessage } from "@/utils/error-message"
 import { Info } from "lucide-react"
 
 interface CreateManualAddendumDialogProps {
@@ -405,10 +406,10 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
               doc.result?.error || "No se pudo generar el documento del anexo automáticamente."
           }
         } catch (genErr) {
-          documentWarning =
-            genErr instanceof Error
-              ? genErr.message
-              : "No se pudo generar el documento del anexo automáticamente."
+          documentWarning = extractErrorMessage(
+            genErr,
+            "No se pudo generar el documento del anexo automáticamente."
+          )
         }
       }
 
@@ -425,7 +426,7 @@ export const CreateManualAddendumDialog: React.FC<CreateManualAddendumDialogProp
       onOpenChange(false)
       onCreated()
     } catch (err) {
-      const message = err instanceof Error ? err.message : ""
+      const message = extractErrorMessage(err)
       let friendly = message || "No se pudo registrar el anexo."
       if (/contrato vigente/i.test(message)) {
         friendly =

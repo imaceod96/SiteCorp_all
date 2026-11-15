@@ -14,7 +14,9 @@ import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Label } from "@/shared/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
+import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import {
   resolveApplicableScaleId,
   fetchSalaryValuesForGroups,
@@ -50,6 +52,7 @@ import ResolutionForm, {
 } from "@/modules/resolutions/presentation/components/ResolutionForm"
 import { updateJobWorkContent } from "@/modules/resolutions"
 import { loadTransitionWorkspace } from "@/modules/people/application/staffing.queries"
+import { loadWorkerLastSeparation } from "@/modules/people/application/people.queries"
 import {
   reincorporateWorkerWithContract,
   reincorporateWorkerWithResolution,
@@ -70,6 +73,7 @@ interface ReincorporateWorkerDialogProps {
   onOpenChange: (open: boolean) => void
   workerId: string
   entityId: string
+  lastSeparationDate?: string | null
   onSuccess: () => void
 }
 
@@ -85,8 +89,10 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
   onOpenChange,
   workerId,
   entityId,
+  lastSeparationDate: lastSeparationDateProp = null,
   onSuccess,
 }) => {
+  const { currentEntity } = useCurrentEntity()
   const queryClient = useQueryClient()
   const [positions, setPositions] = React.useState<StaffingPosition[]>([])
   const [occupancy, setOccupancy] = React.useState<Record<string, number>>({})
@@ -126,6 +132,11 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
   // §45: valores del formulario de Resolución cuando el Cargo es Especialista Principal
   const [resolutionValues, setResolutionValues] = React.useState<ResolutionFormValues | null>(null)
 
+  const [fetchedLastSeparationDate, setFetchedLastSeparationDate] = React.useState<string | null>(
+    null
+  )
+  const effectiveLastSeparationDate = lastSeparationDateProp ?? fetchedLastSeparationDate
+
   const loadData = React.useCallback(async () => {
     if (!entityId) return
     setLoading(true)
@@ -134,32 +145,39 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
       // Caso de uso (lectura): puestos con su estructura y la ocupación vigente de la
       // entidad, tipos de contrato activos, permiso de los datos contractuales e
       // identidad del trabajador para el resumen.
-      const [workspace, segments] = await Promise.all([
+      const [workspace, segments, lastSep, methods, scaleId] = await Promise.all([
         loadTransitionWorkspace(entityId, { workerId }),
         fetchEntityScheduleSegments(entityId),
+        lastSeparationDateProp
+          ? Promise.resolve(null)
+          : loadWorkerLastSeparation(workerId).catch(() => null),
+        fetchPaymentMethods(),
+        resolveApplicableScaleId(entityId),
       ])
+      const groupIds = workspace.positions
+        .map((p) => p.job?.salary_group?.id)
+        .filter((id): id is string => !!id)
+      const salaryValues = await fetchSalaryValuesForGroups(groupIds)
+
       setPositions(workspace.positions)
       setOccupancy(workspace.occupancy.counts)
       setContractTypes(workspace.contractTypes)
       setWorker(workspace.worker)
       setCanManageOrganization(workspace.canManageContractData)
       setSegmentsByPosition(segments)
-
-      // Fase 11A.5: catálogo global de formas de pago
-      setPaymentMethods(await fetchPaymentMethods())
-
-      setApplicableScaleId(await resolveApplicableScaleId(entityId))
-      const groupIds = workspace.positions
-        .map((p) => p.job?.salary_group?.id)
-        .filter((id): id is string => !!id)
-      setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
+      if (!lastSeparationDateProp) {
+        setFetchedLastSeparationDate(lastSep?.effective_date ?? null)
+      }
+      setPaymentMethods(methods)
+      setApplicableScaleId(scaleId)
+      setSalaryValuesByGroup(salaryValues)
     } catch (err) {
       console.error("Error loading reincorporation data:", err)
       setLoadError("No se pudieron cargar los puestos disponibles.")
     } finally {
       setLoading(false)
     }
-  }, [entityId, workerId])
+  }, [entityId, workerId, lastSeparationDateProp])
 
   React.useEffect(() => {
     if (!open) return
@@ -226,6 +244,7 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
     const invalid = validateReincorporationInput({
       positionId,
       reincorporationDate,
+      lastSeparationDate: effectiveLastSeparationDate,
       resolutionDocument: isPrincipalSpecialist,
       contractTypeId,
       signatureDate,
@@ -292,7 +311,7 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
         onOpenChange(false)
         onSuccess()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : ""
+        const msg = extractErrorMessage(err)
         const friendly = msg || "No se pudo completar la reincorporación."
         setError(friendly)
         showError(friendly)
@@ -332,14 +351,14 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "No se pudo completar la reincorporación."
       if (/vacantes/i.test(msg)) {
         friendly = "El puesto seleccionado ya no tiene vacantes disponibles."
       } else if (/no pertenece a la entidad/i.test(msg)) {
         friendly = "El puesto seleccionado no pertenece a la entidad del trabajador."
       } else if (/posterior al fin del per[ií]odo/i.test(msg)) {
-        friendly = "La fecha de reincorporación debe ser posterior al fin del período laboral anterior."
+        friendly = msg
       } else if (/requiere una fecha de fin/i.test(msg)) {
         friendly = "El contrato por tiempo determinado requiere una fecha de fin."
       } else if (/posterior a su inicio/i.test(msg)) {
@@ -457,11 +476,13 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
                 <div>
                   <dt className="text-xs text-muted-foreground">Salario de referencia</dt>
                   <dd className="text-sm font-medium text-ink">
-                    {selectedSalary
-                      ? formatSalary(selectedSalary)
-                      : selectedGroup
-                        ? "Salario no configurado"
-                        : "—"}
+                    {loading
+                      ? "Cargando…"
+                      : selectedSalary
+                        ? formatSalary(selectedSalary)
+                        : selectedGroup
+                          ? "Salario no configurado"
+                          : "—"}
                   </dd>
                 </div>
                 <div>
@@ -471,7 +492,7 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
                   </dd>
                 </div>
               </dl>
-              {selectedGroup && !selectedSalary && (
+              {!loading && selectedGroup && !selectedSalary && (
                 <p className="mt-2 flex items-start gap-1.5 text-xs text-sitecorp-warning">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                   El grupo salarial del nuevo cargo no tiene importe configurado en la escala
@@ -513,7 +534,11 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Inicio del nuevo período laboral. Debe ser posterior al fin del período anterior.
+              Inicio del nuevo período laboral. Debe ser posterior al fin del período anterior
+              {effectiveLastSeparationDate
+                ? ` (${formatConditionDate(effectiveLastSeparationDate)})`
+                : ""}
+              .
             </p>
           </div>
 
@@ -580,6 +605,7 @@ const ReincorporateWorkerDialog: React.FC<ReincorporateWorkerDialogProps> = ({
                 paymentMethods={paymentMethods}
                 paymentSchedule={paymentSchedule}
                 onPaymentScheduleChange={setPaymentSchedule}
+                defaultSignaturePlace={currentEntity?.municipality || ""}
               />
 
               <ContractFormalizationAlerts

@@ -39,6 +39,7 @@ import {
   uploadSstTopicDocument,
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
+import { extractErrorMessage } from "@/utils/error-message"
 import {
   FolderKanban,
   Briefcase,
@@ -373,7 +374,7 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
       toast({
         variant: "destructive",
         title: "Error al guardar sesión",
-        description: err instanceof Error ? err.message : "No se pudo actualizar la sesión.",
+        description: extractErrorMessage(err, "No se pudo actualizar la sesión."),
       })
     } finally {
       setOutcomeSubmitting(false)

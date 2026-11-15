@@ -10,6 +10,7 @@ import type {
   WorkerContractChangeResult,
   WorkerEngagementResult,
   WorkerPositionChangeResult,
+  WorkerSeparationResult,
 } from "../domain/entities"
 
 /**
@@ -226,7 +227,7 @@ export async function reincorporateWorkerRpc(
     workerId: result.worker_id ?? payload.workerId ?? null,
     positionId: payload.positionId,
     effectiveDate: payload.reincorporationDate,
-    triggerType: "NUEVA_CONTRATACION",
+    triggerType: "CAMBIO_CARGO",
     sourceId: result.contract_id ?? result.resolution_id ?? null,
   })
 
@@ -237,10 +238,10 @@ export async function reincorporateWorkerRpc(
   }
 }
 
-/** Baja: cierra la asignación y el contrato vigentes y deja al trabajador inactivo. */
+/** Baja: si es fecha actual/pasada cierra puesto y contrato; si es futura la programa sin inactivar todavía. */
 export async function registerWorkerSeparationRpc(
   payload: RegisterSeparationRpcPayload
-): Promise<void> {
+): Promise<WorkerSeparationResult> {
   const params = withTarget(
     {
       p_worker_id: payload.workerId,
@@ -252,8 +253,43 @@ export async function registerWorkerSeparationRpc(
     payload.targetAssignmentId
   )
 
-  const { error } = await supabase.rpc("register_worker_separation", params)
+  const { data, error } = await supabase.rpc("register_worker_separation", params)
   if (error) throw error
+
+  const result = (data || {}) as { scheduled?: boolean; effective_date?: string }
+  return {
+    scheduled: !!result.scheduled,
+    effectiveDate: result.effective_date || payload.effectiveDate,
+  }
+}
+
+/** Cancela una baja programada futura antes de su fecha efectiva. */
+export async function cancelScheduledWorkerSeparationRpc(input: {
+  workerId: string
+  targetAssignmentId?: string | null
+}): Promise<void> {
+  const params = withTarget(
+    {
+      p_worker_id: input.workerId,
+    },
+    "p_target_assignment_id",
+    input.targetAssignmentId
+  )
+  const { error } = await supabase.rpc("cancel_scheduled_worker_separation", params)
+  if (error) throw error
+}
+
+/** Materializa automáticamente bajas programadas cuya fecha efectiva ya llegó. */
+export async function applyDueScheduledSeparationsRpc(input?: {
+  entityId?: string | null
+  workerId?: string | null
+}): Promise<number> {
+  const { data, error } = await supabase.rpc("apply_due_scheduled_separations", {
+    p_entity_id: input?.entityId ?? null,
+    p_worker_id: input?.workerId ?? null,
+  })
+  if (error) throw error
+  return typeof data === "number" ? data : 0
 }
 
 /** Cambio de tipo de contrato: cierra el vigente y crea uno nuevo con sus condiciones. */

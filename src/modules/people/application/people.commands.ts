@@ -1,4 +1,4 @@
-import { IDENTIFICATION_ERROR_MESSAGE, isValidIdentification } from "@/utils/ci"
+import { validateIdentificationWithBirthDate } from "@/utils/ci"
 import {
   PeopleRuleError,
   candidateRequiresSpecialty,
@@ -44,10 +44,11 @@ export async function registerCandidate(
   const { entityId, companyClientId, registration, unassignedInPool } = command
 
   // El formato del carnet de identidad es un objeto de valor del kernel compartido
-  // (`@/utils/ci`): se aporta al dominio en vez de duplicar la regla de 11 dígitos.
-  const identificationFormatError = isValidIdentification(registration.identification)
-    ? null
-    : IDENTIFICATION_ERROR_MESSAGE
+  // (`@/utils/ci`): valida 11 dígitos, fecha real AAMMDD y coincidencia con nacimiento.
+  const identificationFormatError = validateIdentificationWithBirthDate(
+    registration.identification,
+    registration.birth_date
+  )
 
   const validationError = validateCandidateRegistration(
     registration,

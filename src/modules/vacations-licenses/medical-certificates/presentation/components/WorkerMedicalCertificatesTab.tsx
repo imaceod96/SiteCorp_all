@@ -5,7 +5,7 @@
  * Principios (§2/§82):
  *   · Cada certificado es un EVENTO registrado en el historial del trabajador.
  *   · NO hay saldo, devengo, acumulación mensual, máximo anual.
- *   · La cantidad de días se introduce explícitamente, NO se calcula de fechas (§7).
+ *   · La cantidad de días se calcula a partir de las fechas y se valida contra el período laboral.
  *   · El total anual se deriva de SUM(days) WHERE year(start_date) = year (§46).
  *   · El documento es obligatorio y se almacena en storage privado (§11/§14).
  *   · Lectura por RPC único (list_worker_medical_certificates) validando

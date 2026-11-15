@@ -21,7 +21,10 @@ import {
   fetchSeparationReasons,
   fetchWorkerIdentity,
 } from "../infrastructure/staffing.repository"
-import { previewPositionChangeRpc } from "../infrastructure/worker-transitions.repository"
+import {
+  applyDueScheduledSeparationsRpc,
+  previewPositionChangeRpc,
+} from "../infrastructure/worker-transitions.repository"
 import type {
   ContractTypeOption,
   EntityOccupancy,
@@ -75,6 +78,7 @@ export async function loadEntityStaffingBoard(entityId: string): Promise<EntityS
     return { authorized: false, canManage: false, positions: [], occupancy: emptyOccupancy() }
   }
 
+  await applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
   const [positions, occupancy] = await Promise.all([
     fetchEntityStaffingPositions(entityId, { onlyActive: true }),
     fetchEntityOccupancy(entityId),
@@ -102,6 +106,7 @@ export async function loadTransitionWorkspace(
   entityId: string,
   options: { workerId?: string | null } = {}
 ): Promise<TransitionWorkspace> {
+  await applyDueScheduledSeparationsRpc({ entityId, workerId: options.workerId ?? null }).catch(() => 0)
   const [positions, occupancy, contractTypes, canManageContractData, worker] = await Promise.all([
     fetchEntityStaffingPositions(entityId),
     fetchEntityOccupancy(entityId),
@@ -221,6 +226,7 @@ export async function loadEntityStaffingWorkspace(
   ])
   if (!canView && !canManage) return emptyStaffingWorkspace(canManage)
 
+  await applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
   const [entityName, jobs, positions] = await Promise.all([
     fetchEntityName(entityId),
     fetchEntityStaffingJobs(entityId),

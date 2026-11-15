@@ -17,6 +17,8 @@ import {
   type PersonSeparation,
 } from "@/modules/people"
 import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
+import { formatIsoDateToDisplay } from "@/utils/ci"
+import { extractErrorMessage } from "@/utils/error-message"
 import { ArrowLeft, Search, Undo2, UserPlus } from "lucide-react"
 
 /**
@@ -78,7 +80,7 @@ const EntityReentries = () => {
       setBajas(view.separations)
     } catch (err) {
       console.error("Error loading reentries:", err)
-      setError(err instanceof Error ? err.message : "Error al cargar los reingresos")
+      setError(extractErrorMessage(err, "Error al cargar los reingresos"))
     } finally {
       setLoading(false)
     }
@@ -243,7 +245,7 @@ const EntityReentries = () => {
                       {baja ? (
                         <>
                           <span className="text-xs text-muted-foreground">
-                            Baja: {baja.effective_date}
+                            Baja: {formatIsoDateToDisplay(baja.effective_date) || baja.effective_date}
                           </span>
                           {baja.reason && (
                             <span className="text-xs text-muted-foreground">{baja.reason}</span>
@@ -286,6 +288,7 @@ const EntityReentries = () => {
           }}
           workerId={reentryWorkerId}
           entityId={entityId}
+          lastSeparationDate={bajas[reentryWorkerId]?.effective_date ?? null}
           onSuccess={async () => {
             setReentryWorkerId(null)
             await loadData()

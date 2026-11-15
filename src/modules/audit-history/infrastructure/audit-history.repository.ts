@@ -494,7 +494,7 @@ async function syncDiscoveredPlatformEvents(
         .order("created_at", { ascending: false }),
       supabase
         .from("worker_medical_certificates")
-        .select("id, worker_id, certificate_number, start_date, end_date, days_count, organization_entity_id, created_at")
+        .select("id, worker_id, certificate_number, start_date, return_date, days, organization_entity_id, created_at")
         .order("created_at", { ascending: false }),
     ])
 
@@ -912,19 +912,19 @@ async function syncDiscoveredPlatformEvents(
         organization_entity_id: entId,
         entity_name: entName,
         company_client_id: null,
-        module: "vacations",
+        module: "medical_certificates",
         action: "medical_certificate_registered",
         entity_type: "worker_medical_certificate",
         record_id: cert.certificate_number || wInfo?.identification || cert.id,
-        description: `Registro de certificado médico para ${workerName} (${cert.days_count || ""} día(s))`,
+        description: `Registro de certificado médico para ${workerName} (${cert.days || ""} día(s))`,
         old_values: null,
         new_values: {
           certificate_id: cert.id,
           worker_name: workerName,
           certificate_number: cert.certificate_number,
           start_date: cert.start_date,
-          end_date: cert.end_date,
-          days_count: cert.days_count,
+          return_date: cert.return_date,
+          days: cert.days,
         },
         result: "SUCCESS",
       })
@@ -1064,7 +1064,7 @@ const TABLE_TO_MODULE: Record<string, { module: string; label: string }> = {
   entity_academic_payment_configs: { module: "salary", label: "configuración de pago académico" },
   worker_vacations: { module: "vacations", label: "vacaciones de trabajador" },
   worker_vacation_movements: { module: "vacations", label: "movimiento de vacaciones" },
-  worker_medical_certificates: { module: "vacations", label: "certificado médico" },
+  worker_medical_certificates: { module: "medical_certificates", label: "certificado médico" },
   worker_payroll_movements: { module: "payroll", label: "movimiento de nómina" },
   prenomina_periods: { module: "payroll", label: "período de prenómina" },
   prenomina_entries: { module: "payroll", label: "registro de prenómina" },
@@ -1334,7 +1334,7 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
         entityType = "worker_vacation"
         description = `Operación de vacaciones (${rpcName}) para ${workerLabel}`
       } else if (rpcName.includes("medical_certificate")) {
-        module = "vacations"
+        module = "medical_certificates"
         action = rpcName
         entityType = "worker_medical_certificate"
         description = `Registro o actualización de certificado médico para ${workerLabel}`

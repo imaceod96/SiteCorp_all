@@ -99,7 +99,11 @@ export async function loadEntityPendingSstNotifications(
   if (!entityId) return []
   const state = await loadEntitySstState(entityId)
   return state.notifications
-    .filter((n) => n.organization_entity_id === entityId && n.status !== "COMPLETADA")
+    .filter(
+      (n) =>
+        n.organization_entity_id === entityId &&
+        (n.status === "PENDIENTE" || n.status === "EN_PROCESO")
+    )
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
 }
 
@@ -164,7 +168,7 @@ export async function loadWorkerSstProfile(
     (n) =>
       n.organization_entity_id === entityId &&
       n.worker_id === workerId &&
-      n.status !== "COMPLETADA"
+      (n.status === "PENDIENTE" || n.status === "EN_PROCESO")
   )
 
   const availableSstTopics = state.topics

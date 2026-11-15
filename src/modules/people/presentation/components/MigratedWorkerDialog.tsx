@@ -2,9 +2,8 @@ import * as React from "react"
 import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import {
   ciToBirthDate,
-  isValidIdentification,
   sanitizeIdentificationInput,
-  IDENTIFICATION_ERROR_MESSAGE,
+  validateIdentificationWithBirthDate,
   IDENTIFICATION_LENGTH,
 } from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
@@ -97,7 +96,8 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
     setError("")
     try {
       if (!form.identification.trim()) throw new Error("El número de identificación es obligatorio.")
-      if (!isValidIdentification(form.identification)) throw new Error(IDENTIFICATION_ERROR_MESSAGE)
+      const ciError = validateIdentificationWithBirthDate(form.identification, form.birth_date || null)
+      if (ciError) throw new Error(ciError)
       const startDate = form.employment_start_date.trim()
       if (!startDate) throw new Error("Indica la fecha en la que el trabajador comenzó a trabajar en la entidad.")
       if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error("La fecha de incorporación no es válida.")

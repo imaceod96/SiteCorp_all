@@ -6,6 +6,7 @@ import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button
 import { loadEntityPendingTrainingNotifications } from "../../application/training.service"
 import { TRAINING_CHANGED_EVENT } from "../../infrastructure/training.repository"
 import type { InitialTrainingNotification } from "../../domain/entities"
+import { formatIsoDateToDisplay } from "@/utils/ci"
 import { BellRing, GraduationCap, ArrowUpRight, UserCheck, Building2, Calendar } from "lucide-react"
 
 interface PendingInitialTrainingBannerProps {
@@ -122,7 +123,10 @@ export const PendingInitialTrainingBanner: React.FC<PendingInitialTrainingBanner
                   )}
                   <span className="inline-flex items-center gap-1 tabular-nums">
                     <Calendar className="h-3.5 w-3.5" />
-                    Contratado el: <strong className="font-medium text-ink">{item.hire_date}</strong>
+                    Contratado el:{" "}
+                    <strong className="font-medium text-ink">
+                      {formatIsoDateToDisplay(item.hire_date) || item.hire_date}
+                    </strong>
                   </span>
                 </div>
               </div>

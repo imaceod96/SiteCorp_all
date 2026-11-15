@@ -71,9 +71,11 @@ export async function fetchRepresentativePositions(
   entityId: string,
   onDate?: string
 ): Promise<RepresentativePositionRow[]> {
+  const effectiveDate =
+    onDate && onDate.trim() ? onDate.trim() : new Date().toISOString().slice(0, 10)
   const { data, error } = await supabase.rpc("resolve_entity_representatives", {
     p_entity_id: entityId,
-    p_on_date: onDate ?? null,
+    p_on_date: effectiveDate,
   })
 
   if (error) throw error

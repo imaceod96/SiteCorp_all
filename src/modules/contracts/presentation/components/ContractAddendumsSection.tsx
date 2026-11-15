@@ -15,6 +15,7 @@ import {
 } from "@/modules/contracts/domain/addendum-labels"
 import { isAddendumPending } from "@/modules/contracts/domain/rules"
 import { formatConditionDate, formatContractMoney } from "@/modules/contracts/domain/formats"
+import { toRomanNumeral } from "@/utils/roman-numerals"
 import type {
   ContractAddendum,
   FormalizedConditions,
@@ -84,7 +85,7 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
     () => addendums.filter((row) => isAddendumPending(row.status)),
     [addendums]
   )
-  const currentContract = contracts.find((row) => row.isCurrent) || contracts[0] || null
+  const currentContract = contracts.find((row) => row.isCurrent) || null
 
   // Pluriempleo: con DOS contratos vigentes el anexo exige contrato identificado. Es el
   // contrato del que salen las condiciones formalizadas que se muestran (la base del
@@ -184,7 +185,7 @@ export const ContractAddendumsSection: React.FC<ContractAddendumsSectionProps> =
                     <dd className="text-sm font-medium text-ink">
                       {formatContractMoney(formalized.salary_amount, currency)}
                       {formalized.salary_group_sequence != null
-                        ? ` · Grupo ${formalized.salary_group_sequence}`
+                        ? ` · Grupo ${toRomanNumeral(formalized.salary_group_sequence)}`
                         : ""}
                     </dd>
                   </div>

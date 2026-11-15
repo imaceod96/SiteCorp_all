@@ -32,6 +32,7 @@ import {
   type SstEppDeliveryStatus,
   type SstHealthAptitudeStatus,
 } from "@/modules/sst"
+import { formatIsoDateToDisplay } from "@/utils/ci"
 import {
   GraduationCap,
   CheckCircle2,
@@ -47,6 +48,7 @@ import {
   HeartPulse,
 } from "lucide-react"
 import { useToast } from "@/shared/hooks/use-toast"
+import { extractErrorMessage } from "@/utils/error-message"
 
 interface WorkerAdditionalInfoTabProps {
   entityId: string
@@ -240,6 +242,11 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
 
   const latestAptitude = sstProfile.healthAptitudes[0] ?? null
 
+  const defaultTrainingDate = React.useCallback(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    return hireDate && hireDate > today ? hireDate : today
+  }, [hireDate])
+
   const openRegisterDialog = (notificationId: string | null = null) => {
     setActiveNotificationId(notificationId)
     const areaTopics = profileData.availableTopics.filter(
@@ -256,7 +263,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
           : "Capacitación inicial e inducción al puesto"
       )
     }
-    setReceivedDate(new Date().toISOString().slice(0, 10))
+    setReceivedDate(defaultTrainingDate())
     setNotes("")
     setDialogOpen(true)
   }
@@ -277,7 +284,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
           : "Instrucción inicial de Seguridad y Salud en el Trabajo (SST)"
       )
     }
-    setSstReceivedDate(new Date().toISOString().slice(0, 10))
+    setSstReceivedDate(defaultTrainingDate())
     setSstNotes("")
     setSstTrainingDialogOpen(true)
   }
@@ -324,6 +331,15 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
       return
     }
 
+    if (hireDate && receivedDate < hireDate) {
+      toast({
+        variant: "destructive",
+        title: "Fecha de recepción inválida",
+        description: `La fecha de recepción (${receivedDate}) no puede ser anterior a la fecha de alta del trabajador (${hireDate}).`,
+      })
+      return
+    }
+
     setSubmitting(true)
     try {
       await registerWorkerInitialTraining({
@@ -348,7 +364,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
       toast({
         variant: "destructive",
         title: "No se pudo registrar la capacitación",
-        description: err instanceof Error ? err.message : "Ocurrió un error inesperado.",
+        description: extractErrorMessage(err, "Ocurrió un error inesperado."),
       })
     } finally {
       setSubmitting(false)
@@ -365,6 +381,15 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
         variant: "destructive",
         title: "Tema de SST requerido",
         description: "Especifica el tema de capacitación de SST recibido por el trabajador.",
+      })
+      return
+    }
+
+    if (hireDate && sstReceivedDate < hireDate) {
+      toast({
+        variant: "destructive",
+        title: "Fecha de recepción inválida",
+        description: `La fecha de recepción (${sstReceivedDate}) no puede ser anterior a la fecha de alta del trabajador (${hireDate}).`,
       })
       return
     }
@@ -395,7 +420,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
       toast({
         variant: "destructive",
         title: "No se pudo registrar la capacitación de SST",
-        description: err instanceof Error ? err.message : "Ocurrió un error inesperado.",
+        description: extractErrorMessage(err, "Ocurrió un error inesperado."),
       })
     } finally {
       setSubmittingSstTraining(false)
@@ -510,7 +535,10 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <p className="text-sm text-muted-foreground">
                   Contratado el{" "}
                   <strong className="font-medium text-ink tabular-nums">
-                    {profileData.pendingNotifications[0].hire_date || hireDate || "—"}
+                    {formatIsoDateToDisplay(profileData.pendingNotifications[0].hire_date || hireDate) ||
+                      profileData.pendingNotifications[0].hire_date ||
+                      hireDate ||
+                      "—"}
                   </strong>{" "}
                   en el área{" "}
                   <strong className="font-medium text-ink">
@@ -563,7 +591,10 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                   </strong>{" "}
                   (fecha efectiva{" "}
                   <strong className="font-medium text-ink tabular-nums">
-                    {sstProfile.pendingNotifications[0].effective_date || hireDate || "—"}
+                    {formatIsoDateToDisplay(sstProfile.pendingNotifications[0].effective_date || hireDate) ||
+                      sstProfile.pendingNotifications[0].effective_date ||
+                      hireDate ||
+                      "—"}
                   </strong>
                   ). Registra la instrucción de SST del cargo.
                 </p>
@@ -736,7 +767,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                       <td className="px-4 py-3 font-mono text-xs text-ink tabular-nums">
                         <span className="inline-flex items-center gap-1">
                           <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                          {rec.receivedDate}
+                          {formatIsoDateToDisplay(rec.receivedDate) || rec.receivedDate}
                         </span>
                       </td>
                       <td className="px-4 py-3">
@@ -849,7 +880,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                           {del.epp_name_snapshot}
                         </td>
                         <td className="px-3 py-2.5 font-mono tabular-nums">
-                          {del.delivery_date}
+                          {formatIsoDateToDisplay(del.delivery_date) || del.delivery_date}
                         </td>
                         <td className="px-3 py-2.5 tabular-nums">{del.quantity}</td>
                         <td className="px-3 py-2.5 text-muted-foreground">
@@ -934,13 +965,17 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                   <div>
                     <p className="text-xs text-muted-foreground">Último chequeo</p>
                     <p className="mt-0.5 font-mono text-sm font-medium text-ink tabular-nums">
-                      {latestAptitude.evaluation_date || "No registrado"}
+                      {formatIsoDateToDisplay(latestAptitude.evaluation_date) ||
+                        latestAptitude.evaluation_date ||
+                        "No registrado"}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Próximo chequeo</p>
                     <p className="mt-0.5 font-mono text-sm font-medium text-ink tabular-nums">
-                      {latestAptitude.next_review_date || "No programado"}
+                      {formatIsoDateToDisplay(latestAptitude.next_review_date) ||
+                        latestAptitude.next_review_date ||
+                        "No programado"}
                     </p>
                   </div>
                 </div>
@@ -1015,6 +1050,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <Label>Fecha de recepción</Label>
                 <SiteCorpInput
                   type="date"
+                  min={hireDate || undefined}
                   value={receivedDate}
                   onChange={(e) => setReceivedDate(e.target.value)}
                   required
@@ -1098,6 +1134,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <Label>Fecha de recepción</Label>
                 <SiteCorpInput
                   type="date"
+                  min={hireDate || undefined}
                   value={sstReceivedDate}
                   onChange={(e) => setSstReceivedDate(e.target.value)}
                   required

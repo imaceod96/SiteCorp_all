@@ -9,7 +9,8 @@ import { Label } from "@/shared/components/ui/label"
 import { fetchValidRepresentatives } from "@/modules/representatives"
 import { formatRepresentativeDate } from "@/modules/representatives/domain/rules"
 import type { RepresentativePositionRow } from "@/modules/representatives/domain/entities"
-import { Settings2, UserCheck } from "lucide-react"
+import { isCompleteIsoDate } from "@/utils/ci"
+import { RefreshCw, Settings2, UserCheck } from "lucide-react"
 
 interface RepresentativeSelectProps {
   entityId: string
@@ -45,46 +46,71 @@ export const RepresentativeSelect = ({
   const [rows, setRows] = React.useState<RepresentativePositionRow[]>([])
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [retryToken, setRetryToken] = React.useState(0)
+  const reqIdRef = React.useRef(0)
 
   const onOptionsChangeRef = React.useRef(onOptionsChange)
   React.useEffect(() => {
     onOptionsChangeRef.current = onOptionsChange
   })
 
+  const dateReady = !!onDate && isCompleteIsoDate(onDate)
+
   React.useEffect(() => {
     let cancelled = false
+    const reqId = ++reqIdRef.current
 
-    const load = async () => {
-      if (!entityId || !onDate) {
-        setRows([])
-        onOptionsChangeRef.current?.([])
-        return
-      }
-      setLoading(true)
+    if (!entityId || !dateReady) {
+      setRows([])
       setError(null)
+      setLoading(false)
+      onOptionsChangeRef.current?.([])
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    const runWithRetry = async () => {
       try {
-        const valid = await fetchValidRepresentatives(entityId, onDate)
-        if (!cancelled) {
-          setRows(valid)
-          onOptionsChangeRef.current?.(valid)
-        }
-      } catch (err) {
-        console.error("Error loading representatives:", err)
-        if (!cancelled) {
-          setRows([])
-          onOptionsChangeRef.current?.([])
-          setError("No se pudieron cargar los representantes autorizados.")
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
+        return await fetchValidRepresentatives(entityId, onDate)
+      } catch (firstErr) {
+        if (cancelled || reqId !== reqIdRef.current) throw firstErr
+        await new Promise((resolve) => setTimeout(resolve, 350))
+        if (cancelled || reqId !== reqIdRef.current) throw firstErr
+        return await fetchValidRepresentatives(entityId, onDate)
       }
     }
 
-    load()
+    const timer = window.setTimeout(() => {
+      runWithRetry()
+        .then((valid) => {
+          if (!cancelled && reqId === reqIdRef.current) {
+            setRows(valid)
+            setError(null)
+            onOptionsChangeRef.current?.(valid)
+          }
+        })
+        .catch((err) => {
+          console.error("Error loading representatives:", err)
+          if (!cancelled && reqId === reqIdRef.current) {
+            setRows([])
+            onOptionsChangeRef.current?.([])
+            setError("No se pudieron cargar los representantes autorizados.")
+          }
+        })
+        .finally(() => {
+          if (!cancelled && reqId === reqIdRef.current) {
+            setLoading(false)
+          }
+        })
+    }, 120)
+
     return () => {
       cancelled = true
+      window.clearTimeout(timer)
     }
-  }, [entityId, onDate])
+  }, [entityId, onDate, dateReady, retryToken])
 
   // Mantener coherente la selección con la fecha contractual
   React.useEffect(() => {
@@ -111,6 +137,17 @@ export const RepresentativeSelect = ({
     )
   }
 
+  if (!dateReady) {
+    return (
+      <div className="space-y-2">
+        <Label>{label}</Label>
+        <p className="text-xs text-muted-foreground">
+          Complete una fecha válida (año de 4 dígitos) para resolver el representante vigente.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
@@ -118,7 +155,19 @@ export const RepresentativeSelect = ({
       {loading ? (
         <p className="text-sm text-muted-foreground">Buscando representantes vigentes…</p>
       ) : error ? (
-        <SiteCorpAlert type="danger">{error}</SiteCorpAlert>
+        <SiteCorpAlert type="danger">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span>{error}</span>
+            <button
+              type="button"
+              onClick={() => setRetryToken((t) => t + 1)}
+              className="inline-flex items-center gap-1 rounded-md border border-current/30 px-2.5 py-1 text-xs font-medium hover:bg-black/5"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Reintentar
+            </button>
+          </div>
+        </SiteCorpAlert>
       ) : rows.length === 0 ? (
         <SiteCorpAlert type="danger">
           <div className="space-y-2">

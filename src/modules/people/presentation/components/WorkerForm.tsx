@@ -7,7 +7,11 @@ import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { Label } from "@/shared/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
-import { ciToBirthDate, isValidIdentification, IDENTIFICATION_ERROR_MESSAGE } from "@/utils/ci"
+import {
+  ciToBirthDate,
+  resolveGenderIdFromCi,
+  validateIdentificationWithBirthDate,
+} from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import type { RepresentativePositionRow } from "@/modules/representatives"
@@ -391,9 +395,28 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
     // (0-9) y nunca se convierte a número (preserva ceros iniciales).
     setForm(prev => {
       const derived = ciToBirthDate(value)
-      return { ...prev, identification: value, birth_date: derived || prev.birth_date }
+      const prevDerivedGenderId = resolveGenderIdFromCi(prev.identification, genders)
+      const nextDerivedGenderId = resolveGenderIdFromCi(value, genders)
+      const nextGenderId =
+        nextDerivedGenderId && (!prev.gender_id || prev.gender_id === prevDerivedGenderId)
+          ? nextDerivedGenderId
+          : prev.gender_id
+      return {
+        ...prev,
+        identification: value,
+        birth_date: derived || prev.birth_date,
+        gender_id: nextGenderId,
+      }
     })
   }
+
+  React.useEffect(() => {
+    if (genders.length === 0 || form.gender_id || !form.identification) return
+    const derivedGenderId = resolveGenderIdFromCi(form.identification, genders)
+    if (derivedGenderId) {
+      setForm(prev => (prev.gender_id ? prev : { ...prev, gender_id: derivedGenderId }))
+    }
+  }, [genders, form.identification, form.gender_id])
 
   const handleProvinceChange = (province: string) =>
     setForm(prev => ({ ...prev, province, municipality: "" }))
@@ -422,7 +445,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
         specialty: form.specialty,
         hire_date: form.hire_date,
       },
-      isValidIdentification(form.identification) ? null : IDENTIFICATION_ERROR_MESSAGE
+      validateIdentificationWithBirthDate(form.identification, form.birth_date)
     )
     if (personalError) {
       setFormError(personalError)

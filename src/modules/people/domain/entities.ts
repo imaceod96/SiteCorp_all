@@ -533,6 +533,12 @@ export interface WorkerSeparationInput {
   targetAssignmentId?: string | null
 }
 
+/** Resultado del registro o programación de baja del trabajador. */
+export interface WorkerSeparationResult {
+  scheduled: boolean
+  effectiveDate: string
+}
+
 /** Cambio de tipo de contrato: cierra el vigente y crea uno nuevo con sus condiciones. */
 export interface WorkerContractChangeInput {
   workerId: string
@@ -922,6 +928,9 @@ export interface WorkerAssignmentRow {
   start_date: string
   end_date: string | null
   is_current: boolean
+  scheduled_separation_date?: string | null
+  scheduled_separation_notes?: string | null
+  scheduled_separation_reason?: { name: string } | null
   position: WorkerPositionRef | null
 }
 

@@ -14,6 +14,7 @@ import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Label } from "@/shared/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
 import {
   resolveApplicableScaleId,
@@ -130,21 +131,21 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
     try {
       // Caso de uso (lectura): puestos con su estructura y la ocupación vigente de la
       // entidad (asignación actual con trabajador activo, igual que la Plantilla Operativa).
-      const [workspace, segments] = await Promise.all([
+      const [workspace, segments, scaleId] = await Promise.all([
         loadTransitionWorkspace(entityId),
         fetchEntityScheduleSegments(entityId),
+        resolveApplicableScaleId(entityId),
       ])
-      setPositions(workspace.positions)
-      setOccupancy(workspace.occupancy.counts)
-
-      // Fase 11A.3: horarios habituales de los puestos (solo lectura)
-      setSegmentsByPosition(segments)
-
-      setApplicableScaleId(await resolveApplicableScaleId(entityId))
       const groupIds = workspace.positions
         .map((p) => p.job?.salary_group?.id)
         .filter((id): id is string => !!id)
-      setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
+      const salaryValues = await fetchSalaryValuesForGroups(groupIds)
+
+      setPositions(workspace.positions)
+      setOccupancy(workspace.occupancy.counts)
+      setSegmentsByPosition(segments)
+      setApplicableScaleId(scaleId)
+      setSalaryValuesByGroup(salaryValues)
     } catch (err) {
       console.error("Error loading positions for change:", err)
       setLoadError("No se pudieron cargar los puestos disponibles.")
@@ -357,7 +358,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
         onOpenChange(false)
         onSuccess()
       } catch (err) {
-        const msg = err instanceof Error ? err.message : ""
+        const msg = extractErrorMessage(err)
         const friendly = msg || "No se pudo completar el cambio de puesto."
         setError(friendly)
         showError(friendly)
@@ -418,7 +419,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "No se pudo completar el cambio de puesto."
       if (/vacantes/i.test(msg)) {
         friendly = "El puesto seleccionado ya no tiene vacantes disponibles."
@@ -596,11 +597,11 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
                     <div>
                       <dt className="text-xs text-muted-foreground">Salario</dt>
                       <dd className="text-sm font-medium text-ink">
-                        {salaryLabel(selectedSalary, !!selectedGroup)}
+                        {loading ? "Cargando…" : salaryLabel(selectedSalary, !!selectedGroup)}
                       </dd>
                     </div>
                   </dl>
-                  {selectedGroup && !selectedSalary && (
+                  {!loading && selectedGroup && !selectedSalary && (
                     <p className="mt-2 flex items-start gap-1.5 text-xs text-sitecorp-warning">
                       <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                       El grupo salarial del nuevo cargo no tiene importe configurado en la escala

@@ -32,6 +32,7 @@ export const AUDIT_MODULES = [
   "documents",
   "payroll",
   "vacations",
+  "medical_certificates",
   "system",
 ] as const
 
@@ -51,6 +52,7 @@ export const AUDIT_MODULE_LABELS: Record<AuditModule, string> = {
   documents: "Documentos",
   payroll: "Nómina y movimientos",
   vacations: "Vacaciones",
+  medical_certificates: "Certificados médicos",
   system: "Sistema",
 }
 

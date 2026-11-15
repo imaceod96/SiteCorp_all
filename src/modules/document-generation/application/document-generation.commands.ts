@@ -54,10 +54,18 @@ const failed = (error: string, extra?: Partial<DocumentGenerationResult>): Docum
   ...extra,
 })
 
+export type DocumentGenerationStage =
+  | "VALIDATING"
+  | "LOADING_TEMPLATE"
+  | "RENDERING"
+  | "SAVING"
+
 const runGeneration = async (
   kind: GenerationDocumentKind,
-  sourceId: string
+  sourceId: string,
+  onStageChange?: (stage: DocumentGenerationStage) => void
 ): Promise<DocumentGenerationResult> => {
+  onStageChange?.("VALIDATING")
   let precheck: DocumentGenerationPrecheck
   try {
     precheck = await precheckDocumentGeneration(kind, sourceId)
@@ -78,6 +86,7 @@ const runGeneration = async (
   const configuredPath = precheck.template.configuredFilePath as string
 
   // 1) Cargar el DOCUMENTO CONFIGURADO de la plantilla (nunca el original sin configurar).
+  onStageChange?.("LOADING_TEMPLATE")
   let sourceBytes: Uint8Array
   try {
     sourceBytes = await fetchTemplateFileContent(configuredPath)
@@ -98,6 +107,7 @@ const runGeneration = async (
   const outputMimeType = isXlsxTemplate ? XLSX_MIME : DOCX_MIME
   const outputExtension = isXlsxTemplate ? "xlsx" : "docx"
 
+  onStageChange?.("RENDERING")
   let rendered: {
     bytes: Uint8Array
     unknownKeys: string[]
@@ -134,6 +144,7 @@ const runGeneration = async (
   }
 
   // 4) Reservar la generación (idempotencia: una sola en curso por fuente).
+  onStageChange?.("SAVING")
   let reservation: GenerationReservation
   try {
     reservation = await beginGeneration(kind, sourceId, versionId)
@@ -184,9 +195,15 @@ const runGeneration = async (
   }
 }
 
-export const generateContractDocument = (contractId: string) => runGeneration("CONTRACT", contractId)
+export const generateContractDocument = (
+  contractId: string,
+  onStageChange?: (stage: DocumentGenerationStage) => void
+) => runGeneration("CONTRACT", contractId, onStageChange)
 
-export const generateAddendumDocument = (addendumId: string) => runGeneration("ADDENDUM", addendumId)
+export const generateAddendumDocument = (
+  addendumId: string,
+  onStageChange?: (stage: DocumentGenerationStage) => void
+) => runGeneration("ADDENDUM", addendumId, onStageChange)
 
 export const generateSc404Document = (sourceType: Sc404SourceType, sourceId: string) =>
   runGeneration(sourceType, sourceId)

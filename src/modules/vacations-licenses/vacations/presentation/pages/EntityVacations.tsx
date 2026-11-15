@@ -374,7 +374,7 @@ const EntityVacations = () => {
                                 variant="outline"
                                 type="button"
                                 onClick={() =>
-                                  navigate(`/staffing/workers/${row.worker_id}`)
+                                  navigate(`/workers/${row.worker_id}`)
                                 }
                               >
                                 <Eye className="mr-1 h-3.5 w-3.5" /> Ver
@@ -455,7 +455,7 @@ const EntityVacations = () => {
                           variant="outline"
                           type="button"
                           onClick={() =>
-                            navigate(`/staffing/workers/${row.worker_id}`)
+                            navigate(`/workers/${row.worker_id}`)
                           }
                         >
                           <Eye className="mr-1 h-3.5 w-3.5" /> Ver

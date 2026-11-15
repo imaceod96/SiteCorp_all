@@ -579,6 +579,8 @@ export function validateHireInput(input: HireValidationInput): string | null {
 export interface ReincorporationValidationInput {
   positionId: string
   reincorporationDate: string
+  /** Fecha de la última baja registrada, para validar inmediatamente que la reincorporación sea posterior. */
+  lastSeparationDate?: string | null
   /**
    * El Cargo destino es Especialista Principal: el documento es una Resolución y las
    * condiciones del contrato NO aplican (las valida el formulario de Resolución).
@@ -592,11 +594,19 @@ export interface ReincorporationValidationInput {
   contractEndDate: string
 }
 
+const formatIsoToDisplay = (iso: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim())
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
+}
+
 export function validateReincorporationInput(
   input: ReincorporationValidationInput
 ): string | null {
   if (!input.positionId) return "Selecciona un nuevo puesto."
   if (!input.reincorporationDate) return "La fecha de reincorporación es obligatoria."
+  if (input.lastSeparationDate && input.reincorporationDate <= input.lastSeparationDate) {
+    return `La fecha de reincorporación debe ser posterior al fin del período laboral anterior (${formatIsoToDisplay(input.lastSeparationDate)}).`
+  }
   if (input.resolutionDocument) return null
 
   if (!input.contractTypeId) return "Selecciona un tipo de contrato."

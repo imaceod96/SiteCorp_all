@@ -47,8 +47,8 @@ interface OrganizationEntityFormData {
 
 // El domicilio (dirección, provincia, municipio) ya no forma parte del alta de la
 // entidad: se gestiona en Entidad → Ajustes → Datos contractuales.
-const organizationEntitySchema = z.object({
-  name: z.string().min(1, "El nombre es obligatorio"),
+export const organizationEntitySchema = z.object({
+  name: z.string().trim().min(1, "El nombre es obligatorio"),
   entity_type: z.enum(["business_group", "company", "ueb"]),
   regime_id: z.enum(["PRESUPUESTADA", "EMPRESARIAL"]).nullable(),
   is_active: z.boolean().default(true),
@@ -368,15 +368,25 @@ export const OrganizationEntityDialog = ({
         </DialogHeader>
 
         {saveError && <SiteCorpAlert type="danger">{saveError}</SiteCorpAlert>}
+        {!saveError && (errors.name?.message || errors.parent_id?.message) && (
+          <SiteCorpAlert type="danger">
+            {errors.name?.message || errors.parent_id?.message}
+          </SiteCorpAlert>
+        )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium text-ink">Nombre *</label>
               <SiteCorpInput
                 placeholder="Nombre de la entidad"
+                aria-invalid={!!errors.name}
+                className={errors.name ? "border-sitecorp-danger focus-visible:ring-sitecorp-danger" : undefined}
                 {...register("name")}
               />
+              {errors.name?.message && (
+                <p className="text-xs font-medium text-sitecorp-danger">{errors.name.message}</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -440,7 +450,13 @@ export const OrganizationEntityDialog = ({
                     </option>
                   ))}
                 </SiteCorpSelect>
-                <p className="text-xs text-muted-foreground">
+                <p
+                  className={
+                    errors.parent_id?.message
+                      ? "text-xs font-medium text-sitecorp-danger"
+                      : "text-xs text-muted-foreground"
+                  }
+                >
                   {errors.parent_id?.message
                     ? errors.parent_id.message
                     : watch("entity_type") === "company"

@@ -13,8 +13,10 @@ import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Label } from "@/shared/components/ui/label"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
+import { formatConditionDate } from "@/modules/contracts"
 import {
   loadSeparationReasons,
   registerWorkerSeparation,
@@ -23,7 +25,7 @@ import {
 } from "@/modules/people"
 import { formatSalary } from "@/modules/organization-structure"
 import type { SeparateWorkerDialogProps } from "@/shared/components/worker-action-contracts"
-import { AlertTriangle, UserMinus } from "lucide-react"
+import { AlertTriangle, CalendarClock, UserMinus } from "lucide-react"
 
 // Las props del flujo son un contrato compartido con la página de vencimientos
 // contractuales (módulo Contratos): viven en la capa compartida para que Contratos no
@@ -57,6 +59,14 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
     () => selectedReason?.name.trim().toLowerCase() === "otro",
     [selectedReason]
   )
+  const todayIso = React.useMemo(() => {
+    const d = new Date()
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  }, [])
+  const isFutureDate = !!effectiveDate && effectiveDate > todayIso
 
   React.useEffect(() => {
     if (!open) return
@@ -99,8 +109,8 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
 
     setSubmitting(true)
     try {
-      // Caso de uso: registra la baja (pasa a Reingresos) y su movimiento de nómina.
-      await registerWorkerSeparation({
+      // Caso de uso: registra la baja (inmediata si <= hoy, programada si es futura).
+      const outcome = await registerWorkerSeparation({
         workerId,
         effectiveDate,
         separationReasonId: reasonId,
@@ -111,13 +121,19 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
 
       // La baja cierra el contrato vigente: recalcular alertas de vencimiento.
       invalidateContractAlertData(queryClient)
-      showSuccess("Baja registrada correctamente.")
+      showSuccess(
+        outcome.scheduled
+          ? `Baja programada para el ${formatConditionDate(outcome.effectiveDate)}. El trabajador permanecerá activo hasta esa fecha.`
+          : "Baja registrada correctamente."
+      )
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "No se pudo registrar la baja."
-      if (/no est[aá] activo/i.test(msg)) {
+      if (/baja programada/i.test(msg)) {
+        friendly = msg
+      } else if (/no est[aá] activo/i.test(msg)) {
         friendly = "El trabajador ya no está activo."
       } else if (/anterior al inicio/i.test(msg)) {
         friendly = "La fecha de baja no puede ser anterior al inicio del puesto actual."
@@ -203,8 +219,20 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
               onChange={(e) => setEffectiveDate(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Último día trabajado. El puesto actual se cierra en esta fecha.
+              Último día trabajado. Si es hoy o anterior, la baja se aplica de inmediato.
             </p>
+            {isFutureDate && (
+              <SiteCorpAlert type="info">
+                <span className="flex items-start gap-2 text-xs">
+                  <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    Fecha futura detectada: la baja quedará <strong>programada</strong> para el{" "}
+                    <strong>{formatConditionDate(effectiveDate)}</strong>. El trabajador seguirá
+                    activo ocupando su puesto hasta esa fecha.
+                  </span>
+                </span>
+              </SiteCorpAlert>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -255,7 +283,11 @@ const SeparateWorkerDialog: React.FC<SeparateWorkerDialogProps> = ({
             disabled={submitting || loading}
           >
             <UserMinus className="mr-2 h-4 w-4" />
-            {submitting ? "Procesando…" : "Confirmar baja"}
+            {submitting
+              ? "Procesando…"
+              : isFutureDate
+                ? "Programar baja"
+                : "Confirmar baja"}
           </SiteCorpButton>
         </div>
       </DialogContent>

@@ -293,7 +293,10 @@ const EntityWorkers = () => {
                         <SiteCorpStatusBadge status="warning">Pendiente de vinculación</SiteCorpStatusBadge>
                       )}
                       {missing.length > 0 ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-sitecorp-warning/40 bg-sitecorp-warning/10 px-2.5 py-0.5 text-xs font-medium text-sitecorp-warning">
+                        <span
+                          title={`Pendiente completar: ${missing.join(", ")}`}
+                          className="inline-flex items-center gap-1 rounded-full border border-sitecorp-warning/40 bg-sitecorp-warning/10 px-2.5 py-0.5 text-xs font-medium text-sitecorp-warning"
+                        >
                           <AlertTriangle className="h-3 w-3" />
                           Ficha incompleta ({missing.length})
                         </span>

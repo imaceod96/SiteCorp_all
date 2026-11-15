@@ -13,11 +13,13 @@ import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badg
 import { Label } from "@/shared/components/ui/label"
 import { cn } from "@/lib/utils"
 import { showSuccess } from "@/utils/toast"
+import { extractErrorMessage } from "@/utils/error-message"
 import { ensureEventDocumentation } from "@/modules/document-generation"
 import {
   applySalaryChange,
   fetchSalaryChangeImpact,
   finalizeSalaryChangeEvent,
+  formatConditionDate,
   previewSalaryChange,
   type SalaryChangeApplyResult,
   type SalaryChangeImpactRow,
@@ -39,6 +41,7 @@ interface ReviewSalaryChangeDialogProps {
   groupId: string | null
   groupLabel: string
   scaleLabel: string
+  currentValue?: { amount: number; currency_code: string; effective_from: string } | null
   onApplied: (result: SalaryChangeApplyResult) => void | Promise<void>
 }
 
@@ -55,6 +58,7 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
   groupId,
   groupLabel,
   scaleLabel,
+  currentValue = null,
   onApplied,
 }) => {
   const [newAmount, setNewAmount] = React.useState("")
@@ -89,6 +93,7 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
     if (!open || !groupId || !hasValidAmount) {
       setPreview(null)
       setPreviewError(null)
+      setPreviewLoading(false)
       return
     }
 
@@ -105,7 +110,7 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
         if (!cancelled) {
           setPreview(null)
           setPreviewError(
-            err instanceof Error ? err.message : "No se pudo calcular el impacto del cambio"
+            extractErrorMessage(err, "No se pudo calcular el impacto del cambio")
           )
         }
       } finally {
@@ -128,21 +133,31 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
     } catch (err) {
       setImpactRows([])
       setError(
-        err instanceof Error ? err.message : "No se pudo obtener el listado de trabajadores"
+        extractErrorMessage(err, "No se pudo obtener el listado de trabajadores")
       )
     } finally {
       setImpactLoading(false)
     }
   }
 
-  const currency = preview?.currency_code || "CUP"
-  const previousAmount = preview?.previous_amount ?? null
+  const currency = preview?.currency_code || currentValue?.currency_code || "CUP"
+  const previousAmount = preview ? preview.previous_amount : (currentValue?.amount ?? null)
+  const previousEffectiveFrom = preview
+    ? preview.previous_effective_from
+    : (currentValue?.effective_from ?? null)
   const sameAmount = previousAmount !== null && previousAmount === parsedAmount
   const conflictingValue =
     !!preview?.value_exists_on_date && preview.existing_amount_on_date !== parsedAmount
   const changeIsEmpty = previousAmount === null ? false : sameAmount
   const canSubmit =
-    !!groupId && hasValidAmount && !submitting && !conflictingValue && !changeIsEmpty && !previewError
+    !!groupId &&
+    hasValidAmount &&
+    !previewLoading &&
+    !!preview &&
+    !submitting &&
+    !conflictingValue &&
+    !changeIsEmpty &&
+    !previewError
 
   const handleSubmit = async () => {
     if (!groupId || !canSubmit) return
@@ -165,10 +180,13 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
       // Evento documental masivo: Movimientos de Nómina (Reubicación) + lotes ZIP.
       if (result.status === "APPLIED" && impact.length > 0) {
         try {
+          const normalizedGroupLabel = /^grupo\b/i.test(groupLabel.trim())
+            ? groupLabel.trim()
+            : `Grupo ${groupLabel.trim()}`
           const event = await finalizeSalaryChangeEvent(
             groupId,
             effectiveFrom,
-            `Cambio salarial · ${scaleLabel} · Grupo ${groupLabel}`,
+            `Cambio salarial · ${scaleLabel} · ${normalizedGroupLabel}`,
             impact.map((row) => ({
               worker_id: row.worker_id,
               previous_amount: row.previous_amount,
@@ -209,7 +227,7 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
       onOpenChange(false)
       await onApplied(result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo aplicar el cambio salarial")
+      setError(extractErrorMessage(err, "No se pudo aplicar el cambio salarial"))
     } finally {
       setSubmitting(false)
     }
@@ -243,14 +261,19 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
             <div>
               <dt className="text-xs text-muted-foreground">Importe vigente anterior</dt>
               <dd className="text-sm font-medium text-ink">
-                {previousAmount === null ? (
+                {previewLoading ? (
+                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Calculando importe vigente…
+                  </span>
+                ) : previousAmount === null ? (
                   <span className="italic text-muted-foreground">Sin importe vigente</span>
                 ) : (
                   <>
                     {money(previousAmount, currency)}
-                    {preview?.previous_effective_from && (
+                    {previousEffectiveFrom && (
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        desde {preview.previous_effective_from}
+                        desde {formatConditionDate(previousEffectiveFrom)}
                       </span>
                     )}
                   </>

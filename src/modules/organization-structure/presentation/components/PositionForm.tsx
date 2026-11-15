@@ -118,6 +118,8 @@ export const PositionForm: React.FC<PositionFormProps> = ({
   const [draftEnd, setDraftEnd] = React.useState<string>("16:30")
   const [submitting, setSubmitting] = React.useState(false)
   const [formError, setFormError] = React.useState<string | null>(null)
+  const [submittedAttempt, setSubmittedAttempt] = React.useState(false)
+  const errorAlertRef = React.useRef<HTMLDivElement | null>(null)
 
   const activeJobs = React.useMemo(() => jobs.filter(j => j.is_active), [jobs])
 
@@ -236,7 +238,26 @@ export const PositionForm: React.FC<PositionFormProps> = ({
       scheduleNotes,
     })
     if (validation.error) {
+      setSubmittedAttempt(true)
       setFormError(validation.error)
+      requestAnimationFrame(() => {
+        if (!selectedJobId) {
+          document.getElementById("position-job")?.focus()
+        } else if (!name) {
+          document.getElementById("position-name")?.focus()
+        } else if (!workLocation.trim()) {
+          document.getElementById("position-work-location")?.focus()
+        } else if (!dailyHours.trim()) {
+          document.getElementById("position-daily-hours")?.focus()
+        } else if (!weeklyHours.trim()) {
+          document.getElementById("position-weekly-hours")?.focus()
+        } else if (!monthlyHours.trim()) {
+          document.getElementById("position-monthly-hours")?.focus()
+        } else if (!breakMinutes.trim()) {
+          document.getElementById("position-break")?.focus()
+        }
+        errorAlertRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+      })
       return
     }
 
@@ -268,8 +289,12 @@ export const PositionForm: React.FC<PositionFormProps> = ({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
-      {formError && <SiteCorpAlert type="danger">{formError}</SiteCorpAlert>}
+    <form onSubmit={handleSubmit} noValidate className="space-y-5">
+      {formError && (
+        <div ref={errorAlertRef}>
+          <SiteCorpAlert type="danger">{formError}</SiteCorpAlert>
+        </div>
+      )}
 
       {/* INFORMACIÓN GENERAL */}
       <div className="space-y-4">
@@ -282,6 +307,7 @@ export const PositionForm: React.FC<PositionFormProps> = ({
           <SiteCorpSelect
             value={selectedJobId}
             onValueChange={handleJobChange}
+            className={submittedAttempt && !selectedJobId ? "border-sitecorp-danger" : undefined}
           >
             <option value="">Seleccionar cargo</option>
             {jobOptions.map((job) => (
@@ -290,6 +316,9 @@ export const PositionForm: React.FC<PositionFormProps> = ({
               </option>
             ))}
           </SiteCorpSelect>
+          {submittedAttempt && !selectedJobId && (
+            <p className="text-xs font-medium text-sitecorp-danger">Debes seleccionar un cargo.</p>
+          )}
           <p className="text-xs text-muted-foreground">
             Solo cargos activos de esta entidad. El área, el grupo salarial y el contenido de
             trabajo se heredan del cargo.
@@ -303,8 +332,15 @@ export const PositionForm: React.FC<PositionFormProps> = ({
             value={baseName}
             onChange={(e) => setBaseName(e.target.value)}
             placeholder="Ej.: Almacenero"
+            aria-invalid={submittedAttempt && !baseName.trim()}
+            className={submittedAttempt && !baseName.trim() ? "border-sitecorp-danger" : undefined}
             required
           />
+          {submittedAttempt && !baseName.trim() && (
+            <p className="text-xs font-medium text-sitecorp-danger">
+              El nombre del puesto es obligatorio.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -355,8 +391,15 @@ export const PositionForm: React.FC<PositionFormProps> = ({
             value={workLocation}
             onChange={(e) => setWorkLocation(e.target.value)}
             placeholder="Ej.: Almacén Central"
+            aria-invalid={submittedAttempt && !workLocation.trim()}
+            className={submittedAttempt && !workLocation.trim() ? "border-sitecorp-danger" : undefined}
             required
           />
+          {submittedAttempt && !workLocation.trim() && (
+            <p className="text-xs font-medium text-sitecorp-danger">
+              El lugar de trabajo es obligatorio.
+            </p>
+          )}
           <p className="text-xs text-muted-foreground">
             Ubicación habitual donde se ejecuta el trabajo. Es independiente del área
             organizativa del cargo.
@@ -378,8 +421,13 @@ export const PositionForm: React.FC<PositionFormProps> = ({
               value={dailyHours}
               onChange={(e) => setDailyHours(e.target.value)}
               placeholder="Ej.: 8"
+              aria-invalid={submittedAttempt && !dailyHours.trim()}
+              className={submittedAttempt && !dailyHours.trim() ? "border-sitecorp-danger" : undefined}
               required
             />
+            {submittedAttempt && !dailyHours.trim() && (
+              <p className="text-xs font-medium text-sitecorp-danger">Obligatorio.</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="position-weekly-hours">Horas semanales *</Label>
@@ -389,8 +437,13 @@ export const PositionForm: React.FC<PositionFormProps> = ({
               value={weeklyHours}
               onChange={(e) => setWeeklyHours(e.target.value)}
               placeholder="Ej.: 44"
+              aria-invalid={submittedAttempt && !weeklyHours.trim()}
+              className={submittedAttempt && !weeklyHours.trim() ? "border-sitecorp-danger" : undefined}
               required
             />
+            {submittedAttempt && !weeklyHours.trim() && (
+              <p className="text-xs font-medium text-sitecorp-danger">Obligatorio.</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="position-monthly-hours">Horas mensuales *</Label>
@@ -400,8 +453,13 @@ export const PositionForm: React.FC<PositionFormProps> = ({
               value={monthlyHours}
               onChange={(e) => setMonthlyHours(e.target.value)}
               placeholder="Ej.: 190.6"
+              aria-invalid={submittedAttempt && !monthlyHours.trim()}
+              className={submittedAttempt && !monthlyHours.trim() ? "border-sitecorp-danger" : undefined}
               required
             />
+            {submittedAttempt && !monthlyHours.trim() && (
+              <p className="text-xs font-medium text-sitecorp-danger">Obligatorio.</p>
+            )}
           </div>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -416,8 +474,13 @@ export const PositionForm: React.FC<PositionFormProps> = ({
             value={breakMinutes}
             onChange={(e) => setBreakMinutes(e.target.value)}
             placeholder="Ej.: 30"
+            aria-invalid={submittedAttempt && !breakMinutes.trim()}
+            className={submittedAttempt && !breakMinutes.trim() ? "border-sitecorp-danger" : undefined}
             required
           />
+          {submittedAttempt && !breakMinutes.trim() && (
+            <p className="text-xs font-medium text-sitecorp-danger">El descanso es obligatorio.</p>
+          )}
           <p className="text-xs text-muted-foreground">Se guarda como número de minutos.</p>
         </div>
       </div>

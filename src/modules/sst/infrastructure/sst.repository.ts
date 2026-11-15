@@ -1034,6 +1034,28 @@ export async function saveSstTrainingSessionOutcome(input: {
   const now = new Date().toISOString()
   const effectiveDate = input.scheduledDate || currentSession.scheduled_date
 
+  if (input.status === "REALIZADA" && uniqueWorkerIds.length > 0) {
+    const { data: workerRows } = await supabase
+      .from("workers")
+      .select("id, first_name, first_surname, second_surname, hire_date")
+      .in("id", uniqueWorkerIds)
+
+    for (const w of (workerRows || []) as {
+      id: string
+      first_name: string
+      first_surname: string
+      second_surname: string | null
+      hire_date: string | null
+    }[]) {
+      if (w.hire_date && effectiveDate < w.hire_date) {
+        const wName = [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
+        throw new Error(
+          `La fecha de la sesión de SST (${effectiveDate}) no puede ser anterior a la fecha de alta del trabajador ${wName} (${w.hire_date}).`
+        )
+      }
+    }
+  }
+
   const updatedSession: SstTrainingSession = {
     ...currentSession,
     scheduled_date: effectiveDate,
@@ -1198,6 +1220,21 @@ export async function registerWorkerDirectSstTraining(input: {
   }
 
   const now = new Date().toISOString()
+  const resolvedDate = input.receivedDate || now.slice(0, 10)
+
+  const { data: workerHireRow } = await supabase
+    .from("workers")
+    .select("hire_date")
+    .eq("id", input.workerId)
+    .maybeSingle()
+
+  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
+  if (workerHireDate && resolvedDate < workerHireDate) {
+    throw new Error(
+      `La fecha de recepción (${resolvedDate}) no puede ser anterior a la fecha de alta del trabajador (${workerHireDate}).`
+    )
+  }
+
   const record: SstWorkerTrainingRecord = {
     id: makeUuid(),
     organization_entity_id: input.entityId,
@@ -1209,7 +1246,7 @@ export async function registerWorkerDirectSstTraining(input: {
     job_name_snapshot: folder?.job_name_snapshot ?? input.jobName ?? null,
     area_id_snapshot: folder?.area_id_snapshot ?? input.areaId ?? null,
     area_name_snapshot: folder?.area_name_snapshot ?? input.areaName ?? null,
-    received_date: input.receivedDate || now.slice(0, 10),
+    received_date: resolvedDate,
     status: "RECIBIDA",
     kind: input.kind || "INICIAL_CONTRATACION_SST",
     notes: input.notes?.trim() || null,
@@ -1220,8 +1257,7 @@ export async function registerWorkerDirectSstTraining(input: {
     const matchesTarget =
       n.organization_entity_id === input.entityId &&
       n.worker_id === input.workerId &&
-      n.status !== "COMPLETADA" &&
-      (!input.notificationId || n.id === input.notificationId)
+      (n.status === "PENDIENTE" || n.status === "EN_PROCESO")
 
     if (!matchesTarget) return n
     return {
@@ -1254,7 +1290,7 @@ export async function registerWorkerDirectSstTraining(input: {
     .single()
 
   if (!recError && insertedRec) {
-    let notifUpdateQuery = supabase
+    await supabase
       .from("sst_onboarding_notifications")
       .update({
         status: "COMPLETADA",
@@ -1263,12 +1299,7 @@ export async function registerWorkerDirectSstTraining(input: {
       })
       .eq("organization_entity_id", input.entityId)
       .eq("worker_id", input.workerId)
-      .neq("status", "COMPLETADA")
-
-    if (input.notificationId) {
-      notifUpdateQuery = notifUpdateQuery.eq("id", input.notificationId)
-    }
-    await notifUpdateQuery
+      .in("status", ["PENDIENTE", "EN_PROCESO"])
 
     const saved = insertedRec as SstWorkerTrainingRecord
     updateCachedSstState(input.entityId, {
@@ -1378,13 +1409,31 @@ export async function ensureSstAssignmentNotification(input: {
     const eventKey = `${entityId}:${workerRow.id}:${jobId || "no-job"}:${input.triggerType}:${effectiveDate}`
 
     const state = await loadEntitySstState(entityId, { forceRefresh: true })
+
+    // Si el trabajador cambió de cargo, descartamos cualquier notificación pendiente de cargos anteriores
+    const obsoleteNotifications = state.notifications.filter(
+      (n) =>
+        n.organization_entity_id === entityId &&
+        n.worker_id === workerRow.id &&
+        (n.status === "PENDIENTE" || n.status === "EN_PROCESO") &&
+        n.job_id !== jobId
+    )
+    if (obsoleteNotifications.length > 0) {
+      await supabase
+        .from("sst_onboarding_notifications")
+        .update({ status: "DESCARTADA", completed_at: new Date().toISOString() })
+        .eq("organization_entity_id", entityId)
+        .eq("worker_id", workerRow.id)
+        .in("status", ["PENDIENTE", "EN_PROCESO"])
+        .neq("job_id", jobId || "")
+    }
+
     const alreadyExists = state.notifications.some(
       (n) =>
         n.event_key === eventKey ||
         (n.worker_id === workerRow.id &&
           n.job_id === jobId &&
-          n.trigger_type === input.triggerType &&
-          n.status !== "COMPLETADA")
+          (n.status === "PENDIENTE" || n.status === "EN_PROCESO"))
     )
     if (alreadyExists) return
 

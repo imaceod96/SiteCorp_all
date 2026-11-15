@@ -736,7 +736,7 @@ const CandidateDetail = () => {
                 <SiteCorpButton
                   variant="outline"
                   onClick={() =>
-                    navigate(`/staffing/workers/${linkedWorker.id}`)
+                    navigate(`/workers/${linkedWorker.id}`)
                   }
                 >
                   <Briefcase className="mr-2 h-4 w-4" /> Ver trabajador
@@ -794,7 +794,7 @@ const CandidateDetail = () => {
           worker: linkedWorker,
         }}
         onSuccess={(workerId) =>
-          navigate(`/staffing/workers/${workerId}`)
+          navigate(`/workers/${workerId}`)
         }
       />
 

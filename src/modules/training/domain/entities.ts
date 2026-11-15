@@ -118,7 +118,7 @@ export interface WorkerTrainingRecord {
   created_at: string
 }
 
-export type InitialTrainingNotificationStatus = "PENDIENTE" | "COMPLETADA"
+export type InitialTrainingNotificationStatus = "PENDIENTE" | "COMPLETADA" | "DESCARTADA"
 
 export interface InitialTrainingNotification {
   id: string

@@ -68,7 +68,10 @@ const EntitySettingsContractData = () => {
   const [historyTarget, setHistoryTarget] = React.useState<PositionWithOccupant | null>(null)
   const [editTarget, setEditTarget] = React.useState<PositionWithOccupant | null>(null)
 
+  const loadRequestIdRef = React.useRef(0)
+
   const loadData = React.useCallback(async () => {
+    const reqId = ++loadRequestIdRef.current
     if (!entityId) {
       setNotAllowed("No se pudo determinar la entidad.")
       setLoading(false)
@@ -80,6 +83,7 @@ const EntitySettingsContractData = () => {
 
     try {
       const workspace = await loadEntityContractDataWorkspace(entityId)
+      if (reqId !== loadRequestIdRef.current) return
 
       if (!workspace) {
         setNotAllowed("No tiene permiso para ver los datos contractuales de esta entidad.")
@@ -106,35 +110,44 @@ const EntitySettingsContractData = () => {
 
       setPositions(workspace.positions)
     } catch (err) {
+      if (reqId !== loadRequestIdRef.current) return
       console.error("Error loading contractual data:", err)
       setNotAllowed(
         err instanceof Error ? err.message : "No se pudieron cargar los datos contractuales."
       )
     } finally {
-      setLoading(false)
+      if (reqId === loadRequestIdRef.current) {
+        setLoading(false)
+      }
     }
   }, [entityId])
 
   React.useEffect(() => {
     loadData()
+    return () => {
+      loadRequestIdRef.current += 1
+    }
   }, [loadData])
 
   const activePositions = positions.filter((position) => position.is_active)
   const canAddPosition = activePositions.length < MAX_REPRESENTATIVE_POSITIONS
 
   const handleSaveContractData = async () => {
-    if (!entityId) return
+    if (!entityId || savingData || loading) return
+    const payload: EntityContractDataInput = {
+      organism: contractData.organism?.trim() || null,
+      branch: contractData.branch?.trim() || null,
+      labor_identification_code: contractData.labor_identification_code?.trim() || null,
+      address: contractData.address?.trim() || null,
+      province: contractData.province || null,
+      municipality: contractData.municipality || null,
+      revolution_year: revolutionYearText.trim() || null,
+    }
     setSavingData(true)
     try {
-      await saveEntityContractData(entityId, {
-        organism: contractData.organism?.trim() || null,
-        branch: contractData.branch?.trim() || null,
-        labor_identification_code: contractData.labor_identification_code?.trim() || null,
-        address: contractData.address?.trim() || null,
-        province: contractData.province || null,
-        municipality: contractData.municipality || null,
-        revolution_year: revolutionYearText.trim() || null,
-      })
+      await saveEntityContractData(entityId, payload)
+      setContractData(payload)
+      setRevolutionYearText(payload.revolution_year || "")
       showSuccess("Datos contractuales actualizados.")
     } catch (err) {
       showError(err instanceof Error ? err.message : "No se pudieron guardar los datos contractuales.")
@@ -186,18 +199,18 @@ const EntitySettingsContractData = () => {
             <Label>Organismo al que pertenece</Label>
             <SiteCorpInput
               value={contractData.organism || ""}
-              onChange={(e) => setContractData({ ...contractData, organism: e.target.value })}
+              onChange={(e) => setContractData((prev) => ({ ...prev, organism: e.target.value }))}
               placeholder="Organismo"
-              disabled={!canManage}
+              disabled={!canManage || savingData}
             />
           </div>
           <div className="space-y-2">
             <Label>Rama</Label>
             <SiteCorpInput
               value={contractData.branch || ""}
-              onChange={(e) => setContractData({ ...contractData, branch: e.target.value })}
+              onChange={(e) => setContractData((prev) => ({ ...prev, branch: e.target.value }))}
               placeholder="Rama"
-              disabled={!canManage}
+              disabled={!canManage || savingData}
             />
           </div>
           <div className="space-y-2">
@@ -205,10 +218,10 @@ const EntitySettingsContractData = () => {
             <SiteCorpInput
               value={contractData.labor_identification_code || ""}
               onChange={(e) =>
-                setContractData({ ...contractData, labor_identification_code: e.target.value })
+                setContractData((prev) => ({ ...prev, labor_identification_code: e.target.value }))
               }
               placeholder="Código laboral"
-              disabled={!canManage}
+              disabled={!canManage || savingData}
             />
             <p className="text-xs text-muted-foreground">
               Código interno de SiteCorp (generado automáticamente):{" "}
@@ -219,9 +232,9 @@ const EntitySettingsContractData = () => {
             <Label>Dirección</Label>
             <SiteCorpInput
               value={contractData.address || ""}
-              onChange={(e) => setContractData({ ...contractData, address: e.target.value })}
+              onChange={(e) => setContractData((prev) => ({ ...prev, address: e.target.value }))}
               placeholder="Dirección"
-              disabled={!canManage}
+              disabled={!canManage || savingData}
             />
           </div>
           <div className="space-y-2">
@@ -229,13 +242,13 @@ const EntitySettingsContractData = () => {
             <SiteCorpSelect
               value={contractData.province || ""}
               onValueChange={(value) =>
-                setContractData({
-                  ...contractData,
+                setContractData((prev) => ({
+                  ...prev,
                   province: value || null,
                   municipality: null,
-                })
+                }))
               }
-              disabled={!canManage}
+              disabled={!canManage || savingData}
             >
               <option value="">Seleccionar provincia</option>
               {cubaProvinceOptions(contractData.province).map((name) => (
@@ -249,8 +262,10 @@ const EntitySettingsContractData = () => {
             <Label>Municipio</Label>
             <SiteCorpSelect
               value={contractData.municipality || ""}
-              onValueChange={(value) => setContractData({ ...contractData, municipality: value || null })}
-              disabled={!canManage || !contractData.province}
+              onValueChange={(value) =>
+                setContractData((prev) => ({ ...prev, municipality: value || null }))
+              }
+              disabled={!canManage || savingData || !contractData.province}
             >
               <option value="">Seleccionar municipio</option>
               {municipalityOptions.map((municipality) => (
@@ -266,7 +281,7 @@ const EntitySettingsContractData = () => {
               value={revolutionYearText}
               onChange={(e) => setRevolutionYearText(e.target.value)}
               placeholder="Ej.: 68"
-              disabled={!canManage}
+              disabled={!canManage || savingData}
             />
             <p className="text-xs text-muted-foreground">
               Dato institucional interno (texto libre). Se guarda tal cual se escriba (p. ej. 68) y

@@ -501,6 +501,7 @@ const EntitySettingsSalary = () => {
         groupId={changeGroup?.id || null}
         groupLabel={changeGroup ? groupLabel(changeGroup) : ""}
         scaleLabel={scale?.name || "Escala salarial"}
+        currentValue={changeGroup?.current_value ?? null}
         onApplied={async () => {
           await loadScale()
         }}

@@ -123,7 +123,7 @@ export interface SstWorkerTrainingRecord {
 }
 
 export type SstNotificationTriggerType = "NUEVA_CONTRATACION" | "CAMBIO_CARGO"
-export type SstNotificationStatus = "PENDIENTE" | "EN_PROCESO" | "COMPLETADA"
+export type SstNotificationStatus = "PENDIENTE" | "EN_PROCESO" | "COMPLETADA" | "DESCARTADA"
 
 export interface SstOnboardingNotification {
   id: string

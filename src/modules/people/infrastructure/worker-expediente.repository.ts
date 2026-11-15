@@ -82,6 +82,9 @@ interface RawWorkerAssignmentRow {
   start_date: string
   end_date: string | null
   is_current: boolean
+  scheduled_separation_date?: string | null
+  scheduled_separation_notes?: string | null
+  scheduled_separation_reason?: { name: string } | { name: string }[] | null
   position: RawWorkerPositionRow | RawWorkerPositionRow[] | null
 }
 
@@ -148,6 +151,7 @@ function normalizeWorkerExpediente(raw: RawWorkerExpedienteRow): WorkerExpedient
           const area = job ? firstOf(job.area) : null
           return {
             ...assignment,
+            scheduled_separation_reason: firstOf(assignment.scheduled_separation_reason),
             position: position
               ? {
                   ...position,
@@ -180,6 +184,8 @@ export async function fetchWorkerExpediente(
       *,
       assignments:worker_position_assignments(
         id, position_id, start_date, end_date, is_current,
+        scheduled_separation_date, scheduled_separation_notes,
+        scheduled_separation_reason:worker_separation_reasons(name),
         position:organization_positions(
           id, name, is_active, job_id,
           work_location, daily_hours, weekly_hours, monthly_hours, break_minutes, schedule_notes,
@@ -238,6 +244,7 @@ export async function fetchWorkerEmploymentMovements(
        separation_reason:worker_separation_reasons(name)`
     )
     .eq("worker_id", workerId)
+    .order("effective_date", { ascending: false })
     .order("created_at", { ascending: false })
 
   if (error) throw error

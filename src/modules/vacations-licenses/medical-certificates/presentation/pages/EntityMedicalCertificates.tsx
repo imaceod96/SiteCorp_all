@@ -310,7 +310,7 @@ const EntityMedicalCertificates = () => {
                             <button
                               type="button"
                               onClick={() =>
-                                navigate(`/staffing/workers/${row.worker_id}`)
+                                navigate(`/workers/${row.worker_id}`)
                               }
                               className="font-medium text-sitecorp-primary hover:underline"
                             >

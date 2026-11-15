@@ -21,7 +21,13 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Label } from "@/shared/components/ui/label"
-import { createMedicalCertificate } from "@/modules/vacations-licenses/medical-certificates"
+import {
+  computeMedicalCertificateDays,
+  createMedicalCertificate,
+  fetchWorkerEmploymentWindow,
+  validateMedicalCertificateInput,
+  type WorkerEmploymentWindow,
+} from "@/modules/vacations-licenses/medical-certificates"
 import { loadEntityActiveWorkerOptions, type EntityWorkerOption } from "@/modules/people"
 import { invalidateMedicalCertificateData } from "../hooks/use-medical-certificates"
 import { Loader2, X } from "lucide-react"
@@ -59,6 +65,8 @@ export default function MedicalCertificateFormDialog({
   const [returnDate, setReturnDate] = React.useState("")
   const [days, setDays] = React.useState("")
   const [document, setDocument] = React.useState<File | null>(null)
+  const [employmentWindow, setEmploymentWindow] =
+    React.useState<WorkerEmploymentWindow | null>(null)
   const [formError, setFormError] = React.useState<string | null>(null)
   const [submitting, setSubmitting] = React.useState(false)
 
@@ -73,6 +81,7 @@ export default function MedicalCertificateFormDialog({
     setReturnDate("")
     setDays("")
     setDocument(null)
+    setEmploymentWindow(null)
     setFormError(null)
   }, [open, workerId])
 
@@ -82,8 +91,6 @@ export default function MedicalCertificateFormDialog({
     const loadWorkers = async () => {
       setWorkersLoading(true)
       try {
-        // Trabajadores activos de la entidad: caso de uso del dominio Personas (la misma
-        // lectura que usan los demás formularios que eligen trabajador).
         const options = await loadEntityActiveWorkerOptions(entityId)
         if (!cancelled) setWorkers(options)
       } catch (err) {
@@ -99,17 +106,47 @@ export default function MedicalCertificateFormDialog({
     }
   }, [open, isFixedWorker, entityId])
 
+  React.useEffect(() => {
+    if (!open || !selectedWorkerId) {
+      setEmploymentWindow(null)
+      return
+    }
+    let cancelled = false
+    fetchWorkerEmploymentWindow(selectedWorkerId)
+      .then((win) => {
+        if (!cancelled) setEmploymentWindow(win)
+      })
+      .catch(() => {
+        if (!cancelled) setEmploymentWindow(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open, selectedWorkerId])
+
+  React.useEffect(() => {
+    const computed = computeMedicalCertificateDays(startDate, returnDate)
+    setDays(computed !== null ? String(computed) : "")
+  }, [startDate, returnDate])
+
+  const earliestHireDate = React.useMemo(() => {
+    if (!employmentWindow) return undefined
+    if (employmentWindow.periods.length > 0) {
+      return [...employmentWindow.periods.map((p) => p.hire_date)].sort()[0]
+    }
+    return employmentWindow.fallbackHireDate ?? undefined
+  }, [employmentWindow])
+
   const validate = (): string | null => {
     if (!selectedWorkerId) return "Selecciona el trabajador."
-    if (!startDate) return "La fecha de salida es obligatoria."
-    if (!returnDate) return "La fecha de reincorporación es obligatoria."
-    if (returnDate <= startDate) {
-      return "La fecha de reincorporación debe ser posterior a la fecha de salida."
-    }
     const parsedDays = parseInt(days, 10)
-    if (!days || isNaN(parsedDays) || parsedDays < 1) {
-      return "La cantidad de días debe ser un entero positivo (≥1)."
-    }
+    const domainError = validateMedicalCertificateInput({
+      startDate,
+      returnDate,
+      days: Number.isNaN(parsedDays) ? 0 : parsedDays,
+      employment: employmentWindow,
+    })
+    if (domainError) return domainError
     if (!document) return "Debes adjuntar el certificado médico."
     if (document.size > MAX_FILE_SIZE) return "El archivo no puede superar los 10 MB."
     return null
@@ -185,6 +222,7 @@ export default function MedicalCertificateFormDialog({
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              min={earliestHireDate}
               max={returnDate || undefined}
             />
           </div>
@@ -196,7 +234,7 @@ export default function MedicalCertificateFormDialog({
               type="date"
               value={returnDate}
               onChange={(e) => setReturnDate(e.target.value)}
-              min={startDate || undefined}
+              min={startDate || earliestHireDate || undefined}
             />
           </div>
 
@@ -207,11 +245,12 @@ export default function MedicalCertificateFormDialog({
               type="number"
               min="1"
               value={days}
-              onChange={(e) => setDays(e.target.value)}
-              placeholder="Ej.: 5"
+              readOnly
+              className="bg-muted/40"
+              placeholder="Calculado automáticamente"
             />
             <p className="text-xs text-muted-foreground">
-              Se introduce explícitamente; no se calcula a partir de las fechas.
+              Se calcula automáticamente entre la fecha de salida y la fecha de reincorporación.
             </p>
           </div>
 
