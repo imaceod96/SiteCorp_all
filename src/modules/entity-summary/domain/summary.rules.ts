@@ -30,10 +30,15 @@ export function summarizeCandidates(
 ): CandidatesSummary {
   const summary: CandidatesSummary = { total: rows.length, active: 0, archived: 0, hired: 0 }
   rows.forEach((row) => {
-    if (row.status === "archived") summary.archived += 1
-    else summary.active += 1
-    // Criterio compartido: la fila de candidato quedó vinculada al contratar.
-    if (hasLinkedWorker(row)) summary.hired += 1
+    // Criterio compartido: si la fila de candidato ya quedó vinculada a un trabajador al contratar,
+    // ya no es un candidato activo pendiente sino contratado.
+    if (hasLinkedWorker(row)) {
+      summary.hired += 1
+    } else if (row.status === "archived") {
+      summary.archived += 1
+    } else {
+      summary.active += 1
+    }
   })
   return summary
 }

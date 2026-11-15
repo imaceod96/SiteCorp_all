@@ -12,6 +12,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Label } from "@/shared/components/ui/label"
+import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
 import {
   changeWorkerContract,
@@ -225,7 +226,7 @@ const ChangeContractDialog: React.FC<ChangeContractDialogProps> = ({
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "No se pudo completar el cambio de contrato."
       if (/posterior al inicio del contrato/i.test(msg)) {
         friendly = "La fecha efectiva debe ser posterior al inicio del contrato vigente."

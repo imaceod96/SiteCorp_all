@@ -33,6 +33,8 @@ export {
   computeNightPreview,
   computeClaPreview,
   computeEntryPreview,
+  getDaysInMonth,
+  computeMaxWorkedDaysInPeriod,
   validateWorkedDays,
   validateNightInput,
   validateClaMinutes,

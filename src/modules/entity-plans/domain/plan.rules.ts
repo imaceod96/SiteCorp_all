@@ -183,3 +183,31 @@ export function isModuleEnabledInPlan(
 
   return true
 }
+
+/**
+ * Evalúa si un código de permiso interno de entidad está habilitado según el plan activo.
+ * Garantiza que módulos opcionales (Prenómina, Capacitación y SST) nunca aparezcan ni se
+ * puedan asignar cuando el cliente no los tiene contratados.
+ */
+export function isEntityPermissionEnabledInPlan(
+  permissionCode: string,
+  plan: { packagePrenomina: boolean; packageTrainingSst: boolean } | null | undefined
+): boolean {
+  if (!plan) {
+    return true
+  }
+
+  if (permissionCode === "prenomina.view" || permissionCode === "prenomina.manage") {
+    return isModuleEnabledInPlan("prenomina", plan)
+  }
+
+  if (permissionCode === "training.view" || permissionCode === "training.manage") {
+    return isModuleEnabledInPlan("training", plan)
+  }
+
+  if (permissionCode === "sst.view" || permissionCode === "sst.manage") {
+    return isModuleEnabledInPlan("sst", plan)
+  }
+
+  return true
+}

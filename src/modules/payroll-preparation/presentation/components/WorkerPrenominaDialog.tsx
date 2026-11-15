@@ -26,8 +26,10 @@ import {
 import {
   computeClaPreview,
   computeEntryPreview,
+  computeMaxWorkedDaysInPeriod,
   computeNightPreview,
   deletedNightIds,
+  getDaysInMonth,
   validateClaMinutes,
   validateNightInput,
   validateWorkedDays,
@@ -35,6 +37,7 @@ import {
 import type {
   PrenominaClaConfig,
   PrenominaNightEntry,
+  PrenominaPeriod,
   PrenominaWorkerEntry,
 } from "@/modules/payroll-preparation/domain/entities"
 
@@ -48,6 +51,7 @@ interface NightRow {
 interface WorkerPrenominaDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  period?: PrenominaPeriod | null
   entry: PrenominaWorkerEntry | null
   nights: PrenominaNightEntry[]
   readOnly: boolean
@@ -72,6 +76,7 @@ const defaultNight = (): NightRow => ({ id: null, start: "19:00", end: "07:00", 
 const WorkerPrenominaDialog = ({
   open,
   onOpenChange,
+  period = null,
   entry,
   nights,
   claConfig,
@@ -159,10 +164,28 @@ const WorkerPrenominaDialog = ({
   const addRow = () => setRows((prev) => [...prev, defaultNight()])
   const removeRow = (index: number) => setRows((prev) => prev.filter((_, i) => i !== index))
 
+  const maxMonthDays = period
+    ? getDaysInMonth(period.period_year, period.period_month)
+    : undefined
+  const maxActiveDays =
+    entry.max_worked_days !== null && entry.max_worked_days !== undefined
+      ? entry.max_worked_days
+      : period
+        ? computeMaxWorkedDaysInPeriod({
+            year: period.period_year,
+            month: period.period_month,
+            activeStartDate: entry.period_active_start ?? entry.employment_start_date_snapshot,
+            activeEndDate: entry.period_active_end ?? null,
+          })
+        : null
+
   const handleSave = async () => {
     setError(null)
-    // Validaciones de dominio (mismos mensajes y mismo orden que antes).
-    const daysError = validateWorkedDays(workedDaysValue)
+    // Validaciones de dominio (mismos mensajes y mismo orden que antes + tope mensual/alta).
+    const daysError = validateWorkedDays(workedDaysValue, {
+      maxMonthDays,
+      maxActiveDays,
+    })
     if (daysError) {
       setError(daysError)
       return
@@ -417,7 +440,20 @@ const WorkerPrenominaDialog = ({
 
           {/* Días trabajados */}
           <div className="space-y-2">
-            <Label htmlFor="prenomina-worked-days">Días trabajados</Label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label htmlFor="prenomina-worked-days">Días trabajados</Label>
+              {!readOnly &&
+                entry.proposed_worked_days !== undefined &&
+                workedDaysValue !== entry.proposed_worked_days && (
+                  <button
+                    type="button"
+                    onClick={() => setWorkedDays(formatDecimalInput(entry.proposed_worked_days ?? 0))}
+                    className="text-xs font-medium text-sitecorp-primary hover:underline"
+                  >
+                    Usar días propuestos ({formatDecimalInput(entry.proposed_worked_days ?? 0)})
+                  </button>
+                )}
+            </div>
             <input
               id="prenomina-worked-days"
               type="text"
@@ -429,8 +465,18 @@ const WorkerPrenominaDialog = ({
               placeholder="Ej.: 20,5"
             />
             <p className="text-xs text-muted-foreground">
-              Acepta decimales con coma (20,5). No se prorratea por fecha de alta.
+              Acepta decimales con coma (20,5).
+              {maxActiveDays !== null ? ` Máximo permitido en el período: ${maxActiveDays} día(s).` : ""}
+              {(entry.absence_days_in_period ?? 0) > 0
+                ? ` Ausencias automáticas del período (certificados/vacaciones): ${entry.absence_days_in_period} día(s).`
+                : ""}
             </p>
+            {(entry.period_active_start || entry.period_active_end) && (
+              <p className="text-xs text-muted-foreground">
+                Vigencia de la asignación en el período: {formatDateDMY(entry.period_active_start)} –{" "}
+                {formatDateDMY(entry.period_active_end)}
+              </p>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">

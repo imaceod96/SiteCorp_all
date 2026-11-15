@@ -148,6 +148,7 @@ const Organizations = () => {
   const [deleting, setDeleting] = React.useState(false)
   const [canDeleteEntities, setCanDeleteEntities] = React.useState(false)
   const [canDeleteCompanyClients, setCanDeleteCompanyClients] = React.useState(false)
+  const [canEnterEntityWorkspace, setCanEnterEntityWorkspace] = React.useState(isPlatformSuperAdmin)
   
     const loadData = React.useCallback(async () => {
     try {
@@ -185,19 +186,33 @@ const Organizations = () => {
   }, [loadData])
 
   React.useEffect(() => {
-    const checkDeletePermissions = async () => {
+    const checkPermissions = async () => {
       // Los CÓDIGOS DE PERMISO son el contrato del backend: no se traducen aquí.
-      const [entitiesPermission, companyClientsPermission] = await Promise.all([
+      const [
+        entitiesPermission,
+        companyClientsPermission,
+        settingsView,
+        settingsManage,
+        modulesView,
+        modulesManage,
+      ] = await Promise.all([
         hasPlatformPermission("organizations.delete"),
         hasPlatformPermission("tenants.delete"),
+        hasPlatformPermission("entity_settings.view"),
+        hasPlatformPermission("entity_settings.manage"),
+        hasPlatformPermission("entity_modules.view"),
+        hasPlatformPermission("entity_modules.manage"),
       ])
 
       setCanDeleteEntities(entitiesPermission)
       setCanDeleteCompanyClients(companyClientsPermission)
+      setCanEnterEntityWorkspace(
+        isPlatformSuperAdmin || settingsView || settingsManage || modulesView || modulesManage
+      )
     }
 
-    checkDeletePermissions()
-  }, [hasPlatformPermission])
+    checkPermissions()
+  }, [isPlatformSuperAdmin, hasPlatformPermission])
 
   // Composición de la jerarquía (Grupo Empresarial → Empresa → UEB): regla única del
   // dominio de estructura organizativa.
@@ -501,8 +516,8 @@ const Organizations = () => {
                             <Plus className="mr-1 h-3.5 w-3.5" /> UEB
                           </SiteCorpButton>
                         )}
-                        {/* Gestionar solo existe cuando la entidad es Cuenta SiteCorp */}
-                        {entity.is_sitecorp_account && (
+                        {/* Gestionar solo existe cuando la entidad es Cuenta SiteCorp y el usuario tiene acceso interno */}
+                        {entity.is_sitecorp_account && canEnterEntityWorkspace && (
                           <SiteCorpButton size="sm" variant="outline" onClick={() => enterEntity(entity)}>
                             <LogIn className="mr-1 h-3.5 w-3.5" /> Gestionar
                           </SiteCorpButton>

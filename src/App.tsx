@@ -204,6 +204,17 @@ const LegacyEntityRouteBridge = () => {
   return <LoadingScreen />
 }
 
+const LegacyStaffingWorkerRedirect = () => {
+  const { workerId } = useParams<{ workerId: string }>()
+  const location = useLocation()
+  return (
+    <Navigate
+      to={`/workers/${workerId ?? ""}${location.search}${location.hash}`}
+      replace
+    />
+  )
+}
+
 const AppRoutes = () => {
   const {
     authLoading,
@@ -297,7 +308,7 @@ const AppRoutes = () => {
           <Route path="/workers/:workerId" element={<WorkerDetail />} />
           <Route path="/reentries" element={<EntityReentries />} />
           <Route path="/staffing" element={<EntityStaffing />} />
-          <Route path="/staffing/workers/:workerId" element={<WorkerDetail />} />
+          <Route path="/staffing/workers/:workerId" element={<LegacyStaffingWorkerRedirect />} />
           <Route path="/hiring" element={<EntityHiring />} />
           <Route path="/training" element={<EntityTraining />} />
           <Route path="/sst" element={<EntitySst />} />

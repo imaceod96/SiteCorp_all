@@ -76,7 +76,7 @@ export const ARCHITECTURE_OVERVIEW = {
         "Expedientes de colaboradores, historial laboral y contrataciones.",
         "Monitoreo de vencimientos contractuales con alertas semaforizadas a 30 y 15 días.",
         "Cálculo de la Prenómina con integración de nocturnidad (CLA), antigüedad y subsidios.",
-        "Gestión de Seguridad y Salud en el Trabajo: EPP, Incidentes, Exámenes Médicos e IPERC.",
+        "Gestión de Seguridad y Salud en el Trabajo: EPP, Incidentes, Chequeos Médicos Preempleo y Periódicos, y Matriz de Riesgos Laborales.",
         "Administración de vacaciones devengadas/gozadas y control de licencias y certificados médicos.",
         "Generación de documentos laborales oficiales a partir de plantillas parametrizadas.",
       ],
@@ -161,7 +161,7 @@ export const ENTITY_INITIAL_SETUP_FLOW = {
       realImagePath: "/assets/aistudio/Captura_de_pantalla_2026-10-30_a_las_4.39.10_p._m._02f2a0d9.png",
       objective: "Consignar los datos legales e institucionales del empleador y de sus representantes acreditados para formalizar contratos.",
       whyOrderMatters:
-        "SEGURIDAD Y RESPALDO LEGAL: Al momento de formalizar un contrato, SiteCorp genera un snapshot (instantánea inmutable) con estos datos. Si no se configuran, las cláusulas del contrato quedan en blanco o inválidas ante el Ministerio de Trabajo.",
+        "SEGURIDAD Y RESPALDO LEGAL: Al momento de formalizar un contrato, SiteCorp genera un snapshot (instantánea inmutable) con estos datos. Si no se configuran, las cláusulas del contrato quedan en blanco o inválidas ante el Ministerio de Trabajo y Seguridad Social (MTSS).",
       mandatoryPrerequisite: "Identificación de la razón social y código de entidad.",
       keyElements: [
         "Organismo rector institucional y Rama de actividad económica.",
@@ -205,9 +205,9 @@ export const ENTITY_INITIAL_SETUP_FLOW = {
         "CIERRE DEL CIRCUITO DE PUESTA EN MARCHA: Integra todos los pasos previos (escala salarial, datos del puesto y datos contractuales) en las variables del catálogo documental, dejando la entidad lista para emitir contratos y documentos oficiales.",
       mandatoryPrerequisite: "Pasos 1, 2 y 3 concluidos.",
       keyElements: [
-        "5 tipos oficiales en catálogo: Contrato de Trabajo, Suplemento al Contrato de Trabajo, Certificación de Salario Devengado (SC-4-04), Resolución de Nombramiento y Movimiento de Nómina (Altas / Reubicaciones / Bajas).",
+        "6 tipos oficiales en catálogo: Contrato de Trabajo por Tiempo Determinado, Contrato de Trabajo por Tiempo Indeterminado, Anexo al Contrato de Trabajo, Modelo SC-4-04 (Notificación de Vacaciones, Deducciones, Licencias y Subsidios), Resolución y Movimiento de Nómina (.xlsx).",
         "Separación de Documento original (modelo base intacto) y Documento configurado (.docx o .xlsx con marcadores).",
-        "Catálogo oficial de variables dinámicas por prefijo ({{c.nom}}, {{c.ci}}, {{c.car}}, {{c.sal}}, {{a.nom}}, {{s.nom}}, {{r.nom}}, {{m.nom}}, etc.).",
+        "Catálogo oficial de variables dinámicas por prefijo ({{c.nom}}, {{c.ci}}, {{c.car}}, {{c.sal}}, {{a.nom}}, {{sc404.nom}}, {{r.nom}}, {{m.nom}}, etc.).",
       ],
       validationRules: [
         "Se admiten archivos Word (.doc, .docx) para documentos textuales y Excel (.xlsx) para Movimiento de Nómina; el análisis automático requiere .docx o .xlsx.",
@@ -341,7 +341,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       { name: "Panel 'Plan actual de la cuenta'", description: "Muestra la Entidad Seleccionada (Empresa A), Tenant asociado, ID único, badge 'Cuenta SiteCorp' y la 'Combinación activa' (ej. Básico + Prenómina + Capacitación y SST) con fecha de última modificación." },
       { name: "Paquete 1 — Básico", description: "Badge 'Obligatorio • Siempre activo' (switch bloqueado en encendido). Incluye Resumen, Personas, Contratación, Plantilla, Vacaciones y Licencias, y Ajustes de entidad." },
       { name: "Paquete 2 — Prenómina", description: "Badge 'Opcional' (switch interactivo). Incluye Incidencias del período, Cálculo salarial, Desglose por trabajador e Historiales de preliquidación." },
-      { name: "Paquete 3 — Capacitación y SST", description: "Badge 'Opcional • Paquete' (switch interactivo). Incluye Plan Anual de Capacitación, EPP, Accidentes, EMO y Matriz IPERC." },
+      { name: "Paquete 3 — Capacitación y SST", description: "Badge 'Opcional • Paquete' (switch interactivo). Incluye Plan Anual de Capacitación, EPP, Accidentes de Trabajo, Chequeos Médicos Preempleo y Periódicos, y Matriz de Evaluación de Riesgos Laborales." },
     ],
     workflows: [
       {
@@ -372,7 +372,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       tableRows: [
         { "Paquete": "Paquete 1 — Básico", "Condición": "Obligatorio • Siempre activo", "Módulos que Habilita": "Resumen, Personas, Contratación, Plantilla, Vacaciones, Ajustes", "Estado Switch": "Activado (Bloqueado)" },
         { "Paquete": "Paquete 2 — Prenómina", "Condición": "Opcional", "Módulos que Habilita": "Incidencias, Cálculo salarial, Desglose, Historiales", "Estado Switch": "Activado" },
-        { "Paquete": "Paquete 3 — Capacitación y SST", "Condición": "Opcional • Paquete", "Módulos que Habilita": "Cursos, Asistencias, EPP, Accidentes, EMO, IPERC", "Estado Switch": "Activado" },
+        { "Paquete": "Paquete 3 — Capacitación y SST", "Condición": "Opcional • Paquete", "Módulos que Habilita": "Cursos, Asistencias, EPP, Accidentes, Chequeos Médicos, Evaluación de Riesgos", "Estado Switch": "Activado" },
       ],
       actionButtons: ["Guardar Configuración"],
       notes: "Captura real tomada del módulo oficial Gestión > Plan en SiteCorp Admin.",
@@ -644,19 +644,19 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     realImagePath: "/assets/aistudio/Captura_de_pantalla_2026-10-30_a_las_4.39.32_p._m._b9e51b09.png",
     rolesAllowed: ["Super Administrador", "Asesor Jurídico", "Especialista en Contratación"],
     permissionsRequired: ["document_templates.view", "document_templates.manage"],
-    purpose: "Cargar, validar y activar los modelos oficiales de contratos laborales, suplementos, certificaciones salariales, resoluciones y movimientos de nómina.",
-    description: "Cierre del ciclo de configuración inicial. Con la escala, la plantilla, los datos contractuales y los tramos ya establecidos, este módulo aloja los archivos originales y configurados (.docx o .xlsx) con las variables del catálogo oficial ({{c.nom}}, {{c.ci}}, {{c.car}}, {{c.sal}}, {{m.nom}}, etc.).",
+    purpose: "Cargar, validar y activar los modelos oficiales de contratos laborales (determinado e indeterminado), anexos al contrato, modelo SC-4-04, resoluciones y movimientos de nómina.",
+    description: "Cierre del ciclo de configuración inicial. Con la escala, la plantilla, los datos contractuales y los tramos ya establecidos, este módulo aloja los archivos originales y configurados (.docx o .xlsx) con las variables del catálogo oficial ({{c.nom}}, {{c.ci}}, {{c.car}}, {{c.sal}}, {{sc404.nom}}, {{m.nom}}, etc.).",
     keyElements: [
-      { name: "5 Tipos Documentales Oficiales", description: "Contrato de Trabajo (Word), Suplemento al Contrato de Trabajo (Word), Certificación de Salario Devengado SC-4-04 (Word), Resolución de Nombramiento (Word) y Movimiento de Nómina (Excel .xlsx)." },
+      { name: "6 Tipos Documentales Oficiales", description: "Contrato de Trabajo por Tiempo Determinado (Word), Contrato de Trabajo por Tiempo Indeterminado (Word), Anexo al Contrato de Trabajo (Word), Modelo SC-4-04 — Notificación de Vacaciones, Deducciones, Licencias y Subsidios (Word), Resolución (Word) y Movimiento de Nómina (Excel .xlsx)." },
       { name: "Documento Original vs Configurado", description: "El original conserva intacto el modelo oficial; el configurado incorpora los marcadores {{variable}} y es validado por el analizador antes de activar la versión." },
-      { name: "Catálogo de Variables por Tipo", description: "Variables prefijadas por documento: c.* (Contrato), a.* (Suplemento), s.* (SC-4-04), r.* (Resolución) y m.* (Movimiento de Nómina)." },
+      { name: "Catálogo de Variables por Tipo", description: "Variables prefijadas por documento: c.* (Contrato), a.* (Anexo al Contrato), sc404.* (Modelo SC-4-04), r.* (Resolución) y m.* (Movimiento de Nómina)." },
     ],
     workflows: [
       {
         title: "Carga y activación de una plantilla documental oficial",
         steps: [
           "Acceda a Ajustes > Plantillas documentales y pulse 'Nueva plantilla'.",
-          "Seleccione uno de los 5 tipos documentales y adjunte el archivo original (.doc/.docx o .xlsx).",
+          "Seleccione uno de los 6 tipos documentales y adjunte el archivo original (.doc/.docx o .xlsx).",
           "En el detalle de la plantilla, consulte el catálogo inferior de 'Variables disponibles' e inserte los marcadores (ej. {{c.nom}}, {{c.ci}}) en el archivo configurado.",
           "Suba el archivo en 'Documento configurado' y verifique que la validación estructural marque 'Lista para activar'.",
           "Pulse 'Activar' en el panel de Versiones.",
@@ -675,8 +675,8 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       badges: ["Modelos .docx y .xlsx", "Catálogo Oficial de Variables"],
       tableColumns: ["Tipo de Documento", "Archivo Configurado", "Versión", "Variables Reconocidas", "Estado"],
       tableRows: [
-        { "Tipo de Documento": "Contrato de Trabajo", "Archivo Configurado": "Contrato_Determinado_Config.docx", "Versión": "v1", "Variables Reconocidas": "45 variables (c.*)", "Estado": "Activa" },
-        { "Tipo de Documento": "Suplemento al Contrato de Trabajo", "Archivo Configurado": "Suplemento_Config.docx", "Versión": "v1", "Variables Reconocidas": "39 variables (a.*)", "Estado": "Activa" },
+        { "Tipo de Documento": "Contrato de Trabajo por Tiempo Determinado", "Archivo Configurado": "Contrato_Determinado_Config.docx", "Versión": "v1", "Variables Reconocidas": "45 variables (c.*)", "Estado": "Activa" },
+        { "Tipo de Documento": "Anexo al Contrato de Trabajo", "Archivo Configurado": "Anexo_Contrato_Config.docx", "Versión": "v1", "Variables Reconocidas": "39 variables (a.*)", "Estado": "Activa" },
         { "Tipo de Documento": "Movimiento de Nómina", "Archivo Configurado": "Movimiento_Nomina_Config.xlsx", "Versión": "v1", "Variables Reconocidas": "34 variables (m.*)", "Estado": "Activa" },
       ],
       actionButtons: ["+ Nueva plantilla", "Analizar de nuevo", "Activar"],
@@ -1021,20 +1021,20 @@ export const MANUAL_SECTIONS: ManualSection[] = [
     id: "entity-sst",
     category: "sst_bienestar",
     title: "Seguridad y Salud en el Trabajo (SST)",
-    subtitle: "Prevención de riesgos laborales, capacitaciones por cargo, EPP, inspecciones, EMO e investigación de incidentes",
+    subtitle: "Prevención de riesgos laborales, capacitaciones por cargo, EPP, inspecciones, chequeos médicos e investigación de incidentes",
     route: "/sst",
     realImagePath: "/assets/aistudio/Captura_de_pantalla_2026-10-30_a_las_4.15.23_p._m._2a70425c.png",
-    rolesAllowed: ["Jefe de SST", "Médico Ocupacional", "Supervisor de Seguridad"],
+    rolesAllowed: ["Jefe de SST", "Especialista en SST", "Supervisor de Seguridad"],
     permissionsRequired: ["sst.view", "sst.manage"],
-    purpose: "Gestionar la prevención integral de riesgos laborales, matriz IPERC, entregas de EPP, vigilancia de salud ocupacional (EMO), instrucción obligatoria e investigación de incidentes/accidentes de la entidad.",
+    purpose: "Gestionar la prevención integral de riesgos laborales, matriz de evaluación de peligros, entregas de EPP, control administrativo de chequeos médicos preempleo y periódicos, instrucción obligatoria e investigación de incidentes/accidentes de la entidad.",
     description: "Consola institucional de Seguridad y Salud en el Trabajo (requiere Paquete 3 — Capacitación y SST activo en el plan de la cuenta). Integra avisos normativos por nuevas contrataciones o cambios de puesto, métricas en tiempo real de cobertura de SST y 4 pestañas de operación especializada.",
     keyElements: [
       { name: "Banner 'Avisos de SST pendientes'", description: "Alerta con badge '1 pendiente': Colaborador que requiere instrucción de SST, entrega de EPP o evaluación médica con botón 'Gestionar en ficha ->'." },
       { name: "Mosaico de KPIs de Prevención", description: "TRABAJADORES AL DÍA SST: 0/10 (10 pendientes); SESIONES SST: 0 realizadas; RIESGOS CRÍTICOS/ALTOS: 0; MEDIDAS VENCIDAS: 0; ENTREGAS EPP: 0; INSPECCIONES / SUCESOS: 0 accidentes." },
       { name: "Pestaña 1", description: "1. Capacitaciones por Cargo y Calendario (programación mensual, asistencia e instructivos obligatorios por puesto)." },
-      { name: "Pestaña 2", description: "2. Riesgos, Matriz y Plan de Prevención (evaluación de peligros por área/puesto, matriz IPERC y seguimiento de medidas correctivas)." },
+      { name: "Pestaña 2", description: "2. Riesgos, Matriz y Plan de Prevención (evaluación de peligros por área/puesto, matriz de riesgos laborales y seguimiento de medidas correctivas)." },
       { name: "Pestaña 3", description: "3. EPP e Inspecciones de Seguridad (registro nominal de entrega/reposición de medios de protección y rondas de inspección)." },
-      { name: "Pestaña 4", description: "4. Accidentes, Salud Ocup., Emergencias y Comité (investigación de incidentes/accidentes laborales, programación de EMO y actas del comité)." },
+      { name: "Pestaña 4", description: "4. Accidentes, Salud Ocup., Emergencias y Comité (investigación de incidentes/accidentes laborales, control de chequeos médicos preempleo y periódicos, y actas del comité)." },
     ],
     workflows: [
       {
@@ -1047,11 +1047,11 @@ export const MANUAL_SECTIONS: ManualSection[] = [
         ],
       },
       {
-        title: "Flujo de Matriz IPERC, vigilancia EMO e investigación de incidentes laborales (D8)",
+        title: "Flujo de Evaluación de Riesgos, Chequeos Médicos e investigación de incidentes laborales",
         steps: [
           "En la Pestaña 2 (Riesgos y Matriz), identifique los peligros por cargo/área, evalúe probabilidad × severidad y asigne medidas preventivas con fecha de cumplimiento.",
           "En la Pestaña 3 (EPP e Inspecciones), registre la entrega firmada de Equipos de Protección Personal con su vida útil y ejecute las listas de chequeo de seguridad.",
-          "En la Pestaña 4 (Accidentes y Salud Ocupacional), programe los Exámenes Médicos Ocupacionales (EMO preempleo y periódicos) y, ante cualquier suceso laboral, abra el expediente de investigación del incidente/accidente documentando causas raíz, días perdidos y acciones correctivas.",
+          "En la Pestaña 4 (Accidentes y Salud Ocupacional), programe los chequeos médicos preempleo y periódicos y, ante cualquier suceso laboral, abra el expediente de investigación del incidente/accidente documentando causas raíz, días perdidos y acciones correctivas.",
         ],
       },
     ],
@@ -1075,7 +1075,7 @@ export const MANUAL_SECTIONS: ManualSection[] = [
       tableRows: [
         { "Submódulo SST": "Capacitaciones por Cargo", "Alcance": "Instrucción obligatoria inicial", "Estado Actual": "1 trabajador nuevo pendiente", "Acción Inmediata": "Gestionar en ficha ->" },
         { "Submódulo SST": "Entrega de EPP", "Alcance": "Dotación de implementos de seguridad", "Estado Actual": "0 entregas registradas", "Acción Inmediata": "+ Registrar entrega" },
-        { "Submódulo SST": "Exámenes Médicos (EMO)", "Alcance": "Vigilancia de aptitud física", "Estado Actual": "Evaluación periódica", "Acción Inmediata": "Ver programación" },
+        { "Submódulo SST": "Chequeos Médicos", "Alcance": "Vigilancia de aptitud laboral", "Estado Actual": "Evaluación periódica", "Acción Inmediata": "Ver programación" },
       ],
       actionButtons: ["Gestionar en ficha ->", "Nueva Sesión SST", "Registrar EPP"],
       notes: "Captura real tomada del módulo oficial SST en SiteCorp Entidad.",
@@ -1164,7 +1164,7 @@ export const ROLES_MATRIX = [
   {
     roleName: "Supervisor de Seguridad y Salud (SST)",
     tier: "Entidad",
-    description: "Control de entrega de EPP, investigación de accidentes, seguimiento a exámenes médicos ocupacionales y matriz IPERC.",
+    description: "Control de entrega de EPP, investigación de accidentes de trabajo, seguimiento a chequeos médicos preempleo y periódicos y matriz de riesgos laborales.",
     permissions: ["sst.manage", "training.manage", "medical_certificates.view", "workers.view"],
   },
   {
@@ -1197,12 +1197,12 @@ export const GLOSSARY_TERMS = [
     definition: "Medios de protección individual asignados a cada trabajador conforme a los riesgos del cargo, con trazabilidad de entrega y periodicidad de reposición.",
   },
   {
-    term: "EMO (Exámenes Médicos Ocupacionales)",
-    definition: "Chequeos médicos preventivos (preempleo y periódicos) para verificar la aptitud psicofísica del trabajador respecto a las exigencias de su puesto.",
+    term: "Chequeos Médicos Preempleo y Periódicos",
+    definition: "Evaluaciones médicas preventivas exigidas por la legislación laboral cubana (Ley 116, Código de Trabajo) para verificar la aptitud psicofísica del trabajador respecto a las exigencias de su cargo.",
   },
   {
-    term: "IPERC",
-    definition: "Identificación de Peligros, Evaluación de Riesgos y Medidas de Control. Matriz preventiva de Seguridad y Salud en el Trabajo.",
+    term: "Matriz de Riesgos Laborales",
+    definition: "Instrumento de Seguridad y Salud en el Trabajo para la identificación de peligros por área y cargo, evaluación de riesgos y control del plan de medidas preventivas.",
   },
   {
     term: "Certificado Médico",

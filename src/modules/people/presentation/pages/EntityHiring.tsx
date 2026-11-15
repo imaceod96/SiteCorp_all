@@ -259,7 +259,7 @@ const EntityHiring = () => {
           <span className="flex flex-wrap items-center gap-2">
             La contratación se registró correctamente y la ocupación del puesto fue actualizada.
             <Link
-              to={`/staffing/workers/${hiredWorkerId}`}
+              to={`/workers/${hiredWorkerId}`}
               className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
             >
               Ver expediente del trabajador <ArrowUpRight className="h-3.5 w-3.5" />
@@ -451,7 +451,7 @@ const EntityHiring = () => {
                               className="flex flex-wrap items-center gap-x-3 gap-y-1"
                             >
                               <Link
-                                to={`/staffing/workers/${o.workerId}`}
+                                to={`/workers/${o.workerId}`}
                                 className="text-sm text-sitecorp-primary underline-offset-2 hover:underline"
                               >
                                 {o.name}

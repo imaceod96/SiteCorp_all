@@ -276,7 +276,9 @@ describe("QA Manual de Gestor v2.4.0 — Plantillas Documentales y Catálogo de 
     ).toBe(true)
     expect(sstSection?.workflows.length).toBeGreaterThanOrEqual(2)
     expect(
-      sstSection?.workflows.some((w) => w.title.includes("IPERC"))
+      sstSection?.workflows.some(
+        (w) => w.title.includes("Evaluación de Riesgos") || w.title.includes("IPERC"),
+      ),
     ).toBe(true)
   })
 })

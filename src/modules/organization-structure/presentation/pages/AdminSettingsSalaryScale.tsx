@@ -340,6 +340,7 @@ const AdminSettingsSalaryScale = () => {
         groupId={changeGroup?.id || null}
         groupLabel={changeGroup ? `Grupo ${changeGroup.roman_numeral}` : ""}
         scaleLabel={scale?.name || ""}
+        currentValue={changeGroup?.current_value ?? null}
         onApplied={async () => {
           await loadScale()
         }}

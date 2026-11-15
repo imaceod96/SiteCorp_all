@@ -69,7 +69,26 @@ export const ContractSignatureFields: React.FC<ContractSignatureFieldsProps> = (
   className,
   defaultSignaturePlace = "",
 }) => {
-  const displayPlace = signaturePlace || defaultSignaturePlace
+  const userEditedPlaceRef = React.useRef(false)
+  const onPlaceChangeRef = React.useRef(onSignaturePlaceChange)
+  React.useEffect(() => {
+    onPlaceChangeRef.current = onSignaturePlaceChange
+  })
+
+  // Si el formulario se reinicia por completo, permitir autocompletar el municipio otra vez.
+  React.useEffect(() => {
+    if (!signatureDate && !signaturePlace && !paymentMethodId) {
+      userEditedPlaceRef.current = false
+    }
+  }, [signatureDate, signaturePlace, paymentMethodId])
+
+  // Cuando llega el municipio por defecto y el usuario no ha tocado el campo,
+  // sincronizarlo en el estado real del formulario (nunca sólo visualmente en el DOM).
+  React.useEffect(() => {
+    if (defaultSignaturePlace && !signaturePlace && !userEditedPlaceRef.current) {
+      onPlaceChangeRef.current(defaultSignaturePlace)
+    }
+  }, [defaultSignaturePlace, signaturePlace])
 
   return (
     <div className={cn("grid gap-4 sm:grid-cols-3", className)}>
@@ -92,12 +111,15 @@ export const ContractSignatureFields: React.FC<ContractSignatureFieldsProps> = (
         <SiteCorpInput
           id="contract-signature-place"
           type="text"
-          value={displayPlace}
-          onChange={(e) => onSignaturePlaceChange(e.target.value)}
-          placeholder="Ej.: La Habana"
+          value={signaturePlace}
+          onChange={(e) => {
+            userEditedPlaceRef.current = true
+            onSignaturePlaceChange(e.target.value)
+          }}
+          placeholder={defaultSignaturePlace || "Ej.: La Habana"}
           disabled={disabled}
         />
-        {defaultSignaturePlace && !signaturePlace && (
+        {defaultSignaturePlace && signaturePlace.trim() !== defaultSignaturePlace.trim() && (
           <p className="text-xs text-muted-foreground">
             Municipio de la entidad: {defaultSignaturePlace}
           </p>

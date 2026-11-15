@@ -356,17 +356,19 @@ export async function fetchEntityOrganizationAreas(entityId: string): Promise<En
   if (!entityId) return []
   const { data, error } = await supabase
     .from("organization_areas")
-    .select("id, name, code, is_active")
+    .select("id, name, is_active")
     .eq("organization_entity_id", entityId)
     .order("name", { ascending: true })
 
   if (error) throw error
-  return ((data as EntityAreaOption[] | null) || []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    code: row.code ?? null,
-    is_active: row.is_active ?? true,
-  }))
+  return ((data as { id: string; name: string; is_active: boolean | null }[] | null) || []).map(
+    (row) => ({
+      id: row.id,
+      name: row.name,
+      code: null,
+      is_active: row.is_active ?? true,
+    })
+  )
 }
 
 interface RawWorkerWithAreaRow {
@@ -1011,6 +1013,28 @@ export async function saveTrainingSessionOutcome(input: {
   const now = new Date().toISOString()
   const effectiveDate = input.scheduledDate || currentSession.scheduled_date
 
+  if (input.status === "REALIZADA" && uniqueWorkerIds.length > 0) {
+    const { data: workerRows } = await supabase
+      .from("workers")
+      .select("id, first_name, first_surname, second_surname, hire_date")
+      .in("id", uniqueWorkerIds)
+
+    for (const w of (workerRows || []) as {
+      id: string
+      first_name: string
+      first_surname: string
+      second_surname: string | null
+      hire_date: string | null
+    }[]) {
+      if (w.hire_date && effectiveDate < w.hire_date) {
+        const wName = [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
+        throw new Error(
+          `La fecha de la sesión (${effectiveDate}) no puede ser anterior a la fecha de alta del trabajador ${wName} (${w.hire_date}).`
+        )
+      }
+    }
+  }
+
   const updatedSession: TrainingSession = {
     ...currentSession,
     scheduled_date: effectiveDate,
@@ -1180,6 +1204,21 @@ export async function registerWorkerInitialTraining(input: {
   }
 
   const now = new Date().toISOString()
+  const resolvedDate = input.receivedDate || now.slice(0, 10)
+
+  const { data: workerHireRow } = await supabase
+    .from("workers")
+    .select("hire_date")
+    .eq("id", input.workerId)
+    .maybeSingle()
+
+  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
+  if (workerHireDate && resolvedDate < workerHireDate) {
+    throw new Error(
+      `La fecha de recepción (${resolvedDate}) no puede ser anterior a la fecha de alta del trabajador (${workerHireDate}).`
+    )
+  }
+
   const record: WorkerTrainingRecord = {
     id: makeUuid(),
     organization_entity_id: input.entityId,
@@ -1189,7 +1228,7 @@ export async function registerWorkerInitialTraining(input: {
     topic_title_snapshot: resolvedTitle,
     area_id_snapshot: topic?.area_id ?? input.areaId ?? null,
     area_name_snapshot: folder?.area_name_snapshot ?? input.areaName ?? null,
-    received_date: input.receivedDate || now.slice(0, 10),
+    received_date: resolvedDate,
     status: "RECIBIDA",
     kind: "CAPACITACION_INICIAL",
     notes: input.notes?.trim() || null,
@@ -1200,8 +1239,7 @@ export async function registerWorkerInitialTraining(input: {
     const matchesTarget =
       n.organization_entity_id === input.entityId &&
       n.worker_id === input.workerId &&
-      n.status === "PENDIENTE" &&
-      (!input.notificationId || n.id === input.notificationId)
+      n.status === "PENDIENTE"
 
     if (!matchesTarget) return n
     return {
@@ -1234,7 +1272,7 @@ export async function registerWorkerInitialTraining(input: {
     .single()
 
   if (!recError && insertedRec) {
-    let notifUpdateQuery = supabase
+    await supabase
       .from("training_initial_notifications")
       .update({
         status: "COMPLETADA",
@@ -1244,11 +1282,6 @@ export async function registerWorkerInitialTraining(input: {
       .eq("organization_entity_id", input.entityId)
       .eq("worker_id", input.workerId)
       .eq("status", "PENDIENTE")
-
-    if (input.notificationId) {
-      notifUpdateQuery = notifUpdateQuery.eq("id", input.notificationId)
-    }
-    await notifUpdateQuery
 
     const savedRecord = insertedRec as WorkerTrainingRecord
     updateCachedState(input.entityId, {

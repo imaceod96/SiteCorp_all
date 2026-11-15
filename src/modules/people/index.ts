@@ -75,6 +75,7 @@ export type {
   WorkerPositionChangeResult,
   WorkerEngagementResult,
   WorkerContractChangeResult,
+  WorkerSeparationResult,
 } from "./domain/entities"
 
 export { EMPLOYMENT_STATUS } from "./domain/entities"
@@ -146,6 +147,7 @@ export {
   loadEntityActiveWorkerOptions,
   loadMigrationTemplateData,
   loadPersonIdentificationStatus,
+  loadWorkerLastSeparation,
 } from "./application/people.queries"
 
 /* Casos de uso (contratación y transiciones) */
@@ -181,10 +183,13 @@ export type {
   PositionChangeOutcome,
   ContractChangeOutcome,
   PluriemployOutcome,
+  SeparationOutcome,
 } from "./application/worker-transitions.commands"
 
 export {
   registerWorkerSeparation,
+  cancelScheduledWorkerSeparation,
+  applyDueScheduledSeparations,
   reincorporateWorkerWithContract,
   reincorporateWorkerWithResolution,
   changeWorkerPosition,

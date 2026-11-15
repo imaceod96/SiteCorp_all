@@ -249,9 +249,66 @@ export function computeEntryPreview(
 // Validaciones de captura (mismos mensajes que ya ve el usuario)
 // ---------------------------------------------------------------------------
 
-/** Los días trabajados no pueden ser negativos. */
-export function validateWorkedDays(workedDays: number): string | null {
-  return workedDays < 0 ? "Los días trabajados no pueden ser negativos" : null
+/** Días naturales del mes indicado (1..12). */
+export function getDaysInMonth(year: number, month: number): number {
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) return 31
+  return new Date(Date.UTC(year, month, 0)).getUTCDate()
+}
+
+/**
+ * Calcula los días naturales de vigencia de una asignación/empleo dentro del mes.
+ */
+export function computeMaxWorkedDaysInPeriod(params: {
+  year: number
+  month: number
+  activeStartDate?: string | null
+  activeEndDate?: string | null
+}): number {
+  const daysInMonth = getDaysInMonth(params.year, params.month)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const monthStart = `${params.year}-${pad(params.month)}-01`
+  const monthEnd = `${params.year}-${pad(params.month)}-${pad(daysInMonth)}`
+
+  const effStart =
+    params.activeStartDate && params.activeStartDate > monthStart
+      ? params.activeStartDate
+      : monthStart
+  const effEnd =
+    params.activeEndDate && params.activeEndDate < monthEnd
+      ? params.activeEndDate
+      : monthEnd
+
+  if (effStart > effEnd) return 0
+  const [sy, sm, sd] = effStart.split("-").map(Number)
+  const [ey, em, ed] = effEnd.split("-").map(Number)
+  const startMs = Date.UTC(sy, sm - 1, sd)
+  const endMs = Date.UTC(ey, em - 1, ed)
+  return Math.round((endMs - startMs) / (24 * 60 * 60 * 1000)) + 1
+}
+
+/** Valida los días trabajados contra negativos, días del mes y días de alta en el período. */
+export function validateWorkedDays(
+  workedDays: number,
+  limits?: { maxMonthDays?: number; maxActiveDays?: number | null }
+): string | null {
+  if (Number.isNaN(workedDays) || workedDays < 0) {
+    return "Los días trabajados no pueden ser negativos"
+  }
+  if (
+    limits?.maxMonthDays !== undefined &&
+    limits.maxMonthDays > 0 &&
+    workedDays > limits.maxMonthDays
+  ) {
+    return `Los días trabajados (${workedDays}) no pueden superar los días del mes (${limits.maxMonthDays})`
+  }
+  if (
+    limits?.maxActiveDays !== undefined &&
+    limits.maxActiveDays !== null &&
+    workedDays > limits.maxActiveDays
+  ) {
+    return `Los días trabajados (${workedDays}) no pueden superar los días de alta del trabajador en el período (${limits.maxActiveDays})`
+  }
+  return null
 }
 
 /** Cada registro nocturno necesita horario y noches mayores que cero. */

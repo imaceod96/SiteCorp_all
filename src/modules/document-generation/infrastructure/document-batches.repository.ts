@@ -13,9 +13,9 @@ import { record, text } from "./values"
  * El aislamiento por entidad lo aplica RLS, igual que en el resto del sistema.
  */
 
-/** Lotes documentales visibles dentro del scope permitido (RLS por entidad). */
-export const selectPendingBatches = async (): Promise<PendingBatch[]> => {
-  const { data, error } = await supabase
+/** Lotes documentales visibles dentro del scope de la entidad activa (y RLS). */
+export const selectPendingBatches = async (entityId?: string): Promise<PendingBatch[]> => {
+  let query = supabase
     .from("document_batches")
     .select(
       `id, event_id, organization_entity_id, document_type_code, label, status,
@@ -23,7 +23,12 @@ export const selectPendingBatches = async (): Promise<PendingBatch[]> => {
        event:document_generation_events(effective_date, description),
        entity:organization_entities(name)`
     )
-    .order("created_at", { ascending: false })
+
+  if (entityId) {
+    query = query.eq("organization_entity_id", entityId)
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false })
   if (error) throw error
 
   return ((data as unknown[]) || []).map((raw) => {
@@ -50,13 +55,25 @@ export const selectPendingBatches = async (): Promise<PendingBatch[]> => {
   })
 }
 
-/** Detalle de un lote: cada trabajador/documento con su estado. */
-export const selectBatchItems = async (batchId: string): Promise<PendingBatchItem[]> => {
-  const { data, error } = await supabase
+/** Detalle de un lote: cada trabajador/documento con su estado, validando la entidad si se indica. */
+export const selectBatchItems = async (
+  batchId: string,
+  entityId?: string
+): Promise<PendingBatchItem[]> => {
+  let query = supabase
     .from("document_batch_items")
-    .select("id, worker_id, worker_document_id, worker_name, status, error")
+    .select(
+      entityId
+        ? "id, worker_id, worker_document_id, worker_name, status, error, batch:document_batches!inner(organization_entity_id)"
+        : "id, worker_id, worker_document_id, worker_name, status, error"
+    )
     .eq("batch_id", batchId)
-    .order("worker_name", { ascending: true })
+
+  if (entityId) {
+    query = query.eq("batch.organization_entity_id", entityId)
+  }
+
+  const { data, error } = await query.order("worker_name", { ascending: true })
   if (error) throw error
   return ((data as unknown[]) || []).map((raw) => {
     const row = record(raw)
@@ -71,15 +88,22 @@ export const selectBatchItems = async (batchId: string): Promise<PendingBatchIte
   })
 }
 
-/** Movimientos de nómina de un evento que aún no tienen documento generado. */
+/** Movimientos de nómina de un evento que aún no tienen documento generado (acotados a la entidad si se indica). */
 export const selectUngeneratedEventMovements = async (
-  eventId: string
+  eventId: string,
+  entityId?: string
 ): Promise<{ id: string; worker_id: string }[]> => {
-  const { data, error } = await supabase
+  let query = supabase
     .from("worker_payroll_movements")
     .select("id, worker_id, worker_document_id, status")
     .eq("event_id", eventId)
     .or("worker_document_id.is.null,status.neq.GENERATED")
+
+  if (entityId) {
+    query = query.eq("organization_entity_id", entityId)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return ((data as unknown[]) || []).map((raw) => {
     const row = record(raw)
@@ -88,10 +112,14 @@ export const selectUngeneratedEventMovements = async (
 }
 
 /** Reconstruye los lotes del evento (el backend aplica la regla > 5 por entidad y tipo). */
-export const rpcCreateDocumentBatchesForEvent = async (eventId: string): Promise<number> => {
-  const { data, error } = await supabase.rpc("create_document_batches_for_event", {
-    p_event_id: eventId,
-  })
+export const rpcCreateDocumentBatchesForEvent = async (
+  eventId: string,
+  entityId?: string
+): Promise<number> => {
+  const { data, error } = await supabase.rpc(
+    "create_document_batches_for_event",
+    entityId ? { p_event_id: eventId, p_entity_id: entityId } : { p_event_id: eventId }
+  )
   if (error) throw error
   return Number(record(data).batches) || 0
 }

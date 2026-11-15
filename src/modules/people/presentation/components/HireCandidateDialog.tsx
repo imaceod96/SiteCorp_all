@@ -15,7 +15,9 @@ import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Label } from "@/shared/components/ui/label"
+import { isCompleteIsoDate } from "@/utils/ci"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
 import {
   resolveApplicableScaleId,
@@ -182,31 +184,34 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       // Caso de uso (lectura): puestos con su estructura y ocupación vigente, personas
       // candidatas con su vínculo laboral, tipos de contrato activos y permiso de los
       // datos contractuales de la entidad.
-      const [workspace, segments] = await Promise.all([
+      const [workspace, segments, methods, scaleId, contractData] = await Promise.all([
         loadHiringWorkspace(entityId),
         fetchEntityScheduleSegments(entityId),
+        fetchPaymentMethods(),
+        resolveApplicableScaleId(entityId),
+        fetchEntityContractData(entityId),
       ])
+      const groupIds = workspace.positions
+        .map((p) => p.job?.salary_group?.id)
+        .filter((id): id is string => !!id)
+      const salaryValues = await fetchSalaryValuesForGroups(groupIds)
+
       setPositions(workspace.positions)
       setOccupancy(workspace.occupancy.counts)
       setCandidates(workspace.people)
       setContractTypes(workspace.contractTypes)
       setCanManageOrganization(workspace.canManageContractData)
-
-      // Fase 11A.3: horarios habituales de los puestos (solo lectura)
       setSegmentsByPosition(segments)
-
-      // Fase 11A.5: catálogo global de formas de pago (A tiempo / A rendimiento)
-      setPaymentMethods(await fetchPaymentMethods())
-
-      setApplicableScaleId(await resolveApplicableScaleId(entityId))
-      const groupIds = workspace.positions
-        .map((p) => p.job?.salary_group?.id)
-        .filter((id): id is string => !!id)
-      setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
+      setPaymentMethods(methods)
+      setApplicableScaleId(scaleId)
+      setSalaryValuesByGroup(salaryValues)
 
       // Fase 11A.5: municipio de la entidad para auto-poblar el lugar de firma
-      const contractData = await fetchEntityContractData(entityId)
-      setEntityMunicipality(contractData?.municipality || "")
+      const municipality = contractData?.municipality || ""
+      setEntityMunicipality(municipality)
+      if (municipality) {
+        setSignaturePlace((prev) => prev || municipality)
+      }
     } catch (err) {
       console.error("Error loading hiring data:", err)
       setLoadError("No se pudieron cargar los datos para la contratación.")
@@ -317,6 +322,13 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
   // Preparación contractual (§26/§39): se revisa la integridad completa antes de
   // permitir la contratación, de modo que la generación documental nunca sea el
   // primer punto donde se descubre un dato estructural faltante.
+  const validSignatureDate = isCompleteIsoDate(signatureDate) ? signatureDate : null
+  const validStartDate = isCompleteIsoDate(contractStartDate || hireDate)
+    ? contractStartDate || hireDate
+    : null
+  const validEndDate =
+    isDetermined && isCompleteIsoDate(contractEndDate) ? contractEndDate : null
+
   React.useEffect(() => {
     if (!open) {
       setReadiness(null)
@@ -328,13 +340,13 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       candidateId: selectedCandidate?.id || null,
       workerId: selectedCandidate?.worker?.id || null,
       positionId: positionId || null,
-      signatureDate: signatureDate || null,
+      signatureDate: validSignatureDate,
       contractTypeId: contractTypeId || null,
-      signaturePlace: signaturePlace || null,
+      signaturePlace: signaturePlace.trim() || null,
       paymentMethodId: paymentMethodId || null,
       representativeAssignmentId: representativeAssignmentId || null,
-      contractStartDate: contractStartDate || hireDate || null,
-      contractEndDate: isDetermined ? contractEndDate || null : null,
+      contractStartDate: validStartDate,
+      contractEndDate: validEndDate,
     })
       .then((result) => {
         if (active) setReadiness(result)
@@ -354,28 +366,26 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     selectedCandidate?.id,
     selectedCandidate?.worker?.id,
     positionId,
-    signatureDate,
+    validSignatureDate,
     contractTypeId,
     signaturePlace,
     paymentMethodId,
     representativeAssignmentId,
-    contractStartDate,
-    contractEndDate,
-    hireDate,
-    isDetermined,
+    validStartDate,
+    validEndDate,
   ])
 
   // §16/§17: la contratación exige una plantilla documental activa aplicable.
   // Se valida ANTES de crear el contrato para no dejar contrataciones sin documento.
   React.useEffect(() => {
-    if (!open || !entityId || !selectedType || !signatureDate) {
+    if (!open || !entityId || !selectedType || !validSignatureDate) {
       setTemplateAvailability(null)
       setTemplateChecking(false)
       return
     }
     let active = true
     setTemplateChecking(true)
-    resolveContractTemplateAvailability(entityId, selectedType.code, signatureDate)
+    resolveContractTemplateAvailability(entityId, selectedType.code, validSignatureDate)
       .then((result) => {
         if (active) setTemplateAvailability(result)
       })
@@ -389,7 +399,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
     return () => {
       active = false
     }
-  }, [open, entityId, selectedType, signatureDate])
+  }, [open, entityId, selectedType, validSignatureDate])
 
   const templateBlocked =
     !!templateAvailability &&
@@ -488,7 +498,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
         onOpenChange(false)
         if (workerId) onSuccess(workerId)
       } catch (err) {
-        const msg = err instanceof Error ? err.message : ""
+        const msg = extractErrorMessage(err)
         const friendly = msg || "No se pudo completar la Resolución."
         setError(friendly)
         showError(friendly)
@@ -587,7 +597,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
       onOpenChange(false)
       if (workerId) onSuccess(workerId)
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "No se pudo completar la contratación."
       if (/vacantes/i.test(msg)) {
         friendly = "El puesto seleccionado ya no tiene vacantes disponibles."
@@ -782,11 +792,13 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
                 <div>
                   <dt className="text-xs text-muted-foreground">Salario de referencia</dt>
                   <dd className="text-sm font-medium text-ink">
-                    {selectedSalary
-                      ? formatSalary(selectedSalary)
-                      : selectedGroup
-                        ? "Salario no configurado"
-                        : "—"}
+                    {loading
+                      ? "Cargando…"
+                      : selectedSalary
+                        ? formatSalary(selectedSalary)
+                        : selectedGroup
+                          ? "Salario no configurado"
+                          : "—"}
                   </dd>
                 </div>
                 <div>
@@ -797,7 +809,7 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
                   </dd>
                 </div>
               </dl>
-              {selectedGroup && !selectedSalary && (
+              {!loading && selectedGroup && !selectedSalary && (
                 <p className="mt-2 flex items-start gap-1.5 text-xs text-sitecorp-warning">
                   <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
                   El grupo salarial del cargo no tiene importe configurado en la escala aplicable.
@@ -852,11 +864,13 @@ const HireCandidateDialog: React.FC<HireCandidateDialogProps> = ({
                   <div>
                     <dt className="text-xs text-muted-foreground">Salario de referencia</dt>
                     <dd className="text-sm font-medium text-ink">
-                      {selectedSalary
-                        ? formatSalary(selectedSalary)
-                        : selectedGroup
-                          ? "Salario no configurado"
-                          : "—"}
+                      {loading
+                        ? "Cargando…"
+                        : selectedSalary
+                          ? formatSalary(selectedSalary)
+                          : selectedGroup
+                            ? "Salario no configurado"
+                            : "—"}
                     </dd>
                   </div>
                   <div>

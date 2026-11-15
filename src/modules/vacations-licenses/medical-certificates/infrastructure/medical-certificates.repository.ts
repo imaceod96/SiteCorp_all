@@ -4,7 +4,11 @@ import type {
   EntityMedicalCertificatesResult,
   WorkerMedicalCertificatesResult,
 } from "../domain/entities"
-import { validateDocumentFile } from "../domain/rules"
+import {
+  validateDocumentFile,
+  validateMedicalCertificateInput,
+  type WorkerEmploymentWindow,
+} from "../domain/rules"
 
 /**
  * Certificados Médicos — Infraestructura (adaptador Supabase).
@@ -103,6 +107,38 @@ async function uploadCertificateDocument(workerId: string, file: File): Promise<
   return docData.id
 }
 
+/** Obtiene la ventana laboral del trabajador (períodos de empleo y fecha de alta). */
+export async function fetchWorkerEmploymentWindow(
+  workerId: string
+): Promise<WorkerEmploymentWindow> {
+  const [periodsRes, workerRes] = await Promise.all([
+    supabase
+      .from("worker_employment_periods")
+      .select("hire_date, separation_date")
+      .eq("worker_id", workerId)
+      .order("hire_date", { ascending: true }),
+    supabase
+      .from("workers")
+      .select("hire_date")
+      .eq("id", workerId)
+      .maybeSingle(),
+  ])
+
+  const periods =
+    ((periodsRes.data as { hire_date: string; separation_date: string | null }[] | null) || []).map(
+      (p) => ({
+        hire_date: p.hire_date,
+        separation_date: p.separation_date ?? null,
+      })
+    )
+
+  return {
+    periods,
+    fallbackHireDate:
+      ((workerRes.data as { hire_date?: string | null } | null)?.hire_date ?? null),
+  }
+}
+
 /**
  * Registra un certificado médico (documento obligatorio + RPC SECURITY DEFINER).
  */
@@ -113,22 +149,19 @@ export async function createMedicalCertificate(params: {
   days: number
   document: File | null
 }): Promise<{ certificate_id: string }> {
-  if (!params.start_date || !params.return_date || !params.days) {
-    throw new Error(
-      "La fecha de salida, la fecha de reincorporación y la cantidad de días son obligatorias."
-    )
-  }
-  if (params.return_date <= params.start_date) {
-    throw new Error("La fecha de reincorporación debe ser posterior a la fecha de salida.")
-  }
-  if (params.days < 1) {
-    throw new Error("La cantidad de días debe ser un entero positivo (≥1).")
+  const employment = await fetchWorkerEmploymentWindow(params.worker_id)
+  const validationError = validateMedicalCertificateInput({
+    startDate: params.start_date,
+    returnDate: params.return_date,
+    days: params.days,
+    employment,
+  })
+  if (validationError) {
+    throw new Error(validationError)
   }
   if (!params.document) {
     throw new Error("Debes adjuntar el certificado médico.")
   }
-
-  const documentId = await uploadCertificateDocument(params.worker_id, params.document)
 
   // Obtener el cliente propietario y la entidad del trabajador
   const { data: workerData, error: workerError } = await supabase
@@ -140,6 +173,8 @@ export async function createMedicalCertificate(params: {
   if (workerError || !workerData) {
     throw new Error("No se pudo obtener la información del trabajador.")
   }
+
+  const documentId = await uploadCertificateDocument(params.worker_id, params.document)
 
   // Obtener el usuario actual para created_by
   const { data: { user } } = await supabase.auth.getUser()

@@ -14,6 +14,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
 import { Label } from "@/shared/components/ui/label"
+import { extractErrorMessage } from "@/utils/error-message"
 import { AddendumChangesList } from "@/modules/contracts/presentation/components/AddendumChangesList"
 import { ContractualDocumentSection } from "@/modules/document-generation/presentation/components/ContractualDocumentSection"
 import type { RepresentativeSelectSlotRenderer } from "@/modules/contracts/presentation/components/representative-select-slot"
@@ -168,10 +169,10 @@ export const AddendumDetailDialog: React.FC<AddendumDetailDialogProps> = ({
             doc.result?.error || "No se pudo generar el documento del anexo automáticamente."
         }
       } catch (genErr) {
-        documentWarning =
-          genErr instanceof Error
-            ? genErr.message
-            : "No se pudo generar el documento del anexo automáticamente."
+        documentWarning = extractErrorMessage(
+          genErr,
+          "No se pudo generar el documento del anexo automáticamente."
+        )
       }
       invalidateContractAlertData(queryClient)
       setProcessStage(null)
@@ -184,7 +185,7 @@ export const AddendumDetailDialog: React.FC<AddendumDetailDialogProps> = ({
       onOpenChange(false)
       onChanged()
     } catch (err) {
-      const message = err instanceof Error ? err.message : ""
+      const message = extractErrorMessage(err)
       const friendly = friendlyFormalizeError(message)
       setError(friendly)
       showError(friendly)
@@ -205,7 +206,7 @@ export const AddendumDetailDialog: React.FC<AddendumDetailDialogProps> = ({
       onOpenChange(false)
       onChanged()
     } catch (err) {
-      const message = err instanceof Error ? err.message : ""
+      const message = extractErrorMessage(err)
       const friendly = /formalizado/i.test(message)
         ? "Un anexo formalizado no puede cancelarse: registre un anexo nuevo con las condiciones corregidas."
         : message || "No se pudo cancelar el anexo."

@@ -2,7 +2,7 @@ import * as React from "react"
 import { useNavigate, useLocation, Outlet } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { canViewEntity } from "@/modules/access-control"
+import { loadEntityPermissionSafe } from "@/modules/access-control"
 import {
   SITECORP_MODULES_DISABLED_MESSAGE,
   SITECORP_MODULES_DISABLED_TITLE,
@@ -89,19 +89,20 @@ const EntityRouteWrapper = () => {
         if (isPlatformSuperAdmin) {
           isAuthorized = true
         }
-        // 2. Platform User with organization view/manage permissions
+        // 2. Platform User con permiso explícito de acceso interno (configuración o módulos)
+        //    o asignación directa/heredada sobre la entidad (`can_access_entity(..., '')`).
         else {
-          const [viewAllPerm, manageAllPerm] = await Promise.all([
-            hasPlatformPermission("organizations.view_all"),
-            hasPlatformPermission("organizations.manage_all")
+          const [settingsView, settingsManage, modulesView, modulesManage] = await Promise.all([
+            hasPlatformPermission("entity_settings.view"),
+            hasPlatformPermission("entity_settings.manage"),
+            hasPlatformPermission("entity_modules.view"),
+            hasPlatformPermission("entity_modules.manage"),
           ])
 
-          if (viewAllPerm || manageAllPerm) {
+          if (settingsView || settingsManage || modulesView || modulesManage) {
             isAuthorized = true
-          }
-          // 3. Normal entity-user access check (lo decide el backend).
-          else {
-            isAuthorized = await canViewEntity(entityId)
+          } else {
+            isAuthorized = await loadEntityPermissionSafe(entityId, "")
           }
         }
 

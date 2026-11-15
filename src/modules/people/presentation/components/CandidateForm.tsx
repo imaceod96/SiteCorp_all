@@ -23,9 +23,9 @@ import {
 import {
   ciToBirthDate,
   formatIsoDateToDisplay,
-  isValidIdentification,
+  resolveGenderIdFromCi,
   sanitizeIdentificationInput,
-  IDENTIFICATION_ERROR_MESSAGE,
+  validateIdentificationWithBirthDate,
   IDENTIFICATION_LENGTH,
 } from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
@@ -422,13 +422,29 @@ const CandidateForm = ({
         nextBirthDate = nextDerivedDisplay
       }
 
+      const prevDerivedGenderId = resolveGenderIdFromCi(prev.identification, genders)
+      const nextDerivedGenderId = resolveGenderIdFromCi(cleaned, genders)
+      let nextGenderId = prev.gender_id
+      if (nextDerivedGenderId && (!prev.gender_id || prev.gender_id === prevDerivedGenderId)) {
+        nextGenderId = nextDerivedGenderId
+      }
+
       return {
         ...prev,
         identification: cleaned,
         birth_date: nextBirthDate,
+        gender_id: nextGenderId,
       }
     })
   }
+
+  React.useEffect(() => {
+    if (genders.length === 0 || formData.gender_id || !formData.identification) return
+    const derivedGenderId = resolveGenderIdFromCi(formData.identification, genders)
+    if (derivedGenderId) {
+      setFormData(prev => (prev.gender_id ? prev : { ...prev, gender_id: derivedGenderId }))
+    }
+  }, [genders, formData.identification, formData.gender_id])
 
   const handleProvinceChange = (province: string) => {
     setFormData(prev => ({ ...prev, province, municipality: "" }))
@@ -497,7 +513,7 @@ const CandidateForm = ({
     // son los de siempre. El formato del carné lo aporta el kernel compartido.
     const validationError = validateCandidateRegistration(
       buildRegistrationInput(),
-      isValidIdentification(formData.identification) ? null : IDENTIFICATION_ERROR_MESSAGE
+      validateIdentificationWithBirthDate(formData.identification, formData.birth_date)
     )
     if (validationError) {
       setFormError(validationError)
@@ -600,13 +616,15 @@ const CandidateForm = ({
       }, 1500)
     } catch (err) {
       console.error(isCreate ? "Error creating candidate:" : "Error updating candidate:", err)
-      setFormError(
+      const message =
         err instanceof PeopleRuleError
           ? err.message
-          : isCreate
-            ? "Error al guardar el candidato. Inténtalo de nuevo."
-            : "Error al actualizar el candidato. Inténtalo de nuevo."
-      )
+          : err && typeof err === "object" && "message" in err && typeof (err as { message?: unknown }).message === "string" && (err as { message: string }).message.trim()
+            ? (err as { message: string }).message
+            : isCreate
+              ? "Error al guardar el candidato. Inténtalo de nuevo."
+              : "Error al actualizar el candidato. Inténtalo de nuevo."
+      setFormError(message)
     } finally {
       setFormSubmitting(false)
     }

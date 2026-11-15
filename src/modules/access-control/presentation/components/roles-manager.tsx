@@ -28,8 +28,9 @@ import {
   type PermissionOption,
   type RoleForm,
   type RoleRecord,
-    type RoleScope,
-  } from "@/modules/access-control"
+  type RoleScope,
+} from "@/modules/access-control"
+import { useEntityPlan, isEntityPermissionEnabledInPlan } from "@/modules/entity-plans"
 import {
   BadgeCheck,
   Eye,
@@ -108,6 +109,7 @@ export const RolesManager = ({
 
   const entityReady = scope === "organization" && Boolean(organizationEntityId)
   const dataKey = isPlatform ? "platform" : organizationEntityId || ""
+  const { plan: entityPlan } = useEntityPlan(entityReady ? organizationEntityId : null)
 
   const loadData = React.useCallback(async () => {
     if (scope === "organization" && !organizationEntityId) {
@@ -204,7 +206,13 @@ export const RolesManager = ({
       }
 
       setSaving(true)
-      await saveRole(form, selectedPermissionIds, editingRole)
+      const allowedPermissionIds =
+        scope === "organization" && !isProtectedRole(editingRole)
+          ? selectedPermissionIds.filter((id) =>
+              selectablePermissions.some((permission) => permission.id === id)
+            )
+          : selectedPermissionIds
+      await saveRole(form, allowedPermissionIds, editingRole)
       setSuccess(
         editingRole
           ? "Rol actualizado correctamente."
@@ -284,15 +292,18 @@ export const RolesManager = ({
   }
 
   // Nivel 1 (plataforma): sólo el catálogo de plataforma.
-  // Nivel 2 (entidad): sólo el catálogo global de permisos INTERNOS.
-  const selectablePermissions = React.useMemo(
-    () => selectablePermissionsFor(scope, permissions),
-    [scope, permissions]
-  )
+  // Nivel 2 (entidad): sólo el catálogo global de permisos INTERNOS habilitados en el plan contratado.
+  const planFilteredPermissions = React.useMemo(() => {
+    const base = selectablePermissionsFor(scope, permissions)
+    if (scope !== "organization" || !organizationEntityId) return base
+    return base.filter((permission) => isEntityPermissionEnabledInPlan(permission.code, entityPlan))
+  }, [scope, permissions, organizationEntityId, entityPlan])
+
+  const selectablePermissions = planFilteredPermissions
 
   const allGroups = React.useMemo(
-    () => permissionGroupsFor(scope, permissions),
-    [scope, permissions]
+    () => permissionGroupsFor(scope, planFilteredPermissions),
+    [scope, planFilteredPermissions]
   )
 
   const renderPermissionCheckbox = (permission: PermissionOption) => {
@@ -639,23 +650,33 @@ export const RolesManager = ({
                     SuperAdmin no depende de la lista normal de permisos. La autorización reservada le
                     otorga acceso completo a la plataforma.
                   </SiteCorpAlert>
-                ) : viewingRole.permissionCodes.length === 0 ? (
+                ) : viewingRole.permissionCodes.filter((code) =>
+                  scope !== "organization" || !organizationEntityId
+                    ? true
+                    : isEntityPermissionEnabledInPlan(code, entityPlan)
+                ).length === 0 ? (
                   <div className="rounded-xl border border-dashed border-border p-5 text-sm text-muted-foreground">
                     Este rol no tiene permisos asignados.
                   </div>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {viewingRole.permissionCodes.map((code) => {
-                      const permission = permissions.find((item) => item.code === code)
-                      return (
-                        <span
-                          key={code}
-                          className="inline-flex items-center rounded-lg border border-border bg-sitecorp-background px-3 py-1.5 text-xs font-medium text-ink"
-                        >
-                          {permission ? permissionLabel(scope, permission) : code}
-                        </span>
+                    {viewingRole.permissionCodes
+                      .filter((code) =>
+                        scope !== "organization" || !organizationEntityId
+                          ? true
+                          : isEntityPermissionEnabledInPlan(code, entityPlan)
                       )
-                    })}
+                      .map((code) => {
+                        const permission = permissions.find((item) => item.code === code)
+                        return (
+                          <span
+                            key={code}
+                            className="inline-flex items-center rounded-lg border border-border bg-sitecorp-background px-3 py-1.5 text-xs font-medium text-ink"
+                          >
+                            {permission ? permissionLabel(scope, permission) : code}
+                          </span>
+                        )
+                      })}
                   </div>
                 )}
               </div>

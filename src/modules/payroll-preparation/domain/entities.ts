@@ -46,6 +46,13 @@ export interface PrenominaWorkerEntry {
   salary_currency: string | null
   workday_hours: number | null
   worked_days: number
+  period_active_start?: string | null
+  period_active_end?: string | null
+  max_worked_days?: number | null
+  absence_days_in_period?: number
+  proposed_worked_days?: number
+  worked_days_manual?: boolean
+  assignment_id?: string | null
   worked_hours: number
   hourly_scale_rate: number
   scale_salary_payment: number

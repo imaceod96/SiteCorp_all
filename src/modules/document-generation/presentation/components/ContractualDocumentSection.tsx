@@ -25,6 +25,7 @@ import {
   downloadGeneratedDocument,
   generateAddendumDocument,
   generateContractDocument,
+  type DocumentGenerationStage,
 } from "@/modules/document-generation/application/document-generation.commands"
 import type {
   DocumentGenerationPrecheck,
@@ -71,9 +72,25 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
   const [loading, setLoading] = React.useState(true)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const [generating, setGenerating] = React.useState(false)
+  const [generationStage, setGenerationStage] = React.useState<DocumentGenerationStage | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [failure, setFailure] = React.useState<DocumentGenerationResult | null>(null)
   const [busyDocId, setBusyDocId] = React.useState<string | null>(null)
+
+  const stageLabel = React.useMemo(() => {
+    switch (generationStage) {
+      case "VALIDATING":
+        return "Validando plantilla y datos del expediente…"
+      case "LOADING_TEMPLATE":
+        return "Cargando plantilla configurada…"
+      case "RENDERING":
+        return "Sustituyendo variables en el documento…"
+      case "SAVING":
+        return "Guardando documento en el expediente…"
+      default:
+        return "Generando documento…"
+    }
+  }, [generationStage])
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -113,12 +130,13 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
 
   const handleGenerate = async () => {
     setGenerating(true)
+    setGenerationStage("VALIDATING")
     setFailure(null)
     try {
       const result =
         kind === "CONTRACT"
-          ? await generateContractDocument(sourceId)
-          : await generateAddendumDocument(sourceId)
+          ? await generateContractDocument(sourceId, setGenerationStage)
+          : await generateAddendumDocument(sourceId, setGenerationStage)
       if (!result.success) {
         setDialogOpen(false)
         setFailure(result)
@@ -131,6 +149,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
       setFailure({ success: false, pdfPath: null, error: err instanceof Error ? err.message : "No se pudo generar el documento" })
     } finally {
       setGenerating(false)
+      setGenerationStage(null)
     }
   }
 
@@ -330,8 +349,20 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
               </SiteCorpAlert>
             )}
 
+            {generating && (
+              <div className="flex items-center gap-2 rounded-lg border border-sitecorp-primary/30 bg-sitecorp-primary/5 px-3 py-2 text-xs font-medium text-sitecorp-primary">
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>{stageLabel}</span>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-1">
-              <SiteCorpButton type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+              <SiteCorpButton
+                type="button"
+                variant="outline"
+                disabled={generating}
+                onClick={() => setDialogOpen(false)}
+              >
                 Cancelar
               </SiteCorpButton>
               <SiteCorpButton
@@ -340,7 +371,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
                 onClick={handleGenerate}
               >
                 {generating && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                {latest ? "Regenerar" : "Generar"}
+                {generating ? "Generando…" : latest ? "Regenerar" : "Generar"}
               </SiteCorpButton>
             </div>
           </div>

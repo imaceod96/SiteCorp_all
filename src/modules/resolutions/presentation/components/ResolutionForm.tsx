@@ -230,27 +230,35 @@ const ResolutionForm: React.FC<ResolutionFormProps> = ({
       selectedRepresentative,
     ])
 
-  const persistEntityField = async (
+  const persistQueueRef = React.useRef<Promise<void>>(Promise.resolve())
+
+  const persistEntityField = (
     field: "municipality" | "revolution_year",
     value: string
   ) => {
     if (!context || !canManageContractData) return
-    try {
-      // Se conserva el resto de los datos contractuales: nunca se sobrescriben con vacío.
-      const current = await fetchEntityContractData(context.entity.id)
-      await saveEntityContractData(context.entity.id, {
-        organism: current?.organism ?? null,
-        branch: current?.branch ?? null,
-        labor_identification_code: current?.labor_identification_code ?? null,
-        address: current?.address ?? null,
-        province: current?.province ?? null,
-        municipality: field === "municipality" ? value.trim() || null : current?.municipality ?? null,
-        revolution_year:
-          field === "revolution_year" ? value.trim() || null : current?.revolution_year ?? null,
+    const targetEntityId = context.entity.id
+    persistQueueRef.current = persistQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          // Se conserva el resto de los datos contractuales: nunca se sobrescriben con vacío.
+          const current = await fetchEntityContractData(targetEntityId)
+          await saveEntityContractData(targetEntityId, {
+            organism: current?.organism ?? null,
+            branch: current?.branch ?? null,
+            labor_identification_code: current?.labor_identification_code ?? null,
+            address: current?.address ?? null,
+            province: current?.province ?? null,
+            municipality:
+              field === "municipality" ? value.trim() || null : current?.municipality ?? null,
+            revolution_year:
+              field === "revolution_year" ? value.trim() || null : current?.revolution_year ?? null,
+          })
+        } catch {
+          /* La persistencia es best-effort: el dato se conserva igualmente en el formulario. */
+        }
       })
-    } catch {
-      /* La persistencia es best-effort: el dato se conserva igualmente en el formulario. */
-    }
   }
 
   if (loading && !context) {

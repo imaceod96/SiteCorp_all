@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/shared/components/ui/dialog"
 import { saveDownloadedFile } from "@/modules/people/infrastructure/expediente-storage"
+import { extractErrorMessage } from "@/utils/error-message"
 import {
   TRAINING_FREQUENCY_LABELS,
   TRAINING_FREQUENCY_OPTIONS,
@@ -195,11 +196,13 @@ const EntityTraining: React.FC = () => {
           return new Set(overview.state.folders.map((f) => f.id))
         })
       } catch (err) {
-        setError(
+        const message =
           err instanceof Error
             ? err.message
-            : "No se pudo cargar la información de capacitación de la entidad."
-        )
+            : err && typeof err === "object" && "message" in err && typeof (err as { message?: unknown }).message === "string"
+              ? (err as { message: string }).message
+              : "No se pudo cargar la información de capacitación de la entidad."
+        setError(message)
       } finally {
         if (!opts.silent) setLoading(false)
       }
@@ -661,7 +664,7 @@ const EntityTraining: React.FC = () => {
       toast({
         variant: "destructive",
         title: "No se pudo guardar la sesión",
-        description: err instanceof Error ? err.message : "Error inesperado.",
+        description: extractErrorMessage(err, "Error inesperado."),
       })
     } finally {
       setSessionSubmitting(false)
@@ -1120,12 +1123,12 @@ const EntityTraining: React.FC = () => {
               )}
             </div>
 
-            {areas.length === 0 ? (
+            {areas.filter((a) => a.is_active).length === 0 ? (
               <SiteCorpCard className="rounded-2xl">
                 <div className="py-8 text-center">
                   <FolderOpen className="mx-auto h-8 w-8 text-muted-foreground/60" />
                   <p className="mt-2 text-sm font-semibold text-ink">
-                    Esta entidad aún no tiene áreas organizativas creadas
+                    Esta entidad aún no tiene áreas organizativas activas creadas
                   </p>
                   <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
                     El módulo de Capacitación utiliza exclusivamente las áreas existentes en la
@@ -1149,7 +1152,7 @@ const EntityTraining: React.FC = () => {
                     No hay carpetas de área incorporadas todavía
                   </p>
                   <p className="mx-auto mt-1 max-w-lg text-xs text-muted-foreground">
-                    Incorpora una o más de las {areas.length} áreas organizativas existentes de la
+                    Incorpora una o más de las {areas.filter((a) => a.is_active).length} áreas organizativas existentes de la
                     entidad como carpetas de capacitación para comenzar a registrar sus temas,
                     documentos Word/PDF y sesiones del calendario.
                   </p>

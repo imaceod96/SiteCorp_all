@@ -71,31 +71,36 @@ const EntityPendingDocuments = () => {
   const [itemsLoading, setItemsLoading] = React.useState(false)
 
   const load = React.useCallback(async () => {
-    if (!canView) {
+    if (!canView || !entityId) {
+      setBatches([])
       setLoading(false)
       return
     }
     setLoading(true)
     try {
-      setBatches(await fetchPendingBatches())
+      setBatches(await fetchPendingBatches(entityId))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudieron cargar los lotes documentales")
     } finally {
       setLoading(false)
     }
-  }, [canView])
+  }, [canView, entityId])
 
   React.useEffect(() => {
     void load()
   }, [load])
 
   const openDetail = async (batch: PendingBatch) => {
+    if (!entityId || batch.organization_entity_id !== entityId) {
+      showError("Este lote no pertenece a la entidad seleccionada.")
+      return
+    }
     setDetail(batch)
     setItems([])
     setItemsLoading(true)
     try {
-      setItems(await fetchBatchItems(batch.id))
+      setItems(await fetchBatchItems(batch.id, entityId))
     } catch (err) {
       showError(err instanceof Error ? err.message : "No se pudo cargar el detalle del lote")
     } finally {
@@ -103,11 +108,19 @@ const EntityPendingDocuments = () => {
     }
   }
 
+  const [busyLabel, setBusyLabel] = React.useState<string | null>(null)
+
   const handleGenerate = async (batch: PendingBatch) => {
+    if (!entityId || batch.organization_entity_id !== entityId) {
+      showError("No puede reintentar un lote que no pertenece a esta entidad.")
+      return
+    }
     setBusy(batch.id)
+    setBusyLabel("Generando documentos…")
     try {
-      const result = await generateEventMovementDocuments(batch.event_id)
-      await rebuildEventBatches(batch.event_id)
+      const result = await generateEventMovementDocuments(batch.event_id, entityId)
+      setBusyLabel("Actualizando lote…")
+      await rebuildEventBatches(batch.event_id, entityId)
       await load()
       if (result.failed > 0) {
         showError(`${result.generated} de ${result.generated + result.failed} documentos generados · ${result.failed} error(es).`)
@@ -118,11 +131,17 @@ const EntityPendingDocuments = () => {
       showError(err instanceof Error ? err.message : "No se pudieron generar los documentos")
     } finally {
       setBusy(null)
+      setBusyLabel(null)
     }
   }
 
   const handleCreateZip = async (batch: PendingBatch) => {
+    if (!entityId || batch.organization_entity_id !== entityId) {
+      showError("No puede generar el ZIP de un lote que no pertenece a esta entidad.")
+      return
+    }
     setBusy(batch.id)
+    setBusyLabel("Empaquetando ZIP…")
     try {
       await requestBatchZip(batch.id)
       await load()
@@ -131,12 +150,18 @@ const EntityPendingDocuments = () => {
       showError(err instanceof Error ? err.message : "No se pudo generar el ZIP")
     } finally {
       setBusy(null)
+      setBusyLabel(null)
     }
   }
 
   const handleDownloadZip = async (batch: PendingBatch) => {
+    if (!entityId || batch.organization_entity_id !== entityId) {
+      showError("Este lote no pertenece a la entidad seleccionada.")
+      return
+    }
     if (!batch.zip_path) return
     setBusy(batch.id)
+    setBusyLabel("Preparando descarga…")
     try {
       const url = await createBatchZipUrl(batch.zip_path)
       if (!url) throw new Error("No se pudo preparar la descarga")
@@ -145,6 +170,7 @@ const EntityPendingDocuments = () => {
       showError(err instanceof Error ? err.message : "No se pudo descargar el ZIP")
     } finally {
       setBusy(null)
+      setBusyLabel(null)
     }
   }
 
@@ -249,7 +275,7 @@ const EntityPendingDocuments = () => {
                               ) : (
                                 <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
                               )}
-                              Reintentar
+                              {isBusy && busyLabel ? busyLabel : "Reintentar"}
                             </SiteCorpButton>
                           )}
                           {canManage && !batch.zip_path && batch.generated_count > 0 && (
@@ -264,7 +290,7 @@ const EntityPendingDocuments = () => {
                               ) : (
                                 <FileArchive className="mr-1.5 h-3.5 w-3.5" />
                               )}
-                              Crear ZIP
+                              {isBusy && busyLabel ? busyLabel : "Crear ZIP"}
                             </SiteCorpButton>
                           )}
                           {batch.zip_path && (
@@ -274,7 +300,12 @@ const EntityPendingDocuments = () => {
                               disabled={isBusy}
                               onClick={() => void handleDownloadZip(batch)}
                             >
-                              <Download className="mr-1.5 h-3.5 w-3.5" /> Descargar ZIP
+                              {isBusy ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Download className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              {isBusy && busyLabel ? busyLabel : "Descargar ZIP"}
                             </SiteCorpButton>
                           )}
                         </div>

@@ -646,7 +646,16 @@ const EntityPrenomina = () => {
                       <TableRow>
                         <TableCell className="font-medium text-ink">{entry.worker_name_snapshot}</TableCell>
                         <TableCell>{entry.job_name_snapshot || "—"}</TableCell>
-                        <TableCell>{entry.position_name_snapshot || "—"}</TableCell>
+                        <TableCell>
+                          <div>{entry.position_name_snapshot || "—"}</div>
+                          {(entry.period_active_start || entry.period_active_end) && (
+                            <div className="text-[11px] text-muted-foreground">
+                              {entry.period_active_start ? entry.period_active_start.split("-").reverse().join("/") : "—"}
+                              {" – "}
+                              {entry.period_active_end ? entry.period_active_end.split("-").reverse().join("/") : "—"}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>{entry.salary_group_sequence ?? "—"}</TableCell>
                         <TableCell>
                           {entry.salary_scale_amount !== null ? (
@@ -655,7 +664,14 @@ const EntityPrenomina = () => {
                             <span className="text-sitecorp-danger">Sin salario escala configurado</span>
                           )}
                         </TableCell>
-                        <TableCell>{entry.worked_days}</TableCell>
+                        <TableCell>
+                          <div>{entry.worked_days}</div>
+                          {(entry.absence_days_in_period ?? 0) > 0 && (
+                            <div className="text-[11px] text-muted-foreground">
+                              -{entry.absence_days_in_period} d ausencia
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>{entry.worked_hours}</TableCell>
                         <TableCell>{formatMoney(entry.scale_salary_payment)}</TableCell>
                         <TableCell>
@@ -774,6 +790,7 @@ const EntityPrenomina = () => {
       <WorkerPrenominaDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        period={period}
         entry={activeEntry}
         nights={activeEntry ? nightsByEntry[activeEntry.id] || [] : []}
         claConfig={activeClaConfig}

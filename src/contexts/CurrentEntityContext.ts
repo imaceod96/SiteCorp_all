@@ -34,11 +34,12 @@ interface StoredEntitySession {
   entityId: string
 }
 
-export function readStoredActiveEntityId(expectedUserId?: string | null): string | null {
-  if (typeof window === "undefined" || !window.sessionStorage) return null
+function parseStoredEntitySession(
+  raw: string | null,
+  expectedUserId?: string | null
+): string | null {
+  if (!raw) return null
   try {
-    const raw = window.sessionStorage.getItem(ACTIVE_ENTITY_SESSION_KEY)
-    if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<StoredEntitySession>
     if (
       typeof parsed?.userId !== "string" ||
@@ -56,20 +57,58 @@ export function readStoredActiveEntityId(expectedUserId?: string | null): string
   }
 }
 
-export function writeStoredActiveEntityId(userId: string, entityId: string): void {
-  if (typeof window === "undefined" || !window.sessionStorage) return
+export function readStoredActiveEntityId(expectedUserId?: string | null): string | null {
+  if (typeof window === "undefined") return null
   try {
-    const payload: StoredEntitySession = { userId, entityId }
-    window.sessionStorage.setItem(ACTIVE_ENTITY_SESSION_KEY, JSON.stringify(payload))
+    const fromSession = window.sessionStorage
+      ? parseStoredEntitySession(
+          window.sessionStorage.getItem(ACTIVE_ENTITY_SESSION_KEY),
+          expectedUserId
+        )
+      : null
+    if (fromSession) return fromSession
+
+    const rawLocal = window.localStorage
+      ? window.localStorage.getItem(ACTIVE_ENTITY_SESSION_KEY)
+      : null
+    const fromLocal = parseStoredEntitySession(rawLocal, expectedUserId)
+    if (fromLocal && rawLocal && window.sessionStorage) {
+      try {
+        window.sessionStorage.setItem(ACTIVE_ENTITY_SESSION_KEY, rawLocal)
+      } catch {
+        // Ignorar errores de cuota
+      }
+    }
+    return fromLocal
+  } catch {
+    return null
+  }
+}
+
+export function writeStoredActiveEntityId(userId: string, entityId: string): void {
+  if (typeof window === "undefined") return
+  const serialized = JSON.stringify({ userId, entityId } satisfies StoredEntitySession)
+  try {
+    window.sessionStorage?.setItem(ACTIVE_ENTITY_SESSION_KEY, serialized)
+  } catch {
+    // Ignorar errores de cuota o modo privado
+  }
+  try {
+    window.localStorage?.setItem(ACTIVE_ENTITY_SESSION_KEY, serialized)
   } catch {
     // Ignorar errores de cuota o modo privado
   }
 }
 
 export function clearStoredActiveEntityId(): void {
-  if (typeof window === "undefined" || !window.sessionStorage) return
+  if (typeof window === "undefined") return
   try {
-    window.sessionStorage.removeItem(ACTIVE_ENTITY_SESSION_KEY)
+    window.sessionStorage?.removeItem(ACTIVE_ENTITY_SESSION_KEY)
+  } catch {
+    // Ignorar errores de almacenamiento
+  }
+  try {
+    window.localStorage?.removeItem(ACTIVE_ENTITY_SESSION_KEY)
   } catch {
     // Ignorar errores de almacenamiento
   }

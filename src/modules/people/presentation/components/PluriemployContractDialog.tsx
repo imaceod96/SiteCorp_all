@@ -13,6 +13,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SiteCorpSelect } from "@/shared/components/ui/sitecorp-select"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Label } from "@/shared/components/ui/label"
+import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
 import {
   fetchEntityScheduleSegments,
@@ -264,7 +265,7 @@ const PluriemployContractDialog: React.FC<PluriemployContractDialogProps> = ({
       onOpenChange(false)
       onSuccess()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "No se pudo formalizar el segundo contrato."
       if (/vacantes/i.test(msg)) {
         friendly = "El puesto seleccionado ya no tiene vacantes disponibles."

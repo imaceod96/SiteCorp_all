@@ -1,5 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 import { useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
@@ -16,9 +17,38 @@ interface SettingsItem {
 }
 
 const EntitySettings = () => {
+  const { isPlatformUser, isPlatformSuperAdmin, hasPlatformPermission } = useAuth()
   const { currentEntity } = useCurrentEntity()
   const navigate = useNavigate()
   const { permissions: entityPermissions, loading } = useEntityPermissions(currentEntity?.id)
+  const [platformSettingsState, setPlatformSettingsState] = React.useState<{
+    checked: boolean
+    allowed: boolean
+  }>(() => ({
+    checked: !isPlatformUser || isPlatformSuperAdmin,
+    allowed: !isPlatformUser || isPlatformSuperAdmin,
+  }))
+
+  React.useEffect(() => {
+    if (!isPlatformUser || isPlatformSuperAdmin) {
+      setPlatformSettingsState({ checked: true, allowed: true })
+      return
+    }
+
+    let cancelled = false
+    void Promise.all([
+      hasPlatformPermission("entity_settings.view"),
+      hasPlatformPermission("entity_settings.manage"),
+    ]).then(([canView, canManage]) => {
+      if (!cancelled) {
+        setPlatformSettingsState({ checked: true, allowed: canView || canManage })
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [isPlatformUser, isPlatformSuperAdmin, hasPlatformPermission])
 
   const settingsItems: SettingsItem[] = React.useMemo(
     () => [
@@ -65,7 +95,7 @@ const EntitySettings = () => {
         description: "Descarga la plantilla Excel, valida filas y carga trabajadores históricos.",
         icon: FileSpreadsheet,
         href: "/settings/initial-import",
-        permissions: ["workers.manage"],
+        permissions: ["workers.initial_import", "workers.manage"],
       },
       {
         title: "Altas y Bajas",
@@ -111,9 +141,24 @@ const EntitySettings = () => {
     []
   )
 
-  const visibleItems = settingsItems.filter(
-    (item) => item.permissions.length === 0 || item.permissions.some((code) => entityPermissions.includes(code))
-  )
+  const configItemsVisible = platformSettingsState.allowed
+    ? settingsItems.filter(
+        (item) =>
+          item.permissions.length > 0 &&
+          item.permissions.some((code) => entityPermissions.includes(code))
+      )
+    : []
+
+  const visibleItems =
+    configItemsVisible.length > 0
+      ? settingsItems.filter(
+          (item) =>
+            item.permissions.length === 0 ||
+            item.permissions.some((code) => entityPermissions.includes(code))
+        )
+      : []
+
+  const isChecking = loading || !platformSettingsState.checked
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -122,7 +167,7 @@ const EntitySettings = () => {
         description={`Administración y configuración de ${currentEntity?.name || "esta entidad"}`}
       />
 
-      {!loading && visibleItems.length === 0 ? (
+      {!isChecking && visibleItems.length === 0 ? (
         <SiteCorpAlert type="warning" title="Sin permisos de configuración">
           No tiene permisos internos de configuración en esta entidad. Contacte con el
           administrador de la entidad.

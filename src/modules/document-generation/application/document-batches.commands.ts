@@ -20,9 +20,10 @@ import { generatePayrollMovementDocument } from "./document-generation.commands"
  * Reintenta únicamente los no generados: los correctos nunca se regeneran.
  */
 export async function generateEventMovementDocuments(
-  eventId: string
+  eventId: string,
+  entityId?: string
 ): Promise<EventGenerationResult> {
-  const pending = await selectUngeneratedEventMovements(eventId)
+  const pending = await selectUngeneratedEventMovements(eventId, entityId)
   const result: EventGenerationResult = { generated: 0, failed: 0, errors: [] }
   for (const movement of pending) {
     const generated = await generatePayrollMovementDocument(movement.id)
@@ -37,8 +38,11 @@ export async function generateEventMovementDocuments(
 }
 
 /** Reconstruye los lotes del evento (aplica la regla > 5 por entidad y tipo en el backend). */
-export async function rebuildEventBatches(eventId: string): Promise<number> {
-  return rpcCreateDocumentBatchesForEvent(eventId)
+export async function rebuildEventBatches(
+  eventId: string,
+  entityId?: string
+): Promise<number> {
+  return rpcCreateDocumentBatchesForEvent(eventId, entityId)
 }
 
 /** Empaqueta el ZIP del lote en el backend (Edge Function) y lo registra. */

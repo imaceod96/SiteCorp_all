@@ -63,9 +63,9 @@ interface ContractAlertMeta {
 export const CONTRACT_ALERT_META: Record<ContractAlertState, ContractAlertMeta> = {
   OVERDUE: { label: "Vencido", badge: "danger" },
   DUE_TODAY: { label: "Vence hoy", badge: "danger" },
-  DUE_IN_7: { label: "Vence en 7 días", badge: "warning" },
-  DUE_IN_15: { label: "Vence en 15 días", badge: "warning" },
-  DUE_IN_30: { label: "Vence en 30 días", badge: "info" },
+  DUE_IN_7: { label: "Próximos 7 días", badge: "warning" },
+  DUE_IN_15: { label: "8–15 días", badge: "warning" },
+  DUE_IN_30: { label: "16–30 días", badge: "info" },
   DUE_AFTER_30: { label: "Más de 30 días", badge: "neutral" },
   NO_END_DATE: { label: "Sin fecha de finalización", badge: "neutral" },
 }

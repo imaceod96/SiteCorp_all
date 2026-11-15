@@ -1,8 +1,10 @@
 import * as React from "react"
 import { useParams, useNavigate, useSearchParams } from "react-router-dom"
-import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
+import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
 import { useQueryClient } from "@tanstack/react-query"
 import { invalidateContractAlertData } from "@/modules/contracts/presentation/hooks/use-contract-alerts"
+import { extractErrorMessage } from "@/utils/error-message"
+import { showSuccess, showError } from "@/utils/toast"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
@@ -42,6 +44,7 @@ import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locati
 import { WorkerForm } from "@/modules/people/presentation/components/WorkerForm"
 import { WorkerDocumentsTab } from "@/modules/people/presentation/components/WorkerDocumentsTab"
 import {
+  cancelScheduledWorkerSeparation,
   drivingLicenseLabels,
   loadWorkerExpedienteView,
   registerWorkerExpedienteContract,
@@ -150,6 +153,7 @@ type Catalog = CatalogRow
 const WorkerDetail = () => {
   const { workerId } = useParams<{ workerId: string }>()
   const entityId = useActiveEntityId()
+  const { currentEntity } = useCurrentEntity()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const initialTab = searchParams.get("tab") || "resumen"
@@ -244,6 +248,7 @@ const WorkerDetail = () => {
     Record<string, ContractCompensationComponent[]>
   >({})
   const [contractSubmitting, setContractSubmitting] = React.useState(false)
+  const [cancellingScheduledSeparation, setCancellingScheduledSeparation] = React.useState(false)
   const [actionError, setActionError] = React.useState<string | null>(null)
 
   const currentAssignment = React.useMemo(() => {
@@ -338,35 +343,6 @@ const WorkerDetail = () => {
                   // Pago por antigüedad aplicable, resuelto en el servidor (caso de uso).
                   setTenurePayment(view.tenurePayment)
 
-                  // Pago por categoría académica (Máster / Doctor). Se resuelve con la
-                  // única fuente de verdad del servidor: Doctor tiene prioridad y los
-                  // importes nunca se suman. Sin fallback entre regímenes.
-                  try {
-                    setAcademicPayment(await loadAcademicCategoryPayment(entityId, workerId))
-                  } catch (academicErr) {
-                    console.error("Error resolving academic category payment:", academicErr)
-                    setAcademicPayment(null)
-                  }
-            
-                  // Fase 11A.3: horario habitual del puesto vigente (o del último puesto si está inactivo)
-      const requestedPositionId =
-        mappedWorker.assignments?.find((a) => a.is_current && !a.end_date)?.position_id ||
-        [...(mappedWorker.assignments || [])].sort((a, b) =>
-          a.start_date < b.start_date ? 1 : -1
-        )[0]?.position_id ||
-        null
-
-      if (requestedPositionId) {
-        try {
-          setPositionSegments(await fetchPositionScheduleSegments(requestedPositionId))
-        } catch (segmentsErr) {
-          console.error("Error loading position schedule segments:", segmentsErr)
-          setPositionSegments([])
-        }
-      } else {
-        setPositionSegments([])
-      }
-
       // Catálogos y licencias de conducción: vienen del caso de uso del expediente.
       setGenders(view.catalogs.genders as Catalog[])
       setMaritalStatuses(view.catalogs.maritalStatuses as Catalog[])
@@ -376,46 +352,28 @@ const WorkerDetail = () => {
       setLicenseIds(view.drivingLicenseIds)
       setContractTypes(view.catalogs.contractTypes)
 
-      // Fase 11A.5: catálogo de formas de pago y conceptos retributivos por contrato.
-      // Los conceptos son históricos: cada contrato conserva los suyos.
-      try {
-        setPaymentMethods(await fetchPaymentMethods())
-      } catch (paymentErr) {
-        console.error("Error loading payment methods:", paymentErr)
-        setPaymentMethods([])
-      }
-      try {
-        setComponentsByContract(
-          await fetchComponentsByContract(
-            ((mappedWorker.contracts || []) as { id: string }[]).map((c) => c.id)
-          )
-        )
-      } catch (componentsErr) {
-        console.error("Error loading contract compensation components:", componentsErr)
-        setComponentsByContract({})
-      }
-
-      // Bitácora de movimientos laborales (bajas, reincorporaciones, cambios de puesto),
+      // Bitácora de movimientos laborales (alta, bajas, reincorporaciones, cambios de puesto),
       // con el nombre de su autor resuelto por el caso de uso.
       setMovements(view.movements)
 
       // Escala aplicable y salario de referencia (derivado del assignment actual).
-      // Se calcula a partir de los datos recién cargados (locales), NO del estado
-      // `worker`, que aún no se ha actualizado en este punto del mismo ciclo async.
       setApplicableScaleId(view.applicableScaleId)
       setApplicableScaleName(view.applicableScaleName)
+
+      const requestedPositionId =
+        mappedWorker.assignments?.find((a) => a.is_current && !a.end_date)?.position_id ||
+        [...(mappedWorker.assignments || [])].sort((a, b) =>
+          a.start_date < b.start_date ? 1 : -1
+        )[0]?.position_id ||
+        null
 
       const localAssignments = mappedWorker.assignments || []
       const localCurrentAssignment =
         localAssignments.find((a) => a.is_current && !a.end_date) || null
-      // Si el trabajador está inactivo no hay assignment actual: usamos su última
-      // situación laboral (assignment histórico más reciente) para el salario de referencia.
-      const localLastAssignment = localAssignments
-        .slice()
-        .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0] || null
-      // Pluriempleo: cada contrato vigente tiene su propio grupo salarial, así que se
-      // cargan los valores de escala de TODOS los puestos del trabajador (no sólo del
-      // vigente): la ficha muestra el salario del contrato seleccionado.
+      const localLastAssignment =
+        localAssignments
+          .slice()
+          .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0] || null
       const localGroupIds = Array.from(
         new Set(
           [
@@ -425,44 +383,68 @@ const WorkerDetail = () => {
           ].filter((id): id is string => !!id)
         )
       )
+      const contractIds = ((mappedWorker.contracts || []) as { id: string }[]).map((c) => c.id)
 
-      if (localGroupIds.length > 0) {
-        setSalaryValuesByGroup(await fetchSalaryValuesForGroups(localGroupIds))
-      } else {
-        setSalaryValuesByGroup({})
-      }
+      // Ejecutar en paralelo las consultas auxiliares del expediente para acelerar la carga
+      const [
+        resolvedAcademicPayment,
+        resolvedSegments,
+        resolvedPaymentMethods,
+        resolvedComponentsByContract,
+        resolvedSalaryValuesByGroup,
+        resolvedContractAlert,
+        resolvedSalaryHistory,
+        resolvedAddendums,
+      ] = await Promise.all([
+        loadAcademicCategoryPayment(entityId, workerId).catch((academicErr) => {
+          console.error("Error resolving academic category payment:", academicErr)
+          return null
+        }),
+        requestedPositionId
+          ? fetchPositionScheduleSegments(requestedPositionId).catch((segmentsErr) => {
+              console.error("Error loading position schedule segments:", segmentsErr)
+              return []
+            })
+          : Promise.resolve([]),
+        fetchPaymentMethods().catch((paymentErr) => {
+          console.error("Error loading payment methods:", paymentErr)
+          return []
+        }),
+        fetchComponentsByContract(contractIds).catch((componentsErr) => {
+          console.error("Error loading contract compensation components:", componentsErr)
+          return {}
+        }),
+        localGroupIds.length > 0
+          ? fetchSalaryValuesForGroups(localGroupIds).catch(() => ({}))
+          : Promise.resolve({}),
+        fetchWorkerContractAlert(entityId, workerId).catch((alertErr) => {
+          console.error("Error loading contract alert:", alertErr)
+          return null
+        }),
+        fetchWorkerSalaryHistory(workerId).catch((historyErr) => {
+          console.error("Error loading salary history:", historyErr)
+          return []
+        }),
+        fetchWorkerAddendums(workerId).catch((addendumErr) => {
+          console.error("Error loading contract addendums:", addendumErr)
+          return []
+        }),
+      ])
 
-      // Fase 12: vencimiento del contrato vigente. Se resuelve en el servidor para
-      // compartir el mismo cálculo (fechas y días) que la vista de Alertas.
-      try {
-        setContractAlert(await fetchWorkerContractAlert(entityId, workerId))
-      } catch (alertErr) {
-        console.error("Error loading contract alert:", alertErr)
-        setContractAlert(null)
-      }
-
-      // Fase 11A: histórico salarial (evolución económica: nunca se recalcula).
-      try {
-        setSalaryHistory(await fetchWorkerSalaryHistory(workerId))
-      } catch (historyErr) {
-        console.error("Error loading salary history:", historyErr)
-        setSalaryHistory([])
-      }
-
-      // Fase 11A.6: anexos al contrato y condiciones formalizadas vigentes
-      // (contrato original + anexos formalizados en orden efectivo).
-      try {
-        setAddendums(await fetchWorkerAddendums(workerId))
-      } catch (addendumErr) {
-        console.error("Error loading contract addendums:", addendumErr)
-        setAddendums([])
-      }
+      setAcademicPayment(resolvedAcademicPayment)
+      setPositionSegments(resolvedSegments)
+      setPaymentMethods(resolvedPaymentMethods)
+      setComponentsByContract(resolvedComponentsByContract)
+      setSalaryValuesByGroup(resolvedSalaryValuesByGroup)
+      setContractAlert(resolvedContractAlert)
+      setSalaryHistory(resolvedSalaryHistory)
+      setAddendums(resolvedAddendums)
       // Las condiciones FORMALIZADAS se leen por contrato seleccionado: en pluriempleo
       // cada contrato tiene las suyas y se piden identificando el contrato (efecto
       // dedicado, más abajo).
     } catch (err) {
       console.error("Error loading worker:", err)
-      setError(err instanceof Error ? err.message : "Error al cargar el trabajador")
+      setError(extractErrorMessage(err, "Error al cargar el trabajador"))
     } finally {
       setLoading(false)
     }
@@ -616,7 +598,7 @@ const WorkerDetail = () => {
       loadWorker()
     } catch (err) {
       console.error("Error registering contract:", err)
-      const msg = err instanceof Error ? err.message : ""
+      const msg = extractErrorMessage(err)
       let friendly = "Error al registrar el contrato"
       if (/Datos pendientes/i.test(msg)) {
         friendly = msg
@@ -634,6 +616,24 @@ const WorkerDetail = () => {
       setActionError(friendly)
     } finally {
       setContractSubmitting(false)
+    }
+  }
+
+  const handleCancelScheduledSeparation = async (assignmentId?: string | null) => {
+    if (!worker) return
+    setCancellingScheduledSeparation(true)
+    try {
+      await cancelScheduledWorkerSeparation({
+        workerId: worker.id,
+        targetAssignmentId: assignmentId ?? null,
+      })
+      invalidateContractAlertData(queryClient)
+      showSuccess("Baja programada cancelada correctamente.")
+      await loadWorker()
+    } catch (err) {
+      showError(extractErrorMessage(err, "No se pudo cancelar la baja programada."))
+    } finally {
+      setCancellingScheduledSeparation(false)
     }
   }
 
@@ -1049,13 +1049,15 @@ const WorkerDetail = () => {
                       >
                         <ArrowRightLeft className="mr-2 h-4 w-4" /> Cambiar de puesto
                       </SiteCorpButton>
-                      <SiteCorpButton
-                        type="button"
-                        variant="outline"
-                        onClick={() => setSeparateOpen(true)}
-                      >
-                        <UserMinus className="mr-2 h-4 w-4" /> Dar de baja
-                      </SiteCorpButton>
+                      {!currentAssignment.scheduled_separation_date && (
+                        <SiteCorpButton
+                          type="button"
+                          variant="outline"
+                          onClick={() => setSeparateOpen(true)}
+                        >
+                          <UserMinus className="mr-2 h-4 w-4" /> Dar de baja
+                        </SiteCorpButton>
+                      )}
                     </>
                   )}
                   {isInactive && (
@@ -1066,6 +1068,33 @@ const WorkerDetail = () => {
                 </div>
               )}
             </div>
+
+            {!isInactive && currentAssignment?.scheduled_separation_date && (
+              <div className="mb-4 flex flex-col gap-2 rounded-xl border border-sitecorp-warning/40 bg-sitecorp-warning/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-0.5 text-sm">
+                  <p className="font-semibold text-sitecorp-warning">
+                    Baja programada para el {formatContractDate(currentAssignment.scheduled_separation_date)}
+                  </p>
+                  <p className="text-xs text-ink">
+                    {currentAssignment.scheduled_separation_reason?.name
+                      ? `Motivo: ${currentAssignment.scheduled_separation_reason.name}. `
+                      : ""}
+                    El trabajador continúa activo hasta esa fecha.
+                  </p>
+                </div>
+                {canManage && (
+                  <SiteCorpButton
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={cancellingScheduledSeparation}
+                    onClick={() => handleCancelScheduledSeparation(currentAssignment.id)}
+                  >
+                    {cancellingScheduledSeparation ? "Cancelando…" : "Cancelar baja programada"}
+                  </SiteCorpButton>
+                )}
+              </div>
+            )}
 
             <dl className="grid gap-4">
               <div>
@@ -1737,7 +1766,13 @@ const WorkerDetail = () => {
                         {formatContractDate(movement.effective_date)}
                       </span>
                       <SiteCorpStatusBadge
-                        status={movement.movement_type === "PLURIEMPLEO" ? "info" : "neutral"}
+                        status={
+                          movement.movement_type === "ALTA"
+                            ? "success"
+                            : movement.movement_type === "PLURIEMPLEO"
+                              ? "info"
+                              : "neutral"
+                        }
                       >
                         {employmentMovementLabel(movement.movement_type)}
                       </SiteCorpStatusBadge>
@@ -2113,6 +2148,7 @@ const WorkerDetail = () => {
               onPaymentScheduleChange={(value) =>
                 setContractForm((f) => ({ ...f, paymentSchedule: value }))
               }
+              defaultSignaturePlace={currentEntity?.municipality || ""}
             />
 
             <ContractFormalizationAlerts
@@ -2239,6 +2275,7 @@ const WorkerDetail = () => {
         onOpenChange={setReincorporateOpen}
         workerId={worker.id}
         entityId={entityId as string}
+        lastSeparationDate={lastBaja?.effective_date ?? lastAssignment?.end_date ?? null}
         onSuccess={loadWorker}
       />
 

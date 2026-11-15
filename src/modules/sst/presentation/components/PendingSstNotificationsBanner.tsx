@@ -5,6 +5,7 @@ import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badg
 import { loadEntityPendingSstNotifications } from "../../application/sst.service"
 import { SST_CHANGED_EVENT } from "../../infrastructure/sst.repository"
 import type { SstOnboardingNotification } from "../../domain/entities"
+import { formatIsoDateToDisplay } from "@/utils/ci"
 import { ShieldAlert, ArrowUpRight, UserCheck, Briefcase, Building2 } from "lucide-react"
 
 interface PendingSstNotificationsBannerProps {
@@ -114,7 +115,7 @@ export const PendingSstNotificationsBanner: React.FC<PendingSstNotificationsBann
 
               <div className="flex items-center justify-between border-t border-border pt-2 text-xs">
                 <span className="font-mono text-muted-foreground tabular-nums">
-                  Fecha: {notif.effective_date}
+                  Fecha: {formatIsoDateToDisplay(notif.effective_date) || notif.effective_date}
                 </span>
                 <Link
                   to={`/workers/${notif.worker_id}?tab=informacion-adicional`}

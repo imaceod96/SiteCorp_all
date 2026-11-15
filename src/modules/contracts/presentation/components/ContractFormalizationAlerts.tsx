@@ -4,6 +4,7 @@ import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { AlertTriangle, Settings2, Info } from "lucide-react"
 import { fetchContractFormalizationPending } from "@/modules/contracts/application/contract-conditions.queries"
 import type { ContractFormalizationPending } from "@/modules/contracts/domain/entities"
+import { isCompleteIsoDate } from "@/utils/ci"
 
 interface ContractFormalizationAlertsProps {
   entityId: string
@@ -36,9 +37,14 @@ export const ContractFormalizationAlerts: React.FC<ContractFormalizationAlertsPr
   onPendingChange,
 }) => {
   const [pending, setPending] = React.useState<ContractFormalizationPending | null>(null)
+  const requestSeqRef = React.useRef(0)
+
+  const normalizedSignatureDate =
+    signatureDate && isCompleteIsoDate(signatureDate) ? signatureDate : null
 
   React.useEffect(() => {
     if (!entityId) return
+    const reqId = ++requestSeqRef.current
     let cancelled = false
 
     const load = async () => {
@@ -46,18 +52,18 @@ export const ContractFormalizationAlerts: React.FC<ContractFormalizationAlertsPr
         const result = await fetchContractFormalizationPending({
           entityId,
           positionId,
-          signatureDate,
-          signaturePlace,
+          signatureDate: normalizedSignatureDate,
+          signaturePlace: signaturePlace?.trim() ? signaturePlace.trim() : null,
           paymentMethodId,
           representativeAssignmentId,
         })
-        if (!cancelled) {
+        if (!cancelled && reqId === requestSeqRef.current) {
           setPending(result)
           onPendingChange?.(result)
         }
       } catch (err) {
         console.error("Error loading contract formalization checklist:", err)
-        if (!cancelled) {
+        if (!cancelled && reqId === requestSeqRef.current) {
           setPending(null)
           onPendingChange?.(null)
         }
@@ -73,7 +79,7 @@ export const ContractFormalizationAlerts: React.FC<ContractFormalizationAlertsPr
   }, [
     entityId,
     positionId,
-    signatureDate,
+    normalizedSignatureDate,
     signaturePlace,
     paymentMethodId,
     representativeAssignmentId,
