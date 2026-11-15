@@ -12,6 +12,7 @@ import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button
 import { SiteCorpAlert } from "@/shared/components/ui/sitecorp-alert"
 import { Plus, Trash2 } from "lucide-react"
 import { academicCategoryLabel } from "@/modules/organization-structure"
+import { toRomanNumeral } from "@/utils/cuba-date"
 import {
   formatDateDMY,
   formatDecimalInput,
@@ -286,7 +287,9 @@ const WorkerPrenominaDialog = ({
             <div className="text-sm">
               <span className="text-muted-foreground">Grupo escala: </span>
               <span className="font-medium text-ink">
-                {entry.salary_group_sequence ?? "—"}
+                {entry.salary_group_sequence !== null && entry.salary_group_sequence !== undefined
+                  ? `Grupo ${toRomanNumeral(entry.salary_group_sequence)}`
+                  : "—"}
               </span>
             </div>
             <div className="text-sm">
@@ -442,17 +445,15 @@ const WorkerPrenominaDialog = ({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <Label htmlFor="prenomina-worked-days">Días trabajados</Label>
-              {!readOnly &&
-                entry.proposed_worked_days !== undefined &&
-                workedDaysValue !== entry.proposed_worked_days && (
-                  <button
-                    type="button"
-                    onClick={() => setWorkedDays(formatDecimalInput(entry.proposed_worked_days ?? 0))}
-                    className="text-xs font-medium text-sitecorp-primary hover:underline"
-                  >
-                    Usar días propuestos ({formatDecimalInput(entry.proposed_worked_days ?? 0)})
-                  </button>
-                )}
+              {!readOnly && entry.proposed_worked_days !== undefined && (
+                <button
+                  type="button"
+                  onClick={() => setWorkedDays(formatDecimalInput(entry.proposed_worked_days ?? 0))}
+                  className="text-xs font-medium text-sitecorp-primary hover:underline"
+                >
+                  Usar días propuestos ({formatDecimalInput(entry.proposed_worked_days ?? 0)})
+                </button>
+              )}
             </div>
             <input
               id="prenomina-worked-days"

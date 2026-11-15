@@ -31,8 +31,6 @@ export const MIGRATION_VACATION_BALANCE_MAX = 24
 const INCOMPLETE_FIELD_LABELS: { field: keyof MigrationRow; label: string }[] = [
   { field: "birth_date", label: "fecha de nacimiento" },
   { field: "gender_id", label: "sexo" },
-  { field: "marital_status_id", label: "estado civil" },
-  { field: "skin_color_id", label: "color de piel" },
   { field: "address", label: "dirección" },
 ]
 

@@ -1,4 +1,156 @@
-import { describe, expect, it, beforeEach } from "vitest"
+import { describe, expect, it, vi, beforeEach } from "vitest"
+import type { AuditEventRecord } from "../domain/types"
+
+const mockAuditDb: AuditEventRecord[] = [
+  {
+    id: "evt-db-1",
+    occurred_at: "2026-11-14T10:00:00.000Z",
+    actor_user_id: "usr-admin-1",
+    actor_username: "admin",
+    actor_full_name: "Administrador SiteCorp",
+    scope: "PLATFORM",
+    company_client_id: null,
+    organization_entity_id: null,
+    entity_name: null,
+    module: "settings",
+    action: "platform_initialized",
+    record_id: "SYS-001",
+    description: "Inicialización del sistema",
+    previous_values: null,
+    new_values: null,
+    result: "SUCCESS",
+  },
+]
+
+vi.mock("@/lib/supabase", () => {
+  return {
+    supabase: {
+      auth: {
+        getSession: async () => ({
+          data: {
+            session: {
+              user: {
+                id: "usr-admin-1",
+                email: "admin@sitecorp.cu",
+                user_metadata: { full_name: "Administrador SiteCorp" },
+              },
+            },
+          },
+        }),
+      },
+      from: (table: string) => {
+        if (table === "organization_entities") {
+          return {
+            select: () => ({
+              order: async () => ({
+                data: [
+                  { id: "6926ce6d-bd88-438e-91d7-291601e1c827", name: "Empresa QA Ficticia" },
+                ],
+                error: null,
+              }),
+              eq: (_col: string, val: string) => ({
+                maybeSingle: async () => ({
+                  data: {
+                    id: val,
+                    name: "Empresa QA Ficticia",
+                    company_client_id: "22e0f552-b767-446a-ae56-9ad82bdacd7c",
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+          }
+        }
+        if (table === "audit_events") {
+          const filters: Array<(row: AuditEventRecord) => boolean> = []
+          let rangeFrom = 0
+          let rangeTo = 999
+          const builder = {
+            select: () => builder,
+            eq: (col: keyof AuditEventRecord, val: unknown) => {
+              filters.push((row) => row[col] === val)
+              return builder
+            },
+            gte: (col: keyof AuditEventRecord, val: string) => {
+              filters.push((row) => String(row[col] ?? "") >= val)
+              return builder
+            },
+            lte: (col: keyof AuditEventRecord, val: string) => {
+              filters.push((row) => String(row[col] ?? "") <= val)
+              return builder
+            },
+            or: () => builder,
+            order: () => builder,
+            limit: (n: number) => {
+              rangeFrom = 0
+              rangeTo = n - 1
+              return builder
+            },
+            range: async (from: number, to: number) => {
+              rangeFrom = from
+              rangeTo = to
+              const filtered = mockAuditDb.filter((r) => filters.every((fn) => fn(r)))
+              return {
+                data: filtered.slice(rangeFrom, rangeTo + 1),
+                count: filtered.length,
+                error: null,
+              }
+            },
+            then: (resolve: (val: unknown) => void) => {
+              const filtered = mockAuditDb.filter((r) => filters.every((fn) => fn(r)))
+              resolve({
+                data: filtered.slice(rangeFrom, rangeTo + 1),
+                count: filtered.length,
+                error: null,
+              })
+            },
+            insert: (payload: Partial<AuditEventRecord> | Array<Partial<AuditEventRecord>>) => {
+              const items = Array.isArray(payload) ? payload : [payload]
+              const insertedRows: AuditEventRecord[] = items.map((item) => {
+                const row: AuditEventRecord = {
+                  id: item.id || `evt-${Date.now()}`,
+                  occurred_at: item.occurred_at || new Date().toISOString(),
+                  actor_user_id: item.actor_user_id ?? null,
+                  actor_username: item.actor_username ?? null,
+                  actor_full_name: item.actor_full_name ?? null,
+                  scope: item.scope || "PLATFORM",
+                  company_client_id: item.company_client_id ?? null,
+                  organization_entity_id: item.organization_entity_id ?? null,
+                  entity_name: item.entity_name ?? null,
+                  module: item.module || "settings",
+                  action: item.action || "unknown",
+                  record_id: item.record_id ?? null,
+                  description: item.description || "",
+                  previous_values: item.previous_values ?? null,
+                  new_values: item.new_values ?? null,
+                  result: item.result || "SUCCESS",
+                }
+                mockAuditDb.unshift(row)
+                return row
+              })
+              return {
+                data: insertedRows,
+                error: null,
+                select: () => ({
+                  single: async () => ({ data: insertedRows[0], error: null }),
+                }),
+              }
+            },
+          }
+          return builder
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: null, error: null }),
+            }),
+          }),
+        }
+      },
+    },
+  }
+})
+
 import {
   AUDIT_MODULES,
   AUDIT_MODULE_LABELS,

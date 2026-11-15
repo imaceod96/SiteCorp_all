@@ -29,9 +29,41 @@ const supabaseAnonKey =
 const baseFetch =
   typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : undefined
 
+const TRANSIENT_STATUS_CODES = new Set([429, 502, 503, 504])
+const RETRY_DELAYS_MS = [350, 800, 1600]
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const fetchWithTransientRetry = async (
+  fn: typeof fetch,
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> => {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const response = await fn(input, init)
+      if (
+        !TRANSIENT_STATUS_CODES.has(response.status) ||
+        attempt === RETRY_DELAYS_MS.length ||
+        init?.signal?.aborted
+      ) {
+        return response
+      }
+    } catch (error) {
+      lastError = error
+      if (attempt === RETRY_DELAYS_MS.length || init?.signal?.aborted) {
+        throw error
+      }
+    }
+    await sleep(RETRY_DELAYS_MS[attempt])
+  }
+  throw lastError ?? new Error("Error de red al conectar con el servidor")
+}
+
 const auditedFetch: typeof fetch | undefined = baseFetch
   ? async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const response = await baseFetch(input, init)
+      const response = await fetchWithTransientRetry(baseFetch, input, init)
       try {
         const hook = globalThis.__sitecorpSupabaseMutationHook
         if (hook) {

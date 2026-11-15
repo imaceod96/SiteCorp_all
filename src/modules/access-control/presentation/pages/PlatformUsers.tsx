@@ -342,14 +342,20 @@ const PlatformUsers = () => {
   const rows = users.map((user) => ({
     full_name: user.full_name,
     username: user.username,
-    email: user.email,
+    email: user.email || "—",
     roles: user.roles.map((r) => r.name).join(", ") || "Sin rol",
     status: (
       <SiteCorpStatusBadge status={user.is_active ? "success" : "warning"}>
         {user.is_active ? "Activo" : "Inactivo"}
       </SiteCorpStatusBadge>
     ),
-    created_at: new Date(user.created_at ?? "").toLocaleDateString("es-ES"),
+    created_at: user.created_at
+      ? new Date(user.created_at).toLocaleDateString("es-ES", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "—",
     actions: (
       <div className="flex flex-wrap items-center gap-2">
         <SiteCorpButton size="sm" variant="outline" onClick={() => startEdit(user)}>

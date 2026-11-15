@@ -190,7 +190,12 @@ const EntityRouteWrapper = () => {
     navigate(fallbackPath)
   }
 
-  if (loading) {
+  const isPlanControlledRoute =
+    location.pathname.includes("/payroll-preparation") ||
+    location.pathname.includes("/training") ||
+    location.pathname.includes("/sst")
+
+  if (loading || (isPlanControlledRoute && planLoading)) {
     return (
       <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader

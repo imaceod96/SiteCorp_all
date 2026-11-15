@@ -182,16 +182,16 @@ export async function loadWorkerSstProfile(
     .sort((a, b) => a.title.localeCompare(b.title, "es"))
 
   const jobEppRequirements = currentJobId
-    ? state.jobEppRequirements.filter(
+    ? (state.jobEppRequirements ?? []).filter(
         (r) => r.organization_entity_id === entityId && r.job_id === currentJobId
       )
     : []
 
-  const eppDeliveries = state.workerEppDeliveries
+  const eppDeliveries = (state.workerEppDeliveries ?? [])
     .filter((d) => d.organization_entity_id === entityId && d.worker_id === workerId)
     .sort((a, b) => (a.delivery_date < b.delivery_date ? 1 : -1))
 
-  const healthAptitudes = state.healthAptitudes
+  const healthAptitudes = (state.healthAptitudes ?? [])
     .filter((h) => h.organization_entity_id === entityId && h.worker_id === workerId)
     .sort((a, b) => (a.evaluation_date < b.evaluation_date ? 1 : -1))
 
@@ -199,7 +199,7 @@ export async function loadWorkerSstProfile(
     sstTrainingRecords,
     pendingNotifications,
     availableSstTopics,
-    eppCatalog: state.eppCatalog,
+    eppCatalog: state.eppCatalog ?? [],
     jobEppRequirements,
     eppDeliveries,
     healthAptitudes,

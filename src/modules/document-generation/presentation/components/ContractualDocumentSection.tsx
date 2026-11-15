@@ -116,6 +116,18 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
   }, [load])
 
   const latest = documents.length > 0 ? documents[documents.length - 1] : null
+  const autoGenerateAttemptedRef = React.useRef<string | null>(null)
+
+  const isCuadroContract = React.useMemo(() => {
+    if (kind !== "CONTRACT") return false
+    const category = String(
+      (precheck?.data as { job?: { occupational_category?: string | null } } | null)?.job
+        ?.occupational_category || ""
+    )
+      .trim()
+      .toUpperCase()
+    return category === "CUADRO"
+  }, [kind, precheck])
 
   const handleDownload = async (document: GeneratedDocumentRow) => {
     setBusyDocId(document.id)
@@ -128,7 +140,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
     }
   }
 
-  const handleGenerate = async () => {
+  const handleGenerate = React.useCallback(async () => {
     setGenerating(true)
     setGenerationStage("VALIDATING")
     setFailure(null)
@@ -151,7 +163,23 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
       setGenerating(false)
       setGenerationStage(null)
     }
-  }
+  }, [kind, sourceId, load])
+
+  React.useEffect(() => {
+    if (
+      !loading &&
+      !generating &&
+      kind === "CONTRACT" &&
+      !isCuadroContract &&
+      !latest &&
+      precheck?.ready &&
+      canManage &&
+      autoGenerateAttemptedRef.current !== sourceId
+    ) {
+      autoGenerateAttemptedRef.current = sourceId
+      void handleGenerate()
+    }
+  }, [loading, generating, kind, isCuadroContract, latest, precheck, canManage, sourceId, handleGenerate])
 
   const title = kind === "CONTRACT" ? "Documento contractual" : "Documento del anexo"
 
@@ -186,14 +214,21 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
         )}
       </div>
 
-      {!latest ? (
+      {isCuadroContract ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Este cargo no genera documento contractual.
+        </p>
+      ) : !latest ? (
         <>
-          <p className="mt-2 text-sm text-muted-foreground">Aún no se ha generado el documento.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {generating ? stageLabel : "Aún no se ha generado el documento."}
+          </p>
           {canManage && (
             <SiteCorpButton
               type="button"
               size="sm"
               className="mt-3"
+              disabled={generating}
               onClick={() => {
                 setFailure(null)
                 setDialogOpen(true)

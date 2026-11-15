@@ -21,6 +21,7 @@ import {
 } from "@/shared/components/ui/dialog"
 import { saveDownloadedFile } from "@/modules/people/infrastructure/expediente-storage"
 import { extractErrorMessage } from "@/utils/error-message"
+import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import {
   TRAINING_FREQUENCY_LABELS,
   TRAINING_FREQUENCY_OPTIONS,
@@ -541,7 +542,7 @@ const EntityTraining: React.FC = () => {
 
     setScheduleFolderId(initialFolderId)
     setScheduleTopicId(initialTopicId)
-    setScheduleDate(`${selectedYear}-${new Date().toISOString().slice(5, 10)}`)
+    setScheduleDate(`${selectedYear}-${todayIsoInCuba().slice(5, 10)}`)
     setScheduleNotes("")
     setScheduleDialogOpen(true)
   }
@@ -564,7 +565,7 @@ const EntityTraining: React.FC = () => {
       setScheduleDialogOpen(false)
       toast({
         title: "Sesión programada",
-        description: `Se programó la sesión para el ${created.scheduled_date} en el calendario anual.`,
+        description: `Se programó la sesión para el ${formatIsoDateToDisplay(created.scheduled_date)} en el calendario anual.`,
       })
       await loadData({ silent: true })
     } catch (err) {
@@ -1042,7 +1043,7 @@ const EntityTraining: React.FC = () => {
                           return (
                             <tr key={session.id} className="hover:bg-muted/20">
                               <td className="px-4 py-2.5 font-mono text-xs font-medium text-ink tabular-nums">
-                                {session.scheduled_date}
+                                {formatIsoDateToDisplay(session.scheduled_date)}
                               </td>
                               <td className="px-4 py-2.5 text-ink">{areaName}</td>
                               <td className="px-4 py-2.5 font-medium text-ink">
@@ -1381,7 +1382,7 @@ const EntityTraining: React.FC = () => {
                                                     </p>
                                                     <p className="text-[11px] text-muted-foreground tabular-nums">
                                                       {formatFileSize(doc.file_size)} ·{" "}
-                                                      {doc.created_at.slice(0, 10)}
+                                                      {formatIsoDateToDisplay(doc.created_at.slice(0, 10))}
                                                     </p>
                                                   </div>
                                                   <div className="flex shrink-0 items-center gap-1">
@@ -1433,7 +1434,7 @@ const EntityTraining: React.FC = () => {
                                                   <div className="space-y-0.5">
                                                     <div className="flex items-center gap-2">
                                                       <span className="font-mono text-xs font-semibold text-ink tabular-nums">
-                                                        {session.scheduled_date}
+                                                        {formatIsoDateToDisplay(session.scheduled_date)}
                                                       </span>
                                                       <SiteCorpStatusBadge
                                                         status={statusBadgeVariant(session.status)}
@@ -1785,14 +1786,16 @@ const EntityTraining: React.FC = () => {
                       ] as const
                     ).map((item) => {
                       const active = sessionStatusInput === item.value
+                      const isFutureSession = sessionDateInput > todayIsoInCuba()
+                      const disabledForFuture = isFutureSession && item.value !== "PROGRAMADA"
                       return (
                         <button
                           key={item.value}
                           type="button"
-                          disabled={!canManage}
+                          disabled={!canManage || disabledForFuture}
                           onClick={() => setSessionStatusInput(item.value)}
                           className={cn(
-                            "flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors",
+                            "flex items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                             active
                               ? item.activeClass
                               : "border-border bg-white text-ink hover:bg-muted/40"
@@ -1804,6 +1807,11 @@ const EntityTraining: React.FC = () => {
                       )
                     })}
                   </div>
+                  {sessionDateInput > todayIsoInCuba() && (
+                    <p className="text-xs text-muted-foreground">
+                      Una sesión con fecha futura solo puede permanecer como Programada.
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">

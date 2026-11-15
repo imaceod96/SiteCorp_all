@@ -115,14 +115,14 @@ const rawValueFor = (
       case "contract.signature_year": return documentSignatureYear(data.contract.signature_date)
       case "contract.signature_place": return textOrNull(data.contract.signature_place)
       case "contract.payment_method": return textOrNull(data.contract.payment_method)
-      case "contract.payment_schedule": return textOrNull(data.contract.payment_schedule)
+      case "contract.payment_schedule": return textOrNull(data.contract.payment_schedule) ?? "Mensual"
 
       case "compensation.base_salary": return data.compensation.base_salary
-      case "compensation.additional_payments": return data.compensation.additional_payments
-      case "compensation.abnormal_conditions_payments": return data.compensation.abnormal_conditions_payments
-      case "compensation.other_payments": return data.compensation.other_payments
+      case "compensation.additional_payments": return data.compensation.additional_payments ?? "No aplica"
+      case "compensation.abnormal_conditions_payments": return data.compensation.abnormal_conditions_payments ?? "No aplica"
+      case "compensation.other_payments": return data.compensation.other_payments ?? "No aplica"
       case "compensation.total": return data.compensation.total
-      case "compensation.currency": return textOrNull(data.compensation.currency)
+      case "compensation.currency": return textOrNull(data.compensation.currency) ?? "CUP"
 
       // Short aliases c.* (delegate to same resolution as long keys)
       case "c.ent": return textOrNull(data.entity.name)
@@ -167,13 +167,13 @@ const rawValueFor = (
       case "c.firma_anio": return documentSignatureYear(data.contract.signature_date)
       case "c.lugar_firma": return textOrNull(data.contract.signature_place)
       case "c.formaPago": return textOrNull(data.contract.payment_method)
-      case "c.momentoPago": return textOrNull(data.contract.payment_schedule)
+      case "c.momentoPago": return textOrNull(data.contract.payment_schedule) ?? "Mensual"
       case "c.salario": return data.compensation.base_salary
-      case "c.pagos_adic": return data.compensation.additional_payments
-      case "c.cond_anorm": return data.compensation.abnormal_conditions_payments
-      case "c.otros_pagos": return data.compensation.other_payments
+      case "c.pagos_adic": return data.compensation.additional_payments ?? "No aplica"
+      case "c.cond_anorm": return data.compensation.abnormal_conditions_payments ?? "No aplica"
+      case "c.otros_pagos": return data.compensation.other_payments ?? "No aplica"
       case "c.total": return data.compensation.total
-      case "c.moneda": return textOrNull(data.compensation.currency)
+      case "c.moneda": return textOrNull(data.compensation.currency) ?? "CUP"
       default: return null
     }
   }
@@ -445,7 +445,9 @@ const formatByDataType = (
   
   switch (definition.dataType) {
     case "date": return formatDocumentDate(typeof raw === "string" ? raw : String(raw))
-    case "amount": return formatDocumentAmount(raw)
+    case "amount":
+      if (typeof raw === "string" && raw === "No aplica") return "No aplica"
+      return formatDocumentAmount(raw)
     case "hours": return formatDocumentHours(raw)
     case "integer":
     case "text":

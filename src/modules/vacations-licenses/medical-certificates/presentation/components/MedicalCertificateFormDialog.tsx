@@ -200,7 +200,10 @@ export default function MedicalCertificateFormDialog({
               <Label>Trabajador *</Label>
               <SiteCorpSelect
                 value={selectedWorkerId}
-                onValueChange={(v) => setSelectedWorkerId(v)}
+                onValueChange={(v) => {
+                  setSelectedWorkerId(v)
+                  if (formError) setFormError(null)
+                }}
                 disabled={workersLoading}
               >
                 <option value="">
@@ -221,7 +224,10 @@ export default function MedicalCertificateFormDialog({
               id="mc-start-date"
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => {
+                setStartDate(e.target.value)
+                if (formError) setFormError(null)
+              }}
               min={earliestHireDate}
               max={returnDate || undefined}
             />
@@ -233,7 +239,10 @@ export default function MedicalCertificateFormDialog({
               id="mc-return-date"
               type="date"
               value={returnDate}
-              onChange={(e) => setReturnDate(e.target.value)}
+              onChange={(e) => {
+                setReturnDate(e.target.value)
+                if (formError) setFormError(null)
+              }}
               min={startDate || earliestHireDate || undefined}
             />
           </div>
@@ -261,13 +270,19 @@ export default function MedicalCertificateFormDialog({
                 id="mc-document"
                 type="file"
                 accept={ALLOWED_EXTENSIONS}
-                onChange={(e) => setDocument(e.target.files?.[0] ?? null)}
+                onChange={(e) => {
+                  setDocument(e.target.files?.[0] ?? null)
+                  if (formError) setFormError(null)
+                }}
                 className="flex-1"
               />
               {document && (
                 <button
                   type="button"
-                  onClick={() => setDocument(null)}
+                  onClick={() => {
+                    setDocument(null)
+                    if (formError) setFormError(null)
+                  }}
                   className="shrink-0 rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-ink"
                   aria-label="Eliminar archivo seleccionado"
                 >

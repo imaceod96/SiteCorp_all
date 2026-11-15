@@ -115,7 +115,7 @@ export const rpcCreatePrenominaPeriod = async (
     p_year: year,
     p_month: month,
   })
-  if (error) throw error
+  if (error) throw new Error(error.message || "No se pudo abrir la prenómina")
   return data as string
 }
 
@@ -124,7 +124,7 @@ export const rpcRefreshPrenominaWorkers = async (periodId: string): Promise<numb
   const { data, error } = await supabase.rpc("prenomina_refresh_workers", {
     p_period_id: periodId,
   })
-  if (error) throw error
+  if (error) throw new Error(error.message || "No se pudieron actualizar los trabajadores")
   return (data as number) || 0
 }
 
@@ -141,7 +141,7 @@ export const rpcSavePrenominaInputs = async (
     p_salary_scale_amount: salaryScaleAmount,
     p_workday_hours: workdayHours,
   })
-  if (error) throw error
+  if (error) throw new Error(error.message || "No se pudieron guardar los datos de prenómina")
 }
 
 /** Guarda la captura CLA del trabajador (minutos por modalidad). */

@@ -159,7 +159,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(sessionUser)
 
       try {
-        const identity: AuthenticatedIdentity = await loadAuthenticatedIdentity(sessionUser.id)
+        let identity: AuthenticatedIdentity
+        try {
+          identity = await loadAuthenticatedIdentity(sessionUser.id)
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 300))
+          identity = await loadAuthenticatedIdentity(sessionUser.id)
+        }
 
         // Respuesta antigua: otra sesión (o un cierre de sesión) la ha invalidado.
         if (!mountedRef.current || epoch !== resolutionEpochRef.current) return
@@ -192,7 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (epoch === resolutionEpochRef.current) inFlightUserIdRef.current = null
       }
     },
-    [publishIdentityFailure]
+    [applyAvatar, publishIdentityFailure]
   )
 
   /**

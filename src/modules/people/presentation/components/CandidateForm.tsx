@@ -414,11 +414,11 @@ const CandidateForm = ({
 
       let nextBirthDate = prev.birth_date
       const firstSixChanged = cleaned.slice(0, 6) !== prev.identification.slice(0, 6)
-      if (firstSixChanged && cleaned.length < 6) {
+      if (firstSixChanged || nextDerivedDisplay) {
         birthDateClearedRef.current = false
       }
 
-      if (!birthDateClearedRef.current && (!prev.birth_date || prev.birth_date === prevDerivedDisplay)) {
+      if (nextDerivedDisplay && (!birthDateClearedRef.current || firstSixChanged || !prev.birth_date || prev.birth_date === prevDerivedDisplay)) {
         nextBirthDate = nextDerivedDisplay
       }
 

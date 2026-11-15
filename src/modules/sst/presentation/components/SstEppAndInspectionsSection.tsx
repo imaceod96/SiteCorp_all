@@ -32,6 +32,7 @@ import {
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
 import { HardHat, SearchCheck, Plus, CheckCircle2, AlertTriangle } from "lucide-react"
+import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 
 interface SstEppAndInspectionsSectionProps {
   entityId: string
@@ -75,7 +76,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
   const [delEppId, setDelEppId] = React.useState("")
   const [delCustomName, setDelCustomName] = React.useState("")
   const [delQuantity, setDelQuantity] = React.useState("1")
-  const [delDate, setDelDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [delDate, setDelDate] = React.useState(() => todayIsoInCuba())
   const [delRenewalDate, setDelRenewalDate] = React.useState(
     () => new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10)
   )
@@ -88,7 +89,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
   const [inspFacility, setInspFacility] = React.useState("")
   const [inspType, setInspType] = React.useState("ORDINARIA")
   const [inspInspector, setInspInspector] = React.useState("")
-  const [inspDate, setInspDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [inspDate, setInspDate] = React.useState(() => todayIsoInCuba())
   const [inspStatus, setInspStatus] = React.useState<SstInspectionStatus>("ABIERTA")
   const [inspNotes, setInspNotes] = React.useState("")
 
@@ -416,7 +417,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                   </thead>
                   <tbody className="divide-y divide-border bg-white">
                     {state.workerEppDeliveries.map((del) => {
-                      const today = new Date().toISOString().slice(0, 10)
+                      const today = todayIsoInCuba()
                       const needsRenewal =
                         del.renewal_due_date && del.renewal_due_date <= today
                       return (
@@ -431,7 +432,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                             {del.epp_name_snapshot} (×{del.quantity})
                           </td>
                           <td className="px-4 py-3 font-mono text-xs tabular-nums">
-                            <p className="text-ink">Entregado: {del.delivery_date}</p>
+                            <p className="text-ink">Entregado: {formatIsoDateToDisplay(del.delivery_date)}</p>
                             {del.renewal_due_date && (
                               <p
                                 className={
@@ -440,7 +441,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                                     : "text-muted-foreground"
                                 }
                               >
-                                Reposición: {del.renewal_due_date}
+                                Reposición: {formatIsoDateToDisplay(del.renewal_due_date)}
                               </p>
                             )}
                           </td>
@@ -515,7 +516,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                     <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-mono text-xs font-semibold text-ink tabular-nums">
-                          {insp.scheduled_date} • {insp.inspection_type}
+                          {formatIsoDateToDisplay(insp.scheduled_date)} • {insp.inspection_type}
                         </span>
                         <SiteCorpStatusBadge
                           status={insp.status === "CERRADA" ? "success" : "info"}
@@ -612,6 +613,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 <Label>Stock actual</Label>
                 <SiteCorpInput
                   type="number"
+                  min={0}
                   value={eppStock}
                   onChange={(e) => setEppStock(e.target.value)}
                 />
@@ -620,6 +622,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 <Label>Alerta stock mín.</Label>
                 <SiteCorpInput
                   type="number"
+                  min={0}
                   value={eppMinStock}
                   onChange={(e) => setEppMinStock(e.target.value)}
                 />
@@ -758,6 +761,12 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 <Label>Cantidad</Label>
                 <SiteCorpInput
                   type="number"
+                  min={1}
+                  max={
+                    delEppId && delEppId !== "__custom__"
+                      ? eppMap.get(delEppId)?.stock_quantity
+                      : undefined
+                  }
                   value={delQuantity}
                   onChange={(e) => setDelQuantity(e.target.value)}
                 />
@@ -766,6 +775,8 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 <Label>Fecha de entrega</Label>
                 <SiteCorpInput
                   type="date"
+                  min={workerMap.get(delWorkerId)?.hireDate || undefined}
+                  max={todayIsoInCuba()}
                   value={delDate}
                   onChange={(e) => setDelDate(e.target.value)}
                   required

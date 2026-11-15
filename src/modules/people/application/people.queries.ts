@@ -120,7 +120,7 @@ export async function loadEntityWorkersDirectory(
   }
   if (!canView && !canManage) return empty
 
-  await applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
+  void applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
   const workers = await fetchEntityActiveWorkers(entityId)
 
   const [genders, maritalStatuses, skinColors, educationLevels] = await Promise.all([
@@ -168,7 +168,7 @@ export async function loadEntityReentriesView(input: {
   }
   if (!canView && !canManage) return empty
 
-  await applyDueScheduledSeparationsRpc({ entityId: input.entityId }).catch(() => 0)
+  void applyDueScheduledSeparationsRpc({ entityId: input.entityId }).catch(() => 0)
   const rows = await fetchEntityReentryWorkers(input.entityId)
 
   // Si la persona mantiene OTRA relación vigente en el cliente (aunque sea en otra

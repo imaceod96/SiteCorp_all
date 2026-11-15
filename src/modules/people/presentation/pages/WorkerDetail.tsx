@@ -40,6 +40,7 @@ import WorkerMedicalCertificatesTab from "@/modules/vacations-licenses/medical-c
 import { WorkerAdditionalInfoTab } from "@/modules/training"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
 import { WorkerForm } from "@/modules/people/presentation/components/WorkerForm"
 import { WorkerDocumentsTab } from "@/modules/people/presentation/components/WorkerDocumentsTab"
@@ -384,6 +385,14 @@ const WorkerDetail = () => {
         )
       )
       const contractIds = ((mappedWorker.contracts || []) as { id: string }[]).map((c) => c.id)
+      const currentContractRow = (
+        (mappedWorker.contracts || []) as { is_current?: boolean; start_date?: string | null }[]
+      ).find((c) => c.is_current)
+      const todayCuba = todayIsoInCuba()
+      const salaryEffectiveDate =
+        currentContractRow?.start_date && currentContractRow.start_date.slice(0, 10) > todayCuba
+          ? currentContractRow.start_date.slice(0, 10)
+          : todayCuba
 
       // Ejecutar en paralelo las consultas auxiliares del expediente para acelerar la carga
       const [
@@ -415,7 +424,7 @@ const WorkerDetail = () => {
           return {}
         }),
         localGroupIds.length > 0
-          ? fetchSalaryValuesForGroups(localGroupIds).catch(() => ({}))
+          ? fetchSalaryValuesForGroups(localGroupIds, salaryEffectiveDate).catch(() => ({}))
           : Promise.resolve({}),
         fetchWorkerContractAlert(entityId, workerId).catch((alertErr) => {
           console.error("Error loading contract alert:", alertErr)
@@ -777,8 +786,6 @@ const WorkerDetail = () => {
     const fields: string[] = []
     if (!worker.birth_date) fields.push("fecha de nacimiento")
     if (!worker.gender_id) fields.push("sexo")
-    if (!worker.marital_status_id) fields.push("estado civil")
-    if (!worker.skin_color_id) fields.push("color de piel")
     if (!worker.address) fields.push("dirección")
     if (!worker.employment_start_date) fields.push("fecha de incorporación")
     return fields
@@ -884,7 +891,7 @@ const WorkerDetail = () => {
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Fecha de nacimiento</dt>
-                <dd className="text-sm text-ink">{worker.birth_date || "—"}</dd>
+                <dd className="text-sm text-ink">{formatIsoDateToDisplay(worker.birth_date)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Sexo</dt>
@@ -1107,7 +1114,7 @@ const WorkerDetail = () => {
               </div>
               <div>
                               <dt className="text-xs text-muted-foreground">Fecha de incorporación</dt>
-                              <dd className="text-sm text-ink">{worker.hire_date}</dd>
+                              <dd className="text-sm text-ink">{formatIsoDateToDisplay(worker.hire_date)}</dd>
                             </div>
               
                             <div>
@@ -1289,7 +1296,7 @@ const WorkerDetail = () => {
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <dt className="text-xs text-muted-foreground">Fecha</dt>
-                  <dd className="text-sm font-medium text-ink">{lastBaja.effective_date}</dd>
+                  <dd className="text-sm font-medium text-ink">{formatIsoDateToDisplay(lastBaja.effective_date)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Motivo</dt>
@@ -1354,8 +1361,8 @@ const WorkerDetail = () => {
                     </p>
                   )}
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    Desde {a.start_date}
-                    {a.end_date ? ` hasta ${a.end_date}` : " · en curso"}
+                    Desde {formatIsoDateToDisplay(a.start_date)}
+                    {a.end_date ? ` hasta ${formatIsoDateToDisplay(a.end_date)}` : " · en curso"}
                   </p>
                 </li>
               ))}

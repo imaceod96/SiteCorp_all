@@ -51,11 +51,16 @@ export async function loadEntityPermissionSafe(
   entityId: string,
   permissionCode: string
 ): Promise<boolean> {
-  try {
-    return await rpcCanAccessEntity(entityId, permissionCode)
-  } catch {
-    return false
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await rpcCanAccessEntity(entityId, permissionCode)
+    } catch {
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+      }
+    }
   }
+  return false
 }
 
 /** Varios permisos de la misma entidad, resueltos en paralelo. */

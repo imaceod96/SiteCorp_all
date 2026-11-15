@@ -51,8 +51,13 @@ export async function selectPlatformDocumentFolders(): Promise<PlatformDocumentF
 }
 
 export async function insertPlatformDocumentFolder(name: string): Promise<void> {
-  const { error } = await supabase.from("platform_document_folders").insert({ name })
-  if (error) throw error
+  const { error } = await supabase.from("platform_document_folders").insert({ name: name.trim() })
+  if (error) {
+    if (error.code === "23505" || /duplicate|ya existe/i.test(error.message || "")) {
+      throw new Error("Ya existe una carpeta con ese nombre.")
+    }
+    throw error
+  }
 }
 
 export async function updatePlatformDocumentFolder(
@@ -61,10 +66,15 @@ export async function updatePlatformDocumentFolder(
 ): Promise<void> {
   const { error } = await supabase
     .from("platform_document_folders")
-    .update({ name, updated_at: new Date().toISOString() })
+    .update({ name: name.trim(), updated_at: new Date().toISOString() })
     .eq("id", folderId)
 
-  if (error) throw error
+  if (error) {
+    if (error.code === "23505" || /duplicate|ya existe/i.test(error.message || "")) {
+      throw new Error("Ya existe una carpeta con ese nombre.")
+    }
+    throw error
+  }
 }
 
 export async function deletePlatformDocumentFolder(folderId: string): Promise<void> {

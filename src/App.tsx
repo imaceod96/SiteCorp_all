@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/shared/components/ui/sonner"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
+import { supabase } from "@/lib/supabase"
 import { AuthProvider, useAuth } from "@/app/providers"
 import { CurrentCompanyClientProvider } from "@/app/providers"
 import { CurrentEntityProvider, useCurrentEntity } from "@/app/providers"
@@ -215,6 +216,44 @@ const LegacyStaffingWorkerRedirect = () => {
   )
 }
 
+const DirectWorkerRouteBridge = () => {
+  const { workerId } = useParams<{ workerId: string }>()
+  const { enterEntityWorkspace } = useCurrentEntity()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  React.useEffect(() => {
+    let cancelled = false
+    if (!workerId) {
+      navigate("/admin", { replace: true })
+      return
+    }
+    void supabase
+      .from("workers")
+      .select("organization_entity_id")
+      .eq("id", workerId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        const entityId = (data as { organization_entity_id?: string | null } | null)?.organization_entity_id
+        if (entityId) {
+          enterEntityWorkspace(entityId)
+          navigate(`/workers/${workerId}${location.search}${location.hash}`, { replace: true })
+        } else {
+          navigate("/admin", { replace: true })
+        }
+      })
+      .catch(() => {
+        if (!cancelled) navigate("/admin", { replace: true })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [workerId, enterEntityWorkspace, navigate, location.search, location.hash])
+
+  return <LoadingScreen />
+}
+
 const AppRoutes = () => {
   const {
     authLoading,
@@ -228,8 +267,19 @@ const AppRoutes = () => {
     isPlatformUser,
     isProfileActive,
   } = useAuth()
-  const { activeEntityId } = useCurrentEntity()
+  const { activeEntityId, enterEntityWorkspace } = useCurrentEntity()
   const location = useLocation()
+
+  const queryEntityId = React.useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    return params.get("entity")
+  }, [location.search])
+
+  React.useEffect(() => {
+    if (queryEntityId && queryEntityId !== activeEntityId) {
+      enterEntityWorkspace(queryEntityId)
+    }
+  }, [queryEntityId, activeEntityId, enterEntityWorkspace])
 
   if (authLoading) {
     return <LoadingScreen />
@@ -286,8 +336,10 @@ const AppRoutes = () => {
     location.pathname === "/organization" || location.pathname.startsWith("/organization/")
   const isTenantPath = location.pathname.startsWith("/tenant/")
 
+  const effectiveActiveEntityId = activeEntityId || queryEntityId
+
   const shouldRenderEntityWorkspace =
-    Boolean(activeEntityId) &&
+    Boolean(effectiveActiveEntityId) &&
     !isAdminPath &&
     !isOrganizationPath &&
     (!isTenantPath || isPlatformUser)
@@ -350,6 +402,8 @@ const AppRoutes = () => {
   if (isPlatformUser) {
     return (
       <Routes>
+        <Route path="/workers/:workerId" element={<DirectWorkerRouteBridge />} />
+        <Route path="/staffing/workers/:workerId" element={<DirectWorkerRouteBridge />} />
         <Route element={<PlatformAdminLayout />}>
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/companies" element={<Organizations />} />
@@ -371,6 +425,8 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      <Route path="/workers/:workerId" element={<DirectWorkerRouteBridge />} />
+      <Route path="/staffing/workers/:workerId" element={<DirectWorkerRouteBridge />} />
       <Route element={<CompanyClientLayout />}>
         <Route path="/" element={<Index />} />
         <Route path="/organization" element={<Organization />} />

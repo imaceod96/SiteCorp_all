@@ -210,8 +210,15 @@ export const AdminEntityPlans: React.FC = () => {
     setReason("")
   }
 
+  const isModifyingExistingPlan = Boolean(currentPlan)
+  const isReasonValid = !isModifyingExistingPlan || Boolean(reason.trim())
+
   const handleSavePlan = async () => {
     if (!selectedEntityId) return
+    if (isModifyingExistingPlan && !reason.trim()) {
+      toast.error("El motivo u observación del cambio es obligatorio al modificar un plan activo.")
+      return
+    }
 
     try {
       setSaving(true)
@@ -736,16 +743,24 @@ export const AdminEntityPlans: React.FC = () => {
 
             <div className="space-y-1.5">
               <Label htmlFor="plan-reason" className="text-xs font-medium text-ink">
-                Motivo u observación del cambio (opcional)
+                {isModifyingExistingPlan
+                  ? "Motivo u observación del cambio *"
+                  : "Motivo u observación del cambio (opcional)"}
               </Label>
               <Textarea
                 id="plan-reason"
+                required={isModifyingExistingPlan}
                 placeholder="Ej. Solicitud comercial de ajuste de paquetes contratados..."
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 rows={3}
                 className="text-xs"
               />
+              {isModifyingExistingPlan && !reason.trim() && (
+                <p className="text-[11px] text-amber-700">
+                  Indica el motivo del cambio para dejar trazabilidad en la bitácora del plan.
+                </p>
+              )}
             </div>
           </div>
 
@@ -761,7 +776,7 @@ export const AdminEntityPlans: React.FC = () => {
             <SiteCorpButton
               type="button"
               onClick={handleSavePlan}
-              disabled={saving}
+              disabled={saving || !isReasonValid}
               variant={hasReduction ? "destructive" : "default"}
             >
               {saving ? "Guardando..." : "Confirmar y aplicar cambios"}

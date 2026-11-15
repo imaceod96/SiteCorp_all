@@ -9,13 +9,13 @@ import {
 import { useAuth } from "@/contexts/AuthContext"
 
 /**
- * Entidad activa de los módulos internos (memoria + `sessionStorage` por pestaña).
+ * Entidad activa de los módulos internos (memoria + `sessionStorage`/`localStorage`).
  *
- * ÁMBITO DE SESIÓN: la entidad activa pertenece a UNA sesión de usuario y a UNA
- * pestaña del navegador (`sessionStorage`), de modo que cada pestaña puede trabajar
- * en su propia entidad sin contaminar otras pestañas y conservando `/home`, `/workers`,
- * etc. al recargar. Al cerrar sesión o cambiar de usuario autenticado este estado y
- * su referencia en sesión se limpian de inmediato.
+ * IMPORTANTE (#25): cuando `user` termina de hidratarse al abrir una ruta interna
+ * en una nueva pestaña, `effectiveActiveEntityId` se resuelve de forma SÍNCRONA en el
+ * mismo render a partir de `readStoredActiveEntityId(activeUserId)`, evitando que el
+ * primer frame con `authReady = true` tenga `activeEntityId === null` y dispare una
+ * redirección prematura a `/admin`.
  */
 export const CurrentEntityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth()
@@ -23,11 +23,18 @@ export const CurrentEntityProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const [currentEntity, setCurrentEntityState] = React.useState<OrganizationEntityRow | null>(null)
   const [activeEntityId, setActiveEntityId] = React.useState<string | null>(() =>
-    activeUserId ? readStoredActiveEntityId(activeUserId) : null
+    readStoredActiveEntityId(activeUserId)
   )
   const previousUserIdRef = React.useRef<string | null>(activeUserId)
 
-  // Hidrata si `user` termina de cargar después del montaje inicial del Provider.
+  const effectiveActiveEntityId = React.useMemo(() => {
+    if (activeEntityId) return activeEntityId
+    if (activeUserId) {
+      return readStoredActiveEntityId(activeUserId)
+    }
+    return null
+  }, [activeEntityId, activeUserId])
+
   React.useEffect(() => {
     if (previousUserIdRef.current === activeUserId) {
       if (activeUserId && !activeEntityId) {
@@ -40,17 +47,22 @@ export const CurrentEntityProvider: React.FC<{ children: React.ReactNode }> = ({
     const prevUserId = previousUserIdRef.current
     previousUserIdRef.current = activeUserId
 
-    // Si había sesión anterior o se cerró sesión, limpia cualquier rastro anterior.
-    if (prevUserId !== null || !activeUserId) {
+    // Si había una sesión distinta y se cerró o cambió de usuario, limpia el estado.
+    if (prevUserId !== null && prevUserId !== activeUserId) {
       clearStoredActiveEntityId()
       setCurrentEntityState(null)
       setActiveEntityId(null)
       return
     }
 
-    // Primer montaje con sesión autenticada resuelta: restaura solo si coincide con userId.
+    if (!activeUserId) {
+      return
+    }
+
     const stored = readStoredActiveEntityId(activeUserId)
-    setActiveEntityId(stored)
+    if (stored) {
+      setActiveEntityId(stored)
+    }
   }, [activeUserId, activeEntityId])
 
   const setCurrentEntity = React.useCallback(
@@ -101,7 +113,7 @@ export const CurrentEntityProvider: React.FC<{ children: React.ReactNode }> = ({
     <CurrentEntityContext.Provider
       value={{
         currentEntity,
-        activeEntityId,
+        activeEntityId: effectiveActiveEntityId,
         setCurrentEntity,
         enterEntityWorkspace,
         clearCurrentEntity,

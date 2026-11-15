@@ -1466,7 +1466,7 @@ BEGIN
         'Calle ' || (10 + (v_i % 70)) || ' No. ' || (100 + v_i * 3) || ', Reparto Residencial',
         v_ent_prov, v_ent_mun,
         '+53 5' || lpad((2100000 + v_i * 137)::text, 7, '0'),
-        lower(regexp_replace(v_fname || '.' || v_surname1 || v_i::text, '[^a-zA-Z0-9.]', '', 'g')) || '@horizonte-demo.cu',
+        regexp_replace(translate(lower(v_fname || '.' || v_surname1 || v_i::text), 'áéíóúüñ', 'aeiouun'), '[^a-z0-9.]', '', 'g') || '@horizonte-demo.cu',
         v_hire_date,
         CASE
           WHEN v_i BETWEEN 15 AND 20 THEN DATE '2019-02-01'
@@ -2020,7 +2020,7 @@ BEGIN
       'Técnico Operativo Industrial', v_skin_1,
       'Ave. Central No. ' || (300 + v_j * 15), v_ent_prov, v_ent_mun,
       '+53 5' || lpad((3800000 + v_j * 411)::text, 7, '0'),
-      lower(regexp_replace(v_fname || '.' || v_surname1 || v_i::text, '[^a-zA-Z0-9.]', '', 'g')) || '@horizonte-demo.cu',
+      regexp_replace(translate(lower(v_fname || '.' || v_surname1 || v_i::text), 'áéíóúüñ', 'aeiouun'), '[^a-z0-9.]', '', 'g') || '@horizonte-demo.cu',
       DATE '2021-05-01', DATE '2021-05-01', 'inactive'
     )
     RETURNING id INTO v_worker_id;
@@ -2115,7 +2115,7 @@ BEGIN
       CASE WHEN (v_j % 2) = 1 THEN v_gender_m ELSE v_gender_f END,
       CASE WHEN (v_j % 2) = 0 THEN v_marital_single ELSE v_marital_married END,
       '+53 5' || lpad((4900000 + v_j * 523)::text, 7, '0'),
-      lower(regexp_replace(v_fname || '.' || v_surname1 || '.cand' || v_j::text, '[^a-zA-Z0-9.]', '', 'g')) || '@horizonte-demo.cu',
+      regexp_replace(translate(lower(v_fname || '.' || v_surname1 || '.cand' || v_j::text), 'áéíóúüñ', 'aeiouun'), '[^a-z0-9.]', '', 'g') || '@horizonte-demo.cu',
       'Calle ' || (20 + v_j * 2) || ' No. ' || (410 + v_j * 7),
       v_ent_mun, v_ent_prov,
       CASE WHEN (v_j % 3) = 0 THEN v_edu_sup ELSE v_edu_tm END,

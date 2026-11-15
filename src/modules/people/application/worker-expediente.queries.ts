@@ -134,7 +134,7 @@ export async function loadWorkerExpedienteView(input: {
     applicableScaleInfo,
   ] = await Promise.all([
     (async () => {
-      await applyDueScheduledSeparationsRpc({
+      void applyDueScheduledSeparationsRpc({
         entityId: input.entityId,
         workerId: input.workerId,
       }).catch(() => 0)

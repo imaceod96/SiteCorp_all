@@ -25,13 +25,18 @@ import { useEntityPermissions } from "@/modules/access-control/presentation/hook
 import {
   useEntityMedicalCertificates,
 } from "../hooks/use-medical-certificates"
-import { getCertificateSignedUrl, type EntityMedicalCertificateRow } from "@/modules/vacations-licenses/medical-certificates"
+import {
+  computeMedicalCertificateDays,
+  getCertificateSignedUrl,
+  type EntityMedicalCertificateRow,
+} from "@/modules/vacations-licenses/medical-certificates"
 import MedicalCertificateFormDialog from "../components/MedicalCertificateFormDialog"
 import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import { useToast } from "@/shared/hooks/use-toast"
 import { useSc404Generation } from "@/modules/access-control/presentation/hooks/use-sc404"
 import {
+  AlertTriangle,
   CalendarDays,
   FileText,
   HeartPulse,
@@ -321,7 +326,28 @@ const EntityMedicalCertificates = () => {
                           <td className="py-3 text-ink">{row.area_name || "—"}</td>
                           <td className="py-3 text-ink">{formatDate(row.start_date)}</td>
                           <td className="py-3 text-ink">{formatDate(row.return_date)}</td>
-                          <td className="py-3 font-semibold text-ink">{row.days}</td>
+                          <td className="py-3 font-semibold text-ink">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{row.days}</span>
+                              {(() => {
+                                const expected = computeMedicalCertificateDays(
+                                  row.start_date,
+                                  row.return_date
+                                )
+                                if (expected !== null && expected !== row.days) {
+                                  return (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded bg-sitecorp-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-sitecorp-warning"
+                                      title={`Los días registrados (${row.days}) no coinciden con la diferencia entre fechas (${expected}).`}
+                                    >
+                                      <AlertTriangle className="h-3 w-3" /> Revisar fechas
+                                    </span>
+                                  )
+                                }
+                                return null
+                              })()}
+                            </span>
+                          </td>
                           <td className="py-3">
                             {row.document?.storage_path ? (
                               <SiteCorpButton
