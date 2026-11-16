@@ -73,18 +73,27 @@ export async function loadJobFormWorkspace(
   options: { jobId?: string | null; salaryGroupId?: string | null } = {}
 ): Promise<JobFormWorkspace> {
   let stage: keyof typeof STAGE_MESSAGES = "areas"
+  const jobId = options.jobId || null
+  const salaryGroupId = options.salaryGroupId || null
 
-  const basics = await (async () => {
+  const basicsPromise = (async () => {
     try {
-      const areas = await selectActiveEntityAreas(entityId)
-
-      stage = "categorias"
-      const categories = await fetchOccupationalCategories()
-      const preparationLevels = await fetchPreparationLevels()
-
-      stage = "escala"
-      const regime = await fetchEntityRegime(entityId)
-      const scaleId = await resolveApplicableScaleId(entityId)
+      const [areas, [categories, preparationLevels], [regime, scaleId]] = await Promise.all([
+        selectActiveEntityAreas(entityId).catch((err) => {
+          stage = "areas"
+          throw err
+        }),
+        Promise.all([fetchOccupationalCategories(), fetchPreparationLevels()]).catch((err) => {
+          stage = "categorias"
+          throw err
+        }),
+        Promise.all([fetchEntityRegime(entityId), resolveApplicableScaleId(entityId)]).catch(
+          (err) => {
+            stage = "escala"
+            throw err
+          }
+        ),
+      ])
 
       stage = "grupos"
       if (!scaleId) {
@@ -97,8 +106,10 @@ export async function loadJobFormWorkspace(
         }
       }
 
-      const details = await selectSalaryScaleSummary(scaleId)
-      const groups = await selectGroupsWithValues(scaleId)
+      const [details, groups] = await Promise.all([
+        selectSalaryScaleSummary(scaleId),
+        selectGroupsWithValues(scaleId),
+      ])
 
       return {
         areas,
@@ -118,24 +129,29 @@ export async function loadJobFormWorkspace(
     }
   })()
 
-  const jobId = options.jobId || null
-  const salaryGroupId = options.salaryGroupId || null
-  if (!jobId && !salaryGroupId) {
-    return { ...basics, claNightSegments: [], preparationLevelIds: [], currentSalaryValue: null }
-  }
-
-  // Datos del cargo en edición: si alguno falla, el formulario se abre igualmente vacío.
-  const [claNightSegments, preparationLevelIds, currentSalaryValue] = await Promise.all([
+  // Datos del cargo en edición: se piden en paralelo con la estructura básica.
+  const [basics, claNightSegments, preparationLevelIds] = await Promise.all([
+    basicsPromise,
     jobId
       ? selectJobClaNightSegments(jobId).catch(() => [] as JobClaNightSegment[])
       : Promise.resolve([] as JobClaNightSegment[]),
     jobId
       ? selectJobPreparationLevelIds(jobId).catch(() => [] as string[])
       : Promise.resolve([] as string[]),
-    salaryGroupId
-      ? loadCurrentSalaryValueForGroup(salaryGroupId)
-      : Promise.resolve(null as SalaryValue | null),
   ])
+
+  let currentSalaryValue: SalaryValue | null = null
+  if (salaryGroupId) {
+    const matchedGroup = basics.groups.find((g) => g.group.id === salaryGroupId)
+    if (matchedGroup?.current_value) {
+      currentSalaryValue = {
+        amount: matchedGroup.current_value.amount,
+        currency_code: matchedGroup.current_value.currency_code,
+      }
+    } else {
+      currentSalaryValue = await loadCurrentSalaryValueForGroup(salaryGroupId)
+    }
+  }
 
   return { ...basics, claNightSegments, preparationLevelIds, currentSalaryValue }
 }

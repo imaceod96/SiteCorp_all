@@ -159,31 +159,37 @@ export const AddendumDetailDialog: React.FC<AddendumDetailDialogProps> = ({
         representativeAssignmentId,
       })
 
-      // §42: al formalizar, el documento del anexo se genera automáticamente.
-      let documentWarning: string | null = null
-      setProcessStage("Generando documento del anexo…")
-      try {
-        const doc = await ensureAddendumDocumentGenerated(addendumId)
-        if (!doc.skipped && !doc.generated) {
-          documentWarning =
-            doc.result?.error || "No se pudo generar el documento del anexo automáticamente."
-        }
-      } catch (genErr) {
-        documentWarning = extractErrorMessage(
-          genErr,
-          "No se pudo generar el documento del anexo automáticamente."
-        )
-      }
+      // Refrescar el estado del anexo y cerrar de inmediato sin bloquear al usuario
+      await Promise.resolve(onChanged())
       invalidateContractAlertData(queryClient)
-      setProcessStage(null)
-
-      showSuccess(
-        documentWarning
-          ? `Anexo formalizado. Sus condiciones forman parte del histórico contractual, pero el documento no se pudo generar: ${documentWarning}`
-          : "Anexo formalizado. Se generó automáticamente su documento contractual."
-      )
       onOpenChange(false)
-      onChanged()
+      showSuccess("Anexo formalizado. Generando su documento contractual en segundo plano…")
+
+      // El trigger de BD encola el anexo en `document_generation_jobs`; disparar Edge Function sin bloquear el cierre
+      void ensureAddendumDocumentGenerated(addendumId)
+        .then(async (doc) => {
+          invalidateContractAlertData(queryClient)
+          await Promise.resolve(onChanged())
+          if (!doc.skipped && !doc.generated) {
+            showSuccess(
+              `Anexo formalizado. El documento quedó pendiente con aviso: ${
+                doc.result?.error || "No se pudo generar el documento del anexo automáticamente."
+              }`
+            )
+          } else if (doc.generated) {
+            showSuccess("Documento del anexo generado automáticamente en el servidor.")
+          }
+        })
+        .catch(async (genErr) => {
+          invalidateContractAlertData(queryClient)
+          await Promise.resolve(onChanged())
+          showError(
+            extractErrorMessage(
+              genErr,
+              "El anexo se formalizó, pero hubo un error al invocar la generación del documento."
+            )
+          )
+        })
     } catch (err) {
       const message = extractErrorMessage(err)
       const friendly = friendlyFormalizeError(message)

@@ -1,26 +1,17 @@
-import {
-  ensureAddendumDocumentGenerated,
-  ensureContractDocumentGenerated,
-  setContractDocumentStatus,
-  type DocumentAutomationResult,
-} from "@/modules/contracts"
-import { ensurePayrollMovementDocumentGenerated } from "@/modules/payroll-movements"
-import { ensureResolutionDocumentGenerated } from "@/modules/resolutions"
+import * as contracts from "@/modules/contracts"
+import type { DocumentAutomationResult } from "@/modules/contracts"
+import * as payrollMovements from "@/modules/payroll-movements"
 import type { PayrollMovementType } from "../domain/entities"
 
 /**
  * Personas — Documentos que produce una transición laboral (infraestructura).
  *
- * Qué documento acompaña a cada operación es una regla del dominio
- * (`TRANSITION_MOVEMENT_DOCUMENT`); CÓMO se genera es de la capa documental, que se
- * invoca desde aquí a través de los dominios de contratos, resoluciones y movimientos de
- * nómina — ningún dominio ni caso de uso depende ya de `@/lib`.
+ * Los triggers de PostgreSQL encolan automáticamente cada documento en
+ * `public.document_generation_jobs` dentro de la misma transacción de negocio, y la Edge
+ * Function `process-document-jobs` los procesa en segundo plano.
  *
- * Política de avisos (idéntica a la que ya tenían las pantallas):
- *   · El documento del movimiento de nómina es SILENCIOSO: el movimiento ya quedó
- *     registrado y el documento puede regenerarse. Nunca interrumpe la operación.
- *   · El contrato, el anexo y la Resolución devuelven un AVISO cuando no se pudieron
- *     generar, para que la pantalla no presente la operación como completada.
+ * Estos adaptadores disparan inmediatamente el procesador de la cola y devuelven cualquier
+ * aviso de plantilla o de red sin ocultar errores en bloques `catch` vacíos.
  */
 
 const contractWarning = (result: DocumentAutomationResult): string | null =>
@@ -38,43 +29,61 @@ const resolutionWarning = (result: DocumentAutomationResult): string | null =>
     ? null
     : result.result?.error || "No se pudo generar la Resolución automáticamente."
 
+const movementWarning = (result: DocumentAutomationResult): string | null =>
+  result.skipped || result.generated
+    ? null
+    : result.result?.error || "No se pudo generar el documento del movimiento de nómina."
+
 /**
- * Movimiento de nómina del trabajador (Alta, Baja o Reubicación). Un fallo no se
- * propaga: el movimiento ya está registrado y su documento puede regenerarse.
+ * Movimiento de nómina del trabajador (Alta, Baja o Reubicación).
+ * Encola y procesa el trabajo en `public.document_generation_jobs` sin tragarse errores.
  */
 export async function ensureMovementDocument(
   workerId: string,
   movementType: PayrollMovementType,
   effectiveDate: string
-): Promise<void> {
+): Promise<string | null> {
   try {
-    await ensurePayrollMovementDocumentGenerated(workerId, movementType, effectiveDate)
-  } catch {
-    /* el movimiento ya quedó registrado; el documento puede regenerarse */
+    const movementId = await payrollMovements.findPayrollMovement(
+      workerId,
+      movementType,
+      effectiveDate
+    )
+    if (movementId) {
+      return movementWarning(await contracts.ensurePayrollMovementDocumentQueued(movementId))
+    }
+    return "No se encontró el movimiento de nómina para encolar su generación en el servidor."
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "No se pudo generar el documento del movimiento de nómina."
+    console.warn("[people] error generando documento de movimiento de nómina:", message)
+    return message
   }
 }
 
 /** Documento del contrato creado. Devuelve el aviso si no se pudo generar y actualiza `document_status`. */
 export async function ensureContractDocument(contractId: string): Promise<string | null> {
-  await setContractDocumentStatus(contractId, "PENDIENTE", null)
+  await contracts.setContractDocumentStatus(contractId, "PENDIENTE", null)
   try {
-    const warning = contractWarning(await ensureContractDocumentGenerated(contractId))
-    await setContractDocumentStatus(contractId, warning ? "ERROR" : "GENERADO", warning)
+    const warning = contractWarning(await contracts.ensureContractDocumentGenerated(contractId))
+    await contracts.setContractDocumentStatus(contractId, warning ? "ERROR" : "GENERADO", warning)
     return warning
   } catch (error) {
     const message =
       error instanceof Error
         ? error.message
         : "No se pudo generar el documento contractual automáticamente."
-    await setContractDocumentStatus(contractId, "ERROR", message)
+    await contracts.setContractDocumentStatus(contractId, "ERROR", message)
     return message
   }
 }
 
-/** Documento del anexo formalizado. Devuelve el aviso si no se pudo generar. */
+/** Documento del anexo formalizado (con estado persistido en `public.document_generation_jobs`). */
 export async function ensureAddendumDocument(addendumId: string): Promise<string | null> {
   try {
-    return addendumWarning(await ensureAddendumDocumentGenerated(addendumId))
+    return addendumWarning(await contracts.ensureAddendumDocumentGenerated(addendumId))
   } catch (error) {
     return error instanceof Error
       ? error.message
@@ -85,7 +94,8 @@ export async function ensureAddendumDocument(addendumId: string): Promise<string
 /** Resolución (documento sustitutivo del Cargo Especialista Principal). */
 export async function ensureResolutionDocument(resolutionId: string): Promise<string | null> {
   try {
-    return resolutionWarning(await ensureResolutionDocumentGenerated(resolutionId))
+    const queued = await contracts.ensureResolutionDocumentQueued(resolutionId)
+    return resolutionWarning(queued)
   } catch (error) {
     return error instanceof Error
       ? error.message

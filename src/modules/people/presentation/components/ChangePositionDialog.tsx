@@ -17,23 +17,19 @@ import { toRomanNumeral } from "@/utils/roman-numerals"
 import { extractErrorMessage } from "@/utils/error-message"
 import { showSuccess, showError } from "@/utils/toast"
 import {
-  resolveApplicableScaleId,
-  fetchSalaryValuesForGroups,
   salaryForGroup,
   formatSalary,
   type SalaryValue,
 } from "@/modules/organization-structure"
-import { ArrowRight, AlertTriangle, FileSignature, Info } from "lucide-react"
+import { ArrowRight, AlertTriangle, FileSignature, Info, RefreshCw } from "lucide-react"
+import { isPermissionCheckUnavailableError } from "@/modules/access-control"
 import { PositionWorkInfoReadOnly } from "@/modules/organization-structure/presentation/components/PositionWorkInfoReadOnly"
-import {
-  fetchEntityScheduleSegments,
-  type PositionScheduleSegment,
-} from "@/modules/organization-structure"
+import { type PositionScheduleSegment } from "@/modules/organization-structure"
 import { AddendumChangesList } from "@/modules/contracts/presentation/components/AddendumChangesList"
 import { RepresentativeSelect } from "@/modules/representatives/presentation/components/RepresentativeSelect"
 import {
   changeWorkerPosition,
-  loadTransitionWorkspace,
+  loadPositionChangeWorkspace,
   previewPositionChange,
   validatePositionChangeInput,
   type PositionChangePreview,
@@ -93,6 +89,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
   >({})
   const [loading, setLoading] = React.useState(false)
   const [loadError, setLoadError] = React.useState<string | null>(null)
+  const [canManageContractData, setCanManageContractData] = React.useState(false)
 
   const [selectedPositionId, setSelectedPositionId] = React.useState("")
   const [effectiveDate, setEffectiveDate] = React.useState("")
@@ -127,26 +124,23 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
     setLoading(true)
     setLoadError(null)
     try {
-      // Caso de uso (lectura): puestos con su estructura y la ocupación vigente de la
-      // entidad (asignación actual con trabajador activo, igual que la Plantilla Operativa).
-      const [workspace, segments, scaleId] = await Promise.all([
-        loadTransitionWorkspace(entityId),
-        fetchEntityScheduleSegments(entityId),
-        resolveApplicableScaleId(entityId),
-      ])
-      const groupIds = workspace.positions
-        .map((p) => p.job?.salary_group?.id)
-        .filter((id): id is string => !!id)
-      const salaryValues = await fetchSalaryValuesForGroups(groupIds)
+      // Caso de uso optimizado (B12): puestos -> valores salariales, ocupación, jornadas,
+      // escala aplicable y permiso contract_data.manage en paralelo.
+      const ws = await loadPositionChangeWorkspace(entityId)
 
-      setPositions(workspace.positions)
-      setOccupancy(workspace.occupancy.counts)
-      setSegmentsByPosition(segments)
-      setApplicableScaleId(scaleId)
-      setSalaryValuesByGroup(salaryValues)
+      setPositions(ws.positions)
+      setOccupancy(ws.occupancy.counts)
+      setSegmentsByPosition(ws.segmentsByPosition)
+      setApplicableScaleId(ws.applicableScaleId)
+      setSalaryValuesByGroup(ws.salaryValuesByGroup)
+      setCanManageContractData(ws.canManageContractData)
     } catch (err) {
       console.error("Error loading positions for change:", err)
-      setLoadError("No se pudieron cargar los puestos disponibles.")
+      if (isPermissionCheckUnavailableError(err)) {
+        setLoadError("No se pudo conectar con el servidor")
+      } else {
+        setLoadError("No se pudieron cargar los puestos disponibles.")
+      }
     } finally {
       setLoading(false)
     }
@@ -160,6 +154,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
     setNotes("")
     setError(null)
     setOccupancy({})
+    setCanManageContractData(false)
     setPreview(null)
     setPreviewError(null)
     setCreateAddendum(true)
@@ -328,7 +323,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
         // Caso de uso: movimiento formal hacia un Cargo Especialista Principal. La
         // Resolución es su documento sustitutivo y se genera en la misma operación,
         // junto con el movimiento de nómina de la reubicación.
-        setProcessStage("Generando Resolución…")
+        setProcessStage("Confirmando movimiento y Resolución…")
         const result = await changeWorkerPosition({
           workerId,
           newPositionId: selectedPositionId,
@@ -350,7 +345,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
           )
         } else {
           showSuccess(
-            "Cambio de puesto realizado. Resolución generada y archivada en los Documentos del trabajador."
+            "Cambio de puesto realizado. La Resolución quedó encolada para su generación automática en Documentos."
           )
         }
         onOpenChange(false)
@@ -369,11 +364,10 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
 
     setSubmitting(true)
     try {
-      // §42/§65: al formalizarlo, el documento del anexo se genera automáticamente.
-      if (formalizeAddendumNow) setProcessStage("Generando documento del anexo…")
+      if (formalizeAddendumNow) setProcessStage("Aplicando cambio de puesto…")
 
-      // Caso de uso: cierra la asignación actual, crea la nueva, registra el anexo en la
-      // misma transacción y genera los documentos (aviso si alguno no se pudo generar).
+      // Caso de uso: cierra la asignación actual, crea la nueva y registra el anexo en la
+      // misma transacción; los triggers encolan automáticamente su generación documental.
       const result = await changeWorkerPosition({
         workerId,
         newPositionId: selectedPositionId,
@@ -403,7 +397,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
         showSuccess(
           result.documentWarning
             ? `Cambio de puesto realizado. Anexo Nº ${addendumNumber} formalizado, pero el documento no se pudo generar: ${result.documentWarning}`
-            : `Cambio aplicado correctamente. Se generó automáticamente el Anexo Nº ${addendumNumber} y su documento.`
+            : `Cambio aplicado correctamente. Anexo Nº ${addendumNumber} formalizado y encolado para su generación automática.`
         )
       } else {
         showSuccess(
@@ -462,7 +456,22 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        {loadError && <SiteCorpAlert type="danger">{loadError}</SiteCorpAlert>}
+        {loadError && (
+          <SiteCorpAlert type="danger">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span>{loadError}</span>
+              <SiteCorpButton
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => void loadPositions()}
+              >
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                Reintentar
+              </SiteCorpButton>
+            </div>
+          </SiteCorpAlert>
+        )}
 
         {/* Situación actual */}
         <div className="rounded-xl border border-border bg-muted/30 p-4">
@@ -685,7 +694,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
                     <input
                       type="checkbox"
                       className="mt-1 h-4 w-4 rounded border-input"
-                      checked={createAddendum}
+                      checked={createAddendum && !!preview.employment_contract_id}
                       disabled={!preview.employment_contract_id}
                       onChange={(e) => setCreateAddendum(e.target.checked)}
                     />
@@ -698,7 +707,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
                     </span>
                   </label>
 
-                  {createAddendum && (
+                  {createAddendum && !!preview.employment_contract_id && (
                     <>
                       <label className="flex items-start gap-2 text-sm text-ink">
                         <input
@@ -741,7 +750,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
                             onDate={signatureDate}
                             value={representativeAssignmentId}
                             onChange={setRepresentativeAssignmentId}
-                            canManage
+                            canManage={canManageContractData}
                             label="Representante que suscribe el anexo *"
                             dateHint={`Representante vigente en la fecha de firma${
                               signatureDate ? ` (${formatConditionDate(signatureDate)})` : ""
@@ -776,7 +785,7 @@ const ChangePositionDialog: React.FC<ChangePositionDialogProps> = ({
               positionId={selectedPositionId}
               workerId={workerId}
               initialResolutionDate={effectiveDate}
-              canManageContractData
+              canManageContractData={canManageContractData}
               onValuesChange={setResolutionValues}
             />
           )}

@@ -360,9 +360,25 @@ export interface DocumentGenerationResult {
   error?: string
 }
 
-export type ContractDocumentStatus = "PENDIENTE" | "GENERADO" | "ERROR"
+export type DocumentGenerationJobKind =
+  | "CONTRACT"
+  | "ADDENDUM"
+  | "RESOLUTION"
+  | "PAYROLL_MOVEMENT"
+  | "VACATION"
+  | "MEDICAL_CERTIFICATE"
+
+export type ContractDocumentStatus =
+  | "PENDIENTE"
+  | "GENERANDO"
+  | "GENERADO"
+  | "ERROR"
+  | "SIN_PLANTILLA"
 
 export interface PendingContractDocumentRow {
+  job_id?: string
+  kind?: DocumentGenerationJobKind
+  source_id?: string
   contract_id: string
   worker_id: string
   worker_name: string
@@ -373,5 +389,8 @@ export interface PendingContractDocumentRow {
   document_status: ContractDocumentStatus
   document_error: string | null
   document_status_updated_at: string
+  attempts?: number
+  worker_document_id?: string | null
 }
+
 

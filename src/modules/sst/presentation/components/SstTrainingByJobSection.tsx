@@ -18,6 +18,7 @@ import {
   SST_FREQUENCY_OPTIONS,
   SST_SESSION_STATUS_LABELS,
   formatSstFileSize,
+  type EntityAreaOption,
   type EntityJobOption,
   type EntitySstState,
   type EntityWorkerSstOption,
@@ -77,6 +78,7 @@ const MONTH_NAMES = [
 interface SstTrainingByJobSectionProps {
   entityId: string
   state: EntitySstState
+  areas?: EntityAreaOption[]
   jobs: EntityJobOption[]
   workers: EntityWorkerSstOption[]
   canManage: boolean
@@ -86,6 +88,7 @@ interface SstTrainingByJobSectionProps {
 export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = ({
   entityId,
   state,
+  areas = [],
   jobs,
   workers,
   canManage,
@@ -145,6 +148,10 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
   const [workerSearch, setWorkerSearch] = React.useState<string>("")
   const [outcomeSubmitting, setOutcomeSubmitting] = React.useState(false)
 
+  const areaActiveMap = React.useMemo(
+    () => new Map(areas.map((a) => [a.id, a.isActive !== false])),
+    [areas]
+  )
   const jobMap = React.useMemo(() => new Map(jobs.map((j) => [j.id, j])), [jobs])
   const topicMap = React.useMemo(
     () => new Map(state.topics.map((t) => [t.id, t])),
@@ -153,8 +160,13 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
 
   const availableJobsToIncorporate = React.useMemo(() => {
     const incorporatedJobIds = new Set(state.jobFolders.map((f) => f.job_id))
-    return jobs.filter((j) => j.isActive && !incorporatedJobIds.has(j.id))
-  }, [jobs, state.jobFolders])
+    return jobs.filter(
+      (j) =>
+        j.isActive &&
+        (!j.areaId || areaActiveMap.get(j.areaId) !== false) &&
+        !incorporatedJobIds.has(j.id)
+    )
+  }, [jobs, state.jobFolders, areaActiveMap])
 
   const activeFolder = React.useMemo(
     () => state.jobFolders.find((f) => f.id === selectedFolderId) || null,
@@ -417,7 +429,7 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-sitecorp-primary" />
                 <h2 className="text-lg font-semibold text-ink">
-                  Calendario Anual de Capacitaciones de SST ({selectedYear})
+                  1. Calendario Anual de Capacitaciones de SST ({selectedYear})
                 </h2>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -457,10 +469,15 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
               <SiteCorpSelect value={filterJobId} onValueChange={setFilterJobId}>
                 <SelectItem value="all">Todos los cargos con carpeta SST</SelectItem>
                 {state.jobFolders.map((f) => {
-                  const liveJobName = jobMap.get(f.job_id)?.name || f.job_name_snapshot
+                  const liveJob = jobMap.get(f.job_id)
+                  const liveJobName = liveJob?.name || f.job_name_snapshot
+                  const isInactiveJob = liveJob?.isActive === false
+                  const areaId = liveJob?.areaId ?? f.area_id_snapshot
+                  const isInactiveArea = Boolean(areaId && areaActiveMap.get(areaId) === false)
                   return (
                     <SelectItem key={f.job_id} value={f.job_id}>
                       {liveJobName}
+                      {isInactiveJob || isInactiveArea ? " (inactiva)" : ""}
                     </SelectItem>
                   )
                 })}
@@ -585,7 +602,7 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
                 <div>
-                  <h3 className="text-base font-semibold text-ink">Carpetas por Cargo</h3>
+                  <h3 className="text-base font-semibold text-ink">2. Carpetas por Cargo</h3>
                   <p className="text-xs text-muted-foreground">
                     1 carpeta de SST por cargo existente en la entidad
                   </p>
@@ -619,7 +636,14 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
                   {state.jobFolders.map((folder) => {
                     const liveJob = jobMap.get(folder.job_id)
                     const displayJobName = liveJob?.name || folder.job_name_snapshot
-                    const displayAreaName = liveJob?.areaName || folder.area_name_snapshot
+                    const rawAreaName = liveJob?.areaName || folder.area_name_snapshot
+                    const effectiveAreaId = liveJob?.areaId ?? folder.area_id_snapshot
+                    const isAreaInactive = Boolean(
+                      effectiveAreaId && areaActiveMap.get(effectiveAreaId) === false
+                    )
+                    const displayAreaName = rawAreaName
+                      ? `${rawAreaName}${isAreaInactive ? " (inactiva)" : ""}`
+                      : null
                     const topicCount = state.topics.filter(
                       (t) => t.folder_id === folder.id
                     ).length
@@ -716,9 +740,17 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
                     <p className="mt-1 text-xs text-muted-foreground">
                       Área:{" "}
                       <strong className="font-medium text-ink">
-                        {jobMap.get(activeFolder.job_id)?.areaName ||
-                          activeFolder.area_name_snapshot ||
-                          "—"}
+                        {(() => {
+                          const liveJob = jobMap.get(activeFolder.job_id)
+                          const rawName =
+                            liveJob?.areaName || activeFolder.area_name_snapshot
+                          if (!rawName) return "—"
+                          const effAreaId = liveJob?.areaId ?? activeFolder.area_id_snapshot
+                          const inactive = Boolean(
+                            effAreaId && areaActiveMap.get(effAreaId) === false
+                          )
+                          return `${rawName}${inactive ? " (inactiva)" : ""}`
+                        })()}
                       </strong>{" "}
                       • Si el cargo cambia de nombre en la estructura de la entidad, esta carpeta
                       lo refleja automáticamente.

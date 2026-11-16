@@ -791,8 +791,8 @@ const CandidateDetail = () => {
       {linkedWorker && (
         <SiteCorpAlert type={hasActiveEmployment ? "success" : "info"}>
           {hasActiveEmployment
-            ? `Trabajador activo (${linkedWorker.code}). Este candidato ya forma parte de la plantilla.`
-            : `Trabajador histórico (${linkedWorker.code}). Esta persona fue trabajador anteriormente; la acción «Contratar» realizará una reincorporación.`}
+            ? `Trabajador activo${linkedWorker.code?.trim() ? ` (${linkedWorker.code.trim()})` : ""}. Este candidato ya forma parte de la plantilla.`
+            : `Trabajador histórico${linkedWorker.code?.trim() ? ` (${linkedWorker.code.trim()})` : ""}. Esta persona fue trabajador anteriormente; la acción «Contratar» realizará una reincorporación.`}
         </SiteCorpAlert>
       )}
 

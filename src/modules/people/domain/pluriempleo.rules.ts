@@ -13,6 +13,7 @@
  *   · las etiquetas del vocabulario de la bitácora laboral.
  */
 
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { validateWorkerContractInput } from "./rules"
 import {
   PLURIEMPLEO_DISABLED_MESSAGE,
@@ -56,16 +57,31 @@ export const EMPLOYMENT_MOVEMENT_LABELS: Record<string, string> = {
 export const employmentMovementLabel = (movementType: string): string =>
   EMPLOYMENT_MOVEMENT_LABELS[movementType] || movementType
 
-/** Contratos VIGENTES del trabajador (los que cuentan para el límite de dos). */
+/** Contratos VIGENTES hoy del trabajador (los que cuentan para el límite de dos). */
 export const activeContractsOf = (
   worker: WorkerExpediente | null | undefined
-): WorkerContractRow[] => (worker?.contracts ?? []).filter((contract) => !!contract.is_current)
+): WorkerContractRow[] => {
+  const today = todayIsoInCuba()
+  return (worker?.contracts ?? []).filter(
+    (contract) =>
+      !!contract.is_current &&
+      (!contract.start_date || contract.start_date <= today) &&
+      (!contract.end_date || contract.end_date >= today)
+  )
+}
 
-/** Asignaciones de puesto VIGENTES (sin fecha de fin) del trabajador. */
+/** Asignaciones de puesto VIGENTES hoy del trabajador. */
 export const activeAssignmentsOf = (
   worker: WorkerExpediente | null | undefined
-): WorkerAssignmentRow[] =>
-  (worker?.assignments ?? []).filter((a) => !!a.is_current && !a.end_date)
+): WorkerAssignmentRow[] => {
+  const today = todayIsoInCuba()
+  return (worker?.assignments ?? []).filter(
+    (a) =>
+      !!a.is_current &&
+      (!a.start_date || a.start_date <= today) &&
+      (!a.end_date || a.end_date >= today)
+  )
+}
 
 /** El trabajador está en pluriempleo cuando tiene más de un contrato vigente. */
 export const hasPluriempleo = (worker: WorkerExpediente | null | undefined): boolean =>

@@ -44,14 +44,12 @@ export interface WorkerFormPermissions {
   canManageContractData: boolean
 }
 
-/** Permisos del formulario del trabajador (sin propagar fallos, como ya hacía). */
+/** Permisos del formulario del trabajador. */
 export async function loadWorkerFormPermissions(
   entityId: string
 ): Promise<WorkerFormPermissions> {
   return {
-    canManageContractData: await loadEntityPermissionSafe(entityId, "contract_data.manage").catch(
-      () => false
-    ),
+    canManageContractData: await loadEntityPermissionSafe(entityId, "contract_data.manage"),
   }
 }
 

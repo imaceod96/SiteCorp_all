@@ -153,7 +153,11 @@ const WorkerVacationsTab = ({
 
       {canManage && (
         <div className="flex justify-end">
-          <SiteCorpButton type="button" onClick={() => setDialogOpen(true)}>
+          <SiteCorpButton
+            type="button"
+            disabled={Boolean(data.summary.is_pending_hire)}
+            onClick={() => setDialogOpen(true)}
+          >
             <CalendarPlus className="mr-2 h-4 w-4" /> Registrar vacaciones
           </SiteCorpButton>
         </div>

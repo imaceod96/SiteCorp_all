@@ -404,7 +404,7 @@ export async function fetchEntityWorkersForSst(
     .select(
       `id, code, first_name, first_surname, second_surname, identification, employment_status, hire_date,
        assignments:worker_position_assignments(
-         is_current, end_date,
+         is_current, start_date, end_date,
          position:organization_positions(
            id, name,
            job:organization_jobs(
@@ -420,6 +420,8 @@ export async function fetchEntityWorkersForSst(
 
   if (error) throw error
 
+  const today = todayIsoInCuba()
+
   return (
     (data as unknown as
       | {
@@ -434,6 +436,7 @@ export async function fetchEntityWorkersForSst(
           assignments:
             | {
                 is_current: boolean
+                start_date?: string | null
                 end_date: string | null
                 position:
                   | {
@@ -475,6 +478,12 @@ export async function fetchEntityWorkersForSst(
       | null) || []
   ).map((row) => {
     const activeAssignment =
+      (row.assignments || []).find(
+        (a) =>
+          a.is_current &&
+          (!a.start_date || a.start_date <= today) &&
+          (!a.end_date || a.end_date >= today)
+      ) ||
       (row.assignments || []).find((a) => a.is_current && !a.end_date) ||
       (row.assignments || [])[0] ||
       null

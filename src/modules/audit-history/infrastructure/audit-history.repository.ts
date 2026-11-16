@@ -76,7 +76,6 @@ function deterministicUuid(seed: string): string {
   return `${p1}-${p2}-${p3}-${p4}-${p5}`
 }
 
-let recentDispatchedEvents: AuditEvent[] = []
 
 /** Limpia el texto de búsqueda antes de enviarlo a filtros. */
 function sanitizeSearchTerm(value: string): string {
@@ -863,6 +862,10 @@ const READ_ONLY_RPC_NAMES = new Set([
   "list_platform_user_emails",
   "contract_formalized_conditions",
   "contract_formalized_totals",
+  "claim_due_document_generation_jobs",
+  "mark_document_generation_job_result",
+  "enqueue_document_generation_job",
+  "backfill_missing_document_generation_jobs",
 ])
 
 function isReadOnlyRpc(rpcName: string): boolean {
@@ -923,7 +926,7 @@ const recentInterceptSignatures = new Map<string, number>()
 function isDuplicateIntercept(sig: string): boolean {
   const now = Date.now()
   const prev = recentInterceptSignatures.get(sig)
-  if (prev && now - prev < 3500) {
+  if (prev && now - prev < 150) {
     return true
   }
   recentInterceptSignatures.set(sig, now)
@@ -1266,7 +1269,14 @@ async function handleInterceptedMutation(payload: SupabaseMutationInterceptPaylo
     // 3. Mutaciones directas sobre tablas REST (/rest/v1/<table>)
     if (pathname.includes("/rest/v1/")) {
       const table = pathname.split("/rest/v1/")[1]?.split("/")[0] || ""
-      if (!table || table === "audit_events" || table === "rpc") return
+      if (
+        !table ||
+        table === "audit_events" ||
+        table === "rpc" ||
+        table === "document_generation_jobs" ||
+        table === "candidate_pool_metadata"
+      )
+        return
 
       const sig = `table:${payload.method}:${table}:${parsedUrl.search}:${payload.status}:${JSON.stringify(reqObj || {})}`
       if (isDuplicateIntercept(sig)) return
@@ -1472,63 +1482,38 @@ export async function insertAuditEvent(
 ): Promise<AuditEvent> {
   const nowMs = Date.now()
 
-  // Evitar duplicados en la misma ventana de 4 segundos si una acción dispara tanto llamada manual como interceptor
-  const existingRecent = recentDispatchedEvents.find((e) => {
-    const diff = Math.abs(nowMs - new Date(e.occurred_at).getTime())
-    if (diff > 4000) return false
-    if (e.action !== eventData.action || e.module !== eventData.module) return false
-    if (
-      eventData.record_id &&
-      e.record_id &&
-      e.record_id.toLowerCase() === eventData.record_id.toLowerCase()
-    ) {
-      return true
-    }
-    if (
-      eventData.entity_name &&
-      e.entity_name &&
-      e.entity_name.toLowerCase() === eventData.entity_name.toLowerCase()
-    ) {
-      return true
-    }
-    return false
-  })
-
-  if (existingRecent) {
-    return existingRecent
-  }
-
   const newEvent: AuditEvent = {
     ...eventData,
     id: generateUuid(),
     occurred_at: new Date(nowMs).toISOString(),
   }
 
-  recentDispatchedEvents = [newEvent, ...recentDispatchedEvents.slice(0, 99)]
-
   try {
-    const { error: insErr } = await supabase.from("audit_events").insert([
-      {
-        id: newEvent.id,
-        occurred_at: newEvent.occurred_at,
-        actor_user_id: newEvent.actor_user_id,
-        actor_full_name: newEvent.actor_full_name,
-        actor_username: newEvent.actor_username,
-        scope: newEvent.scope,
-        organization_entity_id: newEvent.organization_entity_id,
-        entity_name: newEvent.entity_name,
-        company_client_id: newEvent.company_client_id,
-        module: newEvent.module,
-        action: newEvent.action,
-        entity_type: newEvent.entity_type,
-        record_id: newEvent.record_id,
-        description: newEvent.description,
-        old_values: newEvent.old_values,
-        new_values: newEvent.new_values,
-        result: newEvent.result,
-      },
-    ])
-    if (insErr) {
+    const { error: insErr } = await supabase.from("audit_events").upsert(
+      [
+        {
+          id: newEvent.id,
+          occurred_at: newEvent.occurred_at,
+          actor_user_id: newEvent.actor_user_id,
+          actor_full_name: newEvent.actor_full_name,
+          actor_username: newEvent.actor_username,
+          scope: newEvent.scope,
+          organization_entity_id: newEvent.organization_entity_id,
+          entity_name: newEvent.entity_name,
+          company_client_id: newEvent.company_client_id,
+          module: newEvent.module,
+          action: newEvent.action,
+          entity_type: newEvent.entity_type,
+          record_id: newEvent.record_id,
+          description: newEvent.description,
+          old_values: newEvent.old_values,
+          new_values: newEvent.new_values,
+          result: newEvent.result,
+        },
+      ],
+      { onConflict: "id", ignoreDuplicates: true }
+    )
+    if (insErr && !insErr.message?.includes("duplicate key")) {
       console.warn("[audit-history] Supabase insert warning:", insErr.message)
     }
   } catch (err) {
@@ -1572,6 +1557,4 @@ export async function exportStoredAuditEvents(): Promise<AuditEvent[]> {
 }
 
 /** Función mantenida por compatibilidad de firma; la auditoría en Supabase es inmutable. */
-export async function clearStoredAuditEvents(): Promise<void> {
-  recentDispatchedEvents = []
-}
+export async function clearStoredAuditEvents(): Promise<void> {}

@@ -10,6 +10,7 @@ import { Label } from "@/shared/components/ui/label"
 import { Textarea } from "@/shared/components/ui/textarea"
 import {
   NO_OCCUPATIONAL_CATEGORY_LABEL,
+  formatSalary,
   jobSaveErrorMessage,
   loadCurrentSalaryValueForGroup,
   loadJobFormWorkspace,
@@ -186,6 +187,17 @@ export const JobForm: React.FC<JobFormProps> = ({
     setSalaryVigente(null)
 
     if (!groupId) return
+
+    const matchedGroup = groups.find((g) => g.group.id === groupId)
+    if (matchedGroup) {
+      if (matchedGroup.current_value) {
+        setSalaryVigente({
+          amount: matchedGroup.current_value.amount,
+          currency_code: matchedGroup.current_value.currency_code,
+        })
+      }
+      return
+    }
 
     const value = await loadCurrentSalaryValueForGroup(groupId)
     if (value) setSalaryVigente(value)
@@ -396,7 +408,7 @@ export const JobForm: React.FC<JobFormProps> = ({
                     }}
                   />
                   <span>{level.name}</span>
-                  <span className="text-xs opacity-70">({level.code})</span>
+                  {level.code ? <span className="text-xs opacity-70">({level.code})</span> : null}
                 </label>
               )
             })}
@@ -440,9 +452,10 @@ export const JobForm: React.FC<JobFormProps> = ({
               <option key={g.group.id} value={g.group.id}>
                 Grupo {g.roman_numeral}
                 {g.current_value
-                  ? ` — ${g.current_value.amount.toLocaleString("es-CU", {
-                      minimumFractionDigits: 2,
-                    })} ${g.current_value.currency_code}`
+                  ? ` — ${formatSalary({
+                      amount: g.current_value.amount,
+                      currency_code: g.current_value.currency_code,
+                    })}`
                   : " — Salario no configurado"}
               </option>
             ))}
@@ -488,10 +501,7 @@ export const JobForm: React.FC<JobFormProps> = ({
                       <SiteCorpStatusBadge status="info">Calculado automáticamente</SiteCorpStatusBadge>
                     </div>
                     <p className="text-lg font-semibold text-ink">
-                      {salaryVigente.amount.toLocaleString("es-CU", {
-                        minimumFractionDigits: 2,
-                      })}{" "}
-                      {salaryVigente.currency_code}
+                      {formatSalary(salaryVigente)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Derivado del grupo salarial y de la escala aplicable a la entidad.

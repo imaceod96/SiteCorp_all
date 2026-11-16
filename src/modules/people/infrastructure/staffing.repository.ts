@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { fetchEntityPoolCandidateOverrides } from "./candidate-pool-meta"
 import { EMPLOYMENT_STATUS } from "../domain/entities"
 import type {
@@ -263,20 +264,22 @@ interface RawOccupancyWorkerRow {
   first_name: string
   first_surname: string
   second_surname: string | null
-  assignments: { position_id: string; is_current: boolean; end_date: string | null }[] | null
+  hire_date?: string | null
+  assignments:
+    | { position_id: string; is_current: boolean; start_date?: string | null; end_date: string | null }[]
+    | null
 }
 
 /**
- * Ocupación vigente: trabajadores ACTIVOS con asignación actual abierta. Un puesto está
- * ocupado mientras tenga una asignación `is_current` sin fecha de fin; ese es el mismo
- * criterio que usaba la plantilla operativa.
+ * Ocupación vigente: trabajadores ACTIVOS con asignación actual vigente hoy.
  */
 export async function fetchEntityOccupancy(entityId: string): Promise<EntityOccupancy> {
+  const today = todayIsoInCuba()
   const { data, error } = await supabase
     .from("workers")
     .select(
-      `id, code, first_name, first_surname, second_surname,
-       assignments:worker_position_assignments(position_id, is_current, end_date)`
+      `id, code, first_name, first_surname, second_surname, hire_date,
+       assignments:worker_position_assignments(position_id, is_current, start_date, end_date)`
     )
     .eq("organization_entity_id", entityId)
     .eq("employment_status", EMPLOYMENT_STATUS.active)
@@ -286,11 +289,18 @@ export async function fetchEntityOccupancy(entityId: string): Promise<EntityOccu
   const occupants: Record<string, PositionOccupant[]> = {}
 
   ;((data as RawOccupancyWorkerRow[] | null) || []).forEach((worker) => {
+    if (worker.hire_date && worker.hire_date > today) return
     const name = [worker.first_name, worker.first_surname, worker.second_surname]
       .filter(Boolean)
       .join(" ")
     ;(worker.assignments || []).forEach((assignment) => {
-      if (!assignment.is_current || assignment.end_date) return
+      if (
+        !assignment.is_current ||
+        (assignment.start_date && assignment.start_date > today) ||
+        (assignment.end_date && assignment.end_date < today)
+      ) {
+        return
+      }
       counts[assignment.position_id] = (counts[assignment.position_id] || 0) + 1
       occupants[assignment.position_id] = [
         ...(occupants[assignment.position_id] || []),

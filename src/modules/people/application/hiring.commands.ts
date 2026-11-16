@@ -1,11 +1,4 @@
 import { hireCandidateRpc } from "../infrastructure/worker-transitions.repository"
-import {
-  ensureContractDocument,
-  ensureMovementDocument,
-  ensureResolutionDocument,
-} from "../infrastructure/transition-documents"
-import { setContractDocumentStatus } from "@/modules/contracts"
-import { TRANSITION_MOVEMENT_DOCUMENT } from "../domain/rules"
 import type {
   CandidateHireInput,
   CandidateHireWithResolutionInput,
@@ -19,25 +12,16 @@ import type {
  * Trabajadores) SIN duplicar ni la persona ni su historial: la RPC resuelve el vínculo
  * por su `worker_id`. Es una sola operación porque es una sola regla.
  *
- * Hay dos vías según el Cargo destino, y las decide el dominio
- * (`requiresResolution` / `isSpecialDocumentRole`):
- *
- *   · CONTRATO    → se formaliza el contrato y se genera su documento.
- *   · RESOLUCIÓN  → Cargo Especialista Principal: la Resolución sustituye al contrato.
- *
- * En ambos casos la operación registra el movimiento de nómina de Alta, cuyo documento es
- * silencioso: el movimiento ya quedó registrado y puede regenerarse.
- *
- * Las validaciones previas (mensajes que ve el usuario) viven en el dominio y las aplica
- * el diálogo antes de llegar aquí; la autoridad final es la propia RPC, que revalida en
- * el servidor la preparación contractual, las fechas y los permisos.
+ * La generación documental se encola automáticamente en `public.document_generation_jobs`
+ * mediante triggers en PostgreSQL dentro de la misma transacción de la RPC y se procesa
+ * en segundo plano por `process-document-jobs`.
  */
 
 export interface EngagementOutcome {
   workerId: string | null
   contractId: string | null
   resolutionId: string | null
-  /** Aviso cuando el documento de la operación no se pudo generar. */
+  /** Aviso cuando el documento de la operación queda pendiente o no se pudo generar. */
   documentWarning: string | null
 }
 
@@ -63,34 +47,7 @@ export async function hireCandidateWithContract(
     paymentScheduleText: input.paymentScheduleText,
   })
 
-  // Para Cargos Cuadro / Especialista Principal no se genera contrato ni documento.
-  let documentWarning: string | null = null
-  if (!input.specialDocumentRole && result.contractId) {
-    const meta = {
-      worker_id: result.workerId,
-      start_date: input.contractStartDate || input.hireDate,
-    }
-    await setContractDocumentStatus(result.contractId, "PENDIENTE", null, meta)
-    try {
-      documentWarning = await ensureContractDocument(result.contractId)
-      await setContractDocumentStatus(
-        result.contractId,
-        documentWarning ? "ERROR" : "GENERADO",
-        documentWarning,
-        meta
-      )
-    } catch (error) {
-      documentWarning =
-        error instanceof Error
-          ? error.message
-          : "No se pudo generar el documento contractual automáticamente."
-      await setContractDocumentStatus(result.contractId, "ERROR", documentWarning, meta)
-    }
-  }
-
-  await registerHireMovement(result.workerId, input.hireDate)
-
-  return { ...result, documentWarning }
+  return { ...result, documentWarning: null }
 }
 
 /** Alta (o recontratación) hacia un Cargo Especialista Principal: Resolución sustitutiva. */
@@ -114,18 +71,5 @@ export async function hireCandidateWithResolution(
     resolutionDate: input.resolution.resolutionDate,
   })
 
-  const documentWarning = result.resolutionId
-    ? await ensureResolutionDocument(result.resolutionId)
-    : null
-
-  await registerHireMovement(result.workerId, input.hireDate)
-
-  return { ...result, documentWarning }
-}
-
-/** Movimiento de nómina del alta, tal y como lo registra la transición. */
-async function registerHireMovement(workerId: string | null, hireDate: string): Promise<void> {
-  const movement = TRANSITION_MOVEMENT_DOCUMENT.hire
-  if (!workerId || !movement) return
-  await ensureMovementDocument(workerId, movement, hireDate)
+  return { ...result, documentWarning: null }
 }

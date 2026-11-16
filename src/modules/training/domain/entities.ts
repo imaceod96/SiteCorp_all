@@ -119,14 +119,16 @@ export interface WorkerTrainingRecord {
 }
 
 export type InitialTrainingNotificationStatus = "PENDIENTE" | "COMPLETADA" | "DESCARTADA"
+export type InitialTrainingTriggerType = "CONTRATACION" | "CAMBIO_CARGO"
 
 export interface InitialTrainingNotification {
   id: string
   organization_entity_id: string
   worker_id: string
   candidate_id: string | null
-  /** Clave única por evento de contratación para evitar notificaciones duplicadas */
+  /** Clave única por evento de contratación o cambio de cargo para evitar duplicados */
   hire_key: string
+  trigger_type?: InitialTrainingTriggerType
   worker_name: string
   worker_code: string | null
   worker_identification: string | null
@@ -156,6 +158,7 @@ export interface EntityWorkerOption {
   areaName: string | null
   positionName: string | null
   employmentStatus: string
+  hireDate?: string | null
 }
 
 export interface EntityTrainingState {

@@ -154,6 +154,7 @@ export {
 export type {
   EntityStaffingBoard,
   TransitionWorkspace,
+  PositionChangeWorkspace,
   ContractChangeWorkspace,
   HiringWorkspace,
 } from "./application/staffing.queries"
@@ -162,6 +163,7 @@ export {
   CONTRACT_DATA_PERMISSION,
   loadEntityStaffingBoard,
   loadTransitionWorkspace,
+  loadPositionChangeWorkspace,
   loadContractChangeWorkspace,
   loadHiringWorkspace,
   previewPositionChange,

@@ -78,6 +78,7 @@ export {
   formatConditionDate,
   formatContractDate,
   formatContractMoney,
+  formatContractSalary,
 } from "./domain/formats"
 
 /* Conceptos retributivos: tipos aprobados, borradores y validación de formulario */
@@ -156,6 +157,7 @@ export {
   matchesContractAlertFilter,
   needsCorrection,
   requiresAttention,
+  resolvedAlertSalary,
   summarizeContractAlerts,
 } from "./domain/contract-alerts.rules"
 // `formatContractDate` se exporta más abajo, desde `domain/formats`: es la MISMA función que
@@ -170,20 +172,31 @@ export {
 /* Automatización documental (infraestructura del contexto) */
 export type {
   ContractDocumentStatus,
+  DocumentGenerationJobKind,
   PendingContractDocumentRow,
 } from "./domain/entities"
 
+export type { DocumentGenerationJobRecord } from "./infrastructure/contract-documents.repository"
+
 export {
   CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT,
+  DOCUMENT_JOB_KIND_LABELS,
   clearContractDocumentStatusStore,
+  enqueueDocumentGenerationJob,
   ensureAddendumDocumentGenerated,
   ensureContractDocumentGenerated,
+  ensurePayrollMovementDocumentQueued,
+  ensureResolutionDocumentQueued,
+  ensureSc404DocumentQueued,
+  fetchDocumentGenerationJob,
   fetchPendingContractDocuments,
   getContractDocumentStatusSnapshot,
   resolveAddendumTemplateAvailability,
   resolveContractTemplateAvailability,
   setContractDocumentStatus,
+  triggerDocumentGenerationJobs,
 } from "./infrastructure/contract-documents.repository"
 
 export { PendingContractDocumentsBanner } from "./presentation/components/PendingContractDocumentsBanner"
+
 

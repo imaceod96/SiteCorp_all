@@ -1,3 +1,4 @@
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { EMPLOYMENT_STATUS } from "./entities"
 import type { StaffingWorkerAssignment, StaffingWorkerRow } from "./entities"
 
@@ -13,14 +14,23 @@ import type { StaffingWorkerAssignment, StaffingWorkerRow } from "./entities"
  */
 
 /**
- * Asignación vigente: la que está abierta (`is_current` sin fecha de fin) sobre un puesto
- * ACTIVO. Es el mismo criterio que usaba la plantilla operativa.
+ * Asignación vigente: la que está vigente hoy (`is_current`, `start_date <= hoy` y sin fecha
+ * de fin vencida) sobre un puesto ACTIVO.
  */
 export const isCurrentStaffingAssignment = (assignment: {
   is_current: boolean | null
+  start_date?: string | null
   end_date: string | null
   position: { is_active: boolean } | null
-}): boolean => !!assignment.is_current && !assignment.end_date && !!assignment.position?.is_active
+}): boolean => {
+  const today = todayIsoInCuba()
+  return (
+    !!assignment.is_current &&
+    (!assignment.start_date || assignment.start_date <= today) &&
+    (!assignment.end_date || assignment.end_date >= today) &&
+    !!assignment.position?.is_active
+  )
+}
 
 /** Asignación vigente del trabajador (`null` si está pendiente de vinculación). */
 export function currentStaffingAssignment(
@@ -29,10 +39,12 @@ export function currentStaffingAssignment(
   return (worker.assignments || []).find(isCurrentStaffingAssignment) ?? null
 }
 
-/** Trabajador con relación laboral vigente. */
+/** Trabajador con relación laboral vigente e incorporado a la fecha actual. */
 export const isActiveStaffingWorker = (
-  worker: Pick<StaffingWorkerRow, "employment_status">
-): boolean => worker.employment_status === EMPLOYMENT_STATUS.active
+  worker: Pick<StaffingWorkerRow, "employment_status"> & { hire_date?: string | null }
+): boolean =>
+  worker.employment_status === EMPLOYMENT_STATUS.active &&
+  (!worker.hire_date || worker.hire_date <= todayIsoInCuba())
 
 /** Trabajadores activos de la plantilla. */
 export const activeStaffingWorkers = (workers: StaffingWorkerRow[]): StaffingWorkerRow[] =>

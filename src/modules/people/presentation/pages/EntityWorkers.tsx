@@ -17,6 +17,7 @@ import {
   type CatalogRow,
   type PersonDirectoryWorker,
 } from "@/modules/people"
+import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import { ArrowLeft, Search, Users, UserCheck, AlertTriangle } from "lucide-react"
 
 /**
@@ -287,6 +288,11 @@ const EntityWorkers = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      {w.hire_date && w.hire_date > todayIsoInCuba() && (
+                        <SiteCorpStatusBadge status="info">
+                          Pendiente de incorporación ({formatIsoDateToDisplay(w.hire_date)})
+                        </SiteCorpStatusBadge>
+                      )}
                       {linkedWorkerIds.has(w.id) ? (
                         <SiteCorpStatusBadge status="neutral">Vinculado a plantilla</SiteCorpStatusBadge>
                       ) : (

@@ -123,7 +123,7 @@ export function LinkWorkerToPositionDialog({ workerId, positions, onSuccess, onC
 
   return <form onSubmit={submit} className="space-y-4">
     {error && <SiteCorpAlert type="danger">{error}</SiteCorpAlert>}
-    <p className="text-sm text-slate-600">Solo se crea un Assignment. No se crea contrato ni se generan documentos.</p>
+    <p className="text-sm text-slate-600">Solo se vincula el trabajador al puesto. No se crea contrato ni se generan documentos.</p>
 
     {/* Selector de Modo */}
     <div className="space-y-2">
@@ -207,7 +207,7 @@ export function LinkWorkerToPositionDialog({ workerId, positions, onSuccess, onC
       <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-sm">
         <div><span className="text-slate-500">Área</span><p className="font-medium">{hierarchy[selected.id]?.area || "—"}</p></div>
         <div><span className="text-slate-500">Cargo</span><p className="font-medium">{hierarchy[selected.id]?.job || selected.job?.name || "—"}</p></div>
-        <div><span className="text-slate-500">Puesto</span><p className="font-medium">{selected.name} ({selected.code})</p></div>
+        <div><span className="text-slate-500">Puesto</span><p className="font-medium">{selected.name}{selected.code?.trim() ? ` (${selected.code.trim()})` : ""}</p></div>
         <div><span className="text-slate-500">Capacidad</span><p className="font-medium">{selected.currentAssignments}/{selected.authorized_quantity}</p></div>
       </div>
     )}
@@ -217,12 +217,13 @@ export function LinkWorkerToPositionDialog({ workerId, positions, onSuccess, onC
         {(() => {
           const suggested = suggestedPositions.find(s => s.positionId === positionId)
           if (!suggested) return null
+          const matchedPos = positions.find(p => p.id === positionId)
           return (
             <>
               <div><span className="text-slate-500">Área</span><p className="font-medium">{hierarchy[positionId]?.area || "—"}</p></div>
-              <div><span className="text-slate-500">Cargo</span><p className="font-medium">{hierarchy[positionId]?.job || positions.find(p => p.id === positionId)?.job?.name || "—"}</p></div>
-              <div><span className="text-slate-500">Puesto</span><p className="font-medium">{positions.find(p => p.id === positionId)?.name} ({positions.find(p => p.id === positionId)?.code})</p></div>
-              <div><span className="text-slate-500">Capacidad</span><p className="font-medium">{positions.find(p => p.id === positionId)?.currentAssignments}/{positions.find(p => p.id === positionId)?.authorized_quantity}</p></div>
+              <div><span className="text-slate-500">Cargo</span><p className="font-medium">{hierarchy[positionId]?.job || matchedPos?.job?.name || "—"}</p></div>
+              <div><span className="text-slate-500">Puesto</span><p className="font-medium">{matchedPos?.name}{matchedPos?.code?.trim() ? ` (${matchedPos.code.trim()})` : ""}</p></div>
+              <div><span className="text-slate-500">Capacidad</span><p className="font-medium">{matchedPos?.currentAssignments}/{matchedPos?.authorized_quantity}</p></div>
             </>
           )
         })()}

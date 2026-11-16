@@ -908,7 +908,7 @@ export const WorkerForm: React.FC<WorkerFormProps> = ({
               <option value="">Seleccionar puesto vacante</option>
               {vacantPositions.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.code}){p.job ? ` — ${p.job.name}` : ""}
+                  {p.name}{p.code ? ` (${p.code})` : ""}{p.job ? ` — ${p.job.name}` : ""}
                 </option>
               ))}
             </SiteCorpSelect>

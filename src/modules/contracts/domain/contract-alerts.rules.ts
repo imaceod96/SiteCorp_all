@@ -53,6 +53,8 @@ export interface ContractAlertRow {
    * nunca finaliza los dos contratos. `null` en contratos sin asignación.
    */
   assignment_id: string | null
+  resolved_salary_amount?: number | null
+  resolved_salary_currency?: string | null
 }
 
 interface ContractAlertMeta {
@@ -213,6 +215,27 @@ export function deadlineLabel(
   if (daysRemaining === 0) return "Vence hoy"
   if (daysRemaining === -1) return "Vencido hace 1 día"
   return `Vencido hace ${Math.abs(daysRemaining)} días`
+}
+
+/**
+ * Resuelve el salario aplicable de una alerta de vencimiento: prioriza el importe
+ * ya resuelto por la RPC `contract_expiry_alerts` (`resolved_salary_amount`) y hace
+ * fallback al mapa en memoria de grupos salariales si la migración aún no se aplicó.
+ */
+export function resolvedAlertSalary(
+  row: ContractAlertRow,
+  salaryValuesByGroup: Record<string, { amount: number; currency_code: string } | null>
+): { amount: number; currency_code: string } | null {
+  if (row.resolved_salary_amount != null && Number.isFinite(Number(row.resolved_salary_amount))) {
+    return {
+      amount: Number(row.resolved_salary_amount),
+      currency_code: row.resolved_salary_currency || "CUP",
+    }
+  }
+  if (row.salary_group_id && salaryValuesByGroup[row.salary_group_id]) {
+    return salaryValuesByGroup[row.salary_group_id]
+  }
+  return null
 }
 
 /**

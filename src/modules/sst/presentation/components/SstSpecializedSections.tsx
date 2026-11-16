@@ -22,7 +22,7 @@ import {
   registerWorkerHealthAptitude,
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
-import { addDaysIsoInCuba, todayIsoInCuba } from "@/utils/cuba-date"
+import { addDaysIsoInCuba, formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import {
   HeartPulse,
   Flame,
@@ -32,6 +32,22 @@ import {
   BarChart3,
   Plus,
 } from "lucide-react"
+
+const HEALTH_EVALUATION_TYPE_LABELS: Record<string, string> = {
+  PRE_EMPLEO: "Chequeo pre-empleo",
+  INGRESO: "Chequeo de ingreso",
+  PERIODICO: "Chequeo periódico",
+  REINTEGRO: "Chequeo de reintegro",
+  CAMBIO_CARGO: "Por cambio de cargo",
+  CAMBIO_PUESTO: "Por cambio de puesto",
+  EGRESO: "Chequeo de egreso",
+}
+
+const PROCEDURE_STATUS_LABELS: Record<string, string> = {
+  VIGENTE: "Vigente",
+  EN_REVISION: "En revisión",
+  OBSOLETO: "Obsoleto",
+}
 
 interface SstSpecializedSectionsProps {
   entityId: string
@@ -55,6 +71,10 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   const { toast } = useToast()
   const workerMap = React.useMemo(() => new Map(workers.map((w) => [w.id, w])), [workers])
   const areaMap = React.useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas])
+  const areaActiveMap = React.useMemo(
+    () => new Map(areas.map((a) => [a.id, a.isActive !== false])),
+    [areas]
+  )
   const jobMap = React.useMemo(() => new Map(jobs.map((j) => [j.id, j.name])), [jobs])
 
   // Formulario rápido: Accidente / Incidente
@@ -65,6 +85,9 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   const [affectedWorkerId, setAffectedWorkerId] = React.useState("")
   const [accidentDesc, setAccidentDesc] = React.useState("")
   const [accidentCauses, setAccidentCauses] = React.useState("")
+  const [accidentSeverity, setAccidentSeverity] = React.useState<
+    "LEVE" | "MODERADO" | "GRAVE" | "MORTAL"
+  >("LEVE")
   const [daysLost, setDaysLost] = React.useState("0")
 
   // Formulario rápido: Salud ocupacional administrativa
@@ -82,7 +105,7 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   // Formulario rápido: Emergencias / Comité / Procedimientos
   const [planTitle, setPlanTitle] = React.useState("")
   const [planAreaId, setPlanAreaId] = React.useState("")
-  const [drillDate, setDrillDate] = React.useState("")
+  const [drillDate, setDrillDate] = React.useState(() => todayIsoInCuba())
 
   const [commTitle, setCommTitle] = React.useState("")
   const [commDate, setCommDate] = React.useState(() => todayIsoInCuba())
@@ -96,7 +119,24 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   const handleSaveAccident = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!accidentDesc.trim()) return
+    const today = todayIsoInCuba()
+    if (occurredAt > today) {
+      toast({
+        variant: "destructive",
+        title: "Fecha inválida",
+        description: "La fecha del accidente o incidente no puede ser futura.",
+      })
+      return
+    }
     const w = workerMap.get(affectedWorkerId)
+    if (w?.hireDate && occurredAt < w.hireDate) {
+      toast({
+        variant: "destructive",
+        title: "Fecha anterior a la incorporación",
+        description: `El trabajador seleccionado se incorpora el ${formatIsoDateToDisplay(w.hireDate)}.`,
+      })
+      return
+    }
     try {
       await createSstAccidentIncident({
         entityId,
@@ -110,8 +150,8 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
         jobName: w?.jobName || null,
         description: accidentDesc,
         immediateCauses: accidentCauses,
-        severity: eventType === "ACCIDENTE_CON_LESION" ? "GRAVE" : "LEVE",
-        daysLost: Number(daysLost) || 0,
+        severity: accidentSeverity,
+        daysLost: eventType === "ACCIDENTE_CON_LESION" ? Math.max(0, Number(daysLost) || 0) : 0,
       })
       setAccidentDesc("")
       setAccidentCauses("")
@@ -134,6 +174,22 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
     e.preventDefault()
     const w = workerMap.get(healthWorkerId)
     if (!w) return
+    if (w.hireDate && healthDate < w.hireDate && healthType !== "PRE_EMPLEO") {
+      toast({
+        variant: "destructive",
+        title: "Fecha anterior a la incorporación",
+        description: `El trabajador se incorpora el ${formatIsoDateToDisplay(w.hireDate)}.`,
+      })
+      return
+    }
+    if (healthNextDate && healthNextDate <= healthDate) {
+      toast({
+        variant: "destructive",
+        title: "Fecha de próxima revisión inválida",
+        description: "La fecha de próxima revisión debe ser posterior a la fecha de evaluación.",
+      })
+      return
+    }
     try {
       await registerWorkerHealthAptitude({
         entityId,
@@ -164,14 +220,14 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 5. ACCIDENTES E INCIDENTES LABORALES */}
+      {/* 7. ACCIDENTES E INCIDENTES LABORALES */}
       <SiteCorpCard className="rounded-2xl">
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border pb-3">
             <AlertOctagon className="h-5 w-5 text-sitecorp-danger" />
             <div>
               <h2 className="text-base font-semibold text-ink">
-                5. Accidentes e Incidentes Laborales
+                7. Accidentes e Incidentes Laborales
               </h2>
               <p className="text-xs text-muted-foreground">
                 Registro e investigación de accidentes con lesión e incidentes sin lesión de esta
@@ -183,48 +239,109 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
           {canManage && (
             <form
               onSubmit={handleSaveAccident}
-              className="grid gap-3 rounded-xl border border-border bg-muted/15 p-3.5 sm:grid-cols-2 lg:grid-cols-5"
+              className="grid gap-3 rounded-xl border border-border bg-muted/15 p-3.5 sm:grid-cols-2 lg:grid-cols-4"
             >
-              <SiteCorpSelect
-                value={eventType}
-                onValueChange={(v) =>
-                  setEventType(v as "ACCIDENTE_CON_LESION" | "INCIDENTE_SIN_LESION" | "OTRO")
-                }
-              >
-                <SelectItem value="INCIDENTE_SIN_LESION">Incidente sin lesión</SelectItem>
-                <SelectItem value="ACCIDENTE_CON_LESION">Accidente con lesión</SelectItem>
-                <SelectItem value="OTRO">Otro suceso de seguridad</SelectItem>
-              </SiteCorpSelect>
+              <div className="space-y-1">
+                <Label className="text-xs">Tipo de suceso</Label>
+                <SiteCorpSelect
+                  value={eventType}
+                  onValueChange={(v) => {
+                    const nextType = v as "ACCIDENTE_CON_LESION" | "INCIDENTE_SIN_LESION" | "OTRO"
+                    setEventType(nextType)
+                    if (nextType === "INCIDENTE_SIN_LESION") {
+                      setAccidentSeverity("LEVE")
+                    }
+                    if (nextType !== "ACCIDENTE_CON_LESION") {
+                      setDaysLost("0")
+                    }
+                  }}
+                >
+                  <SelectItem value="INCIDENTE_SIN_LESION">Incidente sin lesión</SelectItem>
+                  <SelectItem value="ACCIDENTE_CON_LESION">Accidente con lesión</SelectItem>
+                  <SelectItem value="OTRO">Otro suceso de seguridad</SelectItem>
+                </SiteCorpSelect>
+              </div>
 
-              <SiteCorpInput
-                type="date"
-                value={occurredAt}
-                onChange={(e) => setOccurredAt(e.target.value)}
-                required
-              />
+              <div className="space-y-1">
+                <Label className="text-xs">Fecha de ocurrencia</Label>
+                <SiteCorpInput
+                  type="date"
+                  max={todayIsoInCuba()}
+                  value={occurredAt}
+                  onChange={(e) => setOccurredAt(e.target.value)}
+                  required
+                />
+              </div>
 
-              <SiteCorpSelect
-                value={affectedWorkerId || "__none__"}
-                onValueChange={(v) => setAffectedWorkerId(v === "__none__" ? "" : v)}
-              >
-                <SelectItem value="__none__">Trabajador involucrado (opcional)</SelectItem>
-                {workers.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.fullName}
-                  </SelectItem>
-                ))}
-              </SiteCorpSelect>
+              <div className="space-y-1">
+                <Label className="text-xs">Trabajador involucrado (opcional)</Label>
+                <SiteCorpSelect
+                  value={affectedWorkerId || "__none__"}
+                  onValueChange={(v) => setAffectedWorkerId(v === "__none__" ? "" : v)}
+                >
+                  <SelectItem value="__none__">Trabajador involucrado (opcional)</SelectItem>
+                  {workers
+                    .filter((w) => !w.hireDate || w.hireDate <= (occurredAt || todayIsoInCuba()))
+                    .map((w) => (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.fullName}
+                      </SelectItem>
+                    ))}
+                </SiteCorpSelect>
+              </div>
 
-              <SiteCorpInput
-                value={accidentDesc}
-                onChange={(e) => setAccidentDesc(e.target.value)}
-                placeholder="Descripción del suceso y causas..."
-                required
-              />
+              <div className="space-y-1">
+                <Label className="text-xs">Severidad</Label>
+                <SiteCorpSelect
+                  value={accidentSeverity}
+                  onValueChange={(v) =>
+                    setAccidentSeverity(v as "LEVE" | "MODERADO" | "GRAVE" | "MORTAL")
+                  }
+                >
+                  <SelectItem value="LEVE">Severidad: Leve</SelectItem>
+                  <SelectItem value="MODERADO">Severidad: Moderado</SelectItem>
+                  <SelectItem value="GRAVE">Severidad: Grave</SelectItem>
+                  <SelectItem value="MORTAL">Severidad: Mortal</SelectItem>
+                </SiteCorpSelect>
+              </div>
 
-              <SiteCorpButton type="submit" size="sm">
-                <Plus className="mr-1 h-4 w-4" /> Registrar suceso
-              </SiteCorpButton>
+              <div className="space-y-1">
+                <Label className="text-xs">Descripción del suceso</Label>
+                <SiteCorpInput
+                  value={accidentDesc}
+                  onChange={(e) => setAccidentDesc(e.target.value)}
+                  placeholder="Descripción del suceso..."
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Causas inmediatas</Label>
+                <SiteCorpInput
+                  value={accidentCauses}
+                  onChange={(e) => setAccidentCauses(e.target.value)}
+                  placeholder="Causas inmediatas identificadas..."
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Días perdidos</Label>
+                <SiteCorpInput
+                  type="number"
+                  min={0}
+                  value={daysLost}
+                  disabled={eventType !== "ACCIDENTE_CON_LESION"}
+                  onChange={(e) => setDaysLost(e.target.value)}
+                  placeholder="Días perdidos"
+                  title="Días laborales perdidos por incapacidad (solo aplica a accidente con lesión)"
+                />
+              </div>
+
+              <div className="flex items-end">
+                <SiteCorpButton type="submit" size="sm" className="w-full sm:w-auto">
+                  <Plus className="mr-1 h-4 w-4" /> Registrar suceso
+                </SiteCorpButton>
+              </div>
             </form>
           )}
 
@@ -241,11 +358,13 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                 >
                   <div>
                     <p className="font-semibold text-ink">
-                      {item.occurred_at} — {item.description}
+                      {formatIsoDateToDisplay(item.occurred_at)} — {item.description}
                     </p>
                     <p className="text-muted-foreground">
                       Trabajador: {item.affected_worker_name || "No especificado"} • Cargo:{" "}
                       {item.job_name_snapshot || "—"}
+                      {item.severity ? ` • Severidad: ${item.severity}` : ""}
+                      {item.days_lost ? ` • Días perdidos: ${item.days_lost}` : ""}
                     </p>
                   </div>
                   <SiteCorpStatusBadge
@@ -255,7 +374,9 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                   >
                     {item.event_type === "ACCIDENTE_CON_LESION"
                       ? "Accidente con lesión"
-                      : "Incidente sin lesión"}
+                      : item.event_type === "INCIDENTE_SIN_LESION"
+                        ? "Incidente sin lesión"
+                        : "Otro suceso"}
                   </SiteCorpStatusBadge>
                 </div>
               ))}
@@ -264,14 +385,14 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
         </div>
       </SiteCorpCard>
 
-      {/* 7. SALUD OCUPACIONAL ADMINISTRATIVA */}
+      {/* 8. SALUD OCUPACIONAL ADMINISTRATIVA */}
       <SiteCorpCard className="rounded-2xl">
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border pb-3">
             <HeartPulse className="h-5 w-5 text-sitecorp-success" />
             <div>
               <h2 className="text-base font-semibold text-ink">
-                7. Salud Ocupacional (Control Administrativo de Aptitud)
+                8. Salud Ocupacional (Control Administrativo de Aptitud)
               </h2>
               <p className="text-xs text-muted-foreground">
                 Control de chequeos pre-empleo y periódicos, conclusión administrativa de aptitud y
@@ -283,7 +404,7 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
           {canManage && (
             <form
               onSubmit={handleSaveHealthAptitude}
-              className="grid gap-3 rounded-xl border border-border bg-muted/15 p-3.5 sm:grid-cols-2 lg:grid-cols-6"
+              className="grid gap-3 rounded-xl border border-border bg-muted/15 p-3.5 sm:grid-cols-2 lg:grid-cols-7"
             >
               <SiteCorpSelect
                 value={healthWorkerId || "__none__"}
@@ -291,7 +412,13 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
               >
                 <SelectItem value="__none__">Seleccionar trabajador...</SelectItem>
                 {workers
-                  .filter((w) => w.employmentStatus === "active")
+                  .filter(
+                    (w) =>
+                      w.employmentStatus === "active" &&
+                      (healthType === "PRE_EMPLEO" ||
+                        !w.hireDate ||
+                        w.hireDate <= (healthDate || todayIsoInCuba()))
+                  )
                   .map((w) => (
                     <SelectItem key={w.id} value={w.id}>
                       {w.fullName}
@@ -323,6 +450,15 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
 
               <SiteCorpInput
                 type="date"
+                value={healthDate}
+                onChange={(e) => setHealthDate(e.target.value)}
+                title="Fecha de evaluación"
+                required
+              />
+
+              <SiteCorpInput
+                type="date"
+                min={addDaysIsoInCuba(1, healthDate || todayIsoInCuba())}
                 value={healthNextDate}
                 onChange={(e) => setHealthNextDate(e.target.value)}
                 title="Próxima revisión"
@@ -354,8 +490,11 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                   <div>
                     <p className="font-semibold text-ink">{h.worker_name_snapshot}</p>
                     <p className="text-muted-foreground">
-                      {h.evaluation_type} • Eval.: {h.evaluation_date}
-                      {h.next_review_date ? ` • Próx.: ${h.next_review_date}` : ""}
+                      {HEALTH_EVALUATION_TYPE_LABELS[h.evaluation_type] || h.evaluation_type} • Eval.:{" "}
+                      {formatIsoDateToDisplay(h.evaluation_date)}
+                      {h.next_review_date
+                        ? ` • Próx.: ${formatIsoDateToDisplay(h.next_review_date)}`
+                        : ""}
                     </p>
                     {h.administrative_restrictions && (
                       <p className="text-sitecorp-warning">
@@ -381,15 +520,15 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
         </div>
       </SiteCorpCard>
 
-      {/* 8. EMERGENCIAS, 9. COMITÉ SST Y 10. PROCEDIMIENTOS DE TRABAJO SEGURO */}
+      {/* 9. EMERGENCIAS, 10. COMITÉ SST Y 11. PROCEDIMIENTOS DE TRABAJO SEGURO */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* 8. Emergencias y protección contra incendios */}
+        {/* 9. Emergencias y protección contra incendios */}
         <SiteCorpCard className="rounded-2xl">
           <div className="space-y-3">
             <div className="flex items-center gap-2 border-b border-border pb-2">
               <Flame className="h-4 w-4 text-sitecorp-secondary-orange" />
               <h3 className="text-sm font-semibold text-ink">
-                8. Emergencias y Contra Incendios
+                9. Emergencias y Contra Incendios
               </h3>
             </div>
             {canManage && (
@@ -397,17 +536,33 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                 onSubmit={async (e) => {
                   e.preventDefault()
                   if (!planTitle.trim()) return
-                  await createSstEmergencyPlan({
-                    entityId,
-                    areaId: planAreaId || null,
-                    areaName: planAreaId ? areaMap.get(planAreaId) || null : null,
-                    title: planTitle,
-                    planType: "EMERGENCIA_Y_EVACUACION",
-                    version: "1.0",
-                    lastDrillDate: drillDate || null,
-                  })
-                  setPlanTitle("")
-                  await onRefresh()
+                  if (!drillDate) {
+                    toast({
+                      variant: "destructive",
+                      title: "Fecha de simulacro obligatoria",
+                      description: "Debes indicar la fecha del simulacro para registrar el plan.",
+                    })
+                    return
+                  }
+                  try {
+                    await createSstEmergencyPlan({
+                      entityId,
+                      areaId: planAreaId || null,
+                      areaName: planAreaId ? areaMap.get(planAreaId) || null : null,
+                      title: planTitle,
+                      planType: "EMERGENCIA_Y_EVACUACION",
+                      version: "1.0",
+                      lastDrillDate: drillDate,
+                    })
+                    setPlanTitle("")
+                    await onRefresh()
+                  } catch (err) {
+                    toast({
+                      variant: "destructive",
+                      title: "Error al registrar plan",
+                      description: err instanceof Error ? err.message : "Error inesperado.",
+                    })
+                  }
                 }}
                 className="space-y-2"
               >
@@ -423,6 +578,7 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                     value={drillDate}
                     onChange={(e) => setDrillDate(e.target.value)}
                     title="Fecha de simulacro"
+                    required
                   />
                   <SiteCorpButton type="submit" size="sm">
                     Añadir
@@ -438,7 +594,9 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                 >
                   <p className="font-medium text-ink">{p.title}</p>
                   {p.last_drill_date && (
-                    <p className="text-muted-foreground">Simulacro: {p.last_drill_date}</p>
+                    <p className="text-muted-foreground">
+                      Simulacro: {formatIsoDateToDisplay(p.last_drill_date)}
+                    </p>
                   )}
                 </div>
               ))}
@@ -446,13 +604,13 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
           </div>
         </SiteCorpCard>
 
-        {/* 9. Comité de Seguridad y Salud */}
+        {/* 10. Comité de Seguridad y Salud */}
         <SiteCorpCard className="rounded-2xl">
           <div className="space-y-3">
             <div className="flex items-center gap-2 border-b border-border pb-2">
               <Users className="h-4 w-4 text-sitecorp-primary" />
               <h3 className="text-sm font-semibold text-ink">
-                9. Comité de Seguridad y Salud
+                10. Comité de Seguridad y Salud
               </h3>
             </div>
             {canManage && (
@@ -498,20 +656,22 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                   className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs"
                 >
                   <p className="font-medium text-ink">{c.title}</p>
-                  <p className="text-muted-foreground">{c.record_date}</p>
+                  <p className="text-muted-foreground">
+                    {formatIsoDateToDisplay(c.record_date)}
+                  </p>
                 </div>
               ))}
             </div>
           </div>
         </SiteCorpCard>
 
-        {/* 10. Procedimientos de Trabajo Seguro (PTS) */}
+        {/* 11. Procedimientos de Trabajo Seguro (PTS) */}
         <SiteCorpCard className="rounded-2xl">
           <div className="space-y-3">
             <div className="flex items-center gap-2 border-b border-border pb-2">
               <FileCheck2 className="h-4 w-4 text-sitecorp-success" />
               <h3 className="text-sm font-semibold text-ink">
-                10. Procedimientos de Trabajo Seguro
+                11. Procedimientos de Trabajo Seguro
               </h3>
             </div>
             {canManage && (
@@ -576,7 +736,9 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                       <p className="text-sitecorp-secondary-orange">Requiere permiso de trabajo</p>
                     )}
                   </div>
-                  <SiteCorpStatusBadge status="success">{proc.status}</SiteCorpStatusBadge>
+                  <SiteCorpStatusBadge status="success">
+                    {PROCEDURE_STATUS_LABELS[proc.status] || proc.status}
+                  </SiteCorpStatusBadge>
                 </div>
               ))}
             </div>
@@ -584,14 +746,14 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
         </SiteCorpCard>
       </div>
 
-      {/* 11. INFORMES E INDICADORES DE CUMPLIMIENTO POR CARGO */}
+      {/* 12. INFORMES E INDICADORES DE CUMPLIMIENTO POR CARGO */}
       <SiteCorpCard className="rounded-2xl">
         <div className="space-y-4">
           <div className="flex items-center gap-2 border-b border-border pb-3">
             <BarChart3 className="h-5 w-5 text-sitecorp-primary" />
             <div>
               <h2 className="text-base font-semibold text-ink">
-                11. Resumen de Cumplimiento de SST por Cargo de la Entidad
+                12. Resumen de Cumplimiento de SST por Cargo de la Entidad
               </h2>
               <p className="text-xs text-muted-foreground">
                 Consolidado de carpetas de SST, temas, sesiones realizadas, riesgos asociados y EPP
@@ -629,7 +791,13 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                     <tr key={job.id} className="hover:bg-muted/20">
                       <td className="px-4 py-2.5 font-medium text-ink">{job.name}</td>
                       <td className="px-4 py-2.5 text-xs text-muted-foreground">
-                        {job.areaName || "—"}
+                        {job.areaName
+                          ? `${job.areaName}${
+                              job.areaId && areaActiveMap.get(job.areaId) === false
+                                ? " (inactiva)"
+                                : ""
+                            }`
+                          : "—"}
                       </td>
                       <td className="px-4 py-2.5 font-mono text-xs tabular-nums">{topicsCount}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-sitecorp-success tabular-nums">

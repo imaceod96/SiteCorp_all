@@ -175,6 +175,7 @@ const EntityTraining: React.FC = () => {
   const [participantSearch, setParticipantSearch] = React.useState<string>("")
   const [participantAreaFilter, setParticipantAreaFilter] = React.useState<string>("all")
   const [sessionSubmitting, setSessionSubmitting] = React.useState(false)
+  const [sessionError, setSessionError] = React.useState<string | null>(null)
 
   // Subida de documentos Word / PDF por tema
   const [uploadingTopicId, setUploadingTopicId] = React.useState<string | null>(null)
@@ -238,6 +239,24 @@ const EntityTraining: React.FC = () => {
     }
     return map
   }, [areas, state.folders])
+
+  const areaActiveById = React.useMemo(
+    () => new Map(areas.map((a) => [a.id, a.is_active])),
+    [areas]
+  )
+
+  const formatAreaLabel = React.useCallback(
+    (areaId: string, fallback?: string | null) => {
+      const base = areaNameById.get(areaId) || fallback || "Área"
+      return areaActiveById.get(areaId) === false ? `${base} (inactiva)` : base
+    },
+    [areaNameById, areaActiveById]
+  )
+
+  const activeFolders = React.useMemo(
+    () => state.folders.filter((f) => areaActiveById.get(f.area_id) !== false),
+    [state.folders, areaActiveById]
+  )
 
   const folderById = React.useMemo(
     () => new Map(state.folders.map((f) => [f.id, f])),
@@ -386,7 +405,7 @@ const EntityTraining: React.FC = () => {
   // --- Handlers: Temas de Capacitación ---
   const openCreateTopicDialog = (defaultFolderId?: string) => {
     setEditingTopic(null)
-    setTopicFolderId(defaultFolderId || state.folders[0]?.id || "")
+    setTopicFolderId(defaultFolderId || activeFolders[0]?.id || "")
     setTopicTitle("")
     setTopicDescription("")
     setTopicFrequency("TRIMESTRAL")
@@ -535,7 +554,7 @@ const EntityTraining: React.FC = () => {
   // --- Handlers: Programar sesión en calendario ---
   const openScheduleSessionDialog = (preselectedTopic?: TrainingTopic) => {
     const initialFolderId =
-      preselectedTopic?.folder_id || state.folders[0]?.id || ""
+      preselectedTopic?.folder_id || activeFolders[0]?.id || ""
     const folderTopics = state.topics.filter((t) => t.folder_id === initialFolderId)
     const initialTopicId =
       preselectedTopic?.id || folderTopics[0]?.id || state.topics[0]?.id || ""
@@ -585,15 +604,24 @@ const EntityTraining: React.FC = () => {
     setSessionDateInput(session.scheduled_date)
     setSessionStatusInput(session.status)
     setSessionNotesInput(session.notes || "")
-    setSelectedParticipantIds(new Set(session.participant_worker_ids || []))
+    const eligiblePreselected = (session.participant_worker_ids || []).filter((id) => {
+      const w = workerById.get(id)
+      return !(w?.hireDate && session.scheduled_date && w.hireDate > session.scheduled_date)
+    })
+    setSelectedParticipantIds(new Set(eligiblePreselected))
     setParticipantSearch("")
-    setParticipantAreaFilter(session.area_id || "all")
+    const sessionAreaActive = session.area_id ? areaActiveById.get(session.area_id) !== false : false
+    setParticipantAreaFilter(session.area_id && sessionAreaActive ? session.area_id : "all")
+    setSessionError(null)
     setSessionModalOpen(true)
   }
 
   const filteredModalWorkers = React.useMemo(() => {
     const q = participantSearch.trim().toLowerCase()
     return workers.filter((w) => {
+      if (w.hireDate && sessionDateInput && w.hireDate > sessionDateInput) {
+        return false
+      }
       if (participantAreaFilter !== "all" && w.areaId !== participantAreaFilter) {
         return false
       }
@@ -605,7 +633,7 @@ const EntityTraining: React.FC = () => {
         (w.positionName || "").toLowerCase().includes(q)
       )
     })
-  }, [workers, participantSearch, participantAreaFilter])
+  }, [workers, participantSearch, participantAreaFilter, sessionDateInput])
 
   const toggleParticipant = (workerId: string) => {
     setSelectedParticipantIds((prev) => {
@@ -623,6 +651,9 @@ const EntityTraining: React.FC = () => {
     setSelectedParticipantIds((prev) => {
       const next = new Set(prev)
       for (const w of filteredModalWorkers) {
+        if (w.hireDate && sessionDateInput && w.hireDate > sessionDateInput) {
+          continue
+        }
         next.add(w.id)
       }
       return next
@@ -638,9 +669,15 @@ const EntityTraining: React.FC = () => {
     if (!entityId || !activeSession) return
 
     setSessionSubmitting(true)
+    setSessionError(null)
     try {
       const participantIds =
-        sessionStatusInput === "REALIZADA" ? Array.from(selectedParticipantIds) : []
+        sessionStatusInput === "REALIZADA"
+          ? Array.from(selectedParticipantIds).filter((id) => {
+              const w = workerById.get(id)
+              return !(w?.hireDate && sessionDateInput && w.hireDate > sessionDateInput)
+            })
+          : []
 
       await saveTrainingSessionOutcome({
         entityId,
@@ -662,10 +699,12 @@ const EntityTraining: React.FC = () => {
       })
       await loadData({ silent: true })
     } catch (err) {
+      const message = extractErrorMessage(err, "Error inesperado.")
+      setSessionError(message)
       toast({
         variant: "destructive",
         title: "No se pudo guardar la sesión",
-        description: extractErrorMessage(err, "Error inesperado."),
+        description: message,
       })
     } finally {
       setSessionSubmitting(false)
@@ -734,7 +773,7 @@ const EntityTraining: React.FC = () => {
                 type="button"
                 variant="outline"
                 onClick={() => openCreateTopicDialog()}
-                disabled={state.folders.length === 0}
+                disabled={activeFolders.length === 0}
               >
                 <BookOpen className="mr-1.5 h-4 w-4" />
                 Nuevo tema
@@ -901,7 +940,7 @@ const EntityTraining: React.FC = () => {
                       <SelectItem value="all">Todas las áreas</SelectItem>
                       {state.folders.map((f) => (
                         <SelectItem key={f.area_id} value={f.area_id}>
-                          {areaNameById.get(f.area_id) || f.area_name_snapshot}
+                          {formatAreaLabel(f.area_id, f.area_name_snapshot)}
                         </SelectItem>
                       ))}
                     </SiteCorpSelect>
@@ -962,10 +1001,10 @@ const EntityTraining: React.FC = () => {
                         <div className="space-y-2">
                           {monthSessions.map((session) => {
                             const topic = topicById.get(session.topic_id)
-                            const areaName =
-                              areaNameById.get(session.area_id) ||
-                              folderById.get(session.folder_id)?.area_name_snapshot ||
-                              "Área"
+                            const areaName = formatAreaLabel(
+                              session.area_id,
+                              folderById.get(session.folder_id)?.area_name_snapshot
+                            )
                             const dayNumber = session.scheduled_date.slice(8, 10)
                             return (
                               <button
@@ -1036,10 +1075,10 @@ const EntityTraining: React.FC = () => {
                       <tbody className="divide-y divide-border bg-white">
                         {filteredYearSessions.map((session) => {
                           const topic = topicById.get(session.topic_id)
-                          const areaName =
-                            areaNameById.get(session.area_id) ||
-                            folderById.get(session.folder_id)?.area_name_snapshot ||
-                            "—"
+                          const areaName = formatAreaLabel(
+                            session.area_id,
+                            folderById.get(session.folder_id)?.area_name_snapshot || "—"
+                          )
                           return (
                             <tr key={session.id} className="hover:bg-muted/20">
                               <td className="px-4 py-2.5 font-mono text-xs font-medium text-ink tabular-nums">
@@ -1170,8 +1209,8 @@ const EntityTraining: React.FC = () => {
             ) : (
               <div className="space-y-4">
                 {state.folders.map((folder) => {
-                  const areaName =
-                    areaNameById.get(folder.area_id) || folder.area_name_snapshot
+                  const isAreaInactive = areaActiveById.get(folder.area_id) === false
+                  const areaName = formatAreaLabel(folder.area_id, folder.area_name_snapshot)
                   const folderTopics = state.topics.filter((t) => t.folder_id === folder.id)
                   const isExpanded = expandedFolderIds.has(folder.id)
 
@@ -1211,15 +1250,17 @@ const EntityTraining: React.FC = () => {
 
                           {canManage && (
                             <div className="flex items-center gap-2">
-                              <SiteCorpButton
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openCreateTopicDialog(folder.id)}
-                              >
-                                <Plus className="mr-1.5 h-4 w-4" />
-                                Nuevo tema en esta área
-                              </SiteCorpButton>
+                              {!isAreaInactive && (
+                                <SiteCorpButton
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openCreateTopicDialog(folder.id)}
+                                >
+                                  <Plus className="mr-1.5 h-4 w-4" />
+                                  Nuevo tema en esta área
+                                </SiteCorpButton>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => handleDeleteFolder(folder)}
@@ -1565,7 +1606,7 @@ const EntityTraining: React.FC = () => {
                   value={topicFolderId}
                   onValueChange={(val) => setTopicFolderId(val)}
                 >
-                  {state.folders.map((f) => (
+                  {activeFolders.map((f) => (
                     <SelectItem key={f.id} value={f.id}>
                       {areaNameById.get(f.area_id) || f.area_name_snapshot}
                     </SelectItem>
@@ -1648,7 +1689,7 @@ const EntityTraining: React.FC = () => {
                   setScheduleTopicId(firstTopic?.id || "")
                 }}
               >
-                {state.folders.map((f) => (
+                {activeFolders.map((f) => (
                   <SelectItem key={f.id} value={f.id}>
                     {areaNameById.get(f.area_id) || f.area_name_snapshot}
                   </SelectItem>
@@ -1735,6 +1776,12 @@ const EntityTraining: React.FC = () => {
               className="flex min-h-0 flex-1 flex-col"
             >
               <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-4">
+                {sessionError && (
+                  <SiteCorpAlert type="danger" title="No se pudo guardar la sesión">
+                    {sessionError}
+                  </SiteCorpAlert>
+                )}
+
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Fecha de la sesión</Label>
@@ -1749,11 +1796,10 @@ const EntityTraining: React.FC = () => {
                   <div className="space-y-1.5">
                     <Label>Carpeta de área</Label>
                     <SiteCorpInput
-                      value={
-                        areaNameById.get(activeSession.area_id) ||
-                        folderById.get(activeSession.folder_id)?.area_name_snapshot ||
-                        "Área"
-                      }
+                      value={formatAreaLabel(
+                        activeSession.area_id,
+                        folderById.get(activeSession.folder_id)?.area_name_snapshot
+                      )}
                       disabled
                     />
                   </div>
@@ -1878,11 +1924,13 @@ const EntityTraining: React.FC = () => {
                         onValueChange={(val) => setParticipantAreaFilter(val)}
                       >
                         <SelectItem value="all">Todas las áreas de la entidad</SelectItem>
-                        {areas.map((a) => (
-                          <SelectItem key={a.id} value={a.id}>
-                            Área: {a.name}
-                          </SelectItem>
-                        ))}
+                        {areas
+                          .filter((a) => a.is_active !== false)
+                          .map((a) => (
+                            <SelectItem key={a.id} value={a.id}>
+                              Área: {a.name}
+                            </SelectItem>
+                          ))}
                       </SiteCorpSelect>
                     </div>
 
@@ -1895,33 +1943,46 @@ const EntityTraining: React.FC = () => {
                       ) : (
                         filteredModalWorkers.map((w) => {
                           const checked = selectedParticipantIds.has(w.id)
+                          const hiredAfterSession = Boolean(
+                            w.hireDate && sessionDateInput && w.hireDate > sessionDateInput
+                          )
                           return (
                             <label
                               key={w.id}
                               className={cn(
                                 "flex cursor-pointer items-center justify-between gap-3 px-3.5 py-2.5 text-sm transition-colors hover:bg-muted/30",
-                                checked && "bg-sitecorp-primary/5"
+                                checked && "bg-sitecorp-primary/5",
+                                hiredAfterSession && "cursor-not-allowed opacity-60 bg-muted/20"
                               )}
                             >
                               <div className="flex items-center gap-3">
                                 <input
                                   type="checkbox"
-                                  checked={checked}
-                                  disabled={!canManage}
-                                  onChange={() => toggleParticipant(w.id)}
+                                  checked={checked && !hiredAfterSession}
+                                  disabled={!canManage || hiredAfterSession}
+                                  onChange={() => {
+                                    if (!hiredAfterSession) toggleParticipant(w.id)
+                                  }}
                                   className="h-4 w-4 rounded border-border text-sitecorp-primary focus:ring-sitecorp-primary"
                                 />
                                 <div>
                                   <p className="font-medium text-ink">
                                     {w.fullName}{" "}
-                                    <span className="font-mono text-xs text-muted-foreground">
-                                      ({w.code})
-                                    </span>
+                                    {w.code ? (
+                                      <span className="font-mono text-xs text-muted-foreground">
+                                        ({w.code})
+                                      </span>
+                                    ) : null}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
                                     {w.areaName || "Sin área"}
                                     {w.positionName ? ` · ${w.positionName}` : ""}
                                   </p>
+                                  {hiredAfterSession && w.hireDate && (
+                                    <p className="text-[11px] font-medium text-sitecorp-warning">
+                                      Incorporado el {formatIsoDateToDisplay(w.hireDate)} (posterior a la sesión)
+                                    </p>
+                                  )}
                                 </div>
                               </div>
 

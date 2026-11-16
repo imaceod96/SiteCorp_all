@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import type {
   CatalogRefs,
   EducationLevelReport,
@@ -60,6 +61,7 @@ async function fetchActiveWorkerColumn(
     .select(column, { count: "exact" })
     .in("organization_entity_id", entityIds)
     .eq("employment_status", "active")
+    .lte("hire_date", todayIsoInCuba())
   if (error) throw error
   return { rows: (data as unknown as Record<string, unknown>[]) || [], total: count ?? 0 }
 }
