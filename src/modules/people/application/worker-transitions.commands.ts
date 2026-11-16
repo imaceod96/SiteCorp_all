@@ -7,14 +7,6 @@ import {
   registerWorkerSeparationRpc,
   reincorporateWorkerRpc,
 } from "../infrastructure/worker-transitions.repository"
-import {
-  ensureAddendumDocument,
-  ensureContractDocument,
-  ensureMovementDocument,
-  ensureResolutionDocument,
-} from "../infrastructure/transition-documents"
-import { setContractDocumentStatus } from "@/modules/contracts"
-import { TRANSITION_MOVEMENT_DOCUMENT } from "../domain/rules"
 import type {
   PluriemployContractInput,
   PluriemployResult,
@@ -37,12 +29,9 @@ import type {
  *                          anexo al contrato vigente. Conserva la trayectoria.
  *   · Cambio de contrato → permanece en Trabajadores; contrato nuevo e histórico intacto.
  *
- * Efectos posteriores a la transacción (documentos), iguales a los que ya tenían las
- * pantallas: el movimiento de nómina es silencioso (Alta/Baja/Reubicación) y el contrato,
- * el anexo y la Resolución devuelven aviso para no presentar la operación como completada.
- *
- * Las validaciones previas viven en el dominio y las aplica el diálogo; la RPC revalida en
- * el servidor (fechas, vacantes, permisos y preparación contractual).
+ * Los documentos se encolan automáticamente en `public.document_generation_jobs` mediante
+ * triggers en PostgreSQL dentro de la misma transacción de la RPC y se procesan en segundo
+ * plano mediante `process-document-jobs`.
  */
 
 export type SeparationOutcome = WorkerSeparationResult
@@ -51,20 +40,13 @@ export type SeparationOutcome = WorkerSeparationResult
 export async function registerWorkerSeparation(
   input: WorkerSeparationInput
 ): Promise<SeparationOutcome> {
-  const result = await registerWorkerSeparationRpc({
+  return registerWorkerSeparationRpc({
     workerId: input.workerId,
     effectiveDate: input.effectiveDate,
     separationReasonId: input.separationReasonId,
     notes: input.notes,
     targetAssignmentId: input.targetAssignmentId ?? null,
   })
-
-  if (!result.scheduled) {
-    const movement = TRANSITION_MOVEMENT_DOCUMENT.separation
-    if (movement) await ensureMovementDocument(input.workerId, movement, input.effectiveDate)
-  }
-
-  return result
 }
 
 /** Cancela una baja futura previamente programada antes de su fecha efectiva. */
@@ -75,7 +57,7 @@ export async function cancelScheduledWorkerSeparation(input: {
   await cancelScheduledWorkerSeparationRpc(input)
 }
 
-/** Aplica las bajas programadas cuya fecha efectiva ya llegó (<= hoy). */
+/** Aplica las bajas y cambios diferidos cuya fecha efectiva ya llegó (<= hoy en Cuba). */
 export async function applyDueScheduledSeparations(input?: {
   entityId?: string | null
   workerId?: string | null
@@ -108,32 +90,7 @@ export async function reincorporateWorkerWithContract(
     paymentScheduleText: input.paymentScheduleText,
   })
 
-  const documentWarning = result.contractId
-    ? await runContractDocumentWithStatus(result.contractId, {
-        worker_id: result.workerId ?? input.workerId,
-        start_date: input.contractStartDate || input.reincorporationDate,
-      })
-    : null
-  return { workerId: result.workerId, documentWarning }
-}
-
-async function runContractDocumentWithStatus(
-  contractId: string,
-  meta?: { worker_id?: string | null; start_date?: string | null }
-): Promise<string | null> {
-  await setContractDocumentStatus(contractId, "PENDIENTE", null, meta)
-  try {
-    const warning = await ensureContractDocument(contractId)
-    await setContractDocumentStatus(contractId, warning ? "ERROR" : "GENERADO", warning, meta)
-    return warning
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "No se pudo generar el documento contractual automáticamente."
-    await setContractDocumentStatus(contractId, "ERROR", message, meta)
-    return message
-  }
+  return { workerId: result.workerId, documentWarning: null }
 }
 
 /** Reincorporación directa hacia un Cargo Especialista Principal: Resolución sustitutiva. */
@@ -157,10 +114,7 @@ export async function reincorporateWorkerWithResolution(
     resolutionDate: input.resolution.resolutionDate,
   })
 
-  const documentWarning = result.resolutionId
-    ? await ensureResolutionDocument(result.resolutionId)
-    : null
-  return { workerId: result.workerId, documentWarning }
+  return { workerId: result.workerId, documentWarning: null }
 }
 
 export interface PositionChangeOutcome extends WorkerPositionChangeResult {
@@ -188,33 +142,15 @@ export async function changeWorkerPosition(
     reasonCode: "POSITION_CHANGE",
     signatureDate: formalizeNow ? addendum?.signatureDate || null : null,
     signaturePlace: formalizeNow ? addendum?.signaturePlace || null : null,
-    // El representante del anexo cuando se formaliza; el de la Resolución en la vía de
-    // Cargo Especialista Principal (§45). En el resto no se envía ninguno.
     representativeAssignmentId: formalizeNow
       ? addendum?.representativeAssignmentId || null
       : input.representativeAssignmentId ?? null,
     requireFormalized: formalizeNow,
     resolutionDate: input.resolutionDate ?? null,
-    // Pluriempleo: con dos contratos vigentes hay que identificar la asignación
-    // afectada. Con uno solo viaja `null` y la llamada es la de siempre.
     targetAssignmentId: input.targetAssignmentId ?? null,
   })
 
-  // §42/§65: el documento del anexo formalizado se genera automáticamente.
-  const addendumId = result.addendum?.addendum_id
-  let documentWarning: string | null = null
-
-  if (result.resolution_id) {
-    documentWarning = await ensureResolutionDocument(result.resolution_id)
-  } else if (result.addendum?.addendum_status === "FORMALIZED" && addendumId) {
-    documentWarning = await ensureAddendumDocument(addendumId)
-  }
-
-  // Movimiento de Nómina (Reubicación) → documento individual en el expediente.
-  const movement = TRANSITION_MOVEMENT_DOCUMENT.position_change
-  if (movement) await ensureMovementDocument(input.workerId, movement, input.effectiveDate)
-
-  return { ...result, documentWarning }
+  return { ...result, documentWarning: null }
 }
 
 export interface ContractChangeOutcome extends WorkerContractChangeResult {
@@ -238,18 +174,10 @@ export async function changeWorkerContract(
     paymentMethodId: input.paymentMethodId,
     compensationComponents: input.compensationComponents,
     paymentScheduleText: input.paymentScheduleText,
-    // Pluriempleo: con dos contratos vigentes hay que identificar el contrato afectado.
     targetContractId: input.targetContractId ?? null,
   })
 
-  const documentWarning = result.newContractId
-    ? await runContractDocumentWithStatus(result.newContractId, {
-        worker_id: input.workerId,
-        start_date: input.effectiveDate,
-      })
-    : null
-
-  return { ...result, documentWarning }
+  return { ...result, documentWarning: null }
 }
 
 export interface PluriemployOutcome extends PluriemployResult {
@@ -259,22 +187,10 @@ export interface PluriemployOutcome extends PluriemployResult {
 
 /**
  * Alta del SEGUNDO contrato del trabajador (Pluriempleo).
- *
- * No crea candidato ni proceso de selección y no duplica la ficha: abre una segunda
- * asignación y un segundo contrato independientes sobre la misma persona. El documento
- * del contrato se genera después y nunca interrumpe la operación.
  */
 export async function createWorkerPluriemploy(
   input: PluriemployContractInput
 ): Promise<PluriemployOutcome> {
   const result = await createWorkerPluriemployRpc(input)
-
-  const documentWarning = result.contractId
-    ? await runContractDocumentWithStatus(result.contractId, {
-        worker_id: input.workerId,
-        start_date: input.contractStartDate,
-      })
-    : null
-
-  return { ...result, documentWarning }
+  return { ...result, documentWarning: null }
 }

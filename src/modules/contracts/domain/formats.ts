@@ -25,14 +25,18 @@ export const formatContractDate = (isoDate: string | null | undefined): string =
 export const formatConditionDate = formatContractDate
 
 /**
- * Importe contractual: `4 000,00 CUP`. Sin moneda devuelve sólo el número y un importe
- * nulo se muestra como `—` (nunca `NaN` ni `0` por defecto).
+ * Importe contractual unificado con `formatSalary`: `4,500.00 CUP`. Sin moneda devuelve sólo
+ * el número y un importe nulo se muestra como `—` (nunca `NaN` ni `0` por defecto).
  */
 export const formatContractMoney = (amount: number | null, currency?: string | null): string => {
-  if (amount === null || amount === undefined) return "—"
-  const value = `${amount.toLocaleString("es-CU", {
+  if (amount === null || amount === undefined || !Number.isFinite(Number(amount))) return "—"
+  const value = `${Number(amount).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`
   return currency ? `${value} ${currency}` : value
 }
+
+export const formatContractSalary = formatContractMoney
+
+

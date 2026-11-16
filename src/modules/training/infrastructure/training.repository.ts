@@ -137,7 +137,7 @@ async function fetchDatabaseTrainingState(entityId: string): Promise<EntityTrain
     supabase
       .from("training_initial_notifications")
       .select(
-        "id, organization_entity_id, worker_id, candidate_id, hire_key, worker_name, worker_code, worker_identification, area_id, area_name, position_name, hire_date, status, completed_at, completed_record_id, created_at"
+        "id, organization_entity_id, worker_id, candidate_id, hire_key, trigger_type, worker_name, worker_code, worker_identification, area_id, area_name, position_name, hire_date, status, completed_at, completed_record_id, created_at"
       )
       .eq("organization_entity_id", entityId)
       .order("created_at", { ascending: false }),
@@ -244,9 +244,11 @@ interface RawWorkerWithAreaRow {
   second_surname: string | null
   identification: string
   employment_status: string
+  hire_date: string | null
   assignments:
     | {
         is_current: boolean
+        start_date?: string | null
         end_date: string | null
         position:
           | {
@@ -287,12 +289,13 @@ export async function fetchEntityWorkersForTraining(
   entityId: string
 ): Promise<EntityWorkerOption[]> {
   if (!entityId) return []
+  const today = todayIsoInCuba()
   const { data, error } = await supabase
     .from("workers")
     .select(
-      `id, code, first_name, first_surname, second_surname, identification, employment_status,
+      `id, code, first_name, first_surname, second_surname, identification, employment_status, hire_date,
        assignments:worker_position_assignments(
-         is_current, end_date,
+         is_current, start_date, end_date,
          position:organization_positions(
            name,
            job:organization_jobs(
@@ -309,6 +312,12 @@ export async function fetchEntityWorkersForTraining(
 
   return ((data as unknown as RawWorkerWithAreaRow[] | null) || []).map((row) => {
     const activeAssignment =
+      (row.assignments || []).find(
+        (a) =>
+          a.is_current &&
+          (!a.start_date || a.start_date <= today) &&
+          (!a.end_date || a.end_date >= today)
+      ) ||
       (row.assignments || []).find((a) => a.is_current && !a.end_date) ||
       (row.assignments || [])[0] ||
       null
@@ -325,6 +334,7 @@ export async function fetchEntityWorkersForTraining(
       areaName: area?.name ?? null,
       positionName: pos?.name ?? null,
       employmentStatus: row.employment_status,
+      hireDate: row.hire_date ?? null,
     }
   })
 }

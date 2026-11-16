@@ -100,6 +100,7 @@ export interface PersonDirectoryWorker {
   province: string | null
   municipality: string | null
   address: string | null
+  hire_date?: string | null
   employment_start_date: string | null
   has_masters_degree: boolean | null
   has_doctorate_degree: boolean | null
@@ -763,6 +764,7 @@ export interface EntityWorkerOption {
   id: string
   full_name: string
   identification: string
+  hire_date?: string | null
 }
 
 /** Experiencia laboral declarada por la persona (fila de `candidate_work_experiences`). */

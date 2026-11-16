@@ -10,12 +10,8 @@ import * as entityAccessRepo from "@/modules/access-control/infrastructure/entit
 import { loadEntityStaffingBoard } from "@/modules/people/application/staffing.queries"
 import { hireCandidateWithContract } from "@/modules/people/application/hiring.commands"
 import * as workerTransitionsRepo from "@/modules/people/infrastructure/worker-transitions.repository"
-import * as documentGeneration from "@/modules/document-generation"
-import {
-  clearContractDocumentStatusStore,
-  fetchPendingContractDocuments,
-  getContractDocumentStatusSnapshot,
-} from "@/modules/contracts"
+import { supabase } from "@/lib/supabase"
+import { clearContractDocumentStatusStore } from "@/modules/contracts"
 import { getMedicalCertificateIncoherenceReason } from "@/modules/vacations-licenses/medical-certificates"
 
 describe("QA Round 3 — Pendientes (P1, P2, P3, P4 y P5)", () => {
@@ -105,17 +101,20 @@ describe("QA Round 3 — Pendientes (P1, P2, P3, P4 y P5)", () => {
     expect(sqlMigration).toContain("public.create_contract_addendum")
   })
 
-  it("P3: si la generación del documento falla después de hireCandidateRpc, el contrato queda marcado con estado ERROR y aparece en la alerta de contratos con documento pendiente", async () => {
+  it("P3: hireCandidateWithContract concluye tras el RPC sin ensure* en el cliente, y si la Edge Function process-document-jobs responde 503 el contrato queda en estado ERROR visible en PendingContractDocumentsBanner", async () => {
     vi.spyOn(workerTransitionsRepo, "hireCandidateRpc").mockResolvedValueOnce({
       workerId: "worker-pedro-tester",
       contractId: "contract-pedro-503",
       resolutionId: null,
     })
 
-    vi.spyOn(documentGeneration, "fetchGeneratedDocuments").mockResolvedValueOnce([])
-    vi.spyOn(documentGeneration, "generateContractDocument").mockRejectedValueOnce(
-      new Error("503 Service Unavailable")
-    )
+    const rpcSpy = vi.spyOn(supabase, "rpc").mockResolvedValue({ data: null, error: null } as never)
+    vi.spyOn(supabase, "functions", "get").mockReturnValue({
+      invoke: vi.fn().mockResolvedValue({
+        data: null,
+        error: new Error("503 Service Unavailable"),
+      }),
+    } as never)
 
     const outcome = await hireCandidateWithContract({
       candidateId: "cand-pedro",
@@ -125,8 +124,8 @@ describe("QA Round 3 — Pendientes (P1, P2, P3, P4 y P5)", () => {
       contractTypeId: "ct-indeterminado",
       contractStartDate: "2026-11-14",
       isDetermined: false,
-      contractEndDate: null,
-      notes: null,
+      contractEndDate: "",
+      notes: "",
       representativeAssignmentId: "rep-1",
       signatureDate: "2026-11-14",
       signaturePlace: "La Habana",
@@ -137,21 +136,32 @@ describe("QA Round 3 — Pendientes (P1, P2, P3, P4 y P5)", () => {
 
     expect(outcome.workerId).toBe("worker-pedro-tester")
     expect(outcome.contractId).toBe("contract-pedro-503")
-    expect(outcome.documentWarning).toContain("503 Service Unavailable")
+    // En la arquitectura actual (P1), el trigger en PostgreSQL encola el documento sin bloquear la UI
+    expect(outcome.documentWarning).toBeNull()
 
-    const snapshot = getContractDocumentStatusSnapshot("contract-pedro-503")
-    expect(snapshot).not.toBeNull()
-    expect(snapshot?.document_status).toBe("ERROR")
-    expect(snapshot?.document_error).toContain("503 Service Unavailable")
-
-    const pendingList = await fetchPendingContractDocuments("ent-qa")
-    expect(pendingList.some((row) => row.contract_id === "contract-pedro-503")).toBe(true)
+    // Si la cola en el backend / Edge Function falla con 503, marca el contrato como ERROR
+    const { triggerDocumentGenerationJobs } = await import("@/modules/contracts")
+    const triggerRes = await triggerDocumentGenerationJobs({
+      kind: "CONTRACT",
+      sourceId: "contract-pedro-503",
+    })
+    expect(triggerRes.ok).toBe(false)
+    expect(triggerRes.status).toBe("ERROR")
+    expect(triggerRes.error).toContain("503 Service Unavailable")
+    expect(rpcSpy).toHaveBeenCalledWith(
+      "set_contract_document_status",
+      expect.objectContaining({
+        p_contract_id: "contract-pedro-503",
+        p_status: "ERROR",
+        p_error: "503 Service Unavailable",
+      })
+    )
 
     const bannerSource = fs.readFileSync(
       "src/modules/contracts/presentation/components/PendingContractDocumentsBanner.tsx",
       "utf8"
     )
-    expect(bannerSource).toContain("Contratos con documento pendiente de generar")
+    expect(bannerSource).toContain("Documentos pendientes de generar")
     expect(bannerSource).toContain("Generar documento")
   })
 

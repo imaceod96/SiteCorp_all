@@ -212,6 +212,9 @@ export const RolesManager = ({
               selectablePermissions.some((permission) => permission.id === id)
             )
           : selectedPermissionIds
+      if (!permissionsLocked && allowedPermissionIds.length === 0) {
+        throw new Error("Debes asignar al menos un permiso al rol antes de guardar.")
+      }
       await saveRole(form, allowedPermissionIds, editingRole)
       setSuccess(
         editingRole

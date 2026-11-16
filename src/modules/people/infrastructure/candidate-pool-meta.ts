@@ -2,25 +2,17 @@ import { supabase } from "@/lib/supabase"
 
 /**
  * Persistencia de metadatos de la Bolsa Global de Candidatos (`area_id` y postulación
- * multi-entidad) sobre `public.candidate_additional_info` sin requerir migraciones DDL
- * adicionales en `public.candidates`.
+ * multi-entidad) sobre `public.candidate_pool_metadata` en Supabase.
  *
  * Incluye caché en memoria con deduplicación de peticiones en vuelo para evitar consultas
- * repetidas al cargar listados de candidatos.
+ * repetidas al cargar listados de candidatos, y compatibilidad de lectura con registros
+ * históricos en `public.candidate_additional_info`.
  */
 
 export const AREA_META_PREFIX = "__SITECORP_AREA__:"
 export const ENTITIES_META_PREFIX = "__SITECORP_ENTITIES__:"
 export const CANDIDATES_CHANGED_EVENT = "sitecorp:candidates-changed"
-const LOCAL_STORAGE_KEY = "sitecorp_candidate_pool_meta_v1"
 const CACHE_TTL_MS = 30_000
-
-interface LocalPoolMetaEntry {
-  areaId?: string | null
-  entityIds?: string[]
-}
-
-type LocalPoolMetaStore = Record<string, LocalPoolMetaEntry>
 
 interface PoolMetaSnapshot {
   fetchedAt: number
@@ -44,27 +36,7 @@ export function invalidatePoolMetaCache(): void {
   inflightSnapshotPromise = null
 }
 
-function readLocalMetaStore(): LocalPoolMetaStore {
-  if (typeof window === "undefined") return {}
-  try {
-    const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY)
-    if (!raw) return {}
-    return JSON.parse(raw) as LocalPoolMetaStore
-  } catch {
-    return {}
-  }
-}
-
-function writeLocalMetaStore(store: LocalPoolMetaStore): void {
-  if (typeof window === "undefined") return
-  try {
-    window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(store))
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
-/** Carga en una sola consulta todos los metadatos de bolsa y los mantiene en caché. */
+/** Carga en una sola consulta todos los metadatos de bolsa desde Supabase y los mantiene en caché. */
 async function loadPoolMetaSnapshot(forceRefresh = false): Promise<PoolMetaSnapshot> {
   const now = Date.now()
   if (!forceRefresh && memorySnapshot && now - memorySnapshot.fetchedAt < CACHE_TTL_MS) {
@@ -78,21 +50,21 @@ async function loadPoolMetaSnapshot(forceRefresh = false): Promise<PoolMetaSnaps
     const areaByCandidateId = new Map<string, string>()
     const entitiesByCandidateId = new Map<string, string[]>()
 
-    const store = readLocalMetaStore()
-    for (const [candId, local] of Object.entries(store)) {
-      if (local?.areaId) areaByCandidateId.set(candId, local.areaId)
-      if (Array.isArray(local?.entityIds)) entitiesByCandidateId.set(candId, local.entityIds)
-    }
-
     try {
-      const { data, error } = await supabase
-        .from("candidate_additional_info")
-        .select("candidate_id, info_text, created_at")
-        .or(`info_text.like.${AREA_META_PREFIX}%,info_text.like.${ENTITIES_META_PREFIX}%`)
-        .order("created_at", { ascending: true })
+      const [metaRes, legacyRes] = await Promise.allSettled([
+        supabase
+          .from("candidate_pool_metadata")
+          .select("candidate_id, area_id, entity_ids, updated_at")
+          .order("updated_at", { ascending: true }),
+        supabase
+          .from("candidate_additional_info")
+          .select("candidate_id, info_text, created_at")
+          .or(`info_text.like.${AREA_META_PREFIX}%,info_text.like.${ENTITIES_META_PREFIX}%`)
+          .order("created_at", { ascending: true }),
+      ])
 
-      if (!error && data) {
-        for (const row of data as { candidate_id: string; info_text: string }[]) {
+      if (legacyRes.status === "fulfilled" && !legacyRes.value.error && legacyRes.value.data) {
+        for (const row of legacyRes.value.data as { candidate_id: string; info_text: string }[]) {
           if (row.info_text.startsWith(AREA_META_PREFIX)) {
             const val = row.info_text.slice(AREA_META_PREFIX.length).trim()
             if (val) {
@@ -111,6 +83,26 @@ async function loadPoolMetaSnapshot(forceRefresh = false): Promise<PoolMetaSnaps
             } catch {
               // Ignore malformed JSON
             }
+          }
+        }
+      }
+
+      if (metaRes.status === "fulfilled" && !metaRes.value.error && metaRes.value.data) {
+        for (const row of metaRes.value.data as {
+          candidate_id: string
+          area_id?: string | null
+          entity_ids?: string[] | null
+        }[]) {
+          if (row.area_id) {
+            areaByCandidateId.set(row.candidate_id, row.area_id)
+          } else {
+            areaByCandidateId.delete(row.candidate_id)
+          }
+          if (Array.isArray(row.entity_ids)) {
+            entitiesByCandidateId.set(
+              row.candidate_id,
+              row.entity_ids.filter((item): item is string => typeof item === "string" && item.length > 0)
+            )
           }
         }
       }
@@ -137,20 +129,13 @@ export function isInternalCandidateMetaText(text: string | null | undefined): bo
   return text.startsWith(AREA_META_PREFIX) || text.startsWith(ENTITIES_META_PREFIX)
 }
 
-/** Guarda el área de interés (`area_id`) del candidato. */
+/** Guarda el área de interés (`area_id`) del candidato en `public.candidate_pool_metadata`. */
 export async function saveCandidateAreaMeta(
   candidateId: string,
   organizationEntityId: string,
   areaId: string | null | undefined
 ): Promise<void> {
   const normalizedAreaId = (areaId ?? "").trim() || null
-
-  const store = readLocalMetaStore()
-  store[candidateId] = {
-    ...(store[candidateId] || {}),
-    areaId: normalizedAreaId,
-  }
-  writeLocalMetaStore(store)
 
   if (memorySnapshot) {
     if (normalizedAreaId) {
@@ -161,28 +146,46 @@ export async function saveCandidateAreaMeta(
   }
 
   try {
-    await supabase
-      .from("candidate_additional_info")
-      .delete()
-      .eq("candidate_id", candidateId)
-      .like("info_text", `${AREA_META_PREFIX}%`)
+    const existingEntities =
+      memorySnapshot?.entitiesByCandidateId.get(candidateId) ??
+      (organizationEntityId ? [organizationEntityId] : [])
 
-    if (normalizedAreaId) {
-      const userId = (await supabase.auth.getUser()).data.user?.id ?? null
-      await supabase.from("candidate_additional_info").insert({
+    const { error: upsertErr } = await supabase.from("candidate_pool_metadata").upsert(
+      {
         candidate_id: candidateId,
         organization_entity_id: organizationEntityId,
-        info_text: `${AREA_META_PREFIX}${normalizedAreaId}`,
-        created_by: userId,
-      })
+        area_id: normalizedAreaId,
+        entity_ids: existingEntities,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "candidate_id" }
+    )
+
+    if (upsertErr) {
+      // Fallback en caso de que la migración de candidate_pool_metadata aún no esté aplicada
+      await supabase
+        .from("candidate_additional_info")
+        .delete()
+        .eq("candidate_id", candidateId)
+        .like("info_text", `${AREA_META_PREFIX}%`)
+
+      if (normalizedAreaId) {
+        const userId = (await supabase.auth.getUser()).data.user?.id ?? null
+        await supabase.from("candidate_additional_info").insert({
+          candidate_id: candidateId,
+          organization_entity_id: organizationEntityId,
+          info_text: `${AREA_META_PREFIX}${normalizedAreaId}`,
+          created_by: userId,
+        })
+      }
     }
   } catch (err) {
-    console.warn("[people] no se pudo persistir area_id en candidate_additional_info", err)
+    console.warn("[people] no se pudo persistir area_id en candidate_pool_metadata", err)
   }
 }
 
 /**
- * Guarda la lista explícita de entidades a las que está postulado un candidato.
+ * Guarda la lista explícita de entidades a las que está postulado un candidato en `public.candidate_pool_metadata`.
  * Un arreglo vacío (`[]`) indica que el candidato está en la Bolsa Global sin entidad asignada.
  */
 export async function saveCandidateEntitiesMeta(
@@ -192,33 +195,40 @@ export async function saveCandidateEntitiesMeta(
 ): Promise<void> {
   const uniqueIds = Array.from(new Set(entityIds.map((id) => id.trim()).filter(Boolean)))
 
-  const store = readLocalMetaStore()
-  store[candidateId] = {
-    ...(store[candidateId] || {}),
-    entityIds: uniqueIds,
-  }
-  writeLocalMetaStore(store)
-
   if (memorySnapshot) {
     memorySnapshot.entitiesByCandidateId.set(candidateId, uniqueIds)
   }
 
   try {
-    await supabase
-      .from("candidate_additional_info")
-      .delete()
-      .eq("candidate_id", candidateId)
-      .like("info_text", `${ENTITIES_META_PREFIX}%`)
+    const existingAreaId = memorySnapshot?.areaByCandidateId.get(candidateId) ?? null
+    const { error: upsertErr } = await supabase.from("candidate_pool_metadata").upsert(
+      {
+        candidate_id: candidateId,
+        organization_entity_id: organizationEntityId,
+        area_id: existingAreaId,
+        entity_ids: uniqueIds,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "candidate_id" }
+    )
 
-    const userId = (await supabase.auth.getUser()).data.user?.id ?? null
-    await supabase.from("candidate_additional_info").insert({
-      candidate_id: candidateId,
-      organization_entity_id: organizationEntityId,
-      info_text: `${ENTITIES_META_PREFIX}${JSON.stringify(uniqueIds)}`,
-      created_by: userId,
-    })
+    if (upsertErr) {
+      await supabase
+        .from("candidate_additional_info")
+        .delete()
+        .eq("candidate_id", candidateId)
+        .like("info_text", `${ENTITIES_META_PREFIX}%`)
+
+      const userId = (await supabase.auth.getUser()).data.user?.id ?? null
+      await supabase.from("candidate_additional_info").insert({
+        candidate_id: candidateId,
+        organization_entity_id: organizationEntityId,
+        info_text: `${ENTITIES_META_PREFIX}${JSON.stringify(uniqueIds)}`,
+        created_by: userId,
+      })
+    }
   } catch (err) {
-    console.warn("[people] no se pudo persistir entidades en candidate_additional_info", err)
+    console.warn("[people] no se pudo persistir entidades en candidate_pool_metadata", err)
   }
 }
 

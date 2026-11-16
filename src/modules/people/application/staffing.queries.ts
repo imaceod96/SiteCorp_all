@@ -108,11 +108,59 @@ export async function loadTransitionWorkspace(
     fetchEntityStaffingPositions(entityId),
     fetchEntityOccupancy(entityId),
     fetchActiveContractTypes(),
-    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION).catch(() => false),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
     options.workerId ? fetchWorkerIdentity(options.workerId) : Promise.resolve(null),
   ])
 
   return { positions, occupancy, contractTypes, canManageContractData, worker }
+}
+
+export interface PositionChangeWorkspace {
+  positions: StaffingPosition[]
+  occupancy: EntityOccupancy
+  segmentsByPosition: Record<string, PositionScheduleSegment[]>
+  applicableScaleId: string | null
+  salaryValuesByGroup: Record<string, SalaryValue | null>
+  /** Habilita configurar representantes y editar municipio/año contractual en el diálogo. */
+  canManageContractData: boolean
+}
+
+/**
+ * Espacio de trabajo optimizado para ChangePositionDialog (B12):
+ * ejecuta en paralelo puestos (+ salarios en cuanto llegan los puestos), ocupación,
+ * segmentos de jornada, escala aplicable y el permiso contract_data.manage sin rondas extra.
+ */
+export async function loadPositionChangeWorkspace(
+  entityId: string
+): Promise<PositionChangeWorkspace> {
+  const [
+    { positions, salaryValuesByGroup },
+    occupancy,
+    segmentsByPosition,
+    applicableScaleId,
+    canManageContractData,
+  ] = await Promise.all([
+    fetchEntityStaffingPositions(entityId).then(async (rows) => {
+      const groupIds = Array.from(
+        new Set(rows.map((p) => p.job?.salary_group?.id).filter((id): id is string => !!id))
+      )
+      const values = groupIds.length > 0 ? await fetchSalaryValuesForGroups(groupIds) : {}
+      return { positions: rows, salaryValuesByGroup: values }
+    }),
+    fetchEntityOccupancy(entityId),
+    fetchEntityScheduleSegments(entityId),
+    resolveApplicableScaleId(entityId),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
+  ])
+
+  return {
+    positions,
+    occupancy,
+    segmentsByPosition,
+    applicableScaleId,
+    salaryValuesByGroup,
+    canManageContractData,
+  }
 }
 
 export interface ContractChangeWorkspace {
@@ -130,7 +178,7 @@ export async function loadContractChangeWorkspace(
 ): Promise<ContractChangeWorkspace> {
   const [contractTypes, canManageContractData] = await Promise.all([
     fetchActiveContractTypes(),
-    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION).catch(() => false),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
   ])
   return { contractTypes, canManageContractData }
 }

@@ -1,169 +1,239 @@
 import * as React from "react"
 import { Link } from "react-router-dom"
-import { AlertTriangle, FileSignature, Loader2, Sparkles } from "lucide-react"
-import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
-import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
+import { AlertTriangle, FileText, Loader2, RefreshCw, Settings } from "lucide-react"
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
+import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badge"
+import { formatIsoDateToDisplay } from "@/utils/cuba-date"
 import { showError, showSuccess } from "@/utils/toast"
 import {
   CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT,
-  ensureContractDocumentGenerated,
+  DOCUMENT_JOB_KIND_LABELS,
   fetchPendingContractDocuments,
+  triggerDocumentGenerationJobs,
 } from "../../infrastructure/contract-documents.repository"
 import type { PendingContractDocumentRow } from "../../domain/entities"
 
 interface PendingContractDocumentsBannerProps {
-  entityId: string
+  entityId: string | null | undefined
+  canManage?: boolean
+  onResolved?: () => void
 }
 
-export const PendingContractDocumentsBanner: React.FC<
-  PendingContractDocumentsBannerProps
-> = ({ entityId }) => {
+/**
+ * Aviso persistente de documentos pendientes, en curso, sin plantilla o con error de generación
+ * leídos directamente de `public.document_generation_jobs` para TODOS los tipos documentales:
+ * contratos, anexos, resoluciones, movimientos de nómina, vacaciones y certificados médicos.
+ */
+export const PendingContractDocumentsBanner: React.FC<PendingContractDocumentsBannerProps> = ({
+  entityId,
+  canManage = true,
+  onResolved,
+}) => {
   const [rows, setRows] = React.useState<PendingContractDocumentRow[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [generatingId, setGeneratingId] = React.useState<string | null>(null)
+  const [retryingId, setRetryingId] = React.useState<string | null>(null)
 
-  const refresh = React.useCallback(async () => {
-    try {
-      const pending = await fetchPendingContractDocuments(entityId || null)
-      setRows(pending)
-    } catch {
+  const load = React.useCallback(async () => {
+    if (!entityId) {
       setRows([])
-    } finally {
-      setLoading(false)
+      return
     }
+    const list = await fetchPendingContractDocuments(entityId)
+    setRows(list)
   }, [entityId])
 
   React.useEffect(() => {
-    void refresh()
-  }, [refresh])
+    void load()
+  }, [load])
 
   React.useEffect(() => {
-    const handleChanged = () => {
-      void refresh()
+    const handler = () => {
+      void load()
     }
-    window.addEventListener(CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT, handleChanged)
+    window.addEventListener(CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT, handler)
     return () => {
-      window.removeEventListener(CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT, handleChanged)
+      window.removeEventListener(CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT, handler)
     }
-  }, [refresh])
+  }, [load])
 
-  const handleGenerateOne = async (row: PendingContractDocumentRow) => {
-    setGeneratingId(row.contract_id)
+  // Sondeo automático cada 5s mientras existan trabajos en PENDIENTE o GENERANDO
+  const hasActiveJobs = React.useMemo(
+    () =>
+      rows.some(
+        (r) => r.document_status === "PENDIENTE" || r.document_status === "GENERANDO"
+      ),
+    [rows]
+  )
+
+  React.useEffect(() => {
+    if (!hasActiveJobs || !entityId) return
+    const timer = window.setInterval(() => {
+      void load()
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [hasActiveJobs, entityId, load])
+
+  const handleRetry = async (row: PendingContractDocumentRow) => {
+    const key = row.source_id || row.contract_id
+    setRetryingId(key)
     try {
-      const outcome = await ensureContractDocumentGenerated(row.contract_id)
-      if (outcome.generated || outcome.skipped) {
-        showSuccess("Documento contractual generado correctamente.")
+      const outcome = await triggerDocumentGenerationJobs({
+        kind: row.kind ?? "CONTRACT",
+        sourceId: key,
+      })
+      if (outcome.ok) {
+        showSuccess(`Documento generado correctamente para ${row.worker_name}.`)
+        await load()
+        onResolved?.()
       } else {
         showError(
-          outcome.result?.error ||
-            "No se pudo generar el documento contractual. Revisa las variables o la conexión."
+          outcome.error ||
+            "No se pudo generar el documento en este momento. Puedes volver a intentarlo."
         )
+        await load()
       }
-      await refresh()
-    } catch (error) {
+    } catch (err) {
       showError(
-        error instanceof Error
-          ? error.message
-          : "No se pudo generar el documento contractual."
+        err instanceof Error
+          ? err.message
+          : "Error inesperado al reintentar la generación del documento."
       )
-      await refresh()
+      await load()
     } finally {
-      setGeneratingId(null)
+      setRetryingId(null)
     }
   }
 
-  if (loading || rows.length === 0) {
-    return null
-  }
-
-  const count = rows.length
-  const label = count === 1 ? "contrato" : "contratos"
+  if (rows.length === 0) return null
 
   return (
-    <SiteCorpCard className="rounded-2xl border-sitecorp-warning/40 bg-sitecorp-warning/5">
-      <div className="space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-sitecorp-warning/15 p-2.5 text-sitecorp-warning">
-            <AlertTriangle className="h-5 w-5" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-semibold text-ink">
-                Contratos con documento pendiente de generar
-              </h3>
-              <span className="font-mono text-xs font-semibold tabular-nums text-amber-800">
-                · {count} {label}
-              </span>
-            </div>
+    <div
+      role="region"
+      aria-label="Contratos con documento pendiente de generar"
+      className="rounded-2xl border border-sitecorp-warning/40 bg-sitecorp-warning/10 p-4"
+    >
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-sitecorp-warning" />
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">
+              Documentos pendientes de generar ({rows.length})
+            </h3>
             <p className="text-xs text-muted-foreground">
-              El contrato ya quedó formalizado en el servidor, pero su documento Word quedó pendiente
-              o sufrió un corte de conexión durante la generación. Puedes generarlo ahora con un clic.
+              Estado en tiempo real de la cola de generación documental (contratos, anexos,
+              resoluciones, movimientos de nómina, vacaciones y certificados médicos).
             </p>
           </div>
-        </div>
 
-        <div className="divide-y divide-border/60 rounded-xl border border-border/70 bg-white/80 px-3">
-          {rows.map((row) => {
-            const busy = generatingId === row.contract_id
-            return (
-              <div
-                key={row.contract_id}
-                className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0 space-y-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {row.worker_id ? (
-                      <Link
-                        to={`/workers/${row.worker_id}`}
-                        className="text-sm font-medium text-sitecorp-primary hover:underline"
+          <div className="space-y-2">
+            {rows.map((row) => {
+              const rowKey = row.source_id || row.contract_id
+              const isRetrying = retryingId === rowKey
+              const isGenerating =
+                isRetrying ||
+                row.document_status === "PENDIENTE" ||
+                row.document_status === "GENERANDO"
+              const isMissingTemplate = row.document_status === "SIN_PLANTILLA"
+              const kindLabel =
+                (row.kind && DOCUMENT_JOB_KIND_LABELS[row.kind]) ||
+                row.contract_type_name ||
+                "Contrato de trabajo"
+
+              return (
+                <div
+                  key={`${row.kind ?? "CONTRACT"}:${rowKey}`}
+                  className="flex flex-col justify-between gap-2 rounded-xl border border-border bg-white p-3 sm:flex-row sm:items-center"
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {row.worker_id ? (
+                        <Link
+                          to={`/workers/${row.worker_id}?tab=contratacion`}
+                          className="text-sm font-medium text-ink hover:text-sitecorp-primary hover:underline"
+                        >
+                          {row.worker_name}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-medium text-ink">{row.worker_name}</span>
+                      )}
+                      {row.worker_identification && (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          CI: {row.worker_identification}
+                        </span>
+                      )}
+                      <SiteCorpStatusBadge
+                        status={
+                          row.document_status === "ERROR"
+                            ? "danger"
+                            : isMissingTemplate
+                              ? "warning"
+                              : "info"
+                        }
                       >
-                        {row.worker_name}
-                      </Link>
+                        {row.document_status === "ERROR"
+                          ? "Error al generar"
+                          : isMissingTemplate
+                            ? "Falta plantilla"
+                            : "Generando documento…"}
+                      </SiteCorpStatusBadge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {kindLabel}
+                      {row.start_date
+                        ? ` · Inicio: ${formatIsoDateToDisplay(row.start_date)}`
+                        : ""}
+                    </p>
+                    {isMissingTemplate ? (
+                      <p className="text-xs text-sitecorp-warning">
+                        {row.document_error || `Falta la plantilla de ${kindLabel}.`}{" "}
+                        <Link
+                          to="/settings/document-templates"
+                          className="inline-flex items-center gap-1 font-medium text-sitecorp-primary underline"
+                        >
+                          <Settings className="h-3 w-3" /> Configurar plantillas documentales
+                        </Link>
+                      </p>
                     ) : (
-                      <span className="text-sm font-medium text-ink">{row.worker_name}</span>
-                    )}
-                    <SiteCorpStatusBadge
-                      status={row.document_status === "ERROR" ? "danger" : "warning"}
-                    >
-                      {row.document_status}
-                    </SiteCorpStatusBadge>
-                    {row.contract_type_name && (
-                      <span className="text-xs text-muted-foreground">
-                        · {row.contract_type_name}
-                      </span>
+                      row.document_error && (
+                        <p className="text-xs text-sitecorp-danger">
+                          Error: {row.document_error}
+                        </p>
+                      )
                     )}
                   </div>
-                  {row.document_error && (
-                    <p className="text-xs text-sitecorp-danger">{row.document_error}</p>
+
+                  {canManage && (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <SiteCorpButton
+                        size="sm"
+                        variant="outline"
+                        disabled={isRetrying}
+                        onClick={() => void handleRetry(row)}
+                      >
+                        {isGenerating && isRetrying ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            Generando documento…
+                          </>
+                        ) : row.document_status === "ERROR" || isMissingTemplate ? (
+                          <>
+                            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                            Reintentar
+                          </>
+                        ) : (
+                          <>
+                            <FileText className="mr-1.5 h-3.5 w-3.5" />
+                            Generar documento
+                          </>
+                        )}
+                      </SiteCorpButton>
+                    </div>
                   )}
                 </div>
-
-                <div className="shrink-0">
-                  <SiteCorpButton
-                    type="button"
-                    size="sm"
-                    disabled={busy || generatingId !== null}
-                    onClick={() => void handleGenerateOne(row)}
-                  >
-                    {busy ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        Generando…
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                        Generar documento
-                      </>
-                    )}
-                  </SiteCorpButton>
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
-    </SiteCorpCard>
+    </div>
   )
 }

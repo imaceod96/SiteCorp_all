@@ -1,6 +1,5 @@
 import { personRegistrationConflict, shouldUploadVerificationDocument } from "../domain/rules"
 import { fetchPersonIdentificationStatus } from "../infrastructure/candidate-registration.repository"
-import { ensureContractDocument } from "../infrastructure/transition-documents"
 import {
   createWorkerWithPosition,
   registerWorkerContract,
@@ -21,14 +20,9 @@ import type {
  * pantalla informa de un fallo parcial a su manera), el alta con puesto y contrato, el
  * registro del contrato y sus documentos verificadores.
  *
- * UNICIDAD DE PERSONA (§27–§33): el alta comprueba en el backend
- * (`person_identification_status`) que la identificación no pertenezca ya a un Candidato, a
- * un Trabajador o a un Reingreso del cliente; la regla que traduce el resultado en mensaje
- * es del dominio (`personRegistrationConflict`). Nunca se crea una segunda persona ni un
- * identificador nuevo: si la persona existe, se usa su expediente.
- *
- * Las comprobaciones que ya hacía la pantalla (permiso, formato del carné, condiciones del
- * contrato) se aplican antes de llamar aquí con las reglas del dominio.
+ * La generación documental del contrato se encola automáticamente en
+ * `public.document_generation_jobs` mediante triggers en el backend y se procesa mediante
+ * `process-document-jobs`.
  */
 
 /** Guarda los datos personales del trabajador (nunca toca al candidato). */
@@ -73,34 +67,44 @@ export async function createWorkerExpediente(
 ): Promise<string> {
   const workerId = await createWorkerWithPosition(input)
 
+  const uploads: Promise<void>[] = []
   if (
     shouldUploadVerificationDocument(input.hasPreEmploymentCheck, input.preEmploymentCheckFile)
   ) {
-    await uploadWorkerVerificationDocument(workerId, "PRE_EMPLOYMENT_CHECK", input.preEmploymentCheckFile)
+    uploads.push(
+      uploadWorkerVerificationDocument(
+        workerId,
+        "PRE_EMPLOYMENT_CHECK",
+        input.preEmploymentCheckFile
+      )
+    )
   }
+
   if (
     shouldUploadVerificationDocument(input.hasCriminalRecordCheck, input.criminalRecordCheckFile)
   ) {
-    await uploadWorkerVerificationDocument(workerId, "CRIMINAL_RECORD", input.criminalRecordCheckFile)
+    uploads.push(
+      uploadWorkerVerificationDocument(
+        workerId,
+        "CRIMINAL_RECORD",
+        input.criminalRecordCheckFile
+      )
+    )
+  }
+
+  if (uploads.length > 0) {
+    await Promise.all(uploads)
   }
 
   return workerId
 }
 
 /**
- * Registra el contrato del trabajador y genera su documento automático. La generación del
- * documento nunca interrumpe la operación: si falla, el contrato ya está registrado y su
- * documento puede regenerarse.
+ * Registra el contrato del trabajador; el trigger en PostgreSQL encola automáticamente su
+ * generación en `public.document_generation_jobs`.
  */
 export async function registerWorkerExpedienteContract(
   input: WorkerContractFormalizationInput
 ): Promise<string | null> {
-  const contractId = await registerWorkerContract(input)
-
-  if (contractId) {
-    const warning = await ensureContractDocument(contractId)
-    if (warning) console.warn("[people] documento del contrato no generado", warning)
-  }
-
-  return contractId
+  return registerWorkerContract(input)
 }

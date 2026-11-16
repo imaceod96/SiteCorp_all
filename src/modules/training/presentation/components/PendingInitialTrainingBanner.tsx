@@ -105,7 +105,9 @@ export const PendingInitialTrainingBanner: React.FC<PendingInitialTrainingBanner
                     </span>
                   )}
                   <SiteCorpStatusBadge status="warning">
-                    Capacitación inicial pendiente
+                    {item.trigger_type === "CAMBIO_CARGO"
+                      ? "Capacitación pendiente por cambio de cargo"
+                      : "Capacitación inicial pendiente"}
                   </SiteCorpStatusBadge>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -123,7 +125,7 @@ export const PendingInitialTrainingBanner: React.FC<PendingInitialTrainingBanner
                   )}
                   <span className="inline-flex items-center gap-1 tabular-nums">
                     <Calendar className="h-3.5 w-3.5" />
-                    Contratado el:{" "}
+                    {item.trigger_type === "CAMBIO_CARGO" ? "Cambio de cargo el:" : "Contratado el:"}{" "}
                     <strong className="font-medium text-ink">
                       {formatIsoDateToDisplay(item.hire_date) || item.hire_date}
                     </strong>

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { fetchDrivingLicenseCategories, fetchSkinColors } from "./catalogs.repository"
 import {
   fetchCandidatesPoolMeta,
@@ -122,7 +123,7 @@ export async function fetchEntityActiveWorkers(
         `id, code, first_name, first_surname, second_surname, identification,
            gender_id, marital_status_id, skin_color_id, education_level_id,
            phone, email, birth_date, province, municipality, address,
-           employment_start_date, has_masters_degree, has_doctorate_degree`
+           hire_date, employment_start_date, has_masters_degree, has_doctorate_degree`
       )
       .eq("organization_entity_id", entityId)
   )
@@ -143,7 +144,7 @@ export async function fetchEntityActiveWorkerOptions(
 ): Promise<EntityWorkerOption[]> {
   const { data, error } = await supabase
     .from("workers")
-    .select("id, first_name, first_surname, second_surname, identification")
+    .select("id, first_name, first_surname, second_surname, identification, hire_date")
     .eq("organization_entity_id", entityId)
     .eq("employment_status", EMPLOYMENT_STATUS.active)
     .order("first_surname", { ascending: true })
@@ -156,12 +157,14 @@ export async function fetchEntityActiveWorkerOptions(
     first_surname: string
     second_surname: string | null
     identification: string
+    hire_date?: string | null
   }[]).map((worker) => ({
     id: worker.id,
     full_name: [worker.first_name, worker.first_surname, worker.second_surname]
       .filter(Boolean)
       .join(" "),
     identification: worker.identification,
+    hire_date: worker.hire_date ?? null,
   }))
 }
 
@@ -173,18 +176,22 @@ export async function fetchWorkersLinkedToStaffing(workerIds: string[]): Promise
   const linked = new Set<string>()
   if (workerIds.length === 0) return linked
 
+  const today = todayIsoInCuba()
   const { data, error } = await supabase
     .from("worker_position_assignments")
-    .select("worker_id, is_current, end_date")
+    .select("worker_id, is_current, start_date, end_date")
     .in("worker_id", workerIds)
     .eq("is_current", true)
-    .is("end_date", null)
   if (error) {
     console.warn("[people] no se pudo leer la vinculación a plantilla", error)
     return linked
   }
 
-  ;((data as { worker_id: string }[] | null) || []).forEach((row) => linked.add(row.worker_id))
+  ;((data as { worker_id: string; start_date?: string | null; end_date?: string | null }[] | null) || []).forEach((row) => {
+    if ((!row.start_date || row.start_date <= today) && (!row.end_date || row.end_date >= today)) {
+      linked.add(row.worker_id)
+    }
+  })
   return linked
 }
 

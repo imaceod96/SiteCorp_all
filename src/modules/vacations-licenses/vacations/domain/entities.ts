@@ -43,6 +43,10 @@ export interface VacationSummary {
   unassigned_movements: number
   /** Días que esos movimientos representan (informativo). */
   unassigned_days: number
+  /** Indica si la incorporación del trabajador es posterior a la fecha actual en Cuba. */
+  is_pending_hire?: boolean
+  /** Fecha de incorporación del trabajador (YYYY-MM-DD). */
+  hire_date?: string | null
 }
 
 export interface VacationOverviewRow {

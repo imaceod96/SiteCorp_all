@@ -193,8 +193,17 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
     })
   }, [rows, search, stateFilter, areaFilter, jobFilter, positionFilter])
 
-  const salaryOf = (row: ContractAlertRow) =>
-    salaryForGroup(
+  const salaryOf = (row: ContractAlertRow) => {
+    if (
+      row.resolved_salary_amount != null &&
+      Number.isFinite(Number(row.resolved_salary_amount))
+    ) {
+      return {
+        amount: Number(row.resolved_salary_amount),
+        currency_code: row.resolved_salary_currency || "CUP",
+      }
+    }
+    return salaryForGroup(
       applicableScaleId,
       row.salary_group_id && row.salary_scale_id
         ? {
@@ -205,6 +214,7 @@ const EntityContractAlerts: React.FC<EntityContractAlertsProps> = ({
         : null,
       salaryValuesByGroup
     )
+  }
 
   const buildTarget = (row: ContractAlertRow): AlertTarget => ({
     workerId: row.worker_id,

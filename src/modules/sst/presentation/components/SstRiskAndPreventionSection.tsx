@@ -42,9 +42,23 @@ import {
   updateSstRiskStatus,
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
-import { addDaysIsoInCuba, todayIsoInCuba } from "@/utils/cuba-date"
+import { addDaysIsoInCuba, formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import { AlertTriangle, ShieldCheck, Plus, CheckCircle2, ClipboardCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
+
+const SST_RISK_STATUS_LABELS: Record<string, string> = {
+  ACTIVO: "Activo",
+  CONTROLADO: "Controlado",
+  ELIMINADO: "Eliminado",
+  CERRADO: "Cerrado",
+}
+
+const SST_PRIORITY_LABELS: Record<string, string> = {
+  INMEDIATA: "Inmediata",
+  ALTA: "Alta",
+  MEDIA: "Media",
+  BAJA: "Baja",
+}
 
 interface SstRiskAndPreventionSectionProps {
   entityId: string
@@ -112,6 +126,10 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
   const [verificationNotes, setVerificationNotes] = React.useState<string>("")
 
   const areaMap = React.useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas])
+  const areaActiveMap = React.useMemo(
+    () => new Map(areas.map((a) => [a.id, a.isActive !== false])),
+    [areas]
+  )
   const jobMap = React.useMemo(() => new Map(jobs.map((j) => [j.id, j.name])), [jobs])
   const workerMap = React.useMemo(
     () => new Map(workers.map((w) => [w.id, w.fullName])),
@@ -183,6 +201,14 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
 
   const handleCreateAction = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!actionDueDate || actionDueDate < todayIsoInCuba()) {
+      toast({
+        variant: "destructive",
+        title: "Fecha límite inválida",
+        description: "La fecha límite de una nueva medida preventiva no puede ser anterior a hoy.",
+      })
+      return
+    }
     setActionSubmitting(true)
     try {
       await createSstPreventiveAction({
@@ -256,7 +282,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-sitecorp-secondary-orange" />
                 <h2 className="text-lg font-semibold text-ink">
-                  Identificación y Evaluación de Riesgos Laborales (Matriz de Riesgos)
+                  3. Identificación y Evaluación de Riesgos Laborales (Matriz de Riesgos)
                 </h2>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -384,7 +410,11 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                         </p>
                         <p>
                           {risk.area_id
-                            ? areaMap.get(risk.area_id) || risk.area_name_snapshot
+                            ? `${areaMap.get(risk.area_id) || risk.area_name_snapshot}${
+                                areas.find((a) => a.id === risk.area_id)?.isActive === false
+                                  ? " (inactiva)"
+                                  : ""
+                              }`
                             : risk.facility_name || "—"}
                         </p>
                       </td>
@@ -410,7 +440,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                         <SiteCorpStatusBadge
                           status={risk.status === "CONTROLADO" ? "success" : "warning"}
                         >
-                          {risk.status}
+                          {SST_RISK_STATUS_LABELS[risk.status] || risk.status}
                         </SiteCorpStatusBadge>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -460,7 +490,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
               <div className="flex items-center gap-2">
                 <ClipboardCheck className="h-5 w-5 text-sitecorp-primary" />
                 <h2 className="text-lg font-semibold text-ink">
-                  Plan de Prevención y Medidas Correctivas
+                  4. Plan de Prevención y Medidas Correctivas
                 </h2>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -531,12 +561,22 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                           <p className="font-medium text-ink">
                             {act.responsible_name_snapshot || "Sin responsable nominal"}
                           </p>
-                          <p>{act.area_name_snapshot || act.job_name_snapshot || "—"}</p>
+                          <p>
+                            {act.area_name_snapshot
+                              ? `${act.area_name_snapshot}${
+                                  act.area_id && areaActiveMap.get(act.area_id) === false
+                                    ? " (inactiva)"
+                                    : ""
+                                }`
+                              : act.job_name_snapshot || "—"}
+                          </p>
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          <span className="font-semibold text-ink">{act.priority}</span>
+                          <span className="font-semibold text-ink">
+                            {SST_PRIORITY_LABELS[act.priority] || act.priority}
+                          </span>
                           <p className="font-mono text-muted-foreground tabular-nums">
-                            Vence: {act.due_date}
+                            Vence: {formatIsoDateToDisplay(act.due_date)}
                           </p>
                         </td>
                         <td className="px-4 py-3">
@@ -602,11 +642,17 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                   onValueChange={(v) => setRiskJobId(v === "__none__" ? "" : v)}
                 >
                   <SelectItem value="__none__">General / Todos los cargos</SelectItem>
-                  {jobs.map((j) => (
-                    <SelectItem key={j.id} value={j.id}>
-                      {j.name}
-                    </SelectItem>
-                  ))}
+                  {jobs
+                    .filter(
+                      (j) =>
+                        j.isActive !== false &&
+                        (!j.areaId || areaActiveMap.get(j.areaId) !== false)
+                    )
+                    .map((j) => (
+                      <SelectItem key={j.id} value={j.id}>
+                        {j.name}
+                      </SelectItem>
+                    ))}
                 </SiteCorpSelect>
               </div>
               <div className="space-y-1.5">
@@ -616,11 +662,13 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                   onValueChange={(v) => setRiskAreaId(v === "__none__" ? "" : v)}
                 >
                   <SelectItem value="__none__">Seleccionar área...</SelectItem>
-                  {areas.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
+                  {areas
+                    .filter((a) => a.isActive !== false)
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
                 </SiteCorpSelect>
               </div>
             </div>
@@ -789,6 +837,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                 <Label>Fecha límite de cumplimiento *</Label>
                 <SiteCorpInput
                   type="date"
+                  min={todayIsoInCuba()}
                   value={actionDueDate}
                   onChange={(e) => setActionDueDate(e.target.value)}
                   required

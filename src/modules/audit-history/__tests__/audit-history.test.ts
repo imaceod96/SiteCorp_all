@@ -156,6 +156,43 @@ vi.mock("@/lib/supabase", () => {
                 }),
               }
             },
+            upsert: (payload: Partial<AuditEventRecord> | Array<Partial<AuditEventRecord>>) => {
+              const items = Array.isArray(payload) ? payload : [payload]
+              const upsertedRows: AuditEventRecord[] = items.map((item) => {
+                const row: AuditEventRecord = {
+                  id: item.id || `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  occurred_at: item.occurred_at || new Date().toISOString(),
+                  actor_user_id: item.actor_user_id ?? null,
+                  actor_username: item.actor_username ?? null,
+                  actor_full_name: item.actor_full_name ?? null,
+                  scope: item.scope || "PLATFORM",
+                  company_client_id: item.company_client_id ?? null,
+                  organization_entity_id: item.organization_entity_id ?? null,
+                  entity_name: item.entity_name ?? null,
+                  module: item.module || "settings",
+                  action: item.action || "unknown",
+                  record_id: item.record_id ?? null,
+                  description: item.description || "",
+                  previous_values: item.previous_values ?? null,
+                  new_values: item.new_values ?? null,
+                  result: item.result || "SUCCESS",
+                }
+                if (!mockAuditDb.some((existing) => existing.id === row.id)) {
+                  mockAuditDb.unshift(row)
+                }
+                return row
+              })
+              return {
+                data: upsertedRows,
+                error: null,
+                then: (resolve: (val: unknown) => void) => {
+                  resolve({ data: upsertedRows, error: null })
+                },
+                select: () => ({
+                  single: async () => ({ data: upsertedRows[0], error: null }),
+                }),
+              }
+            },
           }
           return builder
         }

@@ -9,6 +9,7 @@ import {
   type VacationStatus,
 } from "@/modules/vacations-licenses/vacations"
 import { AlertTriangle, CalendarClock, CalendarPlus, CalendarCheck2, TrendingUp } from "lucide-react"
+import { formatIsoDateToDisplay } from "@/utils/cuba-date"
 
 const statusTone: Record<VacationStatus, "success" | "warning" | "danger"> = {
   NORMAL: "success",
@@ -76,6 +77,18 @@ const VacationBalanceCard = ({ summary }: { summary: VacationSummary }) => {
           ))}
         </div>
       </div>
+
+      {summary.is_pending_hire && (
+        <div className="mt-4">
+          <SiteCorpAlert type="info" title="Trabajador pendiente de incorporación">
+            El trabajador se incorpora el{" "}
+            <strong>
+              {summary.hire_date ? formatIsoDateToDisplay(summary.hire_date) : "una fecha futura"}
+            </strong>
+            . Hasta la fecha de incorporación no devenga vacaciones ni permite registrar períodos.
+          </SiteCorpAlert>
+        </div>
+      )}
 
       {summary.scheduled_future_days > 0 && (
         <p className="mt-4 text-sm text-muted-foreground">

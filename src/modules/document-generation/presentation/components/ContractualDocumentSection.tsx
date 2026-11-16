@@ -21,15 +21,13 @@ import {
   fetchGeneratedDocuments,
   precheckDocumentGeneration,
 } from "@/modules/document-generation/application/document-generation.queries"
+import { downloadGeneratedDocument } from "@/modules/document-generation/application/document-generation.commands"
 import {
-  downloadGeneratedDocument,
-  generateAddendumDocument,
-  generateContractDocument,
-  type DocumentGenerationStage,
-} from "@/modules/document-generation/application/document-generation.commands"
-import {
-  getContractDocumentStatusSnapshot,
+  CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT,
+  fetchDocumentGenerationJob,
   setContractDocumentStatus,
+  triggerDocumentGenerationJobs,
+  type DocumentGenerationJobRecord,
 } from "@/modules/contracts/infrastructure/contract-documents.repository"
 import type {
   DocumentGenerationPrecheck,
@@ -59,11 +57,11 @@ const templateHeadline = (template: TemplateResolution): string => {
 }
 
 /**
- * Fase 11B.2 — Sección documental contractual (§61/§62/§63).
+ * Fase 11B.2 — Sección documental contractual (§61/§62/§63) con estado de cola en backend.
  *
- * Muestra el estado del documento generado (Word) del contrato o del anexo y
- * permite generarlo/regenerarlo con la versión de plantilla correcta, validando
- * únicamente las variables que ESA plantilla requiere.
+ * Muestra el estado del documento en `public.document_generation_jobs`
+ * (`PENDIENTE` | `GENERANDO` | `SIN_PLANTILLA` | `ERROR` | `GENERADO`) y permite
+ * generarlo/regenerarlo o reintentar desde la cola.
  */
 export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProps> = ({
   kind,
@@ -73,41 +71,28 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
 }) => {
   const [precheck, setPrecheck] = React.useState<DocumentGenerationPrecheck | null>(null)
   const [documents, setDocuments] = React.useState<GeneratedDocumentRow[]>([])
+  const [jobRecord, setJobRecord] = React.useState<DocumentGenerationJobRecord | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [loadError, setLoadError] = React.useState<string | null>(null)
   const [generating, setGenerating] = React.useState(false)
-  const [generationStage, setGenerationStage] = React.useState<DocumentGenerationStage | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [failure, setFailure] = React.useState<DocumentGenerationResult | null>(null)
   const [busyDocId, setBusyDocId] = React.useState<string | null>(null)
-
-  const stageLabel = React.useMemo(() => {
-    switch (generationStage) {
-      case "VALIDATING":
-        return "Validando plantilla y datos del expediente…"
-      case "LOADING_TEMPLATE":
-        return "Cargando plantilla configurada…"
-      case "RENDERING":
-        return "Sustituyendo variables en el documento…"
-      case "SAVING":
-        return "Guardando documento en el expediente…"
-      default:
-        return "Generando documento…"
-    }
-  }, [generationStage])
 
   const load = React.useCallback(async () => {
     setLoading(true)
     setLoadError(null)
     try {
-      const [context, docs] = await Promise.all([
+      const [context, docs, job] = await Promise.all([
         precheckDocumentGeneration(kind, sourceId),
         fetchGeneratedDocuments(
           kind === "CONTRACT" ? { contractId: sourceId } : { addendumId: sourceId }
         ),
+        fetchDocumentGenerationJob(kind, sourceId),
       ])
       setPrecheck(context)
       setDocuments(docs)
+      setJobRecord(job)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "No se pudo cargar el estado del documento")
     } finally {
@@ -119,8 +104,16 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
     void load()
   }, [load])
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const handler = () => {
+      void load()
+    }
+    window.addEventListener(CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT, handler)
+    return () => window.removeEventListener(CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT, handler)
+  }, [load])
+
   const latest = documents.length > 0 ? documents[documents.length - 1] : null
-  const autoGenerateAttemptedRef = React.useRef<string | null>(null)
 
   const isCuadroContract = React.useMemo(() => {
     if (kind !== "CONTRACT") return false
@@ -138,7 +131,11 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
     try {
       await downloadGeneratedDocument(document)
     } catch (err) {
-      setFailure({ success: false, pdfPath: null, error: err instanceof Error ? err.message : "No se pudo descargar el documento" })
+      setFailure({
+        success: false,
+        pdfPath: null,
+        error: err instanceof Error ? err.message : "No se pudo descargar el documento",
+      })
     } finally {
       setBusyDocId(null)
     }
@@ -146,29 +143,24 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
 
   const handleGenerate = React.useCallback(async () => {
     setGenerating(true)
-    setGenerationStage("VALIDATING")
     setFailure(null)
     try {
-      const result =
-        kind === "CONTRACT"
-          ? await generateContractDocument(sourceId, setGenerationStage)
-          : await generateAddendumDocument(sourceId, setGenerationStage)
-      if (!result.success) {
-        if (kind === "CONTRACT") {
-          await setContractDocumentStatus(
-            sourceId,
-            "ERROR",
-            result.error || "No se pudo generar el documento"
-          )
-        }
-        setDialogOpen(false)
-        setFailure(result)
-      } else {
+      const queueRes = await triggerDocumentGenerationJobs({ kind, sourceId })
+      if (queueRes.ok) {
         if (kind === "CONTRACT") {
           await setContractDocumentStatus(sourceId, "GENERADO", null)
         }
         setDialogOpen(false)
+        await load()
+        return
       }
+
+      const errMsg = queueRes.error || "No se pudo generar el documento en el servidor."
+      if (kind === "CONTRACT") {
+        await setContractDocumentStatus(sourceId, "ERROR", errMsg)
+      }
+      setDialogOpen(false)
+      setFailure({ success: false, pdfPath: null, error: errMsg })
       await load()
     } catch (err) {
       const msg = err instanceof Error ? err.message : "No se pudo generar el documento"
@@ -179,217 +171,169 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
       setFailure({ success: false, pdfPath: null, error: msg })
     } finally {
       setGenerating(false)
-      setGenerationStage(null)
     }
   }, [kind, sourceId, load])
 
-  React.useEffect(() => {
-    if (
-      !loading &&
-      !generating &&
-      kind === "CONTRACT" &&
-      !isCuadroContract &&
-      !latest &&
-      precheck?.ready &&
-      canManage &&
-      autoGenerateAttemptedRef.current !== sourceId
-    ) {
-      autoGenerateAttemptedRef.current = sourceId
-      void handleGenerate()
-    }
-  }, [loading, generating, kind, isCuadroContract, latest, precheck, canManage, sourceId, handleGenerate])
-
-  const title = kind === "CONTRACT" ? "Documento contractual" : "Documento del anexo"
-
-  if (loading) {
-    return (
-      <div className={className}>
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Cargando el estado del documento…
-        </p>
-      </div>
-    )
-  }
-
-  if (loadError) {
-    return (
-      <div className={className}>
-        <SiteCorpAlert type="danger" title={title}>
-          {loadError}
-        </SiteCorpAlert>
-      </div>
-    )
-  }
-
   const template = precheck?.template ?? null
-
-  const statusSnapshot =
-    kind === "CONTRACT" ? getContractDocumentStatusSnapshot(sourceId) : null
-  const contractDocStatus = latest
-    ? "GENERADO"
-    : failure || statusSnapshot?.document_status === "ERROR"
-      ? "ERROR"
-      : "PENDIENTE"
+  const jobStatus = jobRecord?.status ?? null
 
   return (
-    <div className={`rounded-xl border border-border bg-muted/10 p-4 ${className ?? ""}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {kind === "CONTRACT" && !isCuadroContract && (
-            <SiteCorpStatusBadge
-              status={
-                contractDocStatus === "GENERADO"
-                  ? "success"
-                  : contractDocStatus === "ERROR"
-                    ? "danger"
-                    : "warning"
-              }
-            >
-              {contractDocStatus}
-            </SiteCorpStatusBadge>
-          )}
-          {latest?.generation_number != null && (
-            <SiteCorpStatusBadge status="info">Generación {latest.generation_number}</SiteCorpStatusBadge>
+    <div className={className}>
+      <div className="rounded-xl border border-border bg-background p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-sitecorp-primary" />
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {kind === "CONTRACT" ? "Documento del contrato" : "Documento del anexo"}
+            </h4>
+          </div>
+
+          {!loading && !isCuadroContract && (
+            <div className="flex items-center gap-2">
+              {latest ? (
+                <SiteCorpStatusBadge status="success">Generado</SiteCorpStatusBadge>
+              ) : jobStatus === "PENDIENTE" || jobStatus === "GENERANDO" || generating ? (
+                <SiteCorpStatusBadge status="info">Generando documento…</SiteCorpStatusBadge>
+              ) : jobStatus === "SIN_PLANTILLA" || template?.status === "NONE" ? (
+                <SiteCorpStatusBadge status="warning">Sin plantilla activa</SiteCorpStatusBadge>
+              ) : jobStatus === "ERROR" ? (
+                <SiteCorpStatusBadge status="danger">Error al generar</SiteCorpStatusBadge>
+              ) : (
+                <SiteCorpStatusBadge status="warning">Pendiente</SiteCorpStatusBadge>
+              )}
+
+              {canManage && (
+                <SiteCorpButton
+                  type="button"
+                  size="sm"
+                  variant={latest ? "outline" : "default"}
+                  disabled={generating}
+                  onClick={() => setDialogOpen(true)}
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      Generando…
+                    </>
+                  ) : latest ? (
+                    <>
+                      <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                      Regenerar documento
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                      Generar documento
+                    </>
+                  )}
+                </SiteCorpButton>
+              )}
+            </div>
           )}
         </div>
-      </div>
 
-      {isCuadroContract ? (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Este cargo no genera documento contractual.
-        </p>
-      ) : !latest ? (
-        <>
-          {kind === "CONTRACT" && precheck?.formalized && (
-            <div className="mt-2 rounded-lg border border-sitecorp-warning/40 bg-sitecorp-warning/10 p-2.5 text-xs text-ink">
-              <p className="font-semibold">Contratos con documento pendiente de generar</p>
-              <p className="mt-0.5 text-muted-foreground">
-                {statusSnapshot?.document_error ||
-                  failure?.error ||
-                  "El contrato está formalizado pero su documento Word aún está pendiente de generar."}
+        {loadError && (
+          <SiteCorpAlert type="danger" className="mt-3">
+            {loadError}
+          </SiteCorpAlert>
+        )}
+
+        {loading ? (
+          <p className="mt-2 text-xs text-muted-foreground">Comprobando estado del documento…</p>
+        ) : isCuadroContract ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Este cargo corresponde a un Cuadro: no requiere generación de contrato laboral.
+          </p>
+        ) : latest ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs">
+            <div className="space-y-0.5">
+              <p className="font-medium text-ink">{latest.file_name}</p>
+              <p className="text-muted-foreground">
+                Generado el {formatGenerationMoment(latest.created_at)}
+                {latest.file_size != null
+                  ? ` · ${formatTemplateFileSize(latest.file_size)}`
+                  : ""}
               </p>
             </div>
-          )}
-          <p className="mt-2 text-sm text-muted-foreground">
-            {generating ? stageLabel : "Aún no se ha generado el documento."}
-          </p>
-          {canManage && (
             <SiteCorpButton
               type="button"
               size="sm"
-              className="mt-3"
-              disabled={generating}
-              onClick={() => {
-                setFailure(null)
-                void handleGenerate()
-              }}
-            >
-              <Sparkles className="mr-2 h-3.5 w-3.5" /> Generar documento
-            </SiteCorpButton>
-          )}
-          {!precheck?.formalized && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {kind === "CONTRACT"
-                ? "El documento se podrá generar cuando el contrato esté formalizado."
-                : "El documento se podrá generar cuando el anexo esté formalizado."}
-            </p>
-          )}
-        </>
-      ) : (
-        <>
-          <p className="mt-2 text-sm font-medium text-ink">{precheck?.documentTypeLabel ?? "Documento contractual"}</p>
-          <dl className="mt-2 space-y-1 text-xs text-muted-foreground">
-            <div className="flex flex-wrap gap-1">
-              <dt>Plantilla:</dt>
-              <dd className="text-ink">
-                {latest.template_name || template?.templateName || "Plantilla"}
-                {latest.version_number != null ? ` · v${latest.version_number}` : ""}
-              </dd>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <dt>Generado:</dt>
-              <dd className="text-ink">{formatGenerationMoment(latest.created_at)}</dd>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <dt>Archivo:</dt>
-              <dd className="text-ink">
-                {latest.file_name}
-                {latest.file_size ? ` · ${formatTemplateFileSize(latest.file_size)}` : ""}
-              </dd>
-            </div>
-          </dl>
-
-          <div className="mt-3 flex flex-wrap gap-2">
-            <SiteCorpButton
-              type="button"
               variant="outline"
-              size="sm"
               disabled={busyDocId === latest.id}
               onClick={() => handleDownload(latest)}
             >
-              <FileText className="mr-2 h-3.5 w-3.5" /> Descargar Word
+              {busyDocId === latest.id ? "Descargando…" : "Descargar"}
             </SiteCorpButton>
+          </div>
+        ) : jobStatus === "SIN_PLANTILLA" || template?.status === "NONE" ? (
+          <SiteCorpAlert type="warning" className="mt-3" title="Falta plantilla activa para este tipo de documento">
+            <p className="text-xs">
+              Configure y active una plantilla aplicable para que el documento pueda generarse automáticamente.
+            </p>
+            <Link
+              to="/settings/document-templates"
+              className="mt-1.5 inline-block text-xs font-semibold text-sitecorp-primary hover:underline"
+            >
+              Ir a Plantillas de documentos
+            </Link>
+          </SiteCorpAlert>
+        ) : jobStatus === "ERROR" ? (
+          <SiteCorpAlert type="danger" className="mt-3" title="No se pudo generar automáticamente">
+            <p className="text-xs">
+              {jobRecord?.last_error || "Ocurrió un error al procesar el documento en la cola."}
+            </p>
             {canManage && (
               <SiteCorpButton
                 type="button"
-                variant="outline"
                 size="sm"
-                onClick={() => {
-                  setFailure(null)
-                  setDialogOpen(true)
-                }}
+                variant="outline"
+                className="mt-2"
+                disabled={generating}
+                onClick={handleGenerate}
               >
-                <RefreshCw className="mr-2 h-3.5 w-3.5" /> Regenerar
+                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+                Reintentar
+              </SiteCorpButton>
+            )}
+          </SiteCorpAlert>
+        ) : jobStatus === "PENDIENTE" || jobStatus === "GENERANDO" ? (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-sitecorp-primary/30 bg-sitecorp-primary/5 px-3 py-2 text-xs text-sitecorp-primary">
+            <span className="flex items-center gap-2 font-medium">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Generando documento en la cola del servidor…
+            </span>
+            {canManage && (
+              <SiteCorpButton
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={generating}
+                onClick={handleGenerate}
+              >
+                Procesar ahora
               </SiteCorpButton>
             )}
           </div>
+        ) : (
+          <p className="mt-2 text-xs text-muted-foreground">
+            El documento se encola automáticamente al formalizar y puede regenerarse en cualquier momento.
+          </p>
+        )}
+      </div>
 
-          {documents.length > 1 && (
-            <div className="mt-3 border-t border-border pt-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Generaciones anteriores
-              </p>
-              <ul className="mt-1.5 space-y-1">
-                {documents
-                  .slice(0, -1)
-                  .reverse()
-                  .map((document) => (
-                    <li key={document.id} className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="text-muted-foreground">
-                        Generación {document.generation_number ?? "—"} ·{" "}
-                        {formatGenerationMoment(document.created_at)}
-                      </span>
-                      <button
-                        type="button"
-                        className="font-medium text-sitecorp-primary hover:underline"
-                        onClick={() => handleDownload(document)}
-                      >
-                        Descargar Word
-                      </button>
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Diálogo de precheck (§64) */}
+      {/* Diálogo de generación/regeneración */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>
-              {latest ? "Regenerar documento contractual" : "Generar documento contractual"}
+              {latest ? "Regenerar documento" : "Generar documento"}
             </DialogTitle>
             <DialogDescription>
-              {latest
-                ? "Se volverá a generar el documento con los datos históricos ya fijados."
-                : "Se generará el documento Word a partir de la plantilla configurada."}
+              Se validará la plantilla aplicable y los datos requeridos del expediente.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 text-sm">
+          <div className="space-y-4 text-sm">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Plantilla</p>
               <p className="text-ink">
@@ -403,14 +347,22 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
             </div>
 
             <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Variables requeridas</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Variables requeridas
+              </p>
               <p className="text-ink">{precheck?.requiredVariables.length ?? 0}</p>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Estado</p>
-              <CheckLine ok={!!template && !!template.versionId && template.versionUsable} label="Plantilla válida" />
-              <CheckLine ok={(precheck?.missingVariables.length ?? 1) === 0} label="Datos completos" />
+              <CheckLine
+                ok={!!template && !!template.versionId && template.versionUsable}
+                label="Plantilla válida"
+              />
+              <CheckLine
+                ok={(precheck?.missingVariables.length ?? 1) === 0}
+                label="Datos completos"
+              />
               <CheckLine
                 ok={!!precheck?.formalized}
                 label={kind === "CONTRACT" ? "Contrato formalizado" : "Anexo formalizado"}
@@ -438,7 +390,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
             {generating && (
               <div className="flex items-center gap-2 rounded-lg border border-sitecorp-primary/30 bg-sitecorp-primary/5 px-3 py-2 text-xs font-medium text-sitecorp-primary">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                <span>{stageLabel}</span>
+                <span>Procesando generación documental en el servidor…</span>
               </div>
             )}
 
@@ -517,7 +469,9 @@ const MissingVariableList: React.FC<{ precheck: DocumentGenerationPrecheck }> = 
       {precheck.missingVariables.map((variable) => (
         <li key={variable.key}>
           {variable.label}
-          {variable.hint && <span className="block text-xs text-muted-foreground">{variable.hint}</span>}
+          {variable.hint && (
+            <span className="block text-xs text-muted-foreground">{variable.hint}</span>
+          )}
         </li>
       ))}
     </ul>

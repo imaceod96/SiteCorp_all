@@ -254,7 +254,17 @@ const WorkerDetail = () => {
 
   const currentAssignment = React.useMemo(() => {
     if (!worker?.assignments) return null
-    return worker.assignments.find(a => a.is_current && !a.end_date) || null
+    const today = todayIsoInCuba()
+    return (
+      worker.assignments.find(
+        (a) =>
+          a.is_current &&
+          (!a.start_date || a.start_date <= today) &&
+          (!a.end_date || a.end_date >= today)
+      ) ||
+      worker.assignments.find((a) => a.is_current && !a.end_date) ||
+      null
+    )
   }, [worker])
 
   const sortedAssignments = React.useMemo(() => {
@@ -1119,10 +1129,17 @@ const WorkerDetail = () => {
             <dl className="grid gap-4">
               <div>
                 <dt className="text-xs text-muted-foreground">Estado laboral</dt>
-                <dd>
+                <dd className="flex flex-wrap items-center gap-2">
                   <SiteCorpStatusBadge status={worker.employment_status === "active" ? "success" : "neutral"}>
                     {worker.employment_status === "active" ? "Activo" : "Inactivo"}
                   </SiteCorpStatusBadge>
+                  {worker.employment_status === "active" &&
+                    worker.hire_date &&
+                    worker.hire_date > todayIsoInCuba() && (
+                      <SiteCorpStatusBadge status="info">
+                        Pendiente de incorporación ({formatIsoDateToDisplay(worker.hire_date)})
+                      </SiteCorpStatusBadge>
+                    )}
                 </dd>
               </div>
               <div>
@@ -1349,36 +1366,58 @@ const WorkerDetail = () => {
             <p className="text-sm text-muted-foreground">Sin movimientos registrados.</p>
           ) : (
             <ol className="relative space-y-4 border-l border-border pl-5">
-              {sortedAssignments.map((a) => (
-                <li key={a.id} className="relative">
-                  <span
-                    className={`absolute -left-[26px] top-1.5 h-3 w-3 rounded-full border-2 border-background ${
-                      a.is_current && !a.end_date ? "bg-sitecorp-success" : "bg-muted-foreground/50"
-                    }`}
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-ink">
-                      {a.position?.name || "Puesto"}
-                    </span>
-                    {a.position?.code && (
-                      <span className="text-xs text-muted-foreground">{a.position.code}</span>
+              {sortedAssignments.map((a) => {
+                const today = todayIsoInCuba()
+                const isScheduledFuture = Boolean(a.start_date && a.start_date > today)
+                const isCurrentActive =
+                  !isScheduledFuture &&
+                  Boolean(a.is_current) &&
+                  (!a.end_date || a.end_date >= today)
+                return (
+                  <li key={a.id} className="relative">
+                    <span
+                      className={`absolute -left-[26px] top-1.5 h-3 w-3 rounded-full border-2 border-background ${
+                        isCurrentActive
+                          ? "bg-sitecorp-success"
+                          : isScheduledFuture
+                            ? "bg-sitecorp-primary"
+                            : "bg-muted-foreground/50"
+                      }`}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-ink">
+                        {a.position?.name || "Puesto"}
+                      </span>
+                      {a.position?.code && (
+                        <span className="text-xs text-muted-foreground">{a.position.code}</span>
+                      )}
+                      {isScheduledFuture ? (
+                        <SiteCorpStatusBadge status="info">
+                          Programado para el {formatIsoDateToDisplay(a.start_date)}
+                        </SiteCorpStatusBadge>
+                      ) : (
+                        isCurrentActive && (
+                          <SiteCorpStatusBadge status="success">Actual</SiteCorpStatusBadge>
+                        )
+                      )}
+                    </div>
+                    {a.position?.job && (
+                      <p className="text-xs text-muted-foreground">
+                        {a.position.job.name}
+                        {a.position.job.area?.name ? ` · ${a.position.job.area.name}` : ""}
+                      </p>
                     )}
-                    {a.is_current && !a.end_date && (
-                      <SiteCorpStatusBadge status="success">Actual</SiteCorpStatusBadge>
-                    )}
-                  </div>
-                  {a.position?.job && (
-                    <p className="text-xs text-muted-foreground">
-                      {a.position.job.name}
-                      {a.position.job.area?.name ? ` · ${a.position.job.area.name}` : ""}
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Desde {formatIsoDateToDisplay(a.start_date)}
+                      {a.end_date
+                        ? ` hasta ${formatIsoDateToDisplay(a.end_date)}`
+                        : isScheduledFuture
+                          ? " · programado"
+                          : " · en curso"}
                     </p>
-                  )}
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Desde {formatIsoDateToDisplay(a.start_date)}
-                    {a.end_date ? ` hasta ${formatIsoDateToDisplay(a.end_date)}` : " · en curso"}
-                  </p>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ol>
           )}
 

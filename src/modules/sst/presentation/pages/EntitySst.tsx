@@ -108,7 +108,9 @@ const EntitySst: React.FC = () => {
   const { state, jobs, areas, workers } = overview
   const today = todayIsoInCuba()
 
-  const activeWorkersCount = workers.filter((w) => w.employmentStatus === "active").length
+  const activeWorkersCount = workers.filter(
+    (w) => w.employmentStatus === "active" && (!w.hireDate || w.hireDate <= today)
+  ).length
   const workersWithSstTraining = new Set(
     state.workerTrainingRecords.map((r) => r.worker_id)
   ).size
@@ -129,6 +131,9 @@ const EntitySst: React.FC = () => {
   ).length
   const pendingEppRenewalsCount = state.workerEppDeliveries.filter(
     (d) => d.renewal_due_date && d.renewal_due_date <= today
+  ).length
+  const overdueHealthChecksCount = state.healthAptitudes.filter(
+    (h) => h.next_review_date && h.next_review_date < today
   ).length
 
   return (
@@ -247,13 +252,16 @@ const EntitySst: React.FC = () => {
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Inspecciones / Sucesos
+                Inspecciones / Salud Ocup.
               </p>
               <p className="mt-1 text-2xl font-bold text-ink tabular-nums">
                 {state.inspections.length}
               </p>
               <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
-                {state.accidentsIncidents.length} accidente(s)/incid.
+                {state.accidentsIncidents.length} suceso(s) •{" "}
+                <span className={cn(overdueHealthChecksCount > 0 && "font-semibold text-sitecorp-danger")}>
+                  Chequeos vencidos: {overdueHealthChecksCount}
+                </span>
               </p>
             </div>
             <div className="rounded-xl bg-sitecorp-primary/10 p-2 text-sitecorp-primary">
@@ -281,6 +289,7 @@ const EntitySst: React.FC = () => {
           <SstTrainingByJobSection
             entityId={entityId}
             state={state}
+            areas={areas}
             jobs={jobs}
             workers={workers}
             canManage={canManage}

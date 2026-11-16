@@ -479,6 +479,14 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
 
   const handleAptitudeSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (nextReviewDate && evaluationDate && nextReviewDate <= evaluationDate) {
+      toast({
+        variant: "destructive",
+        title: "Fechas incoherentes en chequeo médico",
+        description: `La fecha del próximo chequeo (${formatIsoDateToDisplay(nextReviewDate)}) debe ser posterior a la fecha de evaluación (${formatIsoDateToDisplay(evaluationDate)}).`,
+      })
+      return
+    }
     setSubmittingAptitude(true)
     try {
       await registerWorkerHealthAptitude({
@@ -528,12 +536,16 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-base font-semibold text-ink">
-                    Capacitación inicial general pendiente por contratación
+                    {profileData.pendingNotifications[0].trigger_type === "CAMBIO_CARGO"
+                      ? "Capacitación pendiente por cambio de cargo"
+                      : "Capacitación inicial general pendiente por contratación"}
                   </h3>
                   <SiteCorpStatusBadge status="warning">Pendiente</SiteCorpStatusBadge>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Contratado el{" "}
+                  {profileData.pendingNotifications[0].trigger_type === "CAMBIO_CARGO"
+                    ? "Cambio de cargo el "
+                    : "Contratado el "}
                   <strong className="font-medium text-ink tabular-nums">
                     {formatIsoDateToDisplay(profileData.pendingNotifications[0].hire_date || hireDate) ||
                       profileData.pendingNotifications[0].hire_date ||

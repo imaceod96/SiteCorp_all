@@ -3,18 +3,16 @@ import { useToast } from "@/shared/hooks/use-toast"
 import {
   downloadGeneratedDocument,
   fetchGeneratedDocuments,
-  generateSc404Document,
-  parseSc404ExistingId,
   type Sc404SourceType,
 } from "@/modules/document-generation"
+import { ensureSc404DocumentQueued } from "@/modules/contracts"
 
 /**
- * Fase 20 — Generación del modelo SC-4-04 desde Vacaciones o Certificados Médicos.
+ * Fase 20 / Bloque A — Generación y descarga del modelo SC-4-04 desde Vacaciones o Certificados Médicos.
  *
- * La generación es EXPLÍCITA (nunca automática al registrar). Si ya existe un
- * documento para (source_type, source_id, template_version), el backend lo
- * rechaza con SC404_ALREADY_EXISTS y aquí se ofrece/descarga el existente
- * (§47/§48). El DOCX se guarda en el expediente del trabajador (Storage privado).
+ * Los triggers en PostgreSQL encolan automáticamente cada vacación o certificado médico en
+ * `public.document_generation_jobs`. Este hook también permite disparar o reintentar el
+ * trabajo en cola y descargar el documento archivado en el expediente del trabajador.
  */
 export function useSc404Generation() {
   const { toast } = useToast()
@@ -34,9 +32,12 @@ export function useSc404Generation() {
     if (generatingId) return
     setGeneratingId(sourceId)
     try {
-      const result = await generateSc404Document(sourceType, sourceId)
-
-      if (result.success) {
+      const queued = await ensureSc404DocumentQueued(
+        sourceType === "VACATION"
+          ? { vacationId: sourceId }
+          : { medicalCertificateId: sourceId }
+      )
+      if (queued.generated || queued.skipped) {
         const doc = await downloadLatest(sourceType, sourceId)
         toast({
           title: "SC-4-04 generado",
@@ -47,22 +48,10 @@ export function useSc404Generation() {
         return
       }
 
-      // §48: ya existe un documento idéntico (mismo origen + misma versión).
-      const existingId = parseSc404ExistingId(result.error)
-      if (existingId) {
-        const downloaded = await downloadLatest(sourceType, sourceId)
-        toast({
-          title: downloaded ? "SC-4-04 ya existía" : "SC-4-04 ya existía",
-          description: downloaded
-            ? `Ya existía un SC-4-04 para este registro con esta versión de plantilla. Se descargó el documento existente: ${downloaded.file_name}`
-            : "Ya existe un SC-4-04 para este registro con esta versión de plantilla. Puede consultarlo en el expediente del trabajador.",
-        })
-        return
-      }
-
       toast({
         title: "No se pudo generar el SC-4-04",
-        description: result.error ?? "Error desconocido.",
+        description:
+          queued.result?.error ?? "La generación automática quedó en cola en el servidor.",
       })
     } catch (err) {
       toast({
@@ -76,3 +65,5 @@ export function useSc404Generation() {
 
   return { generate, generatingId }
 }
+
+export const useSc404 = useSc404Generation

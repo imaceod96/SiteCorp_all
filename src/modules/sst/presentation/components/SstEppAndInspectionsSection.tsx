@@ -107,7 +107,12 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
   )
 
   const jobMap = React.useMemo(() => new Map(jobs.map((j) => [j.id, j.name])), [jobs])
+  const jobAreaMap = React.useMemo(() => new Map(jobs.map((j) => [j.id, j.areaId])), [jobs])
   const areaMap = React.useMemo(() => new Map(areas.map((a) => [a.id, a.name])), [areas])
+  const areaActiveMap = React.useMemo(
+    () => new Map(areas.map((a) => [a.id, a.isActive !== false])),
+    [areas]
+  )
   const workerMap = React.useMemo(() => new Map(workers.map((w) => [w.id, w])), [workers])
   const eppMap = React.useMemo(
     () => new Map(state.eppCatalog.map((e) => [e.id, e])),
@@ -174,7 +179,27 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
     e.preventDefault()
     const worker = workerMap.get(delWorkerId)
     if (!worker) return
+    if (worker.hireDate && delDate < worker.hireDate) {
+      toast({
+        variant: "destructive",
+        title: "Fecha de entrega inválida",
+        description: `La entrega no puede ser anterior a la fecha de incorporación (${formatIsoDateToDisplay(worker.hireDate)}).`,
+      })
+      return
+    }
     const catalogEpp = delEppId && delEppId !== "__custom__" ? eppMap.get(delEppId) : null
+    const requestedQty = Number(delQuantity) || 1
+    if (catalogEpp) {
+      const available = Number(catalogEpp.stock_quantity ?? 0)
+      if (available <= 0 || requestedQty > available) {
+        toast({
+          variant: "destructive",
+          title: "Sin existencias suficientes",
+          description: `No hay existencias de ${catalogEpp.name}. Stock disponible: ${Math.max(0, available)}`,
+        })
+        return
+      }
+    }
     const resolvedName = catalogEpp?.name || delCustomName
     try {
       await registerWorkerEppDelivery({
@@ -185,7 +210,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
         jobName: worker.jobName,
         eppId: catalogEpp?.id || null,
         eppName: resolvedName,
-        quantity: Number(delQuantity) || 1,
+        quantity: requestedQty,
         deliveryDate: delDate,
         renewalDueDate: delRenewalDate || null,
         signedReceipt: delSigned,
@@ -285,7 +310,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
               <div className="flex items-center gap-2">
                 <HardHat className="h-5 w-5 text-sitecorp-primary" />
                 <h2 className="text-lg font-semibold text-ink">
-                  Equipos de Protección Personal (EPP) — Catálogo, Cargos y Entregas
+                  5. Equipos de Protección Personal (EPP) — Catálogo, Cargos y Entregas
                 </h2>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -381,6 +406,12 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                         <p className="font-semibold text-ink">{req.epp_name_snapshot}</p>
                         <p className="text-muted-foreground">
                           Cargo: {jobMap.get(req.job_id) || req.job_name_snapshot || "—"}
+                          {(() => {
+                            const jAreaId = jobAreaMap.get(req.job_id)
+                            return jAreaId && areaActiveMap.get(jAreaId) === false
+                              ? " (área inactiva)"
+                              : ""
+                          })()}
                         </p>
                       </div>
                       <SiteCorpStatusBadge status={req.is_mandatory ? "info" : "neutral"}>
@@ -481,7 +512,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
             <div>
               <div className="flex items-center gap-2">
                 <SearchCheck className="h-5 w-5 text-sitecorp-primary" />
-                <h2 className="text-lg font-semibold text-ink">Inspecciones de Seguridad</h2>
+                <h2 className="text-lg font-semibold text-ink">6. Inspecciones de Seguridad</h2>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
                 Listas de chequeo por área o instalación, registro de hallazgos no conformes y
@@ -526,6 +557,10 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                       </div>
                       <p className="text-sm font-semibold text-ink">
                         Área: {insp.area_name_snapshot || insp.facility_name || "General"}
+                        {insp.area_id &&
+                        areas.find((a) => a.id === insp.area_id)?.isActive === false
+                          ? " (inactiva)"
+                          : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Inspector: {insp.inspector_name}
@@ -659,11 +694,17 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 onValueChange={(v) => setReqJobId(v === "__none__" ? "" : v)}
               >
                 <SelectItem value="__none__">Seleccionar cargo...</SelectItem>
-                {jobs.map((j) => (
-                  <SelectItem key={j.id} value={j.id}>
-                    {j.name}
-                  </SelectItem>
-                ))}
+                {jobs
+                  .filter(
+                    (j) =>
+                      j.isActive !== false &&
+                      (!j.areaId || areaActiveMap.get(j.areaId) !== false)
+                  )
+                  .map((j) => (
+                    <SelectItem key={j.id} value={j.id}>
+                      {j.name}
+                    </SelectItem>
+                  ))}
               </SiteCorpSelect>
             </div>
             <div className="space-y-1.5">
@@ -723,7 +764,11 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
               >
                 <SelectItem value="__none__">Seleccionar trabajador...</SelectItem>
                 {workers
-                  .filter((w) => w.employmentStatus === "active")
+                  .filter(
+                    (w) =>
+                      w.employmentStatus === "active" &&
+                      (!w.hireDate || w.hireDate <= (delDate || todayIsoInCuba()))
+                  )
                   .map((w) => (
                     <SelectItem key={w.id} value={w.id}>
                       {w.fullName} ({w.jobName || "Sin cargo"})
@@ -738,10 +783,17 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 <SelectItem value="__custom__">Especificar nombre de EPP manualmente</SelectItem>
                 {state.eppCatalog.map((e) => (
                   <SelectItem key={e.id} value={e.id}>
-                    {e.name}
+                    {e.name} (Stock: {e.stock_quantity})
                   </SelectItem>
                 ))}
               </SiteCorpSelect>
+              {delEppId &&
+                delEppId !== "__custom__" &&
+                (eppMap.get(delEppId)?.stock_quantity ?? 0) <= 0 && (
+                  <p className="text-xs font-medium text-sitecorp-danger">
+                    No hay existencias de {eppMap.get(delEppId)?.name}. Stock disponible: 0
+                  </p>
+                )}
             </div>
 
             {(!delEppId || delEppId === "__custom__") && (
@@ -762,11 +814,6 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                 <SiteCorpInput
                   type="number"
                   min={1}
-                  max={
-                    delEppId && delEppId !== "__custom__"
-                      ? eppMap.get(delEppId)?.stock_quantity
-                      : undefined
-                  }
                   value={delQuantity}
                   onChange={(e) => setDelQuantity(e.target.value)}
                 />
@@ -836,11 +883,13 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                   onValueChange={(v) => setInspAreaId(v === "__none__" ? "" : v)}
                 >
                   <SelectItem value="__none__">General / Instalación</SelectItem>
-                  {areas.map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
+                  {areas
+                    .filter((a) => a.isActive !== false)
+                    .map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name}
+                      </SelectItem>
+                    ))}
                 </SiteCorpSelect>
               </div>
               <div className="space-y-1.5">

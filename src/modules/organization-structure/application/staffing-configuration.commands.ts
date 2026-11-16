@@ -54,12 +54,14 @@ export async function saveJob(input: SaveJobInput): Promise<void> {
   }
 
   if (input.jobId) {
-    await updateOrganizationJob(input.jobId, {
-      ...payload,
-      occupational_category_id: input.occupationalCategoryId || null,
-    })
-    await replaceJobClaNightSegments(input.jobId, input.entityId, cla.night_segments)
-    await replaceJobPreparationLevels(input.jobId, input.preparationLevelIds)
+    await Promise.all([
+      updateOrganizationJob(input.jobId, {
+        ...payload,
+        occupational_category_id: input.occupationalCategoryId || null,
+      }),
+      replaceJobClaNightSegments(input.jobId, input.entityId, cla.night_segments),
+      replaceJobPreparationLevels(input.jobId, input.preparationLevelIds),
+    ])
     return
   }
 
@@ -70,8 +72,10 @@ export async function saveJob(input: SaveJobInput): Promise<void> {
   })
   if (!jobId) return
 
-  await replaceJobClaNightSegments(jobId, input.entityId, cla.night_segments)
-  await replaceJobPreparationLevels(jobId, input.preparationLevelIds)
+  await Promise.all([
+    replaceJobClaNightSegments(jobId, input.entityId, cla.night_segments),
+    replaceJobPreparationLevels(jobId, input.preparationLevelIds),
+  ])
 }
 
 /** Desactiva o reactiva un cargo (nunca se elimina). */
