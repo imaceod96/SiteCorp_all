@@ -125,7 +125,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
   const isCuadroContract = React.useMemo(() => {
     if (kind !== "CONTRACT") return false
     const category = String(
-      (precheck?.data as { job?: { occupational_category?: string | null } } | null)?.job
+      (precheck?.documentData as { job?: { occupational_category?: string | null } } | null)?.job
         ?.occupational_category || ""
     )
       .trim()

@@ -76,7 +76,7 @@ export const setContractDocumentStatus = async (
       p_status: status,
       p_error: status === "GENERADO" ? null : (errorMessage ?? null),
     })
-    if (rpcResult && typeof (rpcResult as Promise<unknown>).then === "function") {
+    if (rpcResult && typeof (rpcResult as unknown as PromiseLike<unknown>).then === "function") {
       await rpcResult
     }
   } catch {

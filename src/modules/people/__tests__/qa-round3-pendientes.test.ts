@@ -108,7 +108,6 @@ describe("QA Round 3 — Pendientes (P1, P2, P3, P4 y P5)", () => {
   it("P3: si la generación del documento falla después de hireCandidateRpc, el contrato queda marcado con estado ERROR y aparece en la alerta de contratos con documento pendiente", async () => {
     vi.spyOn(workerTransitionsRepo, "hireCandidateRpc").mockResolvedValueOnce({
       workerId: "worker-pedro-tester",
-      assignmentId: "asg-pedro-1",
       contractId: "contract-pedro-503",
       resolutionId: null,
     })

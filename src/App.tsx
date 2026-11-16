@@ -233,19 +233,21 @@ const DirectWorkerRouteBridge = () => {
       .select("organization_entity_id")
       .eq("id", workerId)
       .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return
-        const entityId = (data as { organization_entity_id?: string | null } | null)?.organization_entity_id
-        if (entityId) {
-          enterEntityWorkspace(entityId)
-          navigate(`/workers/${workerId}${location.search}${location.hash}`, { replace: true })
-        } else {
-          navigate("/admin", { replace: true })
+      .then(
+        ({ data }) => {
+          if (cancelled) return
+          const entityId = (data as { organization_entity_id?: string | null } | null)?.organization_entity_id
+          if (entityId) {
+            enterEntityWorkspace(entityId)
+            navigate(`/workers/${workerId}${location.search}${location.hash}`, { replace: true })
+          } else {
+            navigate("/admin", { replace: true })
+          }
+        },
+        () => {
+          if (!cancelled) navigate("/admin", { replace: true })
         }
-      })
-      .catch(() => {
-        if (!cancelled) navigate("/admin", { replace: true })
-      })
+      )
     return () => {
       cancelled = true
     }

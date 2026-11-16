@@ -1,5 +1,25 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import type { AuditEventRecord } from "../domain/types"
+
+interface AuditEventRecord {
+  id: string
+  occurred_at: string
+  actor_user_id: string | null
+  actor_username: string | null
+  actor_full_name: string | null
+  scope: string
+  company_client_id: string | null
+  organization_entity_id: string | null
+  entity_name: string | null
+  module: string
+  action: string
+  entity_type?: string | null
+  record_id: string | null
+  description: string
+  previous_values?: Record<string, unknown> | null
+  old_values?: Record<string, unknown> | null
+  new_values: Record<string, unknown> | null
+  result: string
+}
 
 const mockAuditDb: AuditEventRecord[] = [
   {

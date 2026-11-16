@@ -271,7 +271,7 @@ export async function createWorkerPluriemploy(
 
   const documentWarning = result.contractId
     ? await runContractDocumentWithStatus(result.contractId, {
-        worker_id: result.workerId ?? input.workerId,
+        worker_id: input.workerId,
         start_date: input.contractStartDate,
       })
     : null

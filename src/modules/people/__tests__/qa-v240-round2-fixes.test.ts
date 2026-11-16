@@ -92,25 +92,24 @@ describe("QA Ronda 2 — Suite Completa de Correcciones (Bloques A, B, C, D y E)
   it("B1 / B2 (N1): resolveAllDocumentVariables rellena valores laborales cubanos por defecto (Mensual, No aplica, CUP) para evitar bloqueo por variables opcionales", () => {
     const resolved = resolveAllDocumentVariables({
       document_type: "CONTRACT",
+      contract_id: "c-1",
+      contract_type_code: "INDETERMINADO",
+      contract_type_name: "Contrato por tiempo indeterminado",
       entity: {
-        id: "ent-1",
         name: "Empresa QA Ficticia",
-        code: "EQAF",
         organism: "OSDE QA",
         branch: "Servicios",
         labor_code: "EQAF-01",
         address: "Calle 23 #100",
         province: "La Habana",
         municipality: "Plaza de la Revolución",
-        revolution_year: 68,
+        revolution_year: "68",
       },
       representative: {
         name: "Director General QA",
         position: "Director General",
       },
       worker: {
-        id: "w-1",
-        worker_code: "001",
         full_name: "Carlos Tester Uno",
         identification: "92061412345",
         birth_date: "1992-06-14",
@@ -120,13 +119,11 @@ describe("QA Ronda 2 — Suite Completa de Correcciones (Bloques A, B, C, D y E)
         municipality: "Playa",
       },
       job: {
-        id: "job-1",
         name: "Especialista en Gestión de RRHH",
         salary_group_sequence: 12,
         occupational_category: "Técnico",
       },
       position: {
-        id: "pos-1",
         name: "Especialista RRHH",
         code: "P-01",
         work_location: "Oficina Central",
@@ -139,7 +136,6 @@ describe("QA Ronda 2 — Suite Completa de Correcciones (Bloques A, B, C, D y E)
         break_minutes: 60,
       },
       contract: {
-        id: "c-1",
         type_code: "INDETERMINADO",
         type_name: "Contrato por tiempo indeterminado",
         start_date: "2026-11-16",
@@ -157,6 +153,7 @@ describe("QA Ronda 2 — Suite Completa de Correcciones (Bloques A, B, C, D y E)
         total: 4610,
         currency: null,
       },
+      formalized_addendums: [],
     })
 
     expect(resolved.values["contract.payment_schedule"]).toBe("Mensual")
