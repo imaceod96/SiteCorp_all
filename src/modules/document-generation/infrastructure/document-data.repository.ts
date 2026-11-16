@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { fetchPositionScheduleSegments } from "@/modules/organization-structure"
 import type {
   AddendumDocumentData,
@@ -110,7 +111,7 @@ export async function getSc404DocumentData(
   sourceType: Sc404SourceType,
   sourceId: string
 ): Promise<Sc404DocumentData> {
-  const issuedAt = new Date().toISOString().slice(0, 10)
+  const issuedAt = todayIsoInCuba()
 
   if (sourceType === "VACATION") {
     const { data, error } = await supabase

@@ -22,7 +22,6 @@ import {
   fetchWorkerIdentity,
 } from "../infrastructure/staffing.repository"
 import {
-  applyDueScheduledSeparationsRpc,
   previewPositionChangeRpc,
 } from "../infrastructure/worker-transitions.repository"
 import type {
@@ -78,7 +77,6 @@ export async function loadEntityStaffingBoard(entityId: string): Promise<EntityS
     return { authorized: false, canManage: false, positions: [], occupancy: emptyOccupancy() }
   }
 
-  void applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
   const [positions, occupancy] = await Promise.all([
     fetchEntityStaffingPositions(entityId, { onlyActive: true }),
     fetchEntityOccupancy(entityId),
@@ -106,12 +104,11 @@ export async function loadTransitionWorkspace(
   entityId: string,
   options: { workerId?: string | null } = {}
 ): Promise<TransitionWorkspace> {
-  void applyDueScheduledSeparationsRpc({ entityId, workerId: options.workerId ?? null }).catch(() => 0)
   const [positions, occupancy, contractTypes, canManageContractData, worker] = await Promise.all([
     fetchEntityStaffingPositions(entityId),
     fetchEntityOccupancy(entityId),
     fetchActiveContractTypes(),
-    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION).catch(() => false),
     options.workerId ? fetchWorkerIdentity(options.workerId) : Promise.resolve(null),
   ])
 
@@ -133,7 +130,7 @@ export async function loadContractChangeWorkspace(
 ): Promise<ContractChangeWorkspace> {
   const [contractTypes, canManageContractData] = await Promise.all([
     fetchActiveContractTypes(),
-    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION),
+    loadEntityPermissionSafe(entityId, CONTRACT_DATA_PERMISSION).catch(() => false),
   ])
   return { contractTypes, canManageContractData }
 }
@@ -226,7 +223,6 @@ export async function loadEntityStaffingWorkspace(
   ])
   if (!canView && !canManage) return emptyStaffingWorkspace(canManage)
 
-  void applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
   const [entityName, jobs, positions] = await Promise.all([
     fetchEntityName(entityId),
     fetchEntityStaffingJobs(entityId),

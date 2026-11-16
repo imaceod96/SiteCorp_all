@@ -19,6 +19,7 @@ import type {
 import { PendingInitialTrainingBanner } from "@/modules/training"
 import { PendingSstNotificationsBanner } from "@/modules/sst"
 import { PendingEmploymentRegistryBanner } from "@/modules/people"
+import { PendingContractDocumentsBanner } from "@/modules/contracts"
 import { useEntityPlan } from "@/modules/entity-plans"
 import {
   Building2,
@@ -267,6 +268,9 @@ const VistaGeneral: React.FC<VistaGeneralProps> = ({
   return (
     <>
       {summary.scopeLoading && <SiteCorpLoading rows={2} />}
+
+      {/* AVISOS DE CONTRATOS CON DOCUMENTO PENDIENTE DE GENERAR */}
+      <PendingContractDocumentsBanner entityId={entityId} />
 
       {/* AVISOS DE REGISTRO HISTÓRICO DE ALTAS Y BAJAS CON INFORMACIÓN PENDIENTE DE COMPLETAR */}
       <PendingEmploymentRegistryBanner entityId={entityId} />

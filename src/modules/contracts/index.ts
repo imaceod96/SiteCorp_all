@@ -168,9 +168,22 @@ export {
 } from "./application/contract-alerts.queries"
 
 /* Automatización documental (infraestructura del contexto) */
+export type {
+  ContractDocumentStatus,
+  PendingContractDocumentRow,
+} from "./domain/entities"
+
 export {
-  resolveContractTemplateAvailability,
-  resolveAddendumTemplateAvailability,
-  ensureContractDocumentGenerated,
+  CONTRACT_DOCUMENT_STATUS_CHANGED_EVENT,
+  clearContractDocumentStatusStore,
   ensureAddendumDocumentGenerated,
+  ensureContractDocumentGenerated,
+  fetchPendingContractDocuments,
+  getContractDocumentStatusSnapshot,
+  resolveAddendumTemplateAvailability,
+  resolveContractTemplateAvailability,
+  setContractDocumentStatus,
 } from "./infrastructure/contract-documents.repository"
+
+export { PendingContractDocumentsBanner } from "./presentation/components/PendingContractDocumentsBanner"
+

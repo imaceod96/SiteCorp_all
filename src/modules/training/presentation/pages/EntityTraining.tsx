@@ -128,7 +128,7 @@ const EntityTraining: React.FC = () => {
   const [error, setError] = React.useState<string | null>(null)
 
   // Filtros del Calendario Anual Principal
-  const currentYear = new Date().getFullYear()
+  const currentYear = Number(todayIsoInCuba().slice(0, 4))
   const [selectedYear, setSelectedYear] = React.useState<number>(currentYear)
   const [filterAreaId, setFilterAreaId] = React.useState<string>("all")
   const [filterTopicId, setFilterTopicId] = React.useState<string>("all")
@@ -157,7 +157,7 @@ const EntityTraining: React.FC = () => {
   const [scheduleFolderId, setScheduleFolderId] = React.useState<string>("")
   const [scheduleTopicId, setScheduleTopicId] = React.useState<string>("")
   const [scheduleDate, setScheduleDate] = React.useState<string>(() =>
-    new Date().toISOString().slice(0, 10)
+    todayIsoInCuba()
   )
   const [scheduleNotes, setScheduleNotes] = React.useState<string>("")
   const [scheduleSubmitting, setScheduleSubmitting] = React.useState(false)

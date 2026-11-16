@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   fetchGeneratedDocuments,
   generateResolutionDocument,
@@ -74,7 +75,7 @@ export const resolveResolutionTemplateAvailability = async (
   const resolved = await resolveDocumentTemplateVersion(
     entityId,
     RESOLUTION_DOCUMENT_TYPE,
-    referenceDate || new Date().toISOString().slice(0, 10)
+    referenceDate || todayIsoInCuba()
   )
 
   const status: ResolutionTemplateStatus =

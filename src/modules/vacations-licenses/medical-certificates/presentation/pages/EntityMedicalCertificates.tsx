@@ -334,13 +334,17 @@ const EntityMedicalCertificates = () => {
                                   row.start_date,
                                   row.return_date
                                 )
-                                if (expected !== null && expected !== row.days) {
+                                if (expected === null || expected !== row.days) {
                                   return (
                                     <span
                                       className="inline-flex items-center gap-1 rounded bg-sitecorp-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-sitecorp-warning"
-                                      title={`Los días registrados (${row.days}) no coinciden con la diferencia entre fechas (${expected}).`}
+                                      title={
+                                        expected !== null
+                                          ? `Certificado con datos incoherentes: los días registrados (${row.days}) no coinciden con la diferencia entre fechas (${expected}).`
+                                          : "Certificado con datos incoherentes."
+                                      }
                                     >
-                                      <AlertTriangle className="h-3 w-3" /> Revisar fechas
+                                      <AlertTriangle className="h-3 w-3" /> Certificado con datos incoherentes
                                     </span>
                                   )
                                 }

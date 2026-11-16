@@ -4,6 +4,7 @@ import {
   ensureMovementDocument,
   ensureResolutionDocument,
 } from "../infrastructure/transition-documents"
+import { setContractDocumentStatus } from "@/modules/contracts"
 import { TRANSITION_MOVEMENT_DOCUMENT } from "../domain/rules"
 import type {
   CandidateHireInput,
@@ -63,10 +64,29 @@ export async function hireCandidateWithContract(
   })
 
   // Para Cargos Cuadro / Especialista Principal no se genera contrato ni documento.
-  const documentWarning =
-    !input.specialDocumentRole && result.contractId
-      ? await ensureContractDocument(result.contractId)
-      : null
+  let documentWarning: string | null = null
+  if (!input.specialDocumentRole && result.contractId) {
+    const meta = {
+      worker_id: result.workerId,
+      start_date: input.contractStartDate || input.hireDate,
+    }
+    await setContractDocumentStatus(result.contractId, "PENDIENTE", null, meta)
+    try {
+      documentWarning = await ensureContractDocument(result.contractId)
+      await setContractDocumentStatus(
+        result.contractId,
+        documentWarning ? "ERROR" : "GENERADO",
+        documentWarning,
+        meta
+      )
+    } catch (error) {
+      documentWarning =
+        error instanceof Error
+          ? error.message
+          : "No se pudo generar el documento contractual automáticamente."
+      await setContractDocumentStatus(result.contractId, "ERROR", documentWarning, meta)
+    }
+  }
 
   await registerHireMovement(result.workerId, input.hireDate)
 

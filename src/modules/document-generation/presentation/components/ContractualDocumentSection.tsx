@@ -27,6 +27,10 @@ import {
   generateContractDocument,
   type DocumentGenerationStage,
 } from "@/modules/document-generation/application/document-generation.commands"
+import {
+  getContractDocumentStatusSnapshot,
+  setContractDocumentStatus,
+} from "@/modules/contracts/infrastructure/contract-documents.repository"
 import type {
   DocumentGenerationPrecheck,
   DocumentGenerationResult,
@@ -150,15 +154,29 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
           ? await generateContractDocument(sourceId, setGenerationStage)
           : await generateAddendumDocument(sourceId, setGenerationStage)
       if (!result.success) {
+        if (kind === "CONTRACT") {
+          await setContractDocumentStatus(
+            sourceId,
+            "ERROR",
+            result.error || "No se pudo generar el documento"
+          )
+        }
         setDialogOpen(false)
         setFailure(result)
       } else {
+        if (kind === "CONTRACT") {
+          await setContractDocumentStatus(sourceId, "GENERADO", null)
+        }
         setDialogOpen(false)
       }
       await load()
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo generar el documento"
+      if (kind === "CONTRACT") {
+        await setContractDocumentStatus(sourceId, "ERROR", msg)
+      }
       setDialogOpen(false)
-      setFailure({ success: false, pdfPath: null, error: err instanceof Error ? err.message : "No se pudo generar el documento" })
+      setFailure({ success: false, pdfPath: null, error: msg })
     } finally {
       setGenerating(false)
       setGenerationStage(null)
@@ -205,13 +223,36 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
 
   const template = precheck?.template ?? null
 
+  const statusSnapshot =
+    kind === "CONTRACT" ? getContractDocumentStatusSnapshot(sourceId) : null
+  const contractDocStatus = latest
+    ? "GENERADO"
+    : failure || statusSnapshot?.document_status === "ERROR"
+      ? "ERROR"
+      : "PENDIENTE"
+
   return (
     <div className={`rounded-xl border border-border bg-muted/10 p-4 ${className ?? ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-        {latest?.generation_number != null && (
-          <SiteCorpStatusBadge status="info">Generación {latest.generation_number}</SiteCorpStatusBadge>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {kind === "CONTRACT" && !isCuadroContract && (
+            <SiteCorpStatusBadge
+              status={
+                contractDocStatus === "GENERADO"
+                  ? "success"
+                  : contractDocStatus === "ERROR"
+                    ? "danger"
+                    : "warning"
+              }
+            >
+              {contractDocStatus}
+            </SiteCorpStatusBadge>
+          )}
+          {latest?.generation_number != null && (
+            <SiteCorpStatusBadge status="info">Generación {latest.generation_number}</SiteCorpStatusBadge>
+          )}
+        </div>
       </div>
 
       {isCuadroContract ? (
@@ -220,6 +261,16 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
         </p>
       ) : !latest ? (
         <>
+          {kind === "CONTRACT" && precheck?.formalized && (
+            <div className="mt-2 rounded-lg border border-sitecorp-warning/40 bg-sitecorp-warning/10 p-2.5 text-xs text-ink">
+              <p className="font-semibold">Contratos con documento pendiente de generar</p>
+              <p className="mt-0.5 text-muted-foreground">
+                {statusSnapshot?.document_error ||
+                  failure?.error ||
+                  "El contrato está formalizado pero su documento Word aún está pendiente de generar."}
+              </p>
+            </div>
+          )}
           <p className="mt-2 text-sm text-muted-foreground">
             {generating ? stageLabel : "Aún no se ha generado el documento."}
           </p>
@@ -231,7 +282,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
               disabled={generating}
               onClick={() => {
                 setFailure(null)
-                setDialogOpen(true)
+                void handleGenerate()
               }}
             >
               <Sparkles className="mr-2 h-3.5 w-3.5" /> Generar documento

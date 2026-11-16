@@ -296,89 +296,97 @@ const CandidateForm = ({
   }, [])
 
   // Fetch candidate data for edit mode
-  React.useEffect(() => {
-    const fetchCandidate = async () => {
-      if (!effectiveEntityId || !candidateId || mode !== "edit") return
+  const fetchCandidate = React.useCallback(async () => {
+    if (!effectiveEntityId || !candidateId || mode !== "edit") return
 
-      setLoading(true)
-      setError(null)
+    setLoading(true)
+    setError(null)
 
-      try {
-        // Permiso de edición, ficha del candidato, licencias y documentos verificadores:
-        // todo lo resuelve el caso de uso del dominio Personas.
-        const { canManage, candidate: data, drivingLicenseIds, verificationDocuments } =
-          await loadCandidateFormData({ entityId: effectiveEntityId, candidateId })
+    try {
+      // Permiso de edición, ficha del candidato, licencias y documentos verificadores:
+      // todo lo resuelve el caso de uso del dominio Personas.
+      const { canManage, candidate: data, drivingLicenseIds, verificationDocuments } =
+        await loadCandidateFormData({ entityId: effectiveEntityId, candidateId })
 
-        setHasManagePermission(canManage)
+      setHasManagePermission(canManage)
 
-        if (!canManage) {
-          setError("No tiene permiso para editar este candidato")
-          return
-        }
-
-        if (!data) {
-          setError("Candidato no encontrado")
-          return
-        }
-
-        setCandidate(data)
-        // El estado de los checkboxes se reconstruye desde los documentos reales para no
-        // depender de un booleano independiente que pueda quedar desincronizado.
-        setExistingPreEmploymentDoc(verificationDocuments.preEmployment)
-        setExistingCriminalRecordDoc(verificationDocuments.criminalRecord)
-
-        // Pre-populate form
-        setFormData({
-          first_name: data.first_name,
-          first_surname: data.first_surname,
-          second_surname: data.second_surname || "",
-          identification: data.identification,
-          birth_date: formatIsoDateToDisplay(data.birth_date),
-          gender_id: data.gender_id || "",
-          marital_status_id: data.marital_status_id || "",
-          phone: data.phone || "",
-          email: data.email || "",
-          address: data.address || "",
-          municipality: data.municipality || "",
-          province: data.province || "",
-          education_level_id: data.education_level_id || "",
-          specialty: data.specialty || "",
-          has_masters_degree: data.has_masters_degree || false,
-          has_doctorate_degree: data.has_doctorate_degree || false,
-          profession_or_trade: data.profession_or_trade || "",
-          political_affiliation: data.political_affiliation || "",
-          is_retired_or_rehired:
-            data.is_retired_or_rehired === true
-              ? "yes"
-              : data.is_retired_or_rehired === false
-                ? "no"
-                : "",
-          has_disciplinary_measures: data.has_disciplinary_measures || false,
-          skin_color_id: data.skin_color_id || "",
-          area_id: data.area_id || "",
-          driving_license_ids: drivingLicenseIds,
-          has_pre_employment_check: !!verificationDocuments.preEmployment,
-          has_criminal_record_check: !!verificationDocuments.criminalRecord,
-          pre_employment_check_file: null,
-          criminal_record_check_file: null,
-          disciplinary_document: null,
-        })
-
-        if (data.province) {
-          setMunicipalities(
-            cubaMunicipalityOptions(data.province, data.municipality).map(name => ({ id: name, name }))
-          )
-        }
-      } catch (err) {
-        console.error("Error fetching candidate:", err)
-        setError(err instanceof Error ? err.message : "Error al cargar el candidato")
-      } finally {
-        setLoading(false)
+      if (!canManage) {
+        setError("No tiene permiso para editar este candidato")
+        return
       }
-    }
 
-    fetchCandidate()
+      if (!data) {
+        setError("Candidato no encontrado")
+        return
+      }
+
+      setCandidate(data)
+      // El estado de los checkboxes se reconstruye desde los documentos reales para no
+      // depender de un booleano independiente que pueda quedar desincronizado.
+      setExistingPreEmploymentDoc(verificationDocuments.preEmployment)
+      setExistingCriminalRecordDoc(verificationDocuments.criminalRecord)
+
+      // Pre-populate form
+      setFormData({
+        first_name: data.first_name,
+        first_surname: data.first_surname,
+        second_surname: data.second_surname || "",
+        identification: data.identification,
+        birth_date: formatIsoDateToDisplay(data.birth_date),
+        gender_id: data.gender_id || "",
+        marital_status_id: data.marital_status_id || "",
+        phone: data.phone || "",
+        email: data.email || "",
+        address: data.address || "",
+        municipality: data.municipality || "",
+        province: data.province || "",
+        education_level_id: data.education_level_id || "",
+        specialty: data.specialty || "",
+        has_masters_degree: data.has_masters_degree || false,
+        has_doctorate_degree: data.has_doctorate_degree || false,
+        profession_or_trade: data.profession_or_trade || "",
+        political_affiliation: data.political_affiliation || "",
+        is_retired_or_rehired:
+          data.is_retired_or_rehired === true
+            ? "yes"
+            : data.is_retired_or_rehired === false
+              ? "no"
+              : "",
+        has_disciplinary_measures: data.has_disciplinary_measures || false,
+        skin_color_id: data.skin_color_id || "",
+        area_id: data.area_id || "",
+        driving_license_ids: drivingLicenseIds,
+        has_pre_employment_check: !!verificationDocuments.preEmployment,
+        has_criminal_record_check: !!verificationDocuments.criminalRecord,
+        pre_employment_check_file: null,
+        criminal_record_check_file: null,
+        disciplinary_document: null,
+      })
+
+      if (data.province) {
+        setMunicipalities(
+          cubaMunicipalityOptions(data.province, data.municipality).map(name => ({ id: name, name }))
+        )
+      }
+    } catch (err) {
+      console.error("Error fetching candidate:", err)
+      if (
+        err instanceof Error &&
+        (err.name === "PermissionCheckUnavailableError" ||
+          err.message === "No se pudo conectar con el servidor")
+      ) {
+        setError("No se pudo conectar con el servidor")
+      } else {
+        setError(err instanceof Error ? err.message : "Error al cargar el candidato")
+      }
+    } finally {
+      setLoading(false)
+    }
   }, [effectiveEntityId, candidateId, mode])
+
+  React.useEffect(() => {
+    void fetchCandidate()
+  }, [fetchCandidate])
 
   const handleFormChange = (field: keyof CandidateFormData, value: string | boolean | File | null) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -652,7 +660,10 @@ const CandidateForm = ({
       <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader title="Error" description="No se pudo cargar el candidato" />
         <SiteCorpAlert type="danger">{error}</SiteCorpAlert>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <SiteCorpButton variant="outline" onClick={() => void fetchCandidate()}>
+            Reintentar
+          </SiteCorpButton>
           <SiteCorpButton variant="outline" onClick={handleCancel}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver a candidato
           </SiteCorpButton>

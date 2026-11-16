@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { loadEntityPermissionSafe } from "@/modules/access-control"
+import { isPermissionCheckUnavailableError, loadEntityPermissionSafe } from "@/modules/access-control"
 import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
 import { SiteCorpCard } from "@/shared/components/ui/sitecorp-card"
@@ -143,7 +143,11 @@ const EntitySettingsDocumentTemplateDetail = () => {
       await loadValidation(nextId)
     } catch (err) {
       console.error("Error loading document template:", err)
-      setNotAllowed(err instanceof Error ? err.message : "No se pudo cargar la plantilla documental.")
+      if (isPermissionCheckUnavailableError(err)) {
+        setNotAllowed("No se pudo conectar con el servidor")
+      } else {
+        setNotAllowed(err instanceof Error ? err.message : "No se pudo cargar la plantilla documental.")
+      }
     } finally {
       setLoading(false)
     }
@@ -305,13 +309,18 @@ const EntitySettingsDocumentTemplateDetail = () => {
         <SiteCorpAlert type="danger">
           {notAllowed || "No se pudo cargar la plantilla documental."}
         </SiteCorpAlert>
-        <SiteCorpButton
-          variant="outline"
-          onClick={() => navigate("/settings/document-templates")}
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Volver al listado
-        </SiteCorpButton>
+        <div className="flex flex-wrap gap-2">
+          <SiteCorpButton variant="outline" onClick={() => void initialLoad()}>
+            Reintentar
+          </SiteCorpButton>
+          <SiteCorpButton
+            variant="outline"
+            onClick={() => navigate("/settings/document-templates")}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Volver al listado
+          </SiteCorpButton>
+        </div>
       </div>
     )
   }

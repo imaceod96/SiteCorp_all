@@ -33,6 +33,7 @@ import {
   type PaymentMethodOption,
 } from "@/modules/contracts"
 import { PLURIEMPLEO_TARGET_REQUIRED_MESSAGE } from "@/shared/config/pluriempleo"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { showError, showSuccess } from "@/utils/toast"
 import { extractErrorMessage } from "@/utils/error-message"
 import { Info } from "lucide-react"
@@ -59,7 +60,7 @@ interface CreateManualAddendumDialogProps {
   renderRepresentativeSelect: RepresentativeSelectSlotRenderer
 }
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayIsoInCuba()
 
 const numberText = (value: string): string => {
   const parsed = Number(value.replace(",", "."))

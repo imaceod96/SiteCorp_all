@@ -18,11 +18,13 @@ import {
   ChevronDown,
   ChevronUp,
   Network,
+  RefreshCw,
   Search,
   Settings,
   UserPlus,
   Users,
 } from "lucide-react"
+import { isPermissionCheckUnavailableError } from "@/modules/access-control"
 import { toRomanNumeral } from "@/utils/roman-numerals"
 import {
   resolveApplicableScaleId,
@@ -92,7 +94,11 @@ const EntityHiring = () => {
       setSalaryValuesByGroup(await fetchSalaryValuesForGroups(groupIds))
     } catch (err) {
       console.error("Error loading hiring data:", err)
-      setError(err instanceof Error ? err.message : "Error al cargar los puestos de la entidad")
+      if (isPermissionCheckUnavailableError(err)) {
+        setError("No se pudo conectar con el servidor")
+      } else {
+        setError(err instanceof Error ? err.message : "Error al cargar los puestos de la entidad")
+      }
     } finally {
       setLoading(false)
     }
@@ -217,7 +223,10 @@ const EntityHiring = () => {
         <SiteCorpAlert type="danger" title="Error">
           {error}
         </SiteCorpAlert>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <SiteCorpButton variant="outline" onClick={() => void loadData()}>
+            <RefreshCw className="mr-2 h-4 w-4" /> Reintentar
+          </SiteCorpButton>
           <SiteCorpButton variant="outline" onClick={() => navigate("/home")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
           </SiteCorpButton>

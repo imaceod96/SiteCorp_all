@@ -213,46 +213,54 @@ const CandidateDetail = () => {
   }, [])
 
   // Ficha del candidato: permisos, datos de la persona, licencias y vínculo laboral
-  React.useEffect(() => {
-    const fetchCandidate = async () => {
-      if (!entityId || !candidateId) {
-        setError("Parámetros de URL no válidos")
+  const fetchCandidate = React.useCallback(async () => {
+    if (!entityId || !candidateId) {
+      setError("Parámetros de URL no válidos")
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const view = await loadCandidateExpedienteView({ entityId, candidateId })
+
+      setHasViewPermission(view.permissions.canView)
+      setHasManagePermission(view.permissions.canManage)
+      setCanManageWorkers(view.permissions.canManageWorkers)
+
+      if (!view.permissions.canView) {
+        setError("No tiene permiso para ver este candidato")
         return
       }
 
-      setLoading(true)
-      setError(null)
-
-      try {
-        const view = await loadCandidateExpedienteView({ entityId, candidateId })
-
-        setHasViewPermission(view.permissions.canView)
-        setHasManagePermission(view.permissions.canManage)
-        setCanManageWorkers(view.permissions.canManageWorkers)
-
-        if (!view.permissions.canView) {
-          setError("No tiene permiso para ver este candidato")
-          return
-        }
-
-        if (!view.candidate) {
-          setError("Candidato no encontrado")
-          return
-        }
-
-        setCandidate(view.candidate)
-        setDrivingLicenseIds(view.drivingLicenseIds)
-        setLinkedWorker(view.linkedWorker)
-      } catch (err) {
-        console.error("Error fetching candidate:", err)
-        setError(err instanceof Error ? err.message : "Error al cargar el candidato")
-      } finally {
-        setLoading(false)
+      if (!view.candidate) {
+        setError("Candidato no encontrado")
+        return
       }
-    }
 
-    fetchCandidate()
+      setCandidate(view.candidate)
+      setDrivingLicenseIds(view.drivingLicenseIds)
+      setLinkedWorker(view.linkedWorker)
+    } catch (err) {
+      console.error("Error fetching candidate:", err)
+      if (
+        err instanceof Error &&
+        (err.name === "PermissionCheckUnavailableError" ||
+          err.message === "No se pudo conectar con el servidor")
+      ) {
+        setError("No se pudo conectar con el servidor")
+      } else {
+        setError(err instanceof Error ? err.message : "Error al cargar el candidato")
+      }
+    } finally {
+      setLoading(false)
+    }
   }, [entityId, candidateId])
+
+  React.useEffect(() => {
+    void fetchCandidate()
+  }, [fetchCandidate])
 
   // Documentos, experiencia laboral, formación académica, notas e información adicional
   const fetchRelatedData = React.useCallback(async () => {
@@ -687,7 +695,13 @@ const CandidateDetail = () => {
         <SiteCorpAlert type="danger" title="Error">
           {error}
         </SiteCorpAlert>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <SiteCorpButton
+            variant="outline"
+            onClick={() => void fetchCandidate()}
+          >
+            Reintentar
+          </SiteCorpButton>
           <SiteCorpButton
             variant="outline"
             onClick={() => navigate("/candidates")}

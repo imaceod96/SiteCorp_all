@@ -26,6 +26,7 @@ import {
   CheckCircle2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 
 type SstMainTab = "training" | "risks" | "epp" | "specialized"
 
@@ -105,7 +106,7 @@ const EntitySst: React.FC = () => {
   }
 
   const { state, jobs, areas, workers } = overview
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayIsoInCuba()
 
   const activeWorkersCount = workers.filter((w) => w.employmentStatus === "active").length
   const workersWithSstTraining = new Set(

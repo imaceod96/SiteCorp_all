@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { fetchWorkerDrivingLicenseIds, saveWorkerDrivingLicenseIds } from "./catalogs.repository"
 import { sanitizeFileName } from "@/lib/documents"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   fetchEducationLevels,
   fetchGenders,
@@ -286,7 +287,7 @@ export async function fetchWorkerTenurePayment(
     const { data } = await supabase.rpc("resolve_tenure_payment_for_worker", {
       p_entity_id: entityId,
       p_worker_id: workerId,
-      p_reference_date: new Date().toISOString().slice(0, 10),
+      p_reference_date: todayIsoInCuba(),
     })
     if (!data || !Array.isArray(data) || data.length === 0) return null
     return data[0] as TenurePaymentRule

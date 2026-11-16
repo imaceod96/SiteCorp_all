@@ -113,6 +113,21 @@ export function validateMedicalCertificateInput(input: {
 }
 
 /**
+ * Detecta si un certificado médico ya registrado tiene datos incoherentes:
+ * - `days` no coincide con `(return_date - start_date)`
+ * - fechas inválidas o fuera del período laboral del trabajador (si se dispone de él).
+ * Devuelve el motivo legible o `null` si el certificado es coherente.
+ */
+export function getMedicalCertificateIncoherenceReason(input: {
+  startDate: string
+  returnDate: string
+  days: number
+  employment?: WorkerEmploymentWindow | null
+}): string | null {
+  return validateMedicalCertificateInput(input)
+}
+
+/**
  * Valida el documento justificativo del certificado médico.
  * Lanza el error de dominio correspondiente si el formato no está permitido o
  * si el archivo supera el tamaño máximo.
@@ -125,3 +140,4 @@ export function validateDocumentFile(file: File): void {
     throw new Error("El archivo no puede superar los 10 MB.")
   }
 }
+

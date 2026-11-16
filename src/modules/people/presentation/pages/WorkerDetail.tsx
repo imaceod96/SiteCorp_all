@@ -453,7 +453,15 @@ const WorkerDetail = () => {
       // dedicado, más abajo).
     } catch (err) {
       console.error("Error loading worker:", err)
-      setError(extractErrorMessage(err, "Error al cargar el trabajador"))
+      if (
+        err instanceof Error &&
+        (err.name === "PermissionCheckUnavailableError" ||
+          err.message === "No se pudo conectar con el servidor")
+      ) {
+        setError("No se pudo conectar con el servidor")
+      } else {
+        setError(extractErrorMessage(err, "Error al cargar el trabajador"))
+      }
     } finally {
       setLoading(false)
     }
@@ -807,9 +815,14 @@ const WorkerDetail = () => {
         <SiteCorpAlert type="danger" title="Error">
           {error || "Trabajador no encontrado"}
         </SiteCorpAlert>
-        <SiteCorpButton variant="outline" onClick={() => navigate(-1)}>
-          <ArrowLeft className="mr-2 h-4 w-4" /> Volver
-        </SiteCorpButton>
+        <div className="flex flex-wrap gap-2">
+          <SiteCorpButton variant="outline" onClick={() => void loadWorker()}>
+            Reintentar
+          </SiteCorpButton>
+          <SiteCorpButton variant="outline" onClick={() => navigate(-1)}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Volver
+          </SiteCorpButton>
+        </div>
       </div>
     )
   }

@@ -32,7 +32,7 @@ import {
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
 import { HardHat, SearchCheck, Plus, CheckCircle2, AlertTriangle } from "lucide-react"
-import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
+import { addDaysIsoInCuba, formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 
 interface SstEppAndInspectionsSectionProps {
   entityId: string
@@ -78,7 +78,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
   const [delQuantity, setDelQuantity] = React.useState("1")
   const [delDate, setDelDate] = React.useState(() => todayIsoInCuba())
   const [delRenewalDate, setDelRenewalDate] = React.useState(
-    () => new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10)
+    () => addDaysIsoInCuba(180)
   )
   const [delSigned, setDelSigned] = React.useState(true)
   const [delNotes, setDelNotes] = React.useState("")
@@ -103,7 +103,7 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
   >("MODERADO")
   const [findingCreateAction, setFindingCreateAction] = React.useState(true)
   const [findingActionDue, setFindingActionDue] = React.useState(
-    () => new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10)
+    () => addDaysIsoInCuba(10)
   )
 
   const jobMap = React.useMemo(() => new Map(jobs.map((j) => [j.id, j.name])), [jobs])

@@ -31,6 +31,18 @@ export function todayIsoInCuba(now: Date = new Date()): string {
 }
 
 /**
+ * Suma o resta días calendario sobre una fecha ISO YYYY-MM-DD (por defecto la fecha actual en Cuba).
+ */
+export function addDaysIsoInCuba(days: number, baseIso: string = todayIsoInCuba()): string {
+  const [year, month, day] = baseIso.slice(0, 10).split("-").map(Number);
+  const utc = new Date(Date.UTC(year || 1970, (month || 1) - 1, (day || 1) + days));
+  const y = String(utc.getUTCFullYear()).padStart(4, "0");
+  const m = String(utc.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(utc.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Formatea una fecha ISO (YYYY-MM-DD o timestamp ISO) a dd/mm/aaaa sin desfase de zona horaria.
  */
 export function formatIsoDateToDisplay(value: string | null | undefined, fallback = "—"): string {

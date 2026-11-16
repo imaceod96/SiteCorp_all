@@ -40,6 +40,7 @@ import {
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
 import { extractErrorMessage } from "@/utils/error-message"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   FolderKanban,
   Briefcase,
@@ -130,7 +131,7 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
   const [scheduleDialogOpen, setScheduleDialogOpen] = React.useState(false)
   const [scheduleTopicId, setScheduleTopicId] = React.useState<string>("")
   const [scheduleDate, setScheduleDate] = React.useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => todayIsoInCuba()
   )
   const [scheduleNotes, setScheduleNotes] = React.useState<string>("")
   const [scheduleSubmitting, setScheduleSubmitting] = React.useState(false)
@@ -305,7 +306,7 @@ export const SstTrainingByJobSection: React.FC<SstTrainingByJobSectionProps> = (
     const defaultTopic =
       presetTopicId || activeFolderTopics[0]?.id || state.topics[0]?.id || ""
     setScheduleTopicId(defaultTopic)
-    setScheduleDate(new Date().toISOString().slice(0, 10))
+    setScheduleDate(todayIsoInCuba())
     setScheduleNotes("")
     setScheduleDialogOpen(true)
   }

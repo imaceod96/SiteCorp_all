@@ -100,6 +100,7 @@ export {
 /* Consultas */
 export {
   canViewEntity,
+  isPermissionCheckUnavailableError,
   loadEntityAccessOverview,
   loadEntityAccessWorkspace,
   loadEntityPermission,
@@ -107,6 +108,7 @@ export {
   loadEntityPermissionSafe,
   loadEntityPermissions,
   loadEntityUserAccess,
+  PermissionCheckUnavailableError,
 } from "./application/entity-access.queries"
 
 /* Permisos de PLATAFORMA (Nivel 1 — Administración global de SiteCorp) */
