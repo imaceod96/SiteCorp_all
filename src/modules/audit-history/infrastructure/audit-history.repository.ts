@@ -318,7 +318,7 @@ async function syncDiscoveredPlatformEvents(
         .order("created_at", { ascending: false }),
       supabase
         .from("worker_medical_certificates")
-        .select("id, worker_id, certificate_number, start_date, return_date, days, organization_entity_id, created_at")
+        .select("id, worker_id, start_date, return_date, days, organization_entity_id, created_at")
         .order("created_at", { ascending: false }),
     ])
 
@@ -739,13 +739,12 @@ async function syncDiscoveredPlatformEvents(
         module: "medical_certificates",
         action: "medical_certificate_registered",
         entity_type: "worker_medical_certificate",
-        record_id: cert.certificate_number || wInfo?.identification || cert.id,
+        record_id: wInfo?.identification || cert.id,
         description: `Registro de certificado médico para ${workerName} (${cert.days || ""} día(s))`,
         old_values: null,
         new_values: {
           certificate_id: cert.id,
           worker_name: workerName,
-          certificate_number: cert.certificate_number,
           start_date: cert.start_date,
           return_date: cert.return_date,
           days: cert.days,

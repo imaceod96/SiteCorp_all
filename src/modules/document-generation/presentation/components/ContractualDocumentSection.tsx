@@ -280,7 +280,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
         ) : jobStatus === "ERROR" ? (
           <SiteCorpAlert type="danger" className="mt-3" title="No se pudo generar automáticamente">
             <p className="text-xs">
-              {jobRecord?.last_error || "Ocurrió un error al procesar el documento en la cola."}
+              {jobRecord?.last_error ? `No se pudo generar el documento: ${jobRecord.last_error.replace(/^ERROR:\s*/i, "")}` : "No se pudo generar el documento."}
             </p>
             {canManage && (
               <SiteCorpButton

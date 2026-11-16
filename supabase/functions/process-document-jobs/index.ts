@@ -168,7 +168,7 @@ async function processSingleJob(supabase: any, job: DocumentJobRow): Promise<{ o
       entityId = data.entity?.id || entityId
       workerId = data.worker?.id || workerId
       const typeCode = String(data.contract?.type_code || "").toUpperCase()
-      templateTypeCode = typeCode === "INDETERMINADO" ? "INDEFINITE_CONTRACT" : "DETERMINED_CONTRACT"
+      templateTypeCode = typeCode === "INDETERMINADO" ? "EMPLOYMENT_CONTRACT_INDETERMINED" : "EMPLOYMENT_CONTRACT_DETERMINED"
       referenceDate = data.contract?.signature_date || data.contract?.start_date || referenceDate
       variables = {
         ...flattenVariables(data as Record<string, unknown>),
@@ -196,7 +196,7 @@ async function processSingleJob(supabase: any, job: DocumentJobRow): Promise<{ o
       contractId = data.contract?.id || null
       entityId = data.entity?.id || entityId
       workerId = data.worker?.id || workerId
-      templateTypeCode = "CONTRACT_VARIATION_ADDENDUM"
+      templateTypeCode = "EMPLOYMENT_CONTRACT_ADDENDUM"
       referenceDate = data.addendum?.signature_date || data.addendum?.effective_date || referenceDate
       variables = {
         ...flattenVariables(data as Record<string, unknown>),
@@ -222,7 +222,7 @@ async function processSingleJob(supabase: any, job: DocumentJobRow): Promise<{ o
       entityId = data.entity?.id || entityId
       workerId = data.worker?.id || workerId
       const resKind = String(data.resolution?.resolution_kind || "APPOINTMENT").toUpperCase()
-      templateTypeCode = resKind === "MOVEMENT" ? "MOVEMENT_RESOLUTION" : "APPOINTMENT_RESOLUTION"
+      templateTypeCode = "RESOLUTION"
       referenceDate = data.resolution?.resolution_date || data.resolution?.effective_date || referenceDate
       variables = {
         ...flattenVariables(data as Record<string, unknown>),
@@ -330,8 +330,8 @@ async function processSingleJob(supabase: any, job: DocumentJobRow): Promise<{ o
       "resolve_document_template_version",
       {
         p_entity_id: entityId,
-        p_template_type_code: templateTypeCode,
-        p_on_date: referenceDate,
+        p_document_type_code: templateTypeCode,
+        p_reference_date: referenceDate,
       }
     )
 
