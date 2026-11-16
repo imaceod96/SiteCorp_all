@@ -133,6 +133,8 @@ export type {
 } from "./domain/rules"
 
 /* Casos de uso (lectura) */
+export type { WorkerLinkageInfo } from "./infrastructure/people.repository"
+
 export type {
   EntityCandidatesView,
   EntityWorkersDirectoryView,

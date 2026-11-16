@@ -262,7 +262,9 @@ const WorkerDetail = () => {
           (!a.start_date || a.start_date <= today) &&
           (!a.end_date || a.end_date >= today)
       ) ||
-      worker.assignments.find((a) => a.is_current && !a.end_date) ||
+      worker.assignments.find(
+        (a) => a.is_current && (!a.start_date || a.start_date <= today) && !a.end_date
+      ) ||
       null
     )
   }, [worker])
@@ -371,20 +373,28 @@ const WorkerDetail = () => {
       setApplicableScaleId(view.applicableScaleId)
       setApplicableScaleName(view.applicableScaleName)
 
-      const requestedPositionId =
-        mappedWorker.assignments?.find((a) => a.is_current && !a.end_date)?.position_id ||
-        [...(mappedWorker.assignments || [])].sort((a, b) =>
-          a.start_date < b.start_date ? 1 : -1
-        )[0]?.position_id ||
-        null
-
+      const todayCuba = todayIsoInCuba()
       const localAssignments = mappedWorker.assignments || []
       const localCurrentAssignment =
-        localAssignments.find((a) => a.is_current && !a.end_date) || null
+        localAssignments.find(
+          (a) =>
+            a.is_current &&
+            (!a.start_date || a.start_date <= todayCuba) &&
+            (!a.end_date || a.end_date >= todayCuba)
+        ) ||
+        localAssignments.find(
+          (a) => a.is_current && (!a.start_date || a.start_date <= todayCuba) && !a.end_date
+        ) ||
+        null
       const localLastAssignment =
         localAssignments
           .slice()
           .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))[0] || null
+      const requestedPositionId =
+        localCurrentAssignment?.position_id ||
+        localLastAssignment?.position_id ||
+        null
+
       const localGroupIds = Array.from(
         new Set(
           [
@@ -398,10 +408,13 @@ const WorkerDetail = () => {
       const currentContractRow = (
         (mappedWorker.contracts || []) as { is_current?: boolean; start_date?: string | null }[]
       ).find((c) => c.is_current)
-      const todayCuba = todayIsoInCuba()
+      const futureEffectiveStart =
+        currentContractRow?.start_date?.slice(0, 10) ||
+        (!localCurrentAssignment ? localLastAssignment?.start_date?.slice(0, 10) : null) ||
+        null
       const salaryEffectiveDate =
-        currentContractRow?.start_date && currentContractRow.start_date.slice(0, 10) > todayCuba
-          ? currentContractRow.start_date.slice(0, 10)
+        futureEffectiveStart && futureEffectiveStart > todayCuba
+          ? futureEffectiveStart
           : todayCuba
 
       // Ejecutar en paralelo las consultas auxiliares del expediente para acelerar la carga
@@ -1140,6 +1153,14 @@ const WorkerDetail = () => {
                         Pendiente de incorporación ({formatIsoDateToDisplay(worker.hire_date)})
                       </SiteCorpStatusBadge>
                     )}
+                  {!isInactive &&
+                    !currentAssignment &&
+                    lastAssignment &&
+                    lastAssignment.start_date > todayIsoInCuba() && (
+                      <SiteCorpStatusBadge status="info">
+                        Vinculado (desde {formatIsoDateToDisplay(lastAssignment.start_date)})
+                      </SiteCorpStatusBadge>
+                    )}
                 </dd>
               </div>
               <div>
@@ -1187,7 +1208,13 @@ const WorkerDetail = () => {
                 <>
                   <div>
                     <dt className="text-xs text-muted-foreground">
-                      {isInactive ? "Último puesto" : "Puesto actual"}
+                      {isInactive
+                        ? "Último puesto"
+                        : !currentAssignment &&
+                            lastAssignment &&
+                            lastAssignment.start_date > todayIsoInCuba()
+                          ? `Puesto asignado (desde ${formatIsoDateToDisplay(lastAssignment.start_date)})`
+                          : "Puesto actual"}
                     </dt>
                     <dd className="text-sm font-medium text-ink">{position.name}</dd>
                     <dd className="text-xs text-muted-foreground">{position.code}</dd>

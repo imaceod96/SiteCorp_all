@@ -16,6 +16,7 @@ import {
 import {
   SST_EPP_DELIVERY_STATUS_LABELS,
   SST_INSPECTION_STATUS_LABELS,
+  formatAccidentSeverityLabel,
   type EntityAreaOption,
   type EntityJobOption,
   type EntitySstState,
@@ -587,7 +588,8 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                                 <span className="text-sitecorp-success">Conforme</span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 font-medium text-sitecorp-danger">
-                                  <AlertTriangle className="h-3 w-3" /> {f.severity}
+                                  <AlertTriangle className="h-3 w-3" />{" "}
+                                  {formatAccidentSeverityLabel(f.severity)}
                                 </span>
                               )}
                             </div>
@@ -769,11 +771,18 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
                       w.employmentStatus === "active" &&
                       (!w.hireDate || w.hireDate <= (delDate || todayIsoInCuba()))
                   )
-                  .map((w) => (
-                    <SelectItem key={w.id} value={w.id}>
-                      {w.fullName} ({w.jobName || "Sin cargo"})
-                    </SelectItem>
-                  ))}
+                  .map((w) => {
+                    const activeRoleLabel = w.positionName
+                      ? w.jobName && w.jobName !== w.positionName
+                        ? `${w.positionName} · ${w.jobName}`
+                        : w.positionName
+                      : w.jobName || "Sin puesto"
+                    return (
+                      <SelectItem key={w.id} value={w.id}>
+                        {w.fullName} ({activeRoleLabel})
+                      </SelectItem>
+                    )
+                  })}
               </SiteCorpSelect>
             </div>
 
@@ -781,15 +790,18 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
               <Label>Equipo de protección (EPP)</Label>
               <SiteCorpSelect value={delEppId} onValueChange={setDelEppId}>
                 <SelectItem value="__custom__">Especificar nombre de EPP manualmente</SelectItem>
-                {state.eppCatalog.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name} (Stock: {e.stock_quantity})
-                  </SelectItem>
-                ))}
+                {state.eppCatalog.map((e) => {
+                  const stock = Number(e.stock_quantity ?? 0)
+                  return (
+                    <SelectItem key={e.id} value={e.id} disabled={stock <= 0}>
+                      {e.name} (Stock: {stock}){stock <= 0 ? " — Sin stock" : ""}
+                    </SelectItem>
+                  )
+                })}
               </SiteCorpSelect>
               {delEppId &&
                 delEppId !== "__custom__" &&
-                (eppMap.get(delEppId)?.stock_quantity ?? 0) <= 0 && (
+                Number(eppMap.get(delEppId)?.stock_quantity ?? 0) <= 0 && (
                   <p className="text-xs font-medium text-sitecorp-danger">
                     No hay existencias de {eppMap.get(delEppId)?.name}. Stock disponible: 0
                   </p>
@@ -857,7 +869,15 @@ export const SstEppAndInspectionsSection: React.FC<SstEppAndInspectionsSectionPr
               >
                 Cancelar
               </SiteCorpButton>
-              <SiteCorpButton type="submit" disabled={!delWorkerId}>
+              <SiteCorpButton
+                type="submit"
+                disabled={
+                  !delWorkerId ||
+                  (!!delEppId &&
+                    delEppId !== "__custom__" &&
+                    Number(eppMap.get(delEppId)?.stock_quantity ?? 0) <= 0)
+                }
+              >
                 Registrar entrega
               </SiteCorpButton>
             </div>

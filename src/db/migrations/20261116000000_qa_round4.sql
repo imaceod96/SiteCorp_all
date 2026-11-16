@@ -2159,7 +2159,7 @@ FOR EACH ROW EXECUTE FUNCTION public.trg_fn_validate_sst_epp_delivery();
 
 CREATE OR REPLACE FUNCTION public.addendum_change_display(
   p_field_code text,
-  p_raw_value text,
+  p_value text,
   p_currency text DEFAULT 'CUP'
 )
 RETURNS text
@@ -2169,7 +2169,7 @@ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_code text := upper(btrim(COALESCE(p_field_code, '')));
-  v_val text := btrim(COALESCE(p_raw_value, ''));
+  v_val text := btrim(COALESCE(p_value, ''));
   v_curr text := COALESCE(NULLIF(btrim(COALESCE(p_currency, '')), ''), 'CUP');
   v_num numeric;
 BEGIN

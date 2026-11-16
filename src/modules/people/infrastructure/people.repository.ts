@@ -168,30 +168,69 @@ export async function fetchEntityActiveWorkerOptions(
   }))
 }
 
+export interface WorkerLinkageInfo {
+  /** Tiene asignación vigente hoy (`is_current = true` y fechas cubriendo hoy). */
+  linkedToday: boolean
+  /** Fecha de inicio más próxima de una asignación futura (`start_date > today`). */
+  scheduledStartDate: string | null
+}
+
 /**
- * Trabajadores con Assignment vigente (filtro Vinculado / Pendiente de vinculación).
- * No se muestra como columna: solo alimenta un criterio de filtro.
+ * Estado de vinculación a plantilla de un conjunto de trabajadores:
+ *   · `linkedToday`: Assignment vigente hoy.
+ *   · `scheduledStartDate`: asignación futura programada (p. ej. trabajador con
+ *     incorporación futura contratado en un puesto cuya vigencia empieza después de hoy).
  */
-export async function fetchWorkersLinkedToStaffing(workerIds: string[]): Promise<Set<string>> {
-  const linked = new Set<string>()
-  if (workerIds.length === 0) return linked
+export async function fetchWorkersLinkageDetails(
+  workerIds: string[]
+): Promise<Record<string, WorkerLinkageInfo>> {
+  const details: Record<string, WorkerLinkageInfo> = {}
+  if (workerIds.length === 0) return details
 
   const today = todayIsoInCuba()
   const { data, error } = await supabase
     .from("worker_position_assignments")
     .select("worker_id, is_current, start_date, end_date")
     .in("worker_id", workerIds)
-    .eq("is_current", true)
+    .order("start_date", { ascending: true })
   if (error) {
     console.warn("[people] no se pudo leer la vinculación a plantilla", error)
-    return linked
+    return details
   }
 
-  ;((data as { worker_id: string; start_date?: string | null; end_date?: string | null }[] | null) || []).forEach((row) => {
-    if ((!row.start_date || row.start_date <= today) && (!row.end_date || row.end_date >= today)) {
-      linked.add(row.worker_id)
+  for (const row of (data as {
+    worker_id: string
+    is_current: boolean
+    start_date?: string | null
+    end_date?: string | null
+  }[] | null) || []) {
+    const prev = details[row.worker_id] ?? { linkedToday: false, scheduledStartDate: null }
+    const start = row.start_date?.slice(0, 10) ?? null
+    const end = row.end_date?.slice(0, 10) ?? null
+
+    if (row.is_current && (!start || start <= today) && (!end || end >= today)) {
+      prev.linkedToday = true
+    } else if (start && start > today && (!end || end >= start)) {
+      if (!prev.scheduledStartDate || start < prev.scheduledStartDate) {
+        prev.scheduledStartDate = start
+      }
     }
-  })
+    details[row.worker_id] = prev
+  }
+  return details
+}
+
+/**
+ * Trabajadores con Assignment vigente hoy (compatibilidad con el filtro Vinculado).
+ */
+export async function fetchWorkersLinkedToStaffing(workerIds: string[]): Promise<Set<string>> {
+  const details = await fetchWorkersLinkageDetails(workerIds)
+  const linked = new Set<string>()
+  for (const [workerId, info] of Object.entries(details)) {
+    if (info.linkedToday) {
+      linked.add(workerId)
+    }
+  }
   return linked
 }
 

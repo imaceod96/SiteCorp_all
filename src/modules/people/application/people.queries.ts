@@ -15,9 +15,10 @@ import {
   fetchMaritalStatuses,
   fetchSkinColorsCatalog,
   fetchWorkersLastSeparation,
-  fetchWorkersLinkedToStaffing,
+  fetchWorkersLinkageDetails,
   fetchDeduplicatedGlobalAreas,
   fetchEntityActiveAreas,
+  type WorkerLinkageInfo,
 } from "../infrastructure/people.repository"
 import type {
   CatalogOption,
@@ -95,6 +96,8 @@ export interface EntityWorkersDirectoryView {
   workers: PersonDirectoryWorker[]
   /** Trabajadores con Assignment vigente (filtro Vinculado / Pendiente). */
   linkedWorkerIds: Set<string>
+  /** Detalle de vinculación vigente hoy o programada por fecha futura. */
+  linkageByWorker: Record<string, WorkerLinkageInfo>
   catalogs: {
     genders: CatalogRow[]
     maritalStatuses: CatalogRow[]
@@ -115,26 +118,34 @@ export async function loadEntityWorkersDirectory(
     canManage,
     workers: [],
     linkedWorkerIds: new Set<string>(),
+    linkageByWorker: {},
     catalogs: { genders: [], maritalStatuses: [], skinColors: [], educationLevels: [] },
   }
   if (!canView && !canManage) return empty
 
   const workers = await fetchEntityActiveWorkers(entityId)
 
-  const [genders, maritalStatuses, skinColors, educationLevels] = await Promise.all([
+  const [genders, maritalStatuses, skinColors, educationLevels, linkageByWorker] = await Promise.all([
     optional(fetchGenders),
     optional(fetchMaritalStatuses),
     optional(fetchSkinColorsCatalog),
     optional(fetchEducationLevels),
+    fetchWorkersLinkageDetails(workers.map((row) => row.id)),
   ])
 
-  const linkedWorkerIds = await fetchWorkersLinkedToStaffing(workers.map((row) => row.id))
+  const linkedWorkerIds = new Set<string>()
+  for (const [workerId, info] of Object.entries(linkageByWorker)) {
+    if (info.linkedToday) {
+      linkedWorkerIds.add(workerId)
+    }
+  }
 
   return {
     canView,
     canManage,
     workers,
     linkedWorkerIds,
+    linkageByWorker,
     catalogs: { genders, maritalStatuses, skinColors, educationLevels },
   }
 }

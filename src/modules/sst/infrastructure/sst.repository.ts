@@ -395,6 +395,20 @@ export async function fetchEntityOrganizationAreasForSst(
   )
 }
 
+export function selectCurrentSstAssignment<
+  T extends { is_current: boolean; start_date?: string | null; end_date?: string | null },
+>(assignments: T[] | null | undefined, today = todayIsoInCuba()): T | null {
+  if (!assignments || assignments.length === 0) return null
+  const validToday = assignments.filter(
+    (a) => (!a.start_date || a.start_date <= today) && (!a.end_date || a.end_date >= today)
+  )
+  return (
+    validToday.find((a) => a.is_current) ||
+    validToday.sort((a, b) => ((a.start_date ?? "") < (b.start_date ?? "") ? 1 : -1))[0] ||
+    null
+  )
+}
+
 export async function fetchEntityWorkersForSst(
   entityId: string
 ): Promise<EntityWorkerSstOption[]> {
@@ -477,16 +491,7 @@ export async function fetchEntityWorkersForSst(
         }[]
       | null) || []
   ).map((row) => {
-    const activeAssignment =
-      (row.assignments || []).find(
-        (a) =>
-          a.is_current &&
-          (!a.start_date || a.start_date <= today) &&
-          (!a.end_date || a.end_date >= today)
-      ) ||
-      (row.assignments || []).find((a) => a.is_current && !a.end_date) ||
-      (row.assignments || [])[0] ||
-      null
+    const activeAssignment = selectCurrentSstAssignment(row.assignments, today)
     const pos = activeAssignment ? firstItem(activeAssignment.position) : null
     const job = pos ? firstItem(pos.job) : null
     const area = job ? firstItem(job.area) : null

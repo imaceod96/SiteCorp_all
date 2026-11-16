@@ -1408,8 +1408,7 @@ $function$;
 
 -- Backfill: restaurar workers.hire_date en notificaciones CAMBIO_CARGO afectadas
 UPDATE public.training_initial_notifications tin
-SET hire_date = w.hire_date,
-    updated_at = now()
+SET hire_date = w.hire_date
 FROM public.workers w
 WHERE w.id = tin.worker_id
   AND tin.trigger_type = 'CAMBIO_CARGO'
@@ -1640,24 +1639,25 @@ BEGIN
     SELECT id INTO v_scale_id FROM public.salary_scales LIMIT 1;
     IF v_scale_id IS NOT NULL THEN
       BEGIN
-        INSERT INTO public.salary_groups (salary_scale_id, sequence_number, code, name)
-        VALUES (v_scale_id, 9992, 'QA_C1_TEST', 'Grupo II Prorrateo QA')
+        INSERT INTO public.salary_groups (id, salary_scale_id, sequence_number, description)
+        VALUES ('99999999-9999-9999-9999-999999999999'::uuid, v_scale_id, 9992, 'Grupo II Prorrateo QA')
+        ON CONFLICT (id) DO UPDATE SET description = EXCLUDED.description
         RETURNING id INTO v_tmp_group_id;
 
-        INSERT INTO public.salary_group_values (salary_group_id, amount, currency_code, effective_from, effective_to, is_active)
-        VALUES
-          (v_tmp_group_id, 5500.00, 'CUP', DATE '2026-11-01', DATE '2026-11-18', true),
-          (v_tmp_group_id, 5600.00, 'CUP', DATE '2026-11-19', NULL, true);
+        INSERT INTO public.salary_group_values (id, salary_group_id, amount, currency_code, effective_from, effective_to, is_active)
+        VALUES ('99999999-9999-9999-9999-999999999991'::uuid, v_tmp_group_id, 5540.00, 'CUP', DATE '2026-11-01', NULL, true)
+        ON CONFLICT (id) DO UPDATE SET amount = EXCLUDED.amount, effective_from = EXCLUDED.effective_from, effective_to = EXCLUDED.effective_to, is_active = EXCLUDED.is_active;
 
-        SELECT p.eff_scale_amount
-          INTO v_prorated
-        FROM public.prenomina_prorated_scale_salary(
+        SELECT (public.prenomina_prorated_scale_salary(
           v_tmp_group_id,
           DATE '2026-11-01',
           DATE '2026-11-30',
-          30,
-          8
-        ) p;
+          30
+        )).eff_scale_amount INTO v_prorated;
+
+        IF v_prorated IS NULL THEN
+          RAISE EXCEPTION 'QA-Round4b CHECK FAILED: prenomina_prorated_scale_salary devolvió NULL';
+        END IF;
 
         IF v_prorated IS DISTINCT FROM 5540.00 THEN
           RAISE EXCEPTION 'QA-Round4b CHECK FAILED: prorrateo C1 devolvió % en vez de 5540.00', v_prorated;
