@@ -189,6 +189,24 @@ export const SST_SEVERITY_LABELS: Record<SstSeverityLevel, string> = {
   EXTREMA: "Extrema",
 }
 
+export const ACCIDENT_SEVERITY_LABELS: Record<string, string> = {
+  LEVE: "Leve",
+  MODERADO: "Moderado",
+  MODERADA: "Moderada",
+  GRAVE: "Grave",
+  MORTAL: "Mortal",
+  CRITICO: "Crítico",
+}
+
+export function formatAccidentSeverityLabel(severity?: string | null): string {
+  if (!severity) return ""
+  return (
+    ACCIDENT_SEVERITY_LABELS[severity] ??
+    ACCIDENT_SEVERITY_LABELS[severity.toUpperCase()] ??
+    severity
+  )
+}
+
 export const SST_RISK_LEVEL_LABELS: Record<SstRiskLevel, string> = {
   BAJO: "Bajo / Trivial",
   MODERADO: "Moderado / Tolerable",

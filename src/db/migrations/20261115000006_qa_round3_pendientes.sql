@@ -2162,8 +2162,9 @@ WHERE ec.document_status = 'PENDIENTE'
       FROM public.worker_position_assignments wpa
       JOIN public.organization_positions op ON op.id = wpa.position_id
       JOIN public.organization_jobs oj ON oj.id = op.job_id
+      LEFT JOIN public.occupational_categories oc ON oc.id = oj.occupational_category_id
       WHERE wpa.id = ec.assignment_id
-        AND upper(btrim(COALESCE(oj.occupational_category, ''))) = 'CUADRO'
+        AND upper(btrim(COALESCE(oc.code, oc.name, ''))) = 'CUADRO'
     )
   );
 

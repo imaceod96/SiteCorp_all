@@ -16,6 +16,7 @@ import {
   personFullName,
   type CatalogRow,
   type PersonDirectoryWorker,
+  type WorkerLinkageInfo,
 } from "@/modules/people"
 import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import { ArrowLeft, Search, Users, UserCheck, AlertTriangle } from "lucide-react"
@@ -47,6 +48,7 @@ const EntityWorkers = () => {
   const [workers, setWorkers] = React.useState<PersonDirectoryWorker[]>([])
   const [catalogs, setCatalogs] = React.useState<Record<string, CatalogRow[]>>({})
   const [linkedWorkerIds, setLinkedWorkerIds] = React.useState<Set<string>>(new Set())
+  const [linkageByWorker, setLinkageByWorker] = React.useState<Record<string, WorkerLinkageInfo>>({})
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
@@ -79,6 +81,7 @@ const EntityWorkers = () => {
         education: view.catalogs.educationLevels,
       })
       setLinkedWorkerIds(view.linkedWorkerIds)
+      setLinkageByWorker(view.linkageByWorker ?? {})
     } catch (err) {
       console.error("Error loading workers directory:", err)
       setError(err instanceof Error ? err.message : "Error al cargar los trabajadores")
@@ -161,10 +164,15 @@ const EntityWorkers = () => {
           { value: "linked", label: "Vinculado a plantilla" },
           { value: "pending", label: "Pendiente de vinculación" },
         ],
-        getValue: (w: PersonDirectoryWorker) => (linkedWorkerIds.has(w.id) ? "linked" : "pending"),
+        getValue: (w: PersonDirectoryWorker) => {
+          const info = linkageByWorker[w.id]
+          if (linkedWorkerIds.has(w.id) || info?.linkedToday) return "linked"
+          if (w.hire_date && w.hire_date > todayIsoInCuba() && info?.scheduledStartDate) return "linked"
+          return "pending"
+        },
       },
     ],
-    [catalogs, linkedWorkerIds]
+    [catalogs, linkedWorkerIds, linkageByWorker]
   )
 
   const filters = useEntityFilters(workers, filterDefinitions)
@@ -288,16 +296,36 @@ const EntityWorkers = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {w.hire_date && w.hire_date > todayIsoInCuba() && (
-                        <SiteCorpStatusBadge status="info">
-                          Pendiente de incorporación ({formatIsoDateToDisplay(w.hire_date)})
-                        </SiteCorpStatusBadge>
-                      )}
-                      {linkedWorkerIds.has(w.id) ? (
-                        <SiteCorpStatusBadge status="neutral">Vinculado a plantilla</SiteCorpStatusBadge>
-                      ) : (
-                        <SiteCorpStatusBadge status="warning">Pendiente de vinculación</SiteCorpStatusBadge>
-                      )}
+                      {(() => {
+                        const today = todayIsoInCuba()
+                        const isFutureHire = !!w.hire_date && w.hire_date > today
+                        const linkage = linkageByWorker[w.id]
+                        const isLinkedToday = linkedWorkerIds.has(w.id) || linkage?.linkedToday
+                        const futureStart = linkage?.scheduledStartDate
+
+                        return (
+                          <>
+                            {isFutureHire && w.hire_date && (
+                              <SiteCorpStatusBadge status="info">
+                                Pendiente de incorporación ({formatIsoDateToDisplay(w.hire_date)})
+                              </SiteCorpStatusBadge>
+                            )}
+                            {isLinkedToday ? (
+                              <SiteCorpStatusBadge status="neutral">
+                                Vinculado a plantilla
+                              </SiteCorpStatusBadge>
+                            ) : isFutureHire && futureStart ? (
+                              <SiteCorpStatusBadge status="info">
+                                Vinculado (desde {formatIsoDateToDisplay(futureStart)})
+                              </SiteCorpStatusBadge>
+                            ) : (
+                              <SiteCorpStatusBadge status="warning">
+                                Pendiente de vinculación
+                              </SiteCorpStatusBadge>
+                            )}
+                          </>
+                        )
+                      })()}
                       {missing.length > 0 ? (
                         <span
                           title={`Pendiente completar: ${missing.join(", ")}`}

@@ -8,6 +8,7 @@ import { SelectItem } from "@/shared/components/ui/select"
 import { Label } from "@/shared/components/ui/label"
 import {
   SST_HEALTH_APTITUDE_LABELS,
+  formatAccidentSeverityLabel,
   type EntityAreaOption,
   type EntityJobOption,
   type EntitySstState,
@@ -363,7 +364,9 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
                     <p className="text-muted-foreground">
                       Trabajador: {item.affected_worker_name || "No especificado"} • Cargo:{" "}
                       {item.job_name_snapshot || "—"}
-                      {item.severity ? ` • Severidad: ${item.severity}` : ""}
+                      {item.severity
+                        ? ` • Severidad: ${formatAccidentSeverityLabel(item.severity)}`
+                        : ""}
                       {item.days_lost ? ` • Días perdidos: ${item.days_lost}` : ""}
                     </p>
                   </div>

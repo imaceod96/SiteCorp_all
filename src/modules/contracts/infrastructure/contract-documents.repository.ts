@@ -253,133 +253,101 @@ export const fetchPendingContractDocuments = async (
   if (!entityId) return []
 
   try {
-    const fromFn = supabase.from?.("document_generation_jobs")
-    if (fromFn && typeof fromFn.select === "function") {
-      const { data, error } = await fromFn
-        .select(
-          `id,
-           organization_entity_id,
-           worker_id,
-           kind,
-           source_id,
-           status,
-           attempts,
-           last_error,
-           worker_document_id,
-           updated_at,
-           worker:workers!document_generation_jobs_worker_id_fkey(id, first_name, first_surname, second_surname, identification)`
-        )
-        .eq("organization_entity_id", entityId)
-        .in("status", ["PENDIENTE", "GENERANDO", "ERROR", "SIN_PLANTILLA"])
-        .order("updated_at", { ascending: false })
+    const fromJobs = supabase.from?.("document_generation_jobs")
+    if (!fromJobs || typeof fromJobs.select !== "function") return []
 
-      if (!error && Array.isArray(data)) {
-        return (
-          data as unknown as {
-            id: string
-            organization_entity_id: string
-            worker_id: string | null
-            kind: DocumentGenerationJobKind
-            source_id: string
-            status: ContractDocumentStatus
-            attempts: number
-            last_error: string | null
-            worker_document_id: string | null
-            updated_at: string
-            worker: {
-              id: string
-              first_name: string
-              first_surname: string
-              second_surname: string | null
-              identification: string | null
-            } | null
-          }[]
-        ).map((row) => {
-          const w = row.worker
-          const fullName = w
-            ? [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
-            : "Trabajador"
-          return {
-            job_id: row.id,
-            kind: row.kind,
-            source_id: row.source_id,
-            contract_id: row.source_id,
-            worker_id: row.worker_id ?? w?.id ?? "",
-            worker_name: fullName,
-            worker_identification: w?.identification ?? null,
-            organization_entity_id: row.organization_entity_id,
-            contract_type_name: DOCUMENT_JOB_KIND_LABELS[row.kind] ?? row.kind,
-            start_date: null,
-            document_status: row.status,
-            document_error: row.last_error ?? null,
-            document_status_updated_at: row.updated_at,
-            attempts: row.attempts,
-            worker_document_id: row.worker_document_id,
-          }
-        })
-      }
-    }
-  } catch {
-    // Fallback a employment_contracts si la tabla aún no está disponible
-  }
-
-  try {
-    const fromFn = supabase.from?.("employment_contracts")
-    if (!fromFn || typeof fromFn.select !== "function") return []
-    const { data, error } = await fromFn
+    const { data, error } = await fromJobs
       .select(
-        `id,
-         worker_id,
-         organization_entity_id,
-         start_date,
-         document_status,
-         document_error,
-         document_status_updated_at,
-         contract_type:employment_contract_types!employment_contracts_contract_type_id_fkey(name),
-         worker:workers!employment_contracts_worker_id_fkey(first_name, first_surname, second_surname, identification)`
+        "id, organization_entity_id, worker_id, kind, source_id, status, attempts, last_error, worker_document_id, updated_at"
       )
       .eq("organization_entity_id", entityId)
-      .eq("is_current", true)
-      .in("document_status", ["PENDIENTE", "ERROR"])
-      .order("document_status_updated_at", { ascending: false })
+      .in("status", ["PENDIENTE", "GENERANDO", "ERROR", "SIN_PLANTILLA"])
+      .order("updated_at", { ascending: false })
 
-    if (error || !Array.isArray(data)) return []
+    if (error || !Array.isArray(data) || data.length === 0) return []
 
-    return (
-      data as unknown as {
+    type JobRow = {
+      id: string
+      organization_entity_id: string
+      worker_id: string | null
+      kind: DocumentGenerationJobKind
+      source_id: string
+      status: ContractDocumentStatus
+      attempts: number
+      last_error: string | null
+      worker_document_id: string | null
+      updated_at: string
+      worker?: {
         id: string
-        worker_id: string
-        organization_entity_id: string
-        start_date: string | null
-        document_status: ContractDocumentStatus
-        document_error: string | null
-        document_status_updated_at: string | null
-        contract_type: { name: string } | null
-        worker: {
-          first_name: string
-          first_surname: string
-          second_surname: string | null
-          identification: string | null
-        } | null
-      }[]
-    ).map((row) => {
-      const w = row.worker
+        first_name: string
+        first_surname: string
+        second_surname: string | null
+        identification: string | null
+      } | null
+    }
+
+    const jobs = data as unknown as JobRow[]
+    const missingWorkerIds = Array.from(
+      new Set(
+        jobs
+          .filter((row) => !row.worker && !!row.worker_id)
+          .map((row) => row.worker_id as string)
+      )
+    )
+
+    const workerMap = new Map<
+      string,
+      {
+        id: string
+        first_name: string
+        first_surname: string
+        second_surname: string | null
+        identification: string | null
+      }
+    >()
+
+    if (missingWorkerIds.length > 0) {
+      const fromWorkers = supabase.from?.("workers")
+      if (fromWorkers && typeof fromWorkers.select === "function") {
+        const { data: workersData } = await fromWorkers
+          .select("id, first_name, first_surname, second_surname, identification")
+          .in("id", missingWorkerIds)
+
+        if (Array.isArray(workersData)) {
+          for (const w of workersData as {
+            id: string
+            first_name: string
+            first_surname: string
+            second_surname: string | null
+            identification: string | null
+          }[]) {
+            workerMap.set(w.id, w)
+          }
+        }
+      }
+    }
+
+    return jobs.map((row) => {
+      const w = row.worker ?? (row.worker_id ? workerMap.get(row.worker_id) ?? null : null)
       const fullName = w
         ? [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
         : "Trabajador"
       return {
-        kind: "CONTRACT",
-        source_id: row.id,
-        contract_id: row.id,
-        worker_id: row.worker_id,
+        job_id: row.id,
+        kind: row.kind,
+        source_id: row.source_id,
+        contract_id: row.source_id,
+        worker_id: row.worker_id ?? w?.id ?? "",
         worker_name: fullName,
         worker_identification: w?.identification ?? null,
         organization_entity_id: row.organization_entity_id,
-        contract_type_name: row.contract_type?.name ?? "Contrato de trabajo",
-        start_date: row.start_date,
-        document_status: row.document_status,
-        document_error: row.document_error ?? null,
-        document_status_updated_at: row.document_status_updated_at ?? new Date().toISOString(),
+        contract_type_name: DOCUMENT_JOB_KIND_LABELS[row.kind] ?? row.kind,
+        start_date: null,
+        document_status: row.status,
+        document_error: row.last_error ?? null,
+        document_status_updated_at: row.updated_at,
+        attempts: row.attempts,
+        worker_document_id: row.worker_document_id,
       }
     })
   } catch {
