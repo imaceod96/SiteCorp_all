@@ -8,7 +8,6 @@ import {
   fetchWorkerLicenseIds,
   fetchWorkerTenurePayment,
 } from "../infrastructure/worker-expediente.repository"
-import { applyDueScheduledSeparationsRpc } from "../infrastructure/worker-transitions.repository"
 import { loadEntityPermissionSafe } from "@/modules/access-control"
 import type {
   CatalogOption,
@@ -50,7 +49,9 @@ export async function loadWorkerFormPermissions(
   entityId: string
 ): Promise<WorkerFormPermissions> {
   return {
-    canManageContractData: await loadEntityPermissionSafe(entityId, "contract_data.manage"),
+    canManageContractData: await loadEntityPermissionSafe(entityId, "contract_data.manage").catch(
+      () => false
+    ),
   }
 }
 
@@ -134,10 +135,6 @@ export async function loadWorkerExpedienteView(input: {
     applicableScaleInfo,
   ] = await Promise.all([
     (async () => {
-      await applyDueScheduledSeparationsRpc({
-        entityId: input.entityId,
-        workerId: input.workerId,
-      }).catch(() => 0)
       const fetchedWorker = await fetchWorkerExpediente(input.entityId, input.workerId)
       const licenseIds = await fetchWorkerLicenseIds(fetchedWorker.id)
       return { worker: fetchedWorker, licenseIds }

@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import type {
   EntityContractData,
   EntityContractDataInput,
@@ -72,7 +73,7 @@ export async function fetchRepresentativePositions(
   onDate?: string
 ): Promise<RepresentativePositionRow[]> {
   const effectiveDate =
-    onDate && onDate.trim() ? onDate.trim() : new Date().toISOString().slice(0, 10)
+    onDate && onDate.trim() ? onDate.trim() : todayIsoInCuba()
   const { data, error } = await supabase.rpc("resolve_entity_representatives", {
     p_entity_id: entityId,
     p_on_date: effectiveDate,

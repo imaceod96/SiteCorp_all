@@ -28,6 +28,36 @@ export async function selectPlatformUserRoles(userId: string): Promise<PlatformU
   return (data as PlatformUserRoleRow[] | null) || []
 }
 
+/** Roles de plataforma asignados a múltiples usuarios en una sola consulta. */
+export async function selectAllPlatformUserRoles(
+  userIds: string[]
+): Promise<Array<PlatformUserRoleRow & { user_id: string }>> {
+  if (userIds.length === 0) return []
+  const { data } = await supabase
+    .from("platform_user_roles")
+    .select("user_id, platform_role_id, platform_roles(name, is_system_role)")
+    .in("user_id", userIds)
+
+  return (data as Array<PlatformUserRoleRow & { user_id: string }> | null) || []
+}
+
+/** Correos de usuarios de plataforma obtenidos desde auth.users mediante RPC segura. */
+export async function selectPlatformUserEmails(): Promise<Record<string, string>> {
+  try {
+    const { data, error } = await supabase.rpc("list_platform_user_emails")
+    if (error || !Array.isArray(data)) return {}
+    const map: Record<string, string> = {}
+    for (const row of data as Array<{ user_id?: string; email?: string | null }>) {
+      if (row.user_id && row.email) {
+        map[row.user_id] = row.email
+      }
+    }
+    return map
+  } catch {
+    return {}
+  }
+}
+
 /** Catálogo de roles de plataforma ACTIVOS, por nombre. */
 export async function selectActivePlatformRoles(): Promise<PlatformRole[]> {
   const { data, error } = await supabase

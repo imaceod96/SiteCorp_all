@@ -18,9 +18,16 @@ interface SalaryGroupDialogProps {
   onOpenChange: (open: boolean) => void
   onSubmit: (salary: string, effectiveFrom: string) => Promise<void>
   isLoading?: boolean
+  minAmount?: number
 }
 
-export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: SalaryGroupDialogProps) => {
+export const SalaryGroupDialog = ({
+  open,
+  onOpenChange,
+  onSubmit,
+  isLoading,
+  minAmount,
+}: SalaryGroupDialogProps) => {
   const [salary, setSalary] = React.useState("")
   const [effectiveFrom, setEffectiveFrom] = React.useState("")
   const [salaryError, setSalaryError] = React.useState("")
@@ -31,6 +38,10 @@ export const SalaryGroupDialog = ({ open, onOpenChange, onSubmit, isLoading }: S
     const num = parseFloat(value)
     if (isNaN(num)) return "El salario debe ser un número válido"
     if (num <= 0) return "El salario debe ser mayor que 0"
+    if (num > 100000) return "El salario no puede superar 100,000 CUP"
+    if (minAmount && num < minAmount) {
+      return `El salario no puede ser inferior al del grupo anterior (${minAmount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} CUP)`
+    }
     return ""
   }
 

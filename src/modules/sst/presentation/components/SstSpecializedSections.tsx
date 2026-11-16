@@ -22,6 +22,7 @@ import {
   registerWorkerHealthAptitude,
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
+import { addDaysIsoInCuba, todayIsoInCuba } from "@/utils/cuba-date"
 import {
   HeartPulse,
   Flame,
@@ -60,7 +61,7 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   const [eventType, setEventType] = React.useState<
     "ACCIDENTE_CON_LESION" | "INCIDENTE_SIN_LESION" | "OTRO"
   >("INCIDENTE_SIN_LESION")
-  const [occurredAt, setOccurredAt] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [occurredAt, setOccurredAt] = React.useState(() => todayIsoInCuba())
   const [affectedWorkerId, setAffectedWorkerId] = React.useState("")
   const [accidentDesc, setAccidentDesc] = React.useState("")
   const [accidentCauses, setAccidentCauses] = React.useState("")
@@ -71,9 +72,9 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   const [healthType, setHealthType] = React.useState<
     "PRE_EMPLEO" | "PERIODICO" | "REINTEGRO" | "CAMBIO_CARGO"
   >("PERIODICO")
-  const [healthDate, setHealthDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [healthDate, setHealthDate] = React.useState(() => todayIsoInCuba())
   const [healthNextDate, setHealthNextDate] = React.useState(
-    () => new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10)
+    () => addDaysIsoInCuba(365)
   )
   const [healthStatus, setHealthStatus] = React.useState<SstHealthAptitudeStatus>("APTO")
   const [healthRestrictions, setHealthRestrictions] = React.useState("")
@@ -84,7 +85,7 @@ export const SstSpecializedSections: React.FC<SstSpecializedSectionsProps> = ({
   const [drillDate, setDrillDate] = React.useState("")
 
   const [commTitle, setCommTitle] = React.useState("")
-  const [commDate, setCommDate] = React.useState(() => new Date().toISOString().slice(0, 10))
+  const [commDate, setCommDate] = React.useState(() => todayIsoInCuba())
   const [commNotes, setCommNotes] = React.useState("")
 
   const [procCode, setProcCode] = React.useState("PTS-01")

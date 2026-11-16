@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { sanitizeFileName } from "@/lib/documents"
+import { todayIsoInCuba, formatIsoDateToDisplay } from "@/utils/cuba-date"
 import {
-  EXPEDIENTE_BUCKET,
   currentUserId,
   downloadExpedienteFile,
   removeExpedienteFiles,
@@ -23,7 +23,6 @@ import {
 } from "../domain/entities"
 
 export const TRAINING_CHANGED_EVENT = "sitecorp:training-changed"
-const STORAGE_KEY_PREFIX = "sitecorp_entity_training_v1_"
 const CACHE_TTL_MS = 15_000
 
 interface CachedEntityState {
@@ -62,50 +61,6 @@ function makeUuid(): string {
   })
 }
 
-function isMissingTableError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false
-  const err = error as { code?: string; message?: string; details?: string }
-  const code = String(err.code || "")
-  const msg = `${err.message || ""} ${err.details || ""}`.toLowerCase()
-  return (
-    code === "42P01" ||
-    code === "PGRST205" ||
-    code === "PGRST204" ||
-    msg.includes("does not exist") ||
-    msg.includes("schema cache") ||
-    msg.includes("could not find the table")
-  )
-}
-
-function localKey(entityId: string): string {
-  return `${STORAGE_KEY_PREFIX}${entityId}`
-}
-
-function remoteStatePath(entityId: string): string {
-  return `training/entity_${entityId}/state_v1.json`
-}
-
-function readLocalState(entityId: string): EntityTrainingState {
-  if (typeof window === "undefined") return emptyTrainingState()
-  try {
-    const raw = window.localStorage.getItem(localKey(entityId))
-    if (!raw) return emptyTrainingState()
-    const parsed = JSON.parse(raw) as Partial<EntityTrainingState>
-    return normalizeState(entityId, parsed)
-  } catch {
-    return emptyTrainingState()
-  }
-}
-
-function writeLocalState(entityId: string, state: EntityTrainingState): void {
-  if (typeof window === "undefined") return
-  try {
-    window.localStorage.setItem(localKey(entityId), JSON.stringify(state))
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
 function normalizeState(
   entityId: string,
   raw: Partial<EntityTrainingState> | null | undefined
@@ -133,36 +88,10 @@ function normalizeState(
   }
 }
 
-function mergeById<T extends { id: string; updated_at?: string; created_at?: string }>(
-  localArr: T[],
-  remoteArr: T[]
-): T[] {
-  const map = new Map<string, T>()
-  for (const item of remoteArr) {
-    map.set(item.id, item)
-  }
-  for (const item of localArr) {
-    const existing = map.get(item.id)
-    if (!existing) {
-      map.set(item.id, item)
-    } else {
-      const localTime = item.updated_at || item.created_at || ""
-      const remoteTime = existing.updated_at || existing.created_at || ""
-      if (localTime >= remoteTime) {
-        map.set(item.id, item)
-      }
-    }
-  }
-  return Array.from(map.values())
-}
-
 /**
- * Intenta consultar las tablas relacionales de Supabase para la entidad.
- * Devuelve `null` si las tablas aún no han sido creadas en el proyecto Supabase.
+ * Consulta las tablas relacionales de Supabase para la entidad.
  */
-async function tryFetchDatabaseTrainingState(
-  entityId: string
-): Promise<EntityTrainingState | null> {
+async function fetchDatabaseTrainingState(entityId: string): Promise<EntityTrainingState> {
   const [
     foldersRes,
     topicsRes,
@@ -223,9 +152,6 @@ async function tryFetchDatabaseTrainingState(
     notificationsRes.error
 
   if (firstError) {
-    if (isMissingTableError(firstError)) {
-      return null
-    }
     throw firstError
   }
 
@@ -247,15 +173,13 @@ async function tryFetchDatabaseTrainingState(
 function updateCachedState(entityId: string, state: EntityTrainingState): void {
   const clean = normalizeState(entityId, state)
   memoryCache.set(entityId, { fetchedAt: Date.now(), state: clean })
-  writeLocalState(entityId, clean)
   notifyTrainingChanged(entityId)
 }
 
 /**
- * Carga el estado de capacitación de la entidad desde las tablas relacionales de Supabase
+ * Carga el estado de capacitación de la entidad exclusivamente desde las tablas relacionales de Supabase
  * (`training_folders`, `training_topics`, `training_topic_documents`, `training_sessions`,
- * `worker_training_records`, `training_initial_notifications`), con respaldo automático en
- * Storage/local si la migración SQL aún no ha sido ejecutada.
+ * `worker_training_records`, `training_initial_notifications`).
  */
 export async function loadEntityTrainingState(
   entityId: string,
@@ -275,77 +199,18 @@ export async function loadEntityTrainingState(
 
   const promise = (async () => {
     try {
-      const dbState = await tryFetchDatabaseTrainingState(entityId)
-      if (dbState !== null) {
-        memoryCache.set(entityId, { fetchedAt: Date.now(), state: dbState })
-        writeLocalState(entityId, dbState)
-        inflightLoads.delete(entityId)
-        return dbState
-      }
-    } catch {
-      // Si hay un error de red puntual, continúa con el respaldo
+      const dbState = await fetchDatabaseTrainingState(entityId)
+      memoryCache.set(entityId, { fetchedAt: Date.now(), state: dbState })
+      inflightLoads.delete(entityId)
+      return dbState
+    } catch (err) {
+      inflightLoads.delete(entityId)
+      throw err
     }
-
-    const localState = readLocalState(entityId)
-    let merged = localState
-
-    try {
-      const { data, error } = await supabase.storage
-        .from(EXPEDIENTE_BUCKET)
-        .download(remoteStatePath(entityId))
-
-      if (!error && data) {
-        const text = await data.text()
-        const remoteParsed = JSON.parse(text) as Partial<EntityTrainingState>
-        const remoteState = normalizeState(entityId, remoteParsed)
-
-        merged = {
-          folders: mergeById(localState.folders, remoteState.folders),
-          topics: mergeById(localState.topics, remoteState.topics),
-          documents: mergeById(localState.documents, remoteState.documents),
-          sessions: mergeById(localState.sessions, remoteState.sessions),
-          workerRecords: mergeById(localState.workerRecords, remoteState.workerRecords),
-          notifications: mergeById(localState.notifications, remoteState.notifications),
-        }
-        writeLocalState(entityId, merged)
-      }
-    } catch {
-      // Si el archivo aún no existe en el bucket o no hay red, se usa el estado local
-    }
-
-    memoryCache.set(entityId, { fetchedAt: Date.now(), state: merged })
-    inflightLoads.delete(entityId)
-    return merged
   })()
 
   inflightLoads.set(entityId, promise)
   return promise
-}
-
-async function persistFallbackTrainingState(
-  entityId: string,
-  state: EntityTrainingState
-): Promise<void> {
-  const cleanState = normalizeState(entityId, state)
-  updateCachedState(entityId, cleanState)
-
-  try {
-    const remotePayload: EntityTrainingState = {
-      ...cleanState,
-      documents: cleanState.documents.map((doc) => ({
-        ...doc,
-        data_url: doc.storage_path ? null : doc.data_url,
-      })),
-    }
-    const blob = new Blob([JSON.stringify(remotePayload)], { type: "application/json" })
-    await supabase.storage.from(EXPEDIENTE_BUCKET).upload(remoteStatePath(entityId), blob, {
-      cacheControl: "0",
-      upsert: true,
-      contentType: "application/json",
-    })
-  } catch {
-    // El respaldo local ya quedó guardado y notificado
-  }
 }
 
 /**
@@ -504,25 +369,16 @@ export async function incorporateEntityAreaFolder(input: {
     .select("id, organization_entity_id, area_id, area_name_snapshot, description, created_at")
     .single()
 
-  if (!error && data) {
-    const saved = data as TrainingFolder
-    updateCachedState(input.entityId, {
-      ...state,
-      folders: [...state.folders.filter((f) => f.id !== saved.id), saved],
-    })
-    return saved
-  }
-
-  if (error && !isMissingTableError(error)) {
+  if (error) {
     throw error
   }
 
-  const nextState: EntityTrainingState = {
+  const saved = data as TrainingFolder
+  updateCachedState(input.entityId, {
     ...state,
-    folders: [...state.folders, folder],
-  }
-  await persistFallbackTrainingState(input.entityId, nextState)
-  return folder
+    folders: [...state.folders.filter((f) => f.id !== saved.id), saved],
+  })
+  return saved
 }
 
 /**
@@ -551,25 +407,19 @@ export async function removeEntityAreaFolder(entityId: string, folderId: string)
     .eq("id", folderId)
     .eq("organization_entity_id", entityId)
 
+  if (error) {
+    throw error
+  }
+
   const nextState: EntityTrainingState = {
     ...state,
     folders: state.folders.filter((f) => f.id !== folderId),
     topics: state.topics.filter((t) => t.folder_id !== folderId),
     documents: state.documents.filter((d) => !topicIds.has(d.topic_id)),
     sessions: state.sessions.filter((s) => s.folder_id !== folderId),
-    // `workerRecords` y `notifications` se conservan siempre
   }
 
-  if (!error) {
-    updateCachedState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) {
-    throw error
-  }
-
-  await persistFallbackTrainingState(entityId, nextState)
+  updateCachedState(entityId, nextState)
 }
 
 export async function createTrainingTopic(input: {
@@ -619,25 +469,16 @@ export async function createTrainingTopic(input: {
     )
     .single()
 
-  if (!error && data) {
-    const saved = data as TrainingTopic
-    updateCachedState(input.entityId, {
-      ...state,
-      topics: [...state.topics, saved],
-    })
-    return saved
-  }
-
-  if (error && !isMissingTableError(error)) {
+  if (error) {
     throw error
   }
 
-  const nextState: EntityTrainingState = {
+  const saved = data as TrainingTopic
+  updateCachedState(input.entityId, {
     ...state,
-    topics: [...state.topics, topic],
-  }
-  await persistFallbackTrainingState(input.entityId, nextState)
-  return topic
+    topics: [...state.topics, saved],
+  })
+  return saved
 }
 
 export async function updateTrainingTopic(input: {
@@ -684,26 +525,18 @@ export async function updateTrainingTopic(input: {
     )
     .single()
 
-  const nextTopics = [...state.topics]
-  nextTopics[index] = (!error && data ? (data as TrainingTopic) : updated)
-
-  if (!error) {
-    updateCachedState(input.entityId, {
-      ...state,
-      topics: nextTopics,
-    })
-    return nextTopics[index]
-  }
-
-  if (!isMissingTableError(error)) {
+  if (error) {
     throw error
   }
 
-  await persistFallbackTrainingState(input.entityId, {
+  const nextTopics = [...state.topics]
+  nextTopics[index] = (data as TrainingTopic) || updated
+
+  updateCachedState(input.entityId, {
     ...state,
     topics: nextTopics,
   })
-  return updated
+  return nextTopics[index]
 }
 
 export async function deleteTrainingTopic(entityId: string, topicId: string): Promise<void> {
@@ -725,24 +558,18 @@ export async function deleteTrainingTopic(entityId: string, topicId: string): Pr
     .eq("id", topicId)
     .eq("organization_entity_id", entityId)
 
+  if (error) {
+    throw error
+  }
+
   const nextState: EntityTrainingState = {
     ...state,
     topics: state.topics.filter((t) => t.id !== topicId),
     documents: state.documents.filter((d) => d.topic_id !== topicId),
     sessions: state.sessions.filter((s) => s.topic_id !== topicId),
-    // El historial individual de los trabajadores (`workerRecords`) nunca se borra
   }
 
-  if (!error) {
-    updateCachedState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) {
-    throw error
-  }
-
-  await persistFallbackTrainingState(entityId, nextState)
+  updateCachedState(entityId, nextState)
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -817,25 +644,16 @@ export async function uploadTrainingTopicDocument(input: {
     )
     .single()
 
-  if (!error && data) {
-    const saved = data as TrainingTopicDocument
-    updateCachedState(input.entityId, {
-      ...state,
-      documents: [saved, ...state.documents],
-    })
-    return saved
-  }
-
-  if (error && !isMissingTableError(error)) {
+  if (error) {
     throw error
   }
 
-  await persistFallbackTrainingState(input.entityId, {
+  const saved = data as TrainingTopicDocument
+  updateCachedState(input.entityId, {
     ...state,
-    documents: [docRecord, ...state.documents],
+    documents: [saved, ...state.documents],
   })
-
-  return docRecord
+  return saved
 }
 
 export async function downloadTrainingTopicDocument(doc: TrainingTopicDocument): Promise<Blob> {
@@ -877,21 +695,16 @@ export async function deleteTrainingTopicDocument(
     .eq("id", documentId)
     .eq("organization_entity_id", entityId)
 
+  if (error) {
+    throw error
+  }
+
   const nextState: EntityTrainingState = {
     ...state,
     documents: state.documents.filter((d) => d.id !== documentId),
   }
 
-  if (!error) {
-    updateCachedState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) {
-    throw error
-  }
-
-  await persistFallbackTrainingState(entityId, nextState)
+  updateCachedState(entityId, nextState)
 }
 
 /**
@@ -949,40 +762,27 @@ export async function scheduleTrainingSession(input: {
     )
     .single()
 
-  if (!error && data) {
-    const saved = {
-      ...(data as TrainingSession),
-      participant_worker_ids: Array.isArray((data as TrainingSession).participant_worker_ids)
-        ? (data as TrainingSession).participant_worker_ids
-        : [],
-    }
-    updateCachedState(input.entityId, {
-      ...state,
-      sessions: [...state.sessions, saved],
-    })
-    return saved
-  }
-
-  if (error && !isMissingTableError(error)) {
+  if (error) {
     throw error
   }
 
-  await persistFallbackTrainingState(input.entityId, {
+  const saved = {
+    ...(data as TrainingSession),
+    participant_worker_ids: Array.isArray((data as TrainingSession).participant_worker_ids)
+      ? (data as TrainingSession).participant_worker_ids
+      : [],
+  }
+  updateCachedState(input.entityId, {
     ...state,
-    sessions: [...state.sessions, session],
+    sessions: [...state.sessions, saved],
   })
-
-  return session
+  return saved
 }
 
 /**
  * Actualiza el estado de una sesión («Programada», «Realizada», «No realizada») y,
  * cuando se marca como «Realizada», registra automáticamente a los trabajadores
  * participantes con una capacitación «Recibida» independiente en su Información adicional.
- *
- * El mismo trabajador puede recibir el mismo tema varias veces en distintas sesiones:
- * cada sesión genera su propio registro por `session_id + worker_id`, sin sobrescribir
- * las sesiones anteriores.
  */
 export async function saveTrainingSessionOutcome(input: {
   entityId: string
@@ -1012,6 +812,13 @@ export async function saveTrainingSessionOutcome(input: {
 
   const now = new Date().toISOString()
   const effectiveDate = input.scheduledDate || currentSession.scheduled_date
+  const todayIso = todayIsoInCuba()
+
+  if ((input.status === "REALIZADA" || input.status === "NO_REALIZADA") && effectiveDate > todayIso) {
+    throw new Error(
+      `No se puede marcar como ${input.status === "REALIZADA" ? "realizada" : "no realizada"} una sesión con fecha programada futura (${formatIsoDateToDisplay(effectiveDate)}). Actualice primero la fecha de la sesión a hoy o una fecha pasada.`
+    )
+  }
 
   if (input.status === "REALIZADA" && uniqueWorkerIds.length > 0) {
     const { data: workerRows } = await supabase
@@ -1029,7 +836,7 @@ export async function saveTrainingSessionOutcome(input: {
       if (w.hire_date && effectiveDate < w.hire_date) {
         const wName = [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
         throw new Error(
-          `La fecha de la sesión (${effectiveDate}) no puede ser anterior a la fecha de alta del trabajador ${wName} (${w.hire_date}).`
+          `La fecha de la sesión (${formatIsoDateToDisplay(effectiveDate)}) no puede ser anterior a la fecha de alta del trabajador ${wName} (${formatIsoDateToDisplay(w.hire_date)}).`
         )
       }
     }
@@ -1096,54 +903,43 @@ export async function saveTrainingSessionOutcome(input: {
     .eq("id", currentSession.id)
     .eq("organization_entity_id", input.entityId)
 
-  if (!sessionDbError) {
-    // Sincronizar registros de esta sesión en `worker_training_records` sin alterar otras sesiones
-    await supabase
-      .from("worker_training_records")
-      .delete()
-      .eq("organization_entity_id", input.entityId)
-      .eq("session_id", currentSession.id)
-
-    if (updatedSessionRecords.length > 0) {
-      const { error: recErr } = await supabase.from("worker_training_records").insert(
-        updatedSessionRecords.map((r) => ({
-          id: r.id,
-          organization_entity_id: r.organization_entity_id,
-          worker_id: r.worker_id,
-          session_id: r.session_id,
-          topic_id: r.topic_id,
-          topic_title_snapshot: r.topic_title_snapshot,
-          area_id_snapshot: r.area_id_snapshot,
-          area_name_snapshot: r.area_name_snapshot,
-          received_date: r.received_date,
-          status: r.status,
-          kind: r.kind,
-          notes: r.notes,
-        }))
-      )
-      if (recErr && !isMissingTableError(recErr)) {
-        throw recErr
-      }
-    }
-
-    updateCachedState(input.entityId, {
-      ...state,
-      sessions: nextSessions,
-      workerRecords: [...otherRecords, ...updatedSessionRecords],
-    })
-    return updatedSession
-  }
-
-  if (!isMissingTableError(sessionDbError)) {
+  if (sessionDbError) {
     throw sessionDbError
   }
 
-  await persistFallbackTrainingState(input.entityId, {
+  await supabase
+    .from("worker_training_records")
+    .delete()
+    .eq("organization_entity_id", input.entityId)
+    .eq("session_id", currentSession.id)
+
+  if (updatedSessionRecords.length > 0) {
+    const { error: recErr } = await supabase.from("worker_training_records").insert(
+      updatedSessionRecords.map((r) => ({
+        id: r.id,
+        organization_entity_id: r.organization_entity_id,
+        worker_id: r.worker_id,
+        session_id: r.session_id,
+        topic_id: r.topic_id,
+        topic_title_snapshot: r.topic_title_snapshot,
+        area_id_snapshot: r.area_id_snapshot,
+        area_name_snapshot: r.area_name_snapshot,
+        received_date: r.received_date,
+        status: r.status,
+        kind: r.kind,
+        notes: r.notes,
+      }))
+    )
+    if (recErr) {
+      throw recErr
+    }
+  }
+
+  updateCachedState(input.entityId, {
     ...state,
     sessions: nextSessions,
     workerRecords: [...otherRecords, ...updatedSessionRecords],
   })
-
   return updatedSession
 }
 
@@ -1156,28 +952,20 @@ export async function deleteTrainingSession(entityId: string, sessionId: string)
     .eq("id", sessionId)
     .eq("organization_entity_id", entityId)
 
-  const nextState: EntityTrainingState = {
-    ...state,
-    sessions: state.sessions.filter((s) => s.id !== sessionId),
-    // Conservamos `workerRecords` históricos de sesiones ya recibidas
-  }
-
-  if (!error) {
-    updateCachedState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) {
+  if (error) {
     throw error
   }
 
-  await persistFallbackTrainingState(entityId, nextState)
+  const nextState: EntityTrainingState = {
+    ...state,
+    sessions: state.sessions.filter((s) => s.id !== sessionId),
+  }
+
+  updateCachedState(entityId, nextState)
 }
 
 /**
- * Registra una capacitación en la pestaña «Información adicional» de la ficha del trabajador
- * (como capacitación inicial del nuevo ingreso o capacitación recibida) y, si tenía una
- * notificación pendiente de capacitación inicial, la marca como completada.
+ * Registra una capacitación en la pestaña «Información adicional» de la ficha del trabajador.
  */
 export async function registerWorkerInitialTraining(input: {
   entityId: string
@@ -1190,6 +978,29 @@ export async function registerWorkerInitialTraining(input: {
   notes?: string | null
   notificationId?: string | null
 }): Promise<WorkerTrainingRecord> {
+  const now = new Date().toISOString()
+  const todayIso = todayIsoInCuba()
+  const resolvedDate = input.receivedDate || todayIso
+
+  if (resolvedDate > todayIso) {
+    throw new Error(
+      `No se puede registrar como recibida una capacitación con fecha futura (${formatIsoDateToDisplay(resolvedDate)}).`
+    )
+  }
+
+  const { data: workerHireRow } = await supabase
+    .from("workers")
+    .select("hire_date")
+    .eq("id", input.workerId)
+    .maybeSingle()
+
+  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
+  if (workerHireDate && resolvedDate < workerHireDate) {
+    throw new Error(
+      `La fecha de recepción (${formatIsoDateToDisplay(resolvedDate)}) no puede ser anterior a la fecha de alta del trabajador (${workerHireDate}) — ${formatIsoDateToDisplay(workerHireDate)}.`
+    )
+  }
+
   const state = await loadEntityTrainingState(input.entityId)
   const topic = input.topicId ? state.topics.find((t) => t.id === input.topicId) : null
   const folder = topic ? state.folders.find((f) => f.id === topic.folder_id) : null
@@ -1201,22 +1012,6 @@ export async function registerWorkerInitialTraining(input: {
   ).trim()
   if (!resolvedTitle) {
     throw new Error("Indica el tema de la capacitación recibida.")
-  }
-
-  const now = new Date().toISOString()
-  const resolvedDate = input.receivedDate || now.slice(0, 10)
-
-  const { data: workerHireRow } = await supabase
-    .from("workers")
-    .select("hire_date")
-    .eq("id", input.workerId)
-    .maybeSingle()
-
-  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
-  if (workerHireDate && resolvedDate < workerHireDate) {
-    throw new Error(
-      `La fecha de recepción (${resolvedDate}) no puede ser anterior a la fecha de alta del trabajador (${workerHireDate}).`
-    )
   }
 
   const record: WorkerTrainingRecord = {
@@ -1271,45 +1066,33 @@ export async function registerWorkerInitialTraining(input: {
     )
     .single()
 
-  if (!recError && insertedRec) {
-    await supabase
-      .from("training_initial_notifications")
-      .update({
-        status: "COMPLETADA",
-        completed_at: now,
-        completed_record_id: record.id,
-      })
-      .eq("organization_entity_id", input.entityId)
-      .eq("worker_id", input.workerId)
-      .eq("status", "PENDIENTE")
-
-    const savedRecord = insertedRec as WorkerTrainingRecord
-    updateCachedState(input.entityId, {
-      ...state,
-      workerRecords: [savedRecord, ...state.workerRecords],
-      notifications: nextNotifications,
-    })
-    return savedRecord
-  }
-
-  if (recError && !isMissingTableError(recError)) {
+  if (recError) {
     throw recError
   }
 
-  await persistFallbackTrainingState(input.entityId, {
+  await supabase
+    .from("training_initial_notifications")
+    .update({
+      status: "COMPLETADA",
+      completed_at: now,
+      completed_record_id: record.id,
+    })
+    .eq("organization_entity_id", input.entityId)
+    .eq("worker_id", input.workerId)
+    .eq("status", "PENDIENTE")
+
+  const savedRecord = (insertedRec as WorkerTrainingRecord) || record
+  updateCachedState(input.entityId, {
     ...state,
-    workerRecords: [record, ...state.workerRecords],
+    workerRecords: [savedRecord, ...state.workerRecords],
     notifications: nextNotifications,
   })
-
-  return record
+  return savedRecord
 }
 
 /**
  * Genera una notificación de capacitación inicial pendiente cuando se completa la
  * contratación de un candidato o alta de un nuevo trabajador dentro de una entidad.
- *
- * Evita notificaciones duplicadas por una misma contratación mediante `hire_key`.
  */
 export async function ensureHiringTrainingNotification(input: {
   workerId: string | null | undefined
@@ -1378,8 +1161,7 @@ export async function ensureHiringTrainingNotification(input: {
       }
     }
 
-    const effectiveHireDate =
-      input.hireDate || workerRow.hire_date || new Date().toISOString().slice(0, 10)
+    const effectiveHireDate = input.hireDate || workerRow.hire_date || todayIsoInCuba()
     const hireKey = `${entityId}:${workerRow.id}:${effectiveHireDate}:hire`
 
     const state = await loadEntityTrainingState(entityId, { forceRefresh: true })
@@ -1444,24 +1226,17 @@ export async function ensureHiringTrainingNotification(input: {
       )
       .maybeSingle()
 
-    if (!error) {
-      const saved = (data as InitialTrainingNotification | null) || notification
-      updateCachedState(entityId, {
-        ...state,
-        notifications: [saved, ...state.notifications.filter((n) => n.id !== saved.id)],
-      })
-      return
-    }
-
-    if (!isMissingTableError(error)) {
+    if (error) {
       throw error
     }
 
-    await persistFallbackTrainingState(entityId, {
+    const saved = (data as InitialTrainingNotification | null) || notification
+    updateCachedState(entityId, {
       ...state,
-      notifications: [notification, ...state.notifications],
+      notifications: [saved, ...state.notifications.filter((n) => n.id !== saved.id)],
     })
   } catch (err) {
     console.warn("[training] no se pudo generar la notificación de capacitación inicial", err)
   }
 }
+

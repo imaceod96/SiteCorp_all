@@ -14,6 +14,7 @@ import { Label } from "@/shared/components/ui/label"
 import { cn } from "@/lib/utils"
 import { showSuccess } from "@/utils/toast"
 import { extractErrorMessage } from "@/utils/error-message"
+import { formatIsoDateToDisplay, toRomanNumeral, todayIsoInCuba } from "@/utils/cuba-date"
 import { ensureEventDocumentation } from "@/modules/document-generation"
 import {
   applySalaryChange,
@@ -45,7 +46,7 @@ interface ReviewSalaryChangeDialogProps {
   onApplied: (result: SalaryChangeApplyResult) => void | Promise<void>
 }
 
-const todayIso = () => new Date().toISOString().split("T")[0]
+const todayIso = () => todayIsoInCuba()
 
 const money = (amount: number | null | undefined, currency: string | null | undefined) =>
   amount === null || amount === undefined
@@ -354,7 +355,7 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
           <SiteCorpAlert type="info">
             <span className="flex items-start gap-2">
               <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" />
-              El nuevo importe entrará en vigor el {preview.new_effective_date}. Hasta esa fecha el
+              El nuevo importe entrará en vigor el {formatIsoDateToDisplay(preview.new_effective_date)}. Hasta esa fecha el
               salario vigente seguirá siendo el anterior.
             </span>
           </SiteCorpAlert>
@@ -374,7 +375,7 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
         {conflictingValue && (
           <SiteCorpAlert type="danger">
             Ya existe un importe registrado para este grupo con la fecha de vigencia{" "}
-            {preview?.new_effective_date}. Seleccione otra fecha efectiva.
+            {formatIsoDateToDisplay(preview?.new_effective_date)}. Seleccione otra fecha efectiva.
           </SiteCorpAlert>
         )}
 
@@ -445,12 +446,15 @@ const ReviewSalaryChangeDialog: React.FC<ReviewSalaryChangeDialogProps> = ({
                           <span>Cargo: {row.job_name || "—"}</span>
                           <span>Puesto: {row.position_name || "—"}</span>
                           <span>
-                            Grupo: {row.group_sequence_number ?? "—"}
+                            Grupo:{" "}
+                            {row.group_sequence_number != null
+                              ? toRomanNumeral(row.group_sequence_number)
+                              : "—"}
                           </span>
                           <span>
                             Contrato vigente:{" "}
                             {row.contract_type_name
-                              ? `${row.contract_type_name} (${row.contract_start_date})`
+                              ? `${row.contract_type_name} (${formatIsoDateToDisplay(row.contract_start_date)})`
                               : "Sin contrato vigente"}
                           </span>
                         </div>

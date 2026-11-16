@@ -42,6 +42,7 @@ import {
   updateSstRiskStatus,
 } from "../../application/sst.service"
 import { useToast } from "@/shared/hooks/use-toast"
+import { addDaysIsoInCuba, todayIsoInCuba } from "@/utils/cuba-date"
 import { AlertTriangle, ShieldCheck, Plus, CheckCircle2, ClipboardCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -99,7 +100,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
   const [actionResponsibleId, setActionResponsibleId] = React.useState<string>("")
   const [actionPriority, setActionPriority] = React.useState<SstActionPriority>("MEDIA")
   const [actionDueDate, setActionDueDate] = React.useState<string>(
-    () => new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10)
+    () => addDaysIsoInCuba(14)
   )
   const [actionSubmitting, setActionSubmitting] = React.useState(false)
 
@@ -504,7 +505,7 @@ export const SstRiskAndPreventionSection: React.FC<SstRiskAndPreventionSectionPr
                 </thead>
                 <tbody className="divide-y divide-border bg-white">
                   {state.preventiveActions.map((act) => {
-                    const today = new Date().toISOString().slice(0, 10)
+                    const today = todayIsoInCuba()
                     const isOverdue =
                       act.status !== "COMPLETADA" &&
                       act.status !== "CANCELADA" &&

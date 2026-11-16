@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import { sanitizeFileName } from "@/lib/documents"
+import { todayIsoInCuba, formatIsoDateToDisplay } from "@/utils/cuba-date"
 import {
-  EXPEDIENTE_BUCKET,
   currentUserId,
   downloadExpedienteFile,
   removeExpedienteFiles,
@@ -48,7 +48,6 @@ import {
 } from "../domain/entities"
 
 export const SST_CHANGED_EVENT = "sitecorp:sst-changed"
-const STORAGE_KEY_PREFIX = "sitecorp_entity_sst_v1_"
 const CACHE_TTL_MS = 12_000
 
 interface CachedEntitySstState {
@@ -99,29 +98,6 @@ function makeUuid(): string {
   })
 }
 
-function isMissingTableError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false
-  const err = error as { code?: string; message?: string; details?: string }
-  const code = String(err.code || "")
-  const msg = `${err.message || ""} ${err.details || ""}`.toLowerCase()
-  return (
-    code === "42P01" ||
-    code === "PGRST205" ||
-    code === "PGRST204" ||
-    msg.includes("does not exist") ||
-    msg.includes("schema cache") ||
-    msg.includes("could not find the table")
-  )
-}
-
-function localKey(entityId: string): string {
-  return `${STORAGE_KEY_PREFIX}${entityId}`
-}
-
-function remoteStatePath(entityId: string): string {
-  return `sst/entity_${entityId}/state_v1.json`
-}
-
 function normalizeSstState(
   entityId: string,
   raw: Partial<EntitySstState> | null | undefined
@@ -161,57 +137,13 @@ function normalizeSstState(
   }
 }
 
-function readLocalState(entityId: string): EntitySstState {
-  if (typeof window === "undefined") return emptySstState()
-  try {
-    const raw = window.localStorage.getItem(localKey(entityId))
-    if (!raw) return emptySstState()
-    return normalizeSstState(entityId, JSON.parse(raw) as Partial<EntitySstState>)
-  } catch {
-    return emptySstState()
-  }
-}
-
-function writeLocalState(entityId: string, state: EntitySstState): void {
-  if (typeof window === "undefined") return
-  try {
-    window.localStorage.setItem(localKey(entityId), JSON.stringify(state))
-  } catch {
-    // Ignore storage quota errors
-  }
-}
-
 function updateCachedSstState(entityId: string, state: EntitySstState): void {
   const clean = normalizeSstState(entityId, state)
   memoryCache.set(entityId, { fetchedAt: Date.now(), state: clean })
-  writeLocalState(entityId, clean)
   notifySstChanged(entityId)
 }
 
-async function persistFallbackSstState(entityId: string, state: EntitySstState): Promise<void> {
-  const clean = normalizeSstState(entityId, state)
-  updateCachedSstState(entityId, clean)
-
-  try {
-    const remotePayload: EntitySstState = {
-      ...clean,
-      documents: clean.documents.map((doc) => ({
-        ...doc,
-        data_url: doc.storage_path ? null : doc.data_url,
-      })),
-    }
-    const blob = new Blob([JSON.stringify(remotePayload)], { type: "application/json" })
-    await supabase.storage.from(EXPEDIENTE_BUCKET).upload(remoteStatePath(entityId), blob, {
-      cacheControl: "0",
-      upsert: true,
-      contentType: "application/json",
-    })
-  } catch {
-    // Local fallback already persisted
-  }
-}
-
-async function tryFetchDatabaseSstState(entityId: string): Promise<EntitySstState | null> {
+async function fetchDatabaseSstState(entityId: string): Promise<EntitySstState> {
   const [
     foldersRes,
     topicsRes,
@@ -345,9 +277,6 @@ async function tryFetchDatabaseSstState(entityId: string): Promise<EntitySstStat
     proceduresRes.error
 
   if (firstError) {
-    if (isMissingTableError(firstError)) {
-      return null
-    }
     throw firstError
   }
 
@@ -391,37 +320,14 @@ export async function loadEntitySstState(
 
   const promise = (async () => {
     try {
-      const dbState = await tryFetchDatabaseSstState(entityId)
-      if (dbState !== null) {
-        memoryCache.set(entityId, { fetchedAt: Date.now(), state: dbState })
-        writeLocalState(entityId, dbState)
-        inflightLoads.delete(entityId)
-        return dbState
-      }
-    } catch {
-      // Fallback to storage/local state
+      const dbState = await fetchDatabaseSstState(entityId)
+      memoryCache.set(entityId, { fetchedAt: Date.now(), state: dbState })
+      inflightLoads.delete(entityId)
+      return dbState
+    } catch (err) {
+      inflightLoads.delete(entityId)
+      throw err
     }
-
-    let state = readLocalState(entityId)
-    try {
-      const { data, error } = await supabase.storage
-        .from(EXPEDIENTE_BUCKET)
-        .download(remoteStatePath(entityId))
-      if (!error && data) {
-        const text = await data.text()
-        const remoteState = normalizeSstState(entityId, JSON.parse(text) as Partial<EntitySstState>)
-        if (remoteState.jobFolders.length > 0 || remoteState.risks.length > 0 || state.jobFolders.length === 0) {
-          state = remoteState
-          writeLocalState(entityId, state)
-        }
-      }
-    } catch {
-      // Ignore storage read failure
-    }
-
-    memoryCache.set(entityId, { fetchedAt: Date.now(), state })
-    inflightLoads.delete(entityId)
-    return state
   })()
 
   inflightLoads.set(entityId, promise)
@@ -638,22 +544,14 @@ export async function incorporateEntityJobSstFolder(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstJobFolder
-    updateCachedSstState(input.entityId, {
-      ...state,
-      jobFolders: [...state.jobFolders.filter((f) => f.id !== saved.id), saved],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstJobFolder
+  updateCachedSstState(input.entityId, {
     ...state,
-    jobFolders: [...state.jobFolders, folder],
+    jobFolders: [...state.jobFolders.filter((f) => f.id !== saved.id), saved],
   })
-  return folder
+  return saved
 }
 
 export async function removeEntityJobSstFolder(entityId: string, folderId: string): Promise<void> {
@@ -676,22 +574,17 @@ export async function removeEntityJobSstFolder(entityId: string, folderId: strin
     .eq("id", folderId)
     .eq("organization_entity_id", entityId)
 
+  if (error) throw error
+
   const nextState: EntitySstState = {
     ...state,
     jobFolders: state.jobFolders.filter((f) => f.id !== folderId),
     topics: state.topics.filter((t) => t.folder_id !== folderId),
     documents: state.documents.filter((d) => !topicIds.has(d.topic_id)),
     sessions: state.sessions.filter((s) => s.folder_id !== folderId),
-    // `workerTrainingRecords` y `notifications` se conservan siempre
   }
 
-  if (!error) {
-    updateCachedSstState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) throw error
-  await persistFallbackSstState(entityId, nextState)
+  updateCachedSstState(entityId, nextState)
 }
 
 export async function createSstTrainingTopic(input: {
@@ -743,22 +636,14 @@ export async function createSstTrainingTopic(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstTrainingTopic
-    updateCachedSstState(input.entityId, {
-      ...state,
-      topics: [...state.topics, saved],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstTrainingTopic
+  updateCachedSstState(input.entityId, {
     ...state,
-    topics: [...state.topics, topic],
+    topics: [...state.topics, saved],
   })
-  return topic
+  return saved
 }
 
 export async function deleteSstTrainingTopic(entityId: string, topicId: string): Promise<void> {
@@ -780,6 +665,8 @@ export async function deleteSstTrainingTopic(entityId: string, topicId: string):
     .eq("id", topicId)
     .eq("organization_entity_id", entityId)
 
+  if (error) throw error
+
   const nextState: EntitySstState = {
     ...state,
     topics: state.topics.filter((t) => t.id !== topicId),
@@ -787,13 +674,7 @@ export async function deleteSstTrainingTopic(entityId: string, topicId: string):
     sessions: state.sessions.filter((s) => s.topic_id !== topicId),
   }
 
-  if (!error) {
-    updateCachedSstState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) throw error
-  await persistFallbackSstState(entityId, nextState)
+  updateCachedSstState(entityId, nextState)
 }
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -863,22 +744,14 @@ export async function uploadSstTopicDocument(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstTopicDocument
-    updateCachedSstState(input.entityId, {
-      ...state,
-      documents: [saved, ...state.documents],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstTopicDocument
+  updateCachedSstState(input.entityId, {
     ...state,
-    documents: [docRecord, ...state.documents],
+    documents: [saved, ...state.documents],
   })
-  return docRecord
+  return saved
 }
 
 export async function downloadSstTopicDocument(doc: SstTopicDocument): Promise<Blob> {
@@ -917,18 +790,14 @@ export async function deleteSstTopicDocument(entityId: string, documentId: strin
     .eq("id", documentId)
     .eq("organization_entity_id", entityId)
 
+  if (error) throw error
+
   const nextState: EntitySstState = {
     ...state,
     documents: state.documents.filter((d) => d.id !== documentId),
   }
 
-  if (!error) {
-    updateCachedSstState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) throw error
-  await persistFallbackSstState(entityId, nextState)
+  updateCachedSstState(entityId, nextState)
 }
 
 export async function scheduleSstTrainingSession(input: {
@@ -981,27 +850,19 @@ export async function scheduleSstTrainingSession(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = {
-      ...(data as SstTrainingSession),
-      participant_worker_ids: Array.isArray((data as SstTrainingSession).participant_worker_ids)
-        ? (data as SstTrainingSession).participant_worker_ids
-        : [],
-    }
-    updateCachedSstState(input.entityId, {
-      ...state,
-      sessions: [...state.sessions, saved],
-    })
-    return saved
+  if (error) throw error
+
+  const saved = {
+    ...(data as SstTrainingSession),
+    participant_worker_ids: Array.isArray((data as SstTrainingSession).participant_worker_ids)
+      ? (data as SstTrainingSession).participant_worker_ids
+      : [],
   }
-
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  updateCachedSstState(input.entityId, {
     ...state,
-    sessions: [...state.sessions, session],
+    sessions: [...state.sessions, saved],
   })
-  return session
+  return saved
 }
 
 export async function saveSstTrainingSessionOutcome(input: {
@@ -1033,6 +894,13 @@ export async function saveSstTrainingSessionOutcome(input: {
 
   const now = new Date().toISOString()
   const effectiveDate = input.scheduledDate || currentSession.scheduled_date
+  const todayIso = todayIsoInCuba()
+
+  if ((input.status === "REALIZADA" || input.status === "NO_REALIZADA") && effectiveDate > todayIso) {
+    throw new Error(
+      `No se puede marcar como ${input.status === "REALIZADA" ? "realizada" : "no realizada"} una sesión de SST con fecha programada futura (${formatIsoDateToDisplay(effectiveDate)}). Actualice primero la fecha de la sesión a hoy o una fecha pasada.`
+    )
+  }
 
   if (input.status === "REALIZADA" && uniqueWorkerIds.length > 0) {
     const { data: workerRows } = await supabase
@@ -1050,7 +918,7 @@ export async function saveSstTrainingSessionOutcome(input: {
       if (w.hire_date && effectiveDate < w.hire_date) {
         const wName = [w.first_name, w.first_surname, w.second_surname].filter(Boolean).join(" ")
         throw new Error(
-          `La fecha de la sesión de SST (${effectiveDate}) no puede ser anterior a la fecha de alta del trabajador ${wName} (${w.hire_date}).`
+          `La fecha de la sesión de SST (${formatIsoDateToDisplay(effectiveDate)}) no puede ser anterior a la fecha de alta del trabajador ${wName} (${formatIsoDateToDisplay(w.hire_date)}).`
         )
       }
     }
@@ -1120,46 +988,37 @@ export async function saveSstTrainingSessionOutcome(input: {
     .eq("id", currentSession.id)
     .eq("organization_entity_id", input.entityId)
 
-  if (!sessionDbError) {
-    await supabase
-      .from("sst_worker_training_records")
-      .delete()
-      .eq("organization_entity_id", input.entityId)
-      .eq("session_id", currentSession.id)
+  if (sessionDbError) throw sessionDbError
 
-    if (updatedSessionRecords.length > 0) {
-      const { error: recErr } = await supabase.from("sst_worker_training_records").insert(
-        updatedSessionRecords.map((r) => ({
-          id: r.id,
-          organization_entity_id: r.organization_entity_id,
-          worker_id: r.worker_id,
-          session_id: r.session_id,
-          topic_id: r.topic_id,
-          topic_title_snapshot: r.topic_title_snapshot,
-          job_id_snapshot: r.job_id_snapshot,
-          job_name_snapshot: r.job_name_snapshot,
-          area_id_snapshot: r.area_id_snapshot,
-          area_name_snapshot: r.area_name_snapshot,
-          received_date: r.received_date,
-          status: r.status,
-          kind: r.kind,
-          notes: r.notes,
-        }))
-      )
-      if (recErr && !isMissingTableError(recErr)) throw recErr
-    }
+  await supabase
+    .from("sst_worker_training_records")
+    .delete()
+    .eq("organization_entity_id", input.entityId)
+    .eq("session_id", currentSession.id)
 
-    updateCachedSstState(input.entityId, {
-      ...state,
-      sessions: nextSessions,
-      workerTrainingRecords: [...otherRecords, ...updatedSessionRecords],
-    })
-    return updatedSession
+  if (updatedSessionRecords.length > 0) {
+    const { error: recErr } = await supabase.from("sst_worker_training_records").insert(
+      updatedSessionRecords.map((r) => ({
+        id: r.id,
+        organization_entity_id: r.organization_entity_id,
+        worker_id: r.worker_id,
+        session_id: r.session_id,
+        topic_id: r.topic_id,
+        topic_title_snapshot: r.topic_title_snapshot,
+        job_id_snapshot: r.job_id_snapshot,
+        job_name_snapshot: r.job_name_snapshot,
+        area_id_snapshot: r.area_id_snapshot,
+        area_name_snapshot: r.area_name_snapshot,
+        received_date: r.received_date,
+        status: r.status,
+        kind: r.kind,
+        notes: r.notes,
+      }))
+    )
+    if (recErr) throw recErr
   }
 
-  if (!isMissingTableError(sessionDbError)) throw sessionDbError
-
-  await persistFallbackSstState(input.entityId, {
+  updateCachedSstState(input.entityId, {
     ...state,
     sessions: nextSessions,
     workerTrainingRecords: [...otherRecords, ...updatedSessionRecords],
@@ -1178,18 +1037,14 @@ export async function deleteSstTrainingSession(
     .eq("id", sessionId)
     .eq("organization_entity_id", entityId)
 
+  if (error) throw error
+
   const nextState: EntitySstState = {
     ...state,
     sessions: state.sessions.filter((s) => s.id !== sessionId),
   }
 
-  if (!error) {
-    updateCachedSstState(entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) throw error
-  await persistFallbackSstState(entityId, nextState)
+  updateCachedSstState(entityId, nextState)
 }
 
 export async function registerWorkerDirectSstTraining(input: {
@@ -1206,6 +1061,29 @@ export async function registerWorkerDirectSstTraining(input: {
   notes?: string | null
   notificationId?: string | null
 }): Promise<SstWorkerTrainingRecord> {
+  const now = new Date().toISOString()
+  const todayIso = todayIsoInCuba()
+  const resolvedDate = input.receivedDate || todayIso
+
+  if (resolvedDate > todayIso) {
+    throw new Error(
+      `No se puede registrar como recibida una capacitación de SST con fecha futura (${formatIsoDateToDisplay(resolvedDate)}).`
+    )
+  }
+
+  const { data: workerHireRow } = await supabase
+    .from("workers")
+    .select("hire_date")
+    .eq("id", input.workerId)
+    .maybeSingle()
+
+  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
+  if (workerHireDate && resolvedDate < workerHireDate) {
+    throw new Error(
+      `La fecha de recepción (${formatIsoDateToDisplay(resolvedDate)}) no puede ser anterior a la fecha de alta del trabajador (${workerHireDate}) — ${formatIsoDateToDisplay(workerHireDate)}.`
+    )
+  }
+
   const state = await loadEntitySstState(input.entityId)
   const topic = input.topicId ? state.topics.find((t) => t.id === input.topicId) : null
   const folder = topic ? state.jobFolders.find((f) => f.id === topic.folder_id) : null
@@ -1217,22 +1095,6 @@ export async function registerWorkerDirectSstTraining(input: {
   ).trim()
   if (!resolvedTitle) {
     throw new Error("Indica el tema de la capacitación de SST recibida.")
-  }
-
-  const now = new Date().toISOString()
-  const resolvedDate = input.receivedDate || now.slice(0, 10)
-
-  const { data: workerHireRow } = await supabase
-    .from("workers")
-    .select("hire_date")
-    .eq("id", input.workerId)
-    .maybeSingle()
-
-  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
-  if (workerHireDate && resolvedDate < workerHireDate) {
-    throw new Error(
-      `La fecha de recepción (${resolvedDate}) no puede ser anterior a la fecha de alta del trabajador (${workerHireDate}).`
-    )
   }
 
   const record: SstWorkerTrainingRecord = {
@@ -1289,41 +1151,31 @@ export async function registerWorkerDirectSstTraining(input: {
     .select("*")
     .single()
 
-  if (!recError && insertedRec) {
-    await supabase
-      .from("sst_onboarding_notifications")
-      .update({
-        status: "COMPLETADA",
-        completed_at: now,
-        completed_record_id: record.id,
-      })
-      .eq("organization_entity_id", input.entityId)
-      .eq("worker_id", input.workerId)
-      .in("status", ["PENDIENTE", "EN_PROCESO"])
+  if (recError) throw recError
 
-    const saved = insertedRec as SstWorkerTrainingRecord
-    updateCachedSstState(input.entityId, {
-      ...state,
-      workerTrainingRecords: [saved, ...state.workerTrainingRecords],
-      notifications: nextNotifications,
+  await supabase
+    .from("sst_onboarding_notifications")
+    .update({
+      status: "COMPLETADA",
+      completed_at: now,
+      completed_record_id: record.id,
     })
-    return saved
-  }
+    .eq("organization_entity_id", input.entityId)
+    .eq("worker_id", input.workerId)
+    .in("status", ["PENDIENTE", "EN_PROCESO"])
 
-  if (recError && !isMissingTableError(recError)) throw recError
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = (insertedRec as SstWorkerTrainingRecord) || record
+  updateCachedSstState(input.entityId, {
     ...state,
-    workerTrainingRecords: [record, ...state.workerTrainingRecords],
+    workerTrainingRecords: [saved, ...state.workerTrainingRecords],
     notifications: nextNotifications,
   })
-  return record
+  return saved
 }
 
 /**
  * Genera automáticamente una notificación de SST en la entidad cuando un candidato es
  * contratado (`NUEVA_CONTRATACION`) o cuando un trabajador cambia de cargo (`CAMBIO_CARGO`).
- * Evita duplicados mediante `event_key`.
  */
 export async function ensureSstAssignmentNotification(input: {
   workerId: string | null | undefined
@@ -1404,13 +1256,11 @@ export async function ensureSstAssignmentNotification(input: {
       }
     }
 
-    const effectiveDate =
-      input.effectiveDate || workerRow.hire_date || new Date().toISOString().slice(0, 10)
+    const effectiveDate = input.effectiveDate || workerRow.hire_date || todayIsoInCuba()
     const eventKey = `${entityId}:${workerRow.id}:${jobId || "no-job"}:${input.triggerType}:${effectiveDate}`
 
     const state = await loadEntitySstState(entityId, { forceRefresh: true })
 
-    // Si el trabajador cambió de cargo, descartamos cualquier notificación pendiente de cargos anteriores
     const obsoleteNotifications = state.notifications.filter(
       (n) =>
         n.organization_entity_id === entityId &&
@@ -1491,20 +1341,12 @@ export async function ensureSstAssignmentNotification(input: {
       .select("*")
       .maybeSingle()
 
-    if (!error) {
-      const saved = (data as SstOnboardingNotification | null) || notification
-      updateCachedSstState(entityId, {
-        ...state,
-        notifications: [saved, ...state.notifications.filter((n) => n.id !== saved.id)],
-      })
-      return
-    }
+    if (error) throw error
 
-    if (!isMissingTableError(error)) throw error
-
-    await persistFallbackSstState(entityId, {
+    const saved = (data as SstOnboardingNotification | null) || notification
+    updateCachedSstState(entityId, {
       ...state,
-      notifications: [notification, ...state.notifications],
+      notifications: [saved, ...state.notifications.filter((n) => n.id !== saved.id)],
     })
   } catch (err) {
     console.warn("[sst] no se pudo generar la notificación automática de SST", err)
@@ -1561,7 +1403,7 @@ export async function createSstRiskAssessment(input: {
     risk_level: riskLevel,
     existing_controls: input.existingControls?.trim() || null,
     status: "ACTIVO",
-    evaluated_at: input.evaluatedAt || now.slice(0, 10),
+    evaluated_at: input.evaluatedAt || todayIsoInCuba(),
     review_date: input.reviewDate || null,
     created_at: now,
     updated_at: now,
@@ -1594,22 +1436,14 @@ export async function createSstRiskAssessment(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstRiskAssessment
-    updateCachedSstState(input.entityId, {
-      ...state,
-      risks: [saved, ...state.risks],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstRiskAssessment
+  updateCachedSstState(input.entityId, {
     ...state,
-    risks: [risk, ...state.risks],
+    risks: [saved, ...state.risks],
   })
-  return risk
+  return saved
 }
 
 export async function updateSstRiskStatus(input: {
@@ -1626,6 +1460,8 @@ export async function updateSstRiskStatus(input: {
     .eq("id", input.riskId)
     .eq("organization_entity_id", input.entityId)
 
+  if (error) throw error
+
   const nextState: EntitySstState = {
     ...state,
     risks: state.risks.map((r) =>
@@ -1633,13 +1469,7 @@ export async function updateSstRiskStatus(input: {
     ),
   }
 
-  if (!error) {
-    updateCachedSstState(input.entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) throw error
-  await persistFallbackSstState(input.entityId, nextState)
+  updateCachedSstState(input.entityId, nextState)
 }
 
 export async function createSstPreventiveAction(input: {
@@ -1712,22 +1542,14 @@ export async function createSstPreventiveAction(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstPreventiveAction
-    updateCachedSstState(input.entityId, {
-      ...state,
-      preventiveActions: [saved, ...state.preventiveActions],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstPreventiveAction
+  updateCachedSstState(input.entityId, {
     ...state,
-    preventiveActions: [action, ...state.preventiveActions],
+    preventiveActions: [saved, ...state.preventiveActions],
   })
-  return action
+  return saved
 }
 
 export async function updateSstPreventiveActionStatus(input: {
@@ -1743,7 +1565,7 @@ export async function updateSstPreventiveActionStatus(input: {
 
   const state = await loadEntitySstState(input.entityId)
   const now = new Date().toISOString()
-  const completedDate = input.status === "COMPLETADA" ? now.slice(0, 10) : null
+  const completedDate = input.status === "COMPLETADA" ? todayIsoInCuba() : null
 
   const { error } = await supabase
     .from("sst_preventive_actions")
@@ -1757,6 +1579,8 @@ export async function updateSstPreventiveActionStatus(input: {
     })
     .eq("id", input.actionId)
     .eq("organization_entity_id", input.entityId)
+
+  if (error) throw error
 
   const nextState: EntitySstState = {
     ...state,
@@ -1775,13 +1599,7 @@ export async function updateSstPreventiveActionStatus(input: {
     ),
   }
 
-  if (!error) {
-    updateCachedSstState(input.entityId, nextState)
-    return
-  }
-
-  if (!isMissingTableError(error)) throw error
-  await persistFallbackSstState(input.entityId, nextState)
+  updateCachedSstState(input.entityId, nextState)
 }
 
 // ============================================================================
@@ -1802,6 +1620,12 @@ export async function createSstEppCatalogItem(input: {
   if (!trimmedName) {
     throw new Error("El nombre del equipo de protección personal (EPP) es obligatorio.")
   }
+  if (input.stockQuantity === null || input.stockQuantity === undefined || Number.isNaN(Number(input.stockQuantity)) || Number(input.stockQuantity) < 0) {
+    throw new Error("El stock disponible del EPP no puede ser negativo.")
+  }
+  if (Number(input.defaultLifespanDays) <= 0) {
+    throw new Error("La vida útil por defecto debe ser mayor que cero.")
+  }
 
   const now = new Date().toISOString()
   const item: SstEppCatalogItem = {
@@ -1811,7 +1635,7 @@ export async function createSstEppCatalogItem(input: {
     category: input.category || "PROTECCION_GENERAL",
     description: input.description?.trim() || null,
     default_lifespan_days: Math.max(1, Number(input.defaultLifespanDays) || 180),
-    stock_quantity: Math.max(0, Number(input.stockQuantity) || 0),
+    stock_quantity: Number(input.stockQuantity),
     min_stock_alert: Math.max(0, Number(input.minStockAlert) || 5),
     created_at: now,
     updated_at: now,
@@ -1832,22 +1656,14 @@ export async function createSstEppCatalogItem(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstEppCatalogItem
-    updateCachedSstState(input.entityId, {
-      ...state,
-      eppCatalog: [...state.eppCatalog, saved],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstEppCatalogItem
+  updateCachedSstState(input.entityId, {
     ...state,
-    eppCatalog: [...state.eppCatalog, item],
+    eppCatalog: [...state.eppCatalog, saved],
   })
-  return item
+  return saved
 }
 
 export async function assignSstJobEppRequirement(input: {
@@ -1893,32 +1709,19 @@ export async function assignSstJobEppRequirement(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstJobEppRequirement
-    updateCachedSstState(input.entityId, {
-      ...state,
-      jobEppRequirements: [
-        ...state.jobEppRequirements.filter(
-          (r) => !(r.job_id === saved.job_id && r.epp_id === saved.epp_id)
-        ),
-        saved,
-      ],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstJobEppRequirement
+  updateCachedSstState(input.entityId, {
     ...state,
     jobEppRequirements: [
       ...state.jobEppRequirements.filter(
-        (r) => !(r.job_id === req.job_id && r.epp_id === req.epp_id)
+        (r) => !(r.job_id === saved.job_id && r.epp_id === saved.epp_id)
       ),
-      req,
+      saved,
     ],
   })
-  return req
+  return saved
 }
 
 export async function registerWorkerEppDelivery(input: {
@@ -1942,6 +1745,41 @@ export async function registerWorkerEppDelivery(input: {
     throw new Error("Selecciona o indica el equipo de protección personal (EPP) entregado.")
   }
 
+  const qty = Number(input.quantity)
+  if (!Number.isFinite(qty) || qty <= 0) {
+    throw new Error("La cantidad entregada debe ser mayor que cero.")
+  }
+
+  const todayIso = todayIsoInCuba()
+  const resolvedDeliveryDate = input.deliveryDate || todayIso
+  if (resolvedDeliveryDate > todayIso) {
+    throw new Error(
+      `La fecha de entrega (${formatIsoDateToDisplay(resolvedDeliveryDate)}) no puede ser futura.`
+    )
+  }
+
+  const { data: workerHireRow } = await supabase
+    .from("workers")
+    .select("hire_date")
+    .eq("id", input.workerId)
+    .maybeSingle()
+
+  const workerHireDate = (workerHireRow as { hire_date?: string | null } | null)?.hire_date ?? null
+  if (workerHireDate && resolvedDeliveryDate < workerHireDate) {
+    throw new Error(
+      `La fecha de entrega (${formatIsoDateToDisplay(resolvedDeliveryDate)}) no puede ser anterior a la fecha de alta del trabajador (${formatIsoDateToDisplay(workerHireDate)}).`
+    )
+  }
+
+  const catalogItem = input.eppId
+    ? state.eppCatalog.find((c) => c.id === input.eppId)
+    : undefined
+  if (catalogItem && qty > catalogItem.stock_quantity) {
+    throw new Error(
+      `La cantidad entregada (${qty}) supera el stock disponible (${catalogItem.stock_quantity}) para "${catalogItem.name}".`
+    )
+  }
+
   const now = new Date().toISOString()
   const delivery: SstWorkerEppDelivery = {
     id: makeUuid(),
@@ -1952,8 +1790,8 @@ export async function registerWorkerEppDelivery(input: {
     job_name_snapshot: input.jobName || null,
     epp_id: input.eppId || null,
     epp_name_snapshot: trimmedEppName,
-    quantity: Math.max(1, Number(input.quantity) || 1),
-    delivery_date: input.deliveryDate || now.slice(0, 10),
+    quantity: qty,
+    delivery_date: resolvedDeliveryDate,
     renewal_due_date: input.renewalDueDate || null,
     status: input.status || "ENTREGADO",
     signed_receipt: input.signedReceipt,
@@ -1983,22 +1821,25 @@ export async function registerWorkerEppDelivery(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstWorkerEppDelivery
-    updateCachedSstState(input.entityId, {
-      ...state,
-      workerEppDeliveries: [saved, ...state.workerEppDeliveries],
-    })
-    return saved
+  if (error) {
+    throw new Error(error.message || "No se pudo registrar la entrega de EPP.")
   }
 
-  if (error && !isMissingTableError(error)) throw error
+  const saved = data as SstWorkerEppDelivery
+  const updatedCatalog = delivery.epp_id
+    ? state.eppCatalog.map((c) =>
+        c.id === delivery.epp_id
+          ? { ...c, stock_quantity: Math.max(0, c.stock_quantity - delivery.quantity) }
+          : c
+      )
+    : state.eppCatalog
 
-  await persistFallbackSstState(input.entityId, {
+  updateCachedSstState(input.entityId, {
     ...state,
-    workerEppDeliveries: [delivery, ...state.workerEppDeliveries],
+    eppCatalog: updatedCatalog,
+    workerEppDeliveries: [saved, ...state.workerEppDeliveries],
   })
-  return delivery
+  return saved
 }
 
 export async function createSstInspection(input: {
@@ -2027,7 +1868,7 @@ export async function createSstInspection(input: {
     facility_name: input.facilityName?.trim() || null,
     inspection_type: input.inspectionType || "ORDINARIA",
     inspector_name: input.inspectorName.trim(),
-    scheduled_date: input.scheduledDate || now.slice(0, 10),
+    scheduled_date: input.scheduledDate || todayIsoInCuba(),
     executed_date: input.executedDate || null,
     status: input.status,
     summary_notes: input.summaryNotes?.trim() || null,
@@ -2053,22 +1894,14 @@ export async function createSstInspection(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstInspection
-    updateCachedSstState(input.entityId, {
-      ...state,
-      inspections: [saved, ...state.inspections],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstInspection
+  updateCachedSstState(input.entityId, {
     ...state,
-    inspections: [inspection, ...state.inspections],
+    inspections: [saved, ...state.inspections],
   })
-  return inspection
+  return saved
 }
 
 export async function addSstInspectionFinding(input: {
@@ -2083,7 +1916,6 @@ export async function addSstInspectionFinding(input: {
   areaId?: string | null
   areaName?: string | null
 }): Promise<SstInspectionFinding> {
-  const state = await loadEntitySstState(input.entityId)
   let linkedActionId: string | null = null
 
   if (!input.conforms && input.createCorrectiveAction && input.correctiveActionDueDate) {
@@ -2136,22 +1968,14 @@ export async function addSstInspectionFinding(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstInspectionFinding
-    updateCachedSstState(input.entityId, {
-      ...latestState,
-      inspectionFindings: [...latestState.inspectionFindings, saved],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstInspectionFinding
+  updateCachedSstState(input.entityId, {
     ...latestState,
-    inspectionFindings: [...latestState.inspectionFindings, finding],
+    inspectionFindings: [...latestState.inspectionFindings, saved],
   })
-  return finding
+  return saved
 }
 
 // ============================================================================
@@ -2182,7 +2006,7 @@ export async function registerWorkerHealthAptitude(input: {
     job_id: input.jobId || null,
     job_name_snapshot: input.jobName || null,
     evaluation_type: input.evaluationType,
-    evaluation_date: input.evaluationDate || now.slice(0, 10),
+    evaluation_date: input.evaluationDate || todayIsoInCuba(),
     next_review_date: input.nextReviewDate || null,
     aptitude_status: input.aptitudeStatus,
     administrative_restrictions: input.administrativeRestrictions?.trim() || null,
@@ -2210,22 +2034,14 @@ export async function registerWorkerHealthAptitude(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstWorkerHealthAptitude
-    updateCachedSstState(input.entityId, {
-      ...state,
-      healthAptitudes: [saved, ...state.healthAptitudes],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstWorkerHealthAptitude
+  updateCachedSstState(input.entityId, {
     ...state,
-    healthAptitudes: [record, ...state.healthAptitudes],
+    healthAptitudes: [saved, ...state.healthAptitudes],
   })
-  return record
+  return saved
 }
 
 export async function createSstAccidentIncident(input: {
@@ -2255,7 +2071,7 @@ export async function createSstAccidentIncident(input: {
     id: makeUuid(),
     organization_entity_id: input.entityId,
     event_type: input.eventType,
-    occurred_at: input.occurredAt || now.slice(0, 10),
+    occurred_at: input.occurredAt || todayIsoInCuba(),
     area_id: input.areaId || null,
     area_name_snapshot: input.areaName || null,
     job_id: input.jobId || null,
@@ -2301,22 +2117,14 @@ export async function createSstAccidentIncident(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstAccidentIncident
-    updateCachedSstState(input.entityId, {
-      ...state,
-      accidentsIncidents: [saved, ...state.accidentsIncidents],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstAccidentIncident
+  updateCachedSstState(input.entityId, {
     ...state,
-    accidentsIncidents: [item, ...state.accidentsIncidents],
+    accidentsIncidents: [saved, ...state.accidentsIncidents],
   })
-  return item
+  return saved
 }
 
 export async function createSstEmergencyPlan(input: {
@@ -2371,22 +2179,14 @@ export async function createSstEmergencyPlan(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstEmergencyPlan
-    updateCachedSstState(input.entityId, {
-      ...state,
-      emergencyPlans: [saved, ...state.emergencyPlans],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstEmergencyPlan
+  updateCachedSstState(input.entityId, {
     ...state,
-    emergencyPlans: [plan, ...state.emergencyPlans],
+    emergencyPlans: [saved, ...state.emergencyPlans],
   })
-  return plan
+  return saved
 }
 
 export async function createSstCommitteeRecord(input: {
@@ -2407,7 +2207,7 @@ export async function createSstCommitteeRecord(input: {
     organization_entity_id: input.entityId,
     record_type: input.recordType || "REUNION",
     title: input.title.trim(),
-    record_date: input.recordDate || now.slice(0, 10),
+    record_date: input.recordDate || todayIsoInCuba(),
     member_worker_id: input.memberWorkerId || null,
     member_name: input.memberName || null,
     member_role: input.memberRole?.trim() || null,
@@ -2433,22 +2233,14 @@ export async function createSstCommitteeRecord(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstCommitteeRecord
-    updateCachedSstState(input.entityId, {
-      ...state,
-      committeeRecords: [saved, ...state.committeeRecords],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstCommitteeRecord
+  updateCachedSstState(input.entityId, {
     ...state,
-    committeeRecords: [record, ...state.committeeRecords],
+    committeeRecords: [saved, ...state.committeeRecords],
   })
-  return record
+  return saved
 }
 
 export async function createSstSafeWorkProcedure(input: {
@@ -2502,20 +2294,13 @@ export async function createSstSafeWorkProcedure(input: {
     .select("*")
     .single()
 
-  if (!error && data) {
-    const saved = data as SstSafeWorkProcedure
-    updateCachedSstState(input.entityId, {
-      ...state,
-      safeWorkProcedures: [saved, ...state.safeWorkProcedures],
-    })
-    return saved
-  }
+  if (error) throw error
 
-  if (error && !isMissingTableError(error)) throw error
-
-  await persistFallbackSstState(input.entityId, {
+  const saved = data as SstSafeWorkProcedure
+  updateCachedSstState(input.entityId, {
     ...state,
-    safeWorkProcedures: [proc, ...state.safeWorkProcedures],
+    safeWorkProcedures: [saved, ...state.safeWorkProcedures],
   })
-  return proc
+  return saved
 }
+

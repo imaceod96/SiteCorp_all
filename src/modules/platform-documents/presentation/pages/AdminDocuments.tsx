@@ -198,6 +198,18 @@ const AdminDocuments = () => {
       return
     }
 
+    const normalizedName = folderDialog.name.trim().toLowerCase()
+    const duplicateExists = folders.some(
+      (f) => f.id !== folderDialog.folderId && f.name.trim().toLowerCase() === normalizedName
+    )
+    if (duplicateExists) {
+      setFolderDialog((state) => ({
+        ...state,
+        error: "Ya existe una carpeta con ese nombre.",
+      }))
+      return
+    }
+
     setFolderDialog((state) => ({ ...state, saving: true, error: null }))
     try {
       if (folderDialog.folderId) {
@@ -211,10 +223,14 @@ const AdminDocuments = () => {
       setFolderDialog({ open: false, folderId: null, name: "", saving: false, error: null })
       await reload()
     } catch (err) {
+      const rawMessage = err instanceof Error ? err.message : ""
+      const friendlyMessage = /duplicate|23505|ya existe/i.test(rawMessage)
+        ? "Ya existe una carpeta con ese nombre."
+        : rawMessage || "No se pudo guardar la carpeta"
       setFolderDialog((state) => ({
         ...state,
         saving: false,
-        error: err instanceof Error ? err.message : "No se pudo guardar la carpeta",
+        error: friendlyMessage,
       }))
     }
   }

@@ -13,6 +13,7 @@ import {
   ensureMovementDocument,
   ensureResolutionDocument,
 } from "../infrastructure/transition-documents"
+import { setContractDocumentStatus } from "@/modules/contracts"
 import { TRANSITION_MOVEMENT_DOCUMENT } from "../domain/rules"
 import type {
   PluriemployContractInput,
@@ -107,8 +108,32 @@ export async function reincorporateWorkerWithContract(
     paymentScheduleText: input.paymentScheduleText,
   })
 
-  const documentWarning = result.contractId ? await ensureContractDocument(result.contractId) : null
+  const documentWarning = result.contractId
+    ? await runContractDocumentWithStatus(result.contractId, {
+        worker_id: result.workerId ?? input.workerId,
+        start_date: input.contractStartDate || input.reincorporationDate,
+      })
+    : null
   return { workerId: result.workerId, documentWarning }
+}
+
+async function runContractDocumentWithStatus(
+  contractId: string,
+  meta?: { worker_id?: string | null; start_date?: string | null }
+): Promise<string | null> {
+  await setContractDocumentStatus(contractId, "PENDIENTE", null, meta)
+  try {
+    const warning = await ensureContractDocument(contractId)
+    await setContractDocumentStatus(contractId, warning ? "ERROR" : "GENERADO", warning, meta)
+    return warning
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "No se pudo generar el documento contractual automáticamente."
+    await setContractDocumentStatus(contractId, "ERROR", message, meta)
+    return message
+  }
 }
 
 /** Reincorporación directa hacia un Cargo Especialista Principal: Resolución sustitutiva. */
@@ -218,7 +243,10 @@ export async function changeWorkerContract(
   })
 
   const documentWarning = result.newContractId
-    ? await ensureContractDocument(result.newContractId)
+    ? await runContractDocumentWithStatus(result.newContractId, {
+        worker_id: input.workerId,
+        start_date: input.effectiveDate,
+      })
     : null
 
   return { ...result, documentWarning }
@@ -242,7 +270,10 @@ export async function createWorkerPluriemploy(
   const result = await createWorkerPluriemployRpc(input)
 
   const documentWarning = result.contractId
-    ? await ensureContractDocument(result.contractId)
+    ? await runContractDocumentWithStatus(result.contractId, {
+        worker_id: input.workerId,
+        start_date: input.contractStartDate,
+      })
     : null
 
   return { ...result, documentWarning }

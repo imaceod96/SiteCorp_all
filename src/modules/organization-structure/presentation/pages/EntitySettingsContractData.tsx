@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from "@/shared/components/ui/label"
 import { cubaMunicipalityOptions, cubaProvinceOptions } from "@/data/cuba-locations-full"
 import { showSuccess, showError } from "@/utils/toast"
+import { addDaysIsoInCuba } from "@/utils/cuba-date"
 import {
   MAX_REPRESENTATIVE_POSITIONS,
   changeRepresentative,
@@ -41,12 +42,8 @@ const emptyContractData: EntityContractDataInput = {
 }
 
 /** Desplaza una fecha ISO (YYYY-MM-DD) en días sin desfases de zona horaria. */
-const shiftIsoDate = (isoDate: string, days: number): string => {
-  const [year, month, day] = isoDate.split("-").map(Number)
-  const date = new Date(Date.UTC(year, (month || 1) - 1, day || 1))
-  date.setUTCDate(date.getUTCDate() + days)
-  return date.toISOString().slice(0, 10)
-}
+const shiftIsoDate = (isoDate: string, days: number): string =>
+  addDaysIsoInCuba(days, isoDate)
 
 const EntitySettingsContractData = () => {
   const entityId = useActiveEntityId() || ""

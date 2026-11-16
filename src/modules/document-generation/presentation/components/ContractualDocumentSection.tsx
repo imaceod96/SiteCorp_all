@@ -27,6 +27,10 @@ import {
   generateContractDocument,
   type DocumentGenerationStage,
 } from "@/modules/document-generation/application/document-generation.commands"
+import {
+  getContractDocumentStatusSnapshot,
+  setContractDocumentStatus,
+} from "@/modules/contracts/infrastructure/contract-documents.repository"
 import type {
   DocumentGenerationPrecheck,
   DocumentGenerationResult,
@@ -116,6 +120,18 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
   }, [load])
 
   const latest = documents.length > 0 ? documents[documents.length - 1] : null
+  const autoGenerateAttemptedRef = React.useRef<string | null>(null)
+
+  const isCuadroContract = React.useMemo(() => {
+    if (kind !== "CONTRACT") return false
+    const category = String(
+      (precheck?.documentData as { job?: { occupational_category?: string | null } } | null)?.job
+        ?.occupational_category || ""
+    )
+      .trim()
+      .toUpperCase()
+    return category === "CUADRO"
+  }, [kind, precheck])
 
   const handleDownload = async (document: GeneratedDocumentRow) => {
     setBusyDocId(document.id)
@@ -128,7 +144,7 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
     }
   }
 
-  const handleGenerate = async () => {
+  const handleGenerate = React.useCallback(async () => {
     setGenerating(true)
     setGenerationStage("VALIDATING")
     setFailure(null)
@@ -138,20 +154,50 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
           ? await generateContractDocument(sourceId, setGenerationStage)
           : await generateAddendumDocument(sourceId, setGenerationStage)
       if (!result.success) {
+        if (kind === "CONTRACT") {
+          await setContractDocumentStatus(
+            sourceId,
+            "ERROR",
+            result.error || "No se pudo generar el documento"
+          )
+        }
         setDialogOpen(false)
         setFailure(result)
       } else {
+        if (kind === "CONTRACT") {
+          await setContractDocumentStatus(sourceId, "GENERADO", null)
+        }
         setDialogOpen(false)
       }
       await load()
     } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo generar el documento"
+      if (kind === "CONTRACT") {
+        await setContractDocumentStatus(sourceId, "ERROR", msg)
+      }
       setDialogOpen(false)
-      setFailure({ success: false, pdfPath: null, error: err instanceof Error ? err.message : "No se pudo generar el documento" })
+      setFailure({ success: false, pdfPath: null, error: msg })
     } finally {
       setGenerating(false)
       setGenerationStage(null)
     }
-  }
+  }, [kind, sourceId, load])
+
+  React.useEffect(() => {
+    if (
+      !loading &&
+      !generating &&
+      kind === "CONTRACT" &&
+      !isCuadroContract &&
+      !latest &&
+      precheck?.ready &&
+      canManage &&
+      autoGenerateAttemptedRef.current !== sourceId
+    ) {
+      autoGenerateAttemptedRef.current = sourceId
+      void handleGenerate()
+    }
+  }, [loading, generating, kind, isCuadroContract, latest, precheck, canManage, sourceId, handleGenerate])
 
   const title = kind === "CONTRACT" ? "Documento contractual" : "Documento del anexo"
 
@@ -177,26 +223,66 @@ export const ContractualDocumentSection: React.FC<ContractualDocumentSectionProp
 
   const template = precheck?.template ?? null
 
+  const statusSnapshot =
+    kind === "CONTRACT" ? getContractDocumentStatusSnapshot(sourceId) : null
+  const contractDocStatus = latest
+    ? "GENERADO"
+    : failure || statusSnapshot?.document_status === "ERROR"
+      ? "ERROR"
+      : "PENDIENTE"
+
   return (
     <div className={`rounded-xl border border-border bg-muted/10 p-4 ${className ?? ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-        {latest?.generation_number != null && (
-          <SiteCorpStatusBadge status="info">Generación {latest.generation_number}</SiteCorpStatusBadge>
-        )}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {kind === "CONTRACT" && !isCuadroContract && (
+            <SiteCorpStatusBadge
+              status={
+                contractDocStatus === "GENERADO"
+                  ? "success"
+                  : contractDocStatus === "ERROR"
+                    ? "danger"
+                    : "warning"
+              }
+            >
+              {contractDocStatus}
+            </SiteCorpStatusBadge>
+          )}
+          {latest?.generation_number != null && (
+            <SiteCorpStatusBadge status="info">Generación {latest.generation_number}</SiteCorpStatusBadge>
+          )}
+        </div>
       </div>
 
-      {!latest ? (
+      {isCuadroContract ? (
+        <p className="mt-2 text-sm text-muted-foreground">
+          Este cargo no genera documento contractual.
+        </p>
+      ) : !latest ? (
         <>
-          <p className="mt-2 text-sm text-muted-foreground">Aún no se ha generado el documento.</p>
+          {kind === "CONTRACT" && precheck?.formalized && (
+            <div className="mt-2 rounded-lg border border-sitecorp-warning/40 bg-sitecorp-warning/10 p-2.5 text-xs text-ink">
+              <p className="font-semibold">Contratos con documento pendiente de generar</p>
+              <p className="mt-0.5 text-muted-foreground">
+                {statusSnapshot?.document_error ||
+                  failure?.error ||
+                  "El contrato está formalizado pero su documento Word aún está pendiente de generar."}
+              </p>
+            </div>
+          )}
+          <p className="mt-2 text-sm text-muted-foreground">
+            {generating ? stageLabel : "Aún no se ha generado el documento."}
+          </p>
           {canManage && (
             <SiteCorpButton
               type="button"
               size="sm"
               className="mt-3"
+              disabled={generating}
               onClick={() => {
                 setFailure(null)
-                setDialogOpen(true)
+                void handleGenerate()
               }}
             >
               <Sparkles className="mr-2 h-3.5 w-3.5" /> Generar documento

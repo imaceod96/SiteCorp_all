@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   isPayrollMovementKind,
   isResolutionKind,
@@ -43,7 +44,7 @@ export const loadSourceContext = async (
       entityId: String(row.organization_entity_id),
       // Una Resolución es un evento formal: se genera una vez creada.
       formalized: true,
-      referenceDate: date ?? new Date().toISOString().slice(0, 10),
+      referenceDate: date ?? todayIsoInCuba(),
       documentTypeCode: "RESOLUTION",
       pinnedVersionId: text(row.document_template_version_id),
     }
@@ -64,7 +65,7 @@ export const loadSourceContext = async (
       entityId: String(row.organization_entity_id),
       // Un Movimiento de Nómina es un evento formal: se genera una vez creado.
       formalized: true,
-      referenceDate: text(row.effective_date) ?? new Date().toISOString().slice(0, 10),
+      referenceDate: text(row.effective_date) ?? todayIsoInCuba(),
       documentTypeCode: "PAYROLL_MOVEMENT",
       pinnedVersionId: text(row.document_template_version_id),
     }
@@ -89,7 +90,7 @@ export const loadSourceContext = async (
       entityId: String(row.organization_entity_id),
       formalized: row.signature_date != null,
       referenceDate:
-        text(row.signature_date) ?? text(row.start_date) ?? new Date().toISOString().slice(0, 10),
+        text(row.signature_date) ?? text(row.start_date) ?? todayIsoInCuba(),
       documentTypeCode: documentTypeCodeForContractType(typeCode),
       pinnedVersionId: text(row.document_template_version_id),
     }
@@ -112,7 +113,7 @@ export const loadSourceContext = async (
     entityId: String(row.organization_entity_id),
     formalized: text(row.status) === "FORMALIZED",
     referenceDate:
-      text(row.signature_date) ?? text(row.effective_date) ?? new Date().toISOString().slice(0, 10),
+      text(row.signature_date) ?? text(row.effective_date) ?? todayIsoInCuba(),
     documentTypeCode: "EMPLOYMENT_CONTRACT_ADDENDUM",
     pinnedVersionId: text(row.document_template_version_id),
   }
@@ -140,7 +141,7 @@ const loadSc404SourceContext = async (
       workerId: String(row.worker_id),
       entityId: String(row.organization_entity_id),
       formalized: true,
-      referenceDate: text(row.start_date) ?? new Date().toISOString().slice(0, 10),
+      referenceDate: text(row.start_date) ?? todayIsoInCuba(),
       documentTypeCode: "SC_4_04",
       pinnedVersionId: null,
     }
@@ -160,7 +161,7 @@ const loadSc404SourceContext = async (
     workerId: String(row.worker_id),
     entityId: String(row.organization_entity_id),
     formalized: true,
-    referenceDate: text(row.start_date) ?? new Date().toISOString().slice(0, 10),
+    referenceDate: text(row.start_date) ?? todayIsoInCuba(),
     documentTypeCode: "SC_4_04",
     pinnedVersionId: null,
   }

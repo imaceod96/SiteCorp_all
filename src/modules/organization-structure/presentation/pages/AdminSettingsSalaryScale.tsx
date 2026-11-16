@@ -11,6 +11,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SalaryGroupDialog } from "@/modules/organization-structure/presentation/components/salary-group-dialog"
 import ReviewSalaryChangeDialog from "@/modules/contracts/presentation/components/ReviewSalaryChangeDialog"
 import { showSuccess } from "@/utils/toast"
+import { formatIsoDateToDisplay, todayIsoInCuba } from "@/utils/cuba-date"
 import { Plus, Edit3, Clock, PlusCircle } from "lucide-react"
 
 interface SalaryGroupRow {
@@ -43,7 +44,7 @@ const AdminSettingsSalaryScale = () => {
   const [showCreateScale, setShowCreateScale] = React.useState(false)
   const [newScaleName, setNewScaleName] = React.useState("Escala salarial presupuestada general")
   const [newScaleCurrency, setNewScaleCurrency] = React.useState("CUP")
-  const [newScaleEffectiveFrom, setNewScaleEffectiveFrom] = React.useState(() => new Date().toISOString().split("T")[0])
+  const [newScaleEffectiveFrom, setNewScaleEffectiveFrom] = React.useState(() => todayIsoInCuba())
   const [canManageGlobal, setCanManageGlobal] = React.useState(false)
   
   // History modal state
@@ -145,7 +146,7 @@ const AdminSettingsSalaryScale = () => {
         setShowCreateScale(false)
         setNewScaleName("Escala salarial presupuestada general")
         setNewScaleCurrency("CUP")
-        setNewScaleEffectiveFrom(new Date().toISOString().split("T")[0])
+        setNewScaleEffectiveFrom(todayIsoInCuba())
         await loadScale()
       }
     } catch (err) {
@@ -203,7 +204,7 @@ const AdminSettingsSalaryScale = () => {
                       </div>
                       <div className="flex gap-2">
                         <SiteCorpButton onClick={handleCreateScale}>Crear</SiteCorpButton>
-                        <SiteCorpButton variant="outline" onClick={() => { setShowCreateScale(false); setNewScaleName("Escala salarial presupuestada general"); setNewScaleCurrency("CUP"); setNewScaleEffectiveFrom(new Date().toISOString().split("T")[0]) }}>Cancelar</SiteCorpButton>
+                        <SiteCorpButton variant="outline" onClick={() => { setShowCreateScale(false); setNewScaleName("Escala salarial presupuestada general"); setNewScaleCurrency("CUP"); setNewScaleEffectiveFrom(todayIsoInCuba()) }}>Cancelar</SiteCorpButton>
                       </div>
                     </div>
                   )}
@@ -242,7 +243,7 @@ const AdminSettingsSalaryScale = () => {
         <SiteCorpAlert type="danger" title="Error">{error}</SiteCorpAlert>
       ) : (
         <>
-          <SiteCorpCard title={`Escala salarial presupuestada de ${scale.name}`} description={scale.description || "Escala salarial global de SiteCorp"}>
+          <SiteCorpCard title={scale.name || "Escala salarial presupuestada general"} description={scale.description || "Escala salarial global de SiteCorp"}>
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -263,6 +264,11 @@ const AdminSettingsSalaryScale = () => {
                 open={showAddGroup}
                 onOpenChange={setShowAddGroup}
                 onSubmit={handleAddGroup}
+                minAmount={
+                  groups.length > 0
+                    ? Math.max(...groups.map((g) => g.current_value?.amount || 0))
+                    : undefined
+                }
               />
 
               {/* Groups table */}
@@ -290,7 +296,7 @@ const AdminSettingsSalaryScale = () => {
                             {group.current_value.amount.toLocaleString("es-CU", { minimumFractionDigits: 2 })} {group.current_value.currency_code}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Vigente desde: {group.current_value.effective_from}
+                            Vigente desde: {formatIsoDateToDisplay(group.current_value.effective_from)}
                           </p>
                         </div>
                       ) : (
@@ -351,6 +357,14 @@ const AdminSettingsSalaryScale = () => {
         open={showHistoryModal}
         onOpenChange={(open) => setShowHistoryModal(open)}
         groupId={historyGroupId}
+        groupLabel={
+          historyGroupId
+            ? (() => {
+                const found = groups.find((g) => g.id === historyGroupId)
+                return found ? `Grupo ${found.roman_numeral} (Secuencia ${found.sequence_number})` : "Grupo"
+              })()
+            : null
+        }
         historyData={historyData}
         historyLoading={historyLoading}
       />
@@ -363,25 +377,22 @@ const SalaryHistoryModal = ({
   open, 
   onOpenChange, 
   groupId, 
+  groupLabel,
   historyData, 
   historyLoading 
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   groupId: string | null
+  groupLabel?: string | null
   historyData: SalaryHistoryValue[]
   historyLoading: boolean
 }) => {
   const getStatus = (value: SalaryHistoryValue): string => {
     if (value.is_active) return "Actual"
-    
-    const today = new Date()
-    const effectiveFrom = new Date(value.effective_from)
-    
-    if (effectiveFrom > today) {
+    if (value.effective_from > todayIsoInCuba()) {
       return "Futuro"
     }
-    
     return "Histórico"
   }
 
@@ -415,7 +426,7 @@ const SalaryHistoryModal = ({
             <div className="space-y-4">
               <div className="border-t border-border pt-4">
                 <h3 className="text-lg font-semibold text-ink mb-2">
-                  Grupo {groupId}
+                  {groupLabel || `Grupo ${groupId}`}
                 </h3>
                 
                 {historyLoading ? (
@@ -428,7 +439,7 @@ const SalaryHistoryModal = ({
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {historyData.map((value, index) => (
+                    {historyData.map((value) => (
                       <div key={value.id} className="rounded-lg border border-border bg-muted/50 p-4">
                         <div className="grid gap-3 md:grid-cols-4 items-start">
                           <div className="space-y-1">
@@ -439,13 +450,13 @@ const SalaryHistoryModal = ({
                           </div>
                           <div className="space-y-1">
                             <p className="text-sm text-muted-foreground">
-                              {value.effective_from}
+                              {formatIsoDateToDisplay(value.effective_from)}
                             </p>
                             <p className="text-xs text-muted-foreground">Vigente desde</p>
                           </div>
                           <div className="space-y-1">
                             <p className="text-sm text-muted-foreground">
-                              {value.effective_to || "Sin fecha de fin"}
+                              {value.effective_to ? formatIsoDateToDisplay(value.effective_to) : "Sin fecha de fin"}
                             </p>
                             <p className="text-xs text-muted-foreground">Vigente hasta</p>
                           </div>

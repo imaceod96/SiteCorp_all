@@ -591,7 +591,7 @@ export const UserManualPage: React.FC = () => {
                 Glosario de Términos y Cumplimiento Normativo
               </h3>
               <p className="text-xs text-slate-500">
-                Conceptos clave y normatividad laboral peruana integrada en SiteCorp
+                Conceptos clave y normatividad laboral cubana integrada en SiteCorp
               </p>
             </div>
           </div>

@@ -2,7 +2,7 @@ import * as React from "react"
 import { useNavigate, useLocation, Outlet } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
 import { useActiveEntityId, useCurrentEntity } from "@/contexts/CurrentEntityContext"
-import { loadEntityPermissionSafe } from "@/modules/access-control"
+import { isPermissionCheckUnavailableError, loadEntityPermissionSafe } from "@/modules/access-control"
 import {
   SITECORP_MODULES_DISABLED_MESSAGE,
   SITECORP_MODULES_DISABLED_TITLE,
@@ -66,71 +66,75 @@ const EntityRouteWrapper = () => {
     return null
   }, [entityPlan, planLoading, location.pathname])
 
-  React.useEffect(() => {
+  const loadEntity = React.useCallback(async () => {
     if (!entityId) {
       setError("ID de entidad no proporcionado")
       setLoading(false)
       return
     }
 
-    const loadEntity = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    try {
+      setLoading(true)
+      setError(null)
 
-        // La entidad la devuelve el dominio de estructura organizativa (con la clave
-        // JS `tenant_id` que consumen los módulos internos ya resuelta).
-        const entity = await loadOrganizationEntity(entityId)
+      // La entidad la devuelve el dominio de estructura organizativa (con la clave
+      // JS `tenant_id` que consumen los módulos internos ya resuelta).
+      const entity = await loadOrganizationEntity(entityId)
 
-        // Authorization logic
-        let isAuthorized = false
+      // Authorization logic
+      let isAuthorized = false
 
-        // 1. Platform SuperAdmin always authorized
-        if (isPlatformSuperAdmin) {
-          isAuthorized = true
-        }
-        // 2. Platform User con permiso explícito de acceso interno (configuración o módulos)
-        //    o asignación directa/heredada sobre la entidad (`can_access_entity(..., '')`).
-        else {
-          const [settingsView, settingsManage, modulesView, modulesManage] = await Promise.all([
-            hasPlatformPermission("entity_settings.view"),
-            hasPlatformPermission("entity_settings.manage"),
-            hasPlatformPermission("entity_modules.view"),
-            hasPlatformPermission("entity_modules.manage"),
-          ])
-
-          if (settingsView || settingsManage || modulesView || modulesManage) {
-            isAuthorized = true
-          } else {
-            isAuthorized = await loadEntityPermissionSafe(entityId, "")
-          }
-        }
-
-        if (!isAuthorized) {
-          throw new Error("Acceso no autorizado")
-        }
-
-        // Protección de los módulos internos: además del acceso a la entidad, el espacio
-        // de trabajo interno requiere que la entidad sea Cuenta SiteCorp.
-        if (!hasSiteCorpAccount(entity)) {
-          clearCurrentEntity()
-          setModulesDisabled(true)
-          return
-        }
-
-        setModulesDisabled(false)
-        setCurrentEntity(entity)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error al cargar la entidad")
-      } finally {
-        initialLoadDone.current = true
-        setLoading(false)
+      // 1. Platform SuperAdmin always authorized
+      if (isPlatformSuperAdmin) {
+        isAuthorized = true
       }
-    }
+      // 2. Platform User con permiso explícito de acceso interno (configuración o módulos)
+      //    o asignación directa/heredada sobre la entidad (`can_access_entity(..., '')`).
+      else {
+        const [settingsView, settingsManage, modulesView, modulesManage] = await Promise.all([
+          hasPlatformPermission("entity_settings.view"),
+          hasPlatformPermission("entity_settings.manage"),
+          hasPlatformPermission("entity_modules.view"),
+          hasPlatformPermission("entity_modules.manage"),
+        ])
 
-    initialLoadDone.current = false
-    loadEntity()
+        if (settingsView || settingsManage || modulesView || modulesManage) {
+          isAuthorized = true
+        } else {
+          isAuthorized = await loadEntityPermissionSafe(entityId, "")
+        }
+      }
+
+      if (!isAuthorized) {
+        throw new Error("Acceso no autorizado")
+      }
+
+      // Protección de los módulos internos: además del acceso a la entidad, el espacio
+      // de trabajo interno requiere que la entidad sea Cuenta SiteCorp.
+      if (!hasSiteCorpAccount(entity)) {
+        clearCurrentEntity()
+        setModulesDisabled(true)
+        return
+      }
+
+      setModulesDisabled(false)
+      setCurrentEntity(entity)
+    } catch (err) {
+      if (isPermissionCheckUnavailableError(err)) {
+        setError("No se pudo conectar con el servidor")
+      } else {
+        setError(err instanceof Error ? err.message : "Error al cargar la entidad")
+      }
+    } finally {
+      initialLoadDone.current = true
+      setLoading(false)
+    }
   }, [entityId, isPlatformSuperAdmin, hasPlatformPermission, setCurrentEntity, clearCurrentEntity])
+
+  React.useEffect(() => {
+    initialLoadDone.current = false
+    void loadEntity()
+  }, [loadEntity])
 
   // Ruta externa de retorno (Organizaciones o estructura del cliente)
   React.useEffect(() => {
@@ -190,7 +194,12 @@ const EntityRouteWrapper = () => {
     navigate(fallbackPath)
   }
 
-  if (loading) {
+  const isPlanControlledRoute =
+    location.pathname.includes("/payroll-preparation") ||
+    location.pathname.includes("/training") ||
+    location.pathname.includes("/sst")
+
+  if (loading || (isPlanControlledRoute && planLoading)) {
     return (
       <div className="space-y-6 p-4 sm:p-6">
         <SiteCorpPageHeader
@@ -212,7 +221,10 @@ const EntityRouteWrapper = () => {
         <SiteCorpAlert type="danger" title="Error">
           {error}
         </SiteCorpAlert>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <SiteCorpButton variant="outline" onClick={() => void loadEntity()}>
+            Reintentar
+          </SiteCorpButton>
           <SiteCorpButton variant="outline" onClick={handleExitEntity}>
             Volver a organizaciones
           </SiteCorpButton>

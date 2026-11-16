@@ -21,9 +21,14 @@ import { useToast } from "@/shared/hooks/use-toast"
 import { useEntityPermissions } from "@/modules/access-control/presentation/hooks/use-entity-permissions"
 import { useWorkerMedicalCertificates } from "../hooks/use-medical-certificates"
 import { useSc404Generation } from "@/modules/access-control/presentation/hooks/use-sc404"
-import { getCertificateSignedUrl } from "@/modules/vacations-licenses/medical-certificates"
+import {
+  fetchWorkerEmploymentWindow,
+  getCertificateSignedUrl,
+  getMedicalCertificateIncoherenceReason,
+  type WorkerEmploymentWindow,
+} from "@/modules/vacations-licenses/medical-certificates"
 import MedicalCertificateFormDialog from "./MedicalCertificateFormDialog"
-import { Upload, FileText, Loader2, RefreshCw } from "lucide-react"
+import { AlertTriangle, Upload, FileText, Loader2, RefreshCw } from "lucide-react"
 
 interface WorkerMedicalCertificatesTabProps {
   workerId: string
@@ -44,12 +49,32 @@ export default function WorkerMedicalCertificatesTab({
 
   const [selectedYear, setSelectedYear] = React.useState<number>(new Date().getFullYear())
   const [dialogOpen, setDialogOpen] = React.useState(false)
+  const [employmentWindow, setEmploymentWindow] =
+    React.useState<WorkerEmploymentWindow | null>(null)
   const { generate: generateSc404, generatingId: generatingSc404Id } = useSc404Generation()
 
   // Reset al cambiar de trabajador (caso de prueba: Worker A → Worker B).
   React.useEffect(() => {
     setSelectedYear(new Date().getFullYear())
   }, [workerId])
+
+  React.useEffect(() => {
+    let active = true
+    if (!workerId || !canView) {
+      setEmploymentWindow(null)
+      return
+    }
+    fetchWorkerEmploymentWindow(workerId)
+      .then((win) => {
+        if (active) setEmploymentWindow(win)
+      })
+      .catch(() => {
+        if (active) setEmploymentWindow(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [workerId, canView])
 
   const {
     data,
@@ -183,11 +208,30 @@ export default function WorkerMedicalCertificatesTab({
                   </tr>
                 </thead>
                 <tbody>
-                  {certificates.map((cert) => (
+                  {certificates.map((cert) => {
+                    const incoherence = getMedicalCertificateIncoherenceReason({
+                      startDate: cert.start_date,
+                      returnDate: cert.return_date,
+                      days: cert.days,
+                      employment: employmentWindow,
+                    })
+                    return (
                     <tr key={cert.id} className="border-b border-border/50">
                       <td className="py-3 text-ink">{cert.start_date}</td>
                       <td className="py-3 text-ink">{cert.return_date}</td>
-                      <td className="py-3 text-ink">{cert.days}</td>
+                      <td className="py-3 text-ink">
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <span>{cert.days}</span>
+                          {incoherence && (
+                            <span
+                              className="inline-flex items-center gap-1 rounded bg-sitecorp-warning/15 px-1.5 py-0.5 text-[11px] font-medium text-sitecorp-warning"
+                              title={incoherence}
+                            >
+                              <AlertTriangle className="h-3 w-3" /> Certificado con datos incoherentes
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="py-3">
                         {cert.document?.storage_path ? (
                           <SiteCorpButton
@@ -222,7 +266,8 @@ export default function WorkerMedicalCertificatesTab({
                         </td>
                       )}
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

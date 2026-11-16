@@ -1,6 +1,7 @@
 import {
   ensureAddendumDocumentGenerated,
   ensureContractDocumentGenerated,
+  setContractDocumentStatus,
   type DocumentAutomationResult,
 } from "@/modules/contracts"
 import { ensurePayrollMovementDocumentGenerated } from "@/modules/payroll-movements"
@@ -53,14 +54,20 @@ export async function ensureMovementDocument(
   }
 }
 
-/** Documento del contrato creado. Devuelve el aviso si no se pudo generar. */
+/** Documento del contrato creado. Devuelve el aviso si no se pudo generar y actualiza `document_status`. */
 export async function ensureContractDocument(contractId: string): Promise<string | null> {
+  await setContractDocumentStatus(contractId, "PENDIENTE", null)
   try {
-    return contractWarning(await ensureContractDocumentGenerated(contractId))
+    const warning = contractWarning(await ensureContractDocumentGenerated(contractId))
+    await setContractDocumentStatus(contractId, warning ? "ERROR" : "GENERADO", warning)
+    return warning
   } catch (error) {
-    return error instanceof Error
-      ? error.message
-      : "No se pudo generar el documento contractual automáticamente."
+    const message =
+      error instanceof Error
+        ? error.message
+        : "No se pudo generar el documento contractual automáticamente."
+    await setContractDocumentStatus(contractId, "ERROR", message)
+    return message
   }
 }
 

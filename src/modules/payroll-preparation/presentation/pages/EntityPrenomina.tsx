@@ -16,6 +16,7 @@ import WorkerPrenominaDialog from "@/modules/payroll-preparation/presentation/co
 import { FilterBuilder } from "@/shared/components/filter-builder"
 import { useEntityFilters, type EntityFilterDefinition } from "@/modules/organization-structure/presentation/hooks/use-entity-filters"
 import { academicCategoryLabel } from "@/modules/organization-structure"
+import { toRomanNumeral } from "@/utils/cuba-date"
 import {
   MONTH_LABELS,
   PRENOMINA_STATUS_LABELS,
@@ -192,9 +193,13 @@ const EntityPrenomina = () => {
   }, [entityId, loadPeriods])
 
   React.useEffect(() => {
-    if (!canView) return
+    if (permissionsLoading) return
+    if (!canView) {
+      setLoading(false)
+      return
+    }
     loadInitial()
-  }, [canView, loadInitial])
+  }, [permissionsLoading, canView, loadInitial])
 
   const reloadSelected = React.useCallback(async () => {
     if (selectedPeriodId) {
@@ -416,7 +421,7 @@ const EntityPrenomina = () => {
       type: "select",
       options: Array.from(new Set(entries.map((e) => e.salary_group_sequence).filter((v): v is number => v !== null && v !== undefined)))
         .sort((a, b) => a - b)
-        .map((value) => ({ value: String(value), label: String(value) })),
+        .map((value) => ({ value: String(value), label: `Grupo ${toRomanNumeral(value)}` })),
       getValue: (e: PrenominaWorkerEntry) => (e.salary_group_sequence === null || e.salary_group_sequence === undefined ? null : String(e.salary_group_sequence)),
     },
     { key: "cla", label: "Con CLA", type: "boolean", getValue: (e: PrenominaWorkerEntry) => e.cla_applied },
@@ -656,7 +661,11 @@ const EntityPrenomina = () => {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>{entry.salary_group_sequence ?? "—"}</TableCell>
+                        <TableCell>
+                          {entry.salary_group_sequence !== null && entry.salary_group_sequence !== undefined
+                            ? toRomanNumeral(entry.salary_group_sequence)
+                            : "—"}
+                        </TableCell>
                         <TableCell>
                           {entry.salary_scale_amount !== null ? (
                             formatMoney(entry.salary_scale_amount)

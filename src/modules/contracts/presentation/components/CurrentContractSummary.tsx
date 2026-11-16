@@ -5,6 +5,7 @@ import { SiteCorpStatusBadge } from "@/shared/components/ui/sitecorp-status-badg
 import { Button as SiteCorpButton } from "@/shared/components/ui/sitecorp-button"
 import { FileSignature, FileText, UserMinus } from "lucide-react"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   CONTRACT_ALERT_META,
   deadlineLabel,
@@ -63,8 +64,11 @@ export const CurrentContractSummary: React.FC<CurrentContractSummaryProps> = ({
   onSeparate,
 }) => {
   const currency = formalized?.currency_code || currentSalaryCurrency || "CUP"
+  const todayCuba = todayIsoInCuba()
+  const isFutureContract = !!contractStartDate && contractStartDate.slice(0, 10) > todayCuba
 
   const salaryDiffers =
+    !isFutureContract &&
     formalized?.salary_amount != null &&
     currentSalaryAmount != null &&
     Number(formalized.salary_amount) !== Number(currentSalaryAmount)

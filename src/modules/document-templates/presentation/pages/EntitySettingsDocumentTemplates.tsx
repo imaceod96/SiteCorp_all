@@ -1,6 +1,6 @@
 import * as React from "react"
 import { useNavigate } from "react-router-dom"
-import { loadEntityPermissionSafe } from "@/modules/access-control"
+import { isPermissionCheckUnavailableError, loadEntityPermissionSafe } from "@/modules/access-control"
 import { fetchEntityName } from "@/modules/organization-structure"
 import { useActiveEntityId } from "@/contexts/CurrentEntityContext"
 import { SiteCorpPageHeader } from "@/shared/components/ui/sitecorp-page-header"
@@ -82,9 +82,13 @@ const EntitySettingsDocumentTemplates = () => {
       setTemplates(loadedTemplates)
     } catch (err) {
       console.error("Error loading document templates:", err)
-      setLoadError(
-        err instanceof Error ? err.message : "No se pudieron cargar las plantillas documentales."
-      )
+      if (isPermissionCheckUnavailableError(err)) {
+        setLoadError("No se pudo conectar con el servidor")
+      } else {
+        setLoadError(
+          err instanceof Error ? err.message : "No se pudieron cargar las plantillas documentales."
+        )
+      }
     } finally {
       setLoading(false)
     }
@@ -168,7 +172,16 @@ const EntitySettingsDocumentTemplates = () => {
       {header}
 
       {busyLabel && <SiteCorpAlert type="info">{busyLabel}</SiteCorpAlert>}
-      {loadError && <SiteCorpAlert type="danger">{loadError}</SiteCorpAlert>}
+      {loadError && (
+        <div className="space-y-3">
+          <SiteCorpAlert type="danger">{loadError}</SiteCorpAlert>
+          <div>
+            <SiteCorpButton variant="outline" onClick={() => void loadData()}>
+              Reintentar
+            </SiteCorpButton>
+          </div>
+        </div>
+      )}
 
       {templates.length === 0 ? (
         <SiteCorpCard>

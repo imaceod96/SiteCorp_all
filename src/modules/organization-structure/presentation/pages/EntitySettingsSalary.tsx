@@ -12,6 +12,7 @@ import { SiteCorpInput } from "@/shared/components/ui/sitecorp-input"
 import { SalaryGroupDialog } from "@/modules/organization-structure/presentation/components/salary-group-dialog"
 import ReviewSalaryChangeDialog from "@/modules/contracts/presentation/components/ReviewSalaryChangeDialog"
 import { toRomanNumeral } from "@/utils/roman-numerals"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { formatDocumentDate } from "@/modules/document-templates/domain/document-variables"
 import { Scale, Plus, Edit3, Clock, AlertTriangle } from "lucide-react"
 import type { SalaryGroupWithCurrent, SalaryScale } from "@/contexts/SalaryContext"
@@ -196,7 +197,7 @@ const EntitySettingsSalary = () => {
       try {
         const name = newScaleName.trim() || "Escala salarial empresarial"
         const currency = newScaleCurrency.trim() || "CUP"
-        const effectiveFrom = newScaleEffectiveFrom || new Date().toISOString().split('T')[0]
+        const effectiveFrom = newScaleEffectiveFrom || todayIsoInCuba()
         
         const newScale = await createEntityEmpresarialScale(
           currentEntity.id,
@@ -208,7 +209,7 @@ const EntitySettingsSalary = () => {
         setShowCreateEnterpriseScale(false)
         setNewScaleName("")
         setNewScaleCurrency("CUP")
-        setNewScaleEffectiveFrom(new Date().toISOString().split('T')[0])
+        setNewScaleEffectiveFrom(todayIsoInCuba())
         await loadScale()
       }
     } catch (err) {
@@ -385,6 +386,11 @@ const EntitySettingsSalary = () => {
                                   open={showAddGroup}
                                   onOpenChange={setShowAddGroup}
                                   onSubmit={handleAddGroup}
+                                  minAmount={
+                                    groups.length > 0
+                                      ? Math.max(...groups.map((g) => g.current_value?.amount || 0))
+                                      : undefined
+                                  }
                                 />
             
                                 {/* Groups table */}
@@ -545,14 +551,9 @@ const SalaryHistoryModal = ({
 }) => {
   const getStatus = (value: SalaryHistoryValue): string => {
     if (value.is_active) return "Actual"
-    
-    const today = new Date()
-    const effectiveFrom = new Date(value.effective_from)
-    
-    if (effectiveFrom > today) {
+    if (value.effective_from > todayIsoInCuba()) {
       return "Futuro"
     }
-    
     return "Histórico"
   }
 

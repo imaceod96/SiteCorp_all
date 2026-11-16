@@ -370,8 +370,14 @@ export const RolesManager = ({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <BadgeCheck className="h-4 w-4 text-sitecorp-primary" />
-            {roles.length} {roles.length === 1 ? "rol" : "roles"} ·{" "}
-            {selectablePermissions.length} permisos {isPlatform ? "de plataforma" : "internos"}
+            {!showRoles ? (
+              "Cargando..."
+            ) : (
+              <>
+                {roles.length} {roles.length === 1 ? "rol" : "roles"} ·{" "}
+                {selectablePermissions.length} permisos {isPlatform ? "de plataforma" : "internos"}
+              </>
+            )}
           </div>
           <SiteCorpButton
             onClick={openCreate}

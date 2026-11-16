@@ -2,7 +2,6 @@ import { loadEntityPermission } from "@/modules/access-control"
 import { isPendingCandidate, isReentryWorker } from "../domain/rules"
 import { fetchPersonIdentificationStatus } from "../infrastructure/candidate-registration.repository"
 import { rpcMigrationTemplateData } from "../infrastructure/worker-migration.repository"
-import { applyDueScheduledSeparationsRpc } from "../infrastructure/worker-transitions.repository"
 import {
   fetchCandidatesWithLicense,
   fetchClientEmploymentIndex,
@@ -120,7 +119,6 @@ export async function loadEntityWorkersDirectory(
   }
   if (!canView && !canManage) return empty
 
-  await applyDueScheduledSeparationsRpc({ entityId }).catch(() => 0)
   const workers = await fetchEntityActiveWorkers(entityId)
 
   const [genders, maritalStatuses, skinColors, educationLevels] = await Promise.all([
@@ -168,7 +166,6 @@ export async function loadEntityReentriesView(input: {
   }
   if (!canView && !canManage) return empty
 
-  await applyDueScheduledSeparationsRpc({ entityId: input.entityId }).catch(() => 0)
   const rows = await fetchEntityReentryWorkers(input.entityId)
 
   // Si la persona mantiene OTRA relación vigente en el cliente (aunque sea en otra

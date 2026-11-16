@@ -16,6 +16,7 @@ export type { WorkerEmploymentWindow } from "./domain/rules"
 /* Reglas puras del dominio */
 export {
   computeMedicalCertificateDays,
+  getMedicalCertificateIncoherenceReason,
   validateDocumentFile,
   validateMedicalCertificateInput,
 } from "./domain/rules"

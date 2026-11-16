@@ -42,149 +42,6 @@ const AUDIT_EVENT_COLUMNS = [
   "result",
 ].join(", ")
 
-/** Datos semilla iniciales para entornos de prueba sin sesión activa. */
-const INITIAL_SEED_EVENTS: AuditEvent[] = [
-  {
-    id: "ae-seed-001",
-    occurred_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-    actor_user_id: "e7062a40-bc05-4ffb-a5a5-ba73d1ab116f",
-    actor_full_name: "Administrador Fundador",
-    actor_username: "admin",
-    scope: "SITECORP",
-    organization_entity_id: null,
-    entity_name: "SiteCorp Global",
-    company_client_id: null,
-    module: "system",
-    action: "system_initialized",
-    entity_type: "platform",
-    record_id: "sitecorp-v1",
-    description: "Inicialización del sistema y verificación de seguridad de plataforma",
-    old_values: null,
-    new_values: { version: "1.0.0", environment: "production", rls_enabled: true },
-    result: "SUCCESS",
-  },
-  {
-    id: "ae-seed-002",
-    occurred_at: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
-    actor_user_id: "e7062a40-bc05-4ffb-a5a5-ba73d1ab116f",
-    actor_full_name: "Administrador Fundador",
-    actor_username: "admin",
-    scope: "ENTITY",
-    organization_entity_id: "ent-demo-001",
-    entity_name: "Empresa Demo Auditoría",
-    company_client_id: "client-demo-001",
-    module: "entities",
-    action: "entity_created",
-    entity_type: "organization_entity",
-    record_id: "EMP-AUDIT-01",
-    description: "Creación de la entidad principal 'Empresa Demo Auditoría' con Cuenta SiteCorp activa",
-    old_values: null,
-    new_values: {
-      name: "Empresa Demo Auditoría",
-      code: "EMP-AUDIT-01",
-      entity_type: "company",
-      regime_id: "EMPRESARIAL",
-      is_sitecorp_account: true,
-    },
-    result: "SUCCESS",
-  },
-  {
-    id: "ae-seed-003",
-    occurred_at: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
-    actor_user_id: "e7062a40-bc05-4ffb-a5a5-ba73d1ab116f",
-    actor_full_name: "Administrador Fundador",
-    actor_username: "admin",
-    scope: "ENTITY",
-    organization_entity_id: "ent-demo-002",
-    entity_name: "UEB Operaciones Central",
-    company_client_id: "client-demo-001",
-    module: "entities",
-    action: "entity_created",
-    entity_type: "organization_entity",
-    record_id: "UEB-AUDIT-01",
-    description: "Creación de la UEB subordinada 'UEB Operaciones Central'",
-    old_values: null,
-    new_values: {
-      name: "UEB Operaciones Central",
-      code: "UEB-AUDIT-01",
-      entity_type: "ueb",
-      parent_name: "Empresa Demo Auditoría",
-    },
-    result: "SUCCESS",
-  },
-  {
-    id: "ae-seed-004",
-    occurred_at: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
-    actor_user_id: "e7062a40-bc05-4ffb-a5a5-ba73d1ab116f",
-    actor_full_name: "Administrador Fundador",
-    actor_username: "admin",
-    scope: "ENTITY",
-    organization_entity_id: "ent-demo-001",
-    entity_name: "Empresa Demo Auditoría",
-    company_client_id: "client-demo-001",
-    module: "workers",
-    action: "worker_hired",
-    entity_type: "worker",
-    record_id: "WRK-85041212345",
-    description: "Contratación y formalización de Carlos Martínez Rodríguez como Especialista Principal",
-    old_values: { candidate_status: "in_review" },
-    new_values: {
-      worker_name: "Carlos Martínez Rodríguez",
-      identification: "85041212345",
-      position_title: "Especialista Principal en Gestión Humana",
-      salary: 7500,
-      currency: "CUP",
-      contract_type: "indefinite",
-    },
-    result: "SUCCESS",
-  },
-  {
-    id: "ae-seed-005",
-    occurred_at: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-    actor_user_id: "e7062a40-bc05-4ffb-a5a5-ba73d1ab116f",
-    actor_full_name: "Administrador Fundador",
-    actor_username: "admin",
-    scope: "ENTITY",
-    organization_entity_id: "ent-demo-001",
-    entity_name: "Empresa Demo Auditoría",
-    company_client_id: "client-demo-001",
-    module: "workers",
-    action: "worker_hired",
-    entity_type: "worker",
-    record_id: "WRK-92091854321",
-    description: "Contratación de Elena Fernández Díaz como Técnico de Recursos Humanos",
-    old_values: { candidate_status: "in_review" },
-    new_values: {
-      worker_name: "Elena Fernández Díaz",
-      identification: "92091854321",
-      position_title: "Técnico de Recursos Humanos",
-      salary: 6200,
-      currency: "CUP",
-      contract_type: "indefinite",
-    },
-    result: "SUCCESS",
-  },
-  {
-    id: "ae-seed-006",
-    occurred_at: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-    actor_user_id: "e7062a40-bc05-4ffb-a5a5-ba73d1ab116f",
-    actor_full_name: "Administrador Fundador",
-    actor_username: "admin",
-    scope: "SITECORP",
-    organization_entity_id: null,
-    entity_name: "SiteCorp Global",
-    company_client_id: null,
-    module: "roles",
-    action: "role_assigned",
-    entity_type: "platform_user_role",
-    record_id: "ROL-RRHH-01",
-    description: "Asignación de privilegios de Gestión de RRHH a la cuenta de usuario imaceod96@gmail.com",
-    old_values: { permissions: ["view_only"] },
-    new_values: { role_name: "HR Manager", permissions: ["workers.manage", "contracts.manage", "staffing.manage"] },
-    result: "SUCCESS",
-  },
-]
-
 function generateUuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID()
@@ -219,39 +76,7 @@ function deterministicUuid(seed: string): string {
   return `${p1}-${p2}-${p3}-${p4}-${p5}`
 }
 
-let memoryFallbackEvents: AuditEvent[] = [...INITIAL_SEED_EVENTS]
-
-function getStoredEvents(): AuditEvent[] {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return memoryFallbackEvents
-  }
-
-  try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
-    if (!raw) {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_SEED_EVENTS))
-      return [...INITIAL_SEED_EVENTS]
-    }
-    const parsed = JSON.parse(raw)
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      return parsed
-    }
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_SEED_EVENTS))
-    return [...INITIAL_SEED_EVENTS]
-  } catch {
-    return memoryFallbackEvents
-  }
-}
-
-function saveStoredEvents(events: AuditEvent[]): void {
-  memoryFallbackEvents = events
-  if (typeof window === "undefined" || !window.localStorage) return
-  try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(events))
-  } catch (err) {
-    console.warn("[audit-history] Error saving to localStorage:", err)
-  }
-}
+let recentDispatchedEvents: AuditEvent[] = []
 
 /** Limpia el texto de búsqueda antes de enviarlo a filtros. */
 function sanitizeSearchTerm(value: string): string {
@@ -1032,6 +857,12 @@ const READ_ONLY_RPC_NAMES = new Set([
   "company_client_deletion_summary",
   "tenant_deletion_summary",
   "prenomina_cla_config",
+  "apply_due_scheduled_separations",
+  "sync_entity_area_training_folders",
+  "sync_entity_area_sst_folders",
+  "list_platform_user_emails",
+  "contract_formalized_conditions",
+  "contract_formalized_totals",
 ])
 
 function isReadOnlyRpc(rpcName: string): boolean {
@@ -1565,32 +1396,19 @@ export async function selectAuditEvents(params: {
   const from = (safePage - 1) * pageSize
   const to = from + pageSize - 1
 
-  let remoteEvents: AuditEvent[] = []
+  const { data: remoteData, error: remoteError } = await supabase
+    .from("audit_events")
+    .select(AUDIT_EVENT_COLUMNS)
+    .order("occurred_at", { ascending: false })
+    .limit(500)
 
-  try {
-    const { data: remoteData, error: remoteError } = await supabase
-      .from("audit_events")
-      .select(AUDIT_EVENT_COLUMNS)
-      .order("occurred_at", { ascending: false })
-      .limit(500)
-
-    if (!remoteError && Array.isArray(remoteData)) {
-      remoteEvents = remoteData as unknown as AuditEvent[]
-    }
-  } catch {
-    // Continuar con almacén local si la red o tabla falla
+  if (remoteError) {
+    throw new Error(remoteError.message || "No se pudo consultar el historial de auditoría.")
   }
 
-  const localEvents = getStoredEvents()
-  const combinedInitial = [...remoteEvents, ...localEvents]
+  const remoteEvents = Array.isArray(remoteData) ? (remoteData as unknown as AuditEvent[]) : []
 
-  const { mergedEvents, hasRealPlatformData } = await syncDiscoveredPlatformEvents(combinedInitial)
-
-  if (hasRealPlatformData || remoteEvents.length > 0) {
-    saveStoredEvents(mergedEvents)
-  }
-
-  const filtered = mergedEvents.filter((event) => {
+  const filtered = remoteEvents.filter((event) => {
     if (filters.scope && event.scope !== filters.scope) return false
     if (filters.entityId && event.organization_entity_id !== filters.entityId) return false
     if (filters.module && event.module !== filters.module) return false
@@ -1647,16 +1465,15 @@ export async function selectAuditEvents(params: {
 }
 
 /**
- * Inserta un nuevo evento de auditoría de manera inmutable en almacenamiento local y en Supabase.
+ * Inserta un nuevo evento de auditoría de manera inmutable en Supabase `public.audit_events`.
  */
 export async function insertAuditEvent(
   eventData: Omit<AuditEvent, "id" | "occurred_at">
 ): Promise<AuditEvent> {
-  const events = getStoredEvents()
   const nowMs = Date.now()
 
-  // Evitar duplicados si una acción dispara tanto llamada manual como interceptor universal
-  const existingRecent = events.find((e) => {
+  // Evitar duplicados en la misma ventana de 4 segundos si una acción dispara tanto llamada manual como interceptor
+  const existingRecent = recentDispatchedEvents.find((e) => {
     const diff = Math.abs(nowMs - new Date(e.occurred_at).getTime())
     if (diff > 4000) return false
     if (e.action !== eventData.action || e.module !== eventData.module) return false
@@ -1687,11 +1504,8 @@ export async function insertAuditEvent(
     occurred_at: new Date(nowMs).toISOString(),
   }
 
-  // 1. Guardar en almacenamiento persistente local
-  events.unshift(newEvent)
-  saveStoredEvents(events)
+  recentDispatchedEvents = [newEvent, ...recentDispatchedEvents.slice(0, 99)]
 
-  // 2. Insertar en Supabase public.audit_events
   try {
     const { error: insErr } = await supabase.from("audit_events").insert([
       {
@@ -1730,41 +1544,34 @@ export async function insertAuditEvent(
 
 /** Entidades para el selector de filtro por entidad. */
 export async function selectAuditEntityOptions(): Promise<AuditEntityOption[]> {
-  try {
-    const { data, error } = await supabase
-      .from("organization_entities")
-      .select("id, name")
-      .order("name")
+  const { data, error } = await supabase
+    .from("organization_entities")
+    .select("id, name")
+    .order("name")
 
-    if (!error && data && data.length > 0) {
-      return data as AuditEntityOption[]
-    }
-  } catch {
-    // Fallback a entidades conocidas
+  if (error) {
+    throw new Error(error.message || "No se pudieron cargar las entidades de auditoría.")
   }
 
-  const events = getStoredEvents()
-  const map = new Map<string, string>()
-  map.set("ent-demo-001", "Empresa Demo Auditoría")
-  map.set("ent-demo-002", "UEB Operaciones Central")
-
-  for (const e of events) {
-    if (e.organization_entity_id && e.entity_name) {
-      map.set(e.organization_entity_id, e.entity_name)
-    }
-  }
-
-  return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
+  return (data as AuditEntityOption[]) || []
 }
 
-/** Obtiene todos los eventos guardados para exportación. */
+/** Obtiene todos los eventos guardados en Supabase para exportación. */
 export async function exportStoredAuditEvents(): Promise<AuditEvent[]> {
-  return getStoredEvents()
+  const { data, error } = await supabase
+    .from("audit_events")
+    .select(AUDIT_EVENT_COLUMNS)
+    .order("occurred_at", { ascending: false })
+    .limit(1000)
+
+  if (error) {
+    throw new Error(error.message || "No se pudieron exportar los eventos de auditoría.")
+  }
+
+  return Array.isArray(data) ? (data as unknown as AuditEvent[]) : []
 }
 
-/** Reinicia el almacén de eventos. */
+/** Función mantenida por compatibilidad de firma; la auditoría en Supabase es inmutable. */
 export async function clearStoredAuditEvents(): Promise<void> {
-  if (typeof window !== "undefined" && window.localStorage) {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_SEED_EVENTS))
-  }
+  recentDispatchedEvents = []
 }

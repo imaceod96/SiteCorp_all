@@ -185,8 +185,6 @@ export function missingPersonProfileFields(worker: PersonDirectoryWorker): strin
   const fields: string[] = []
   if (!worker.birth_date) fields.push("fecha de nacimiento")
   if (!worker.gender_id) fields.push("sexo")
-  if (!worker.marital_status_id) fields.push("estado civil")
-  if (!worker.skin_color_id) fields.push("color de piel")
   if (!worker.address) fields.push("dirección")
   if (!worker.employment_start_date) fields.push("fecha de incorporación")
   return fields

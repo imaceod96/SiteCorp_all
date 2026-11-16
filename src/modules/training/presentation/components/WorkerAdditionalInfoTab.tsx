@@ -33,6 +33,7 @@ import {
   type SstHealthAptitudeStatus,
 } from "@/modules/sst"
 import { formatIsoDateToDisplay } from "@/utils/ci"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   GraduationCap,
   CheckCircle2,
@@ -116,7 +117,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
     "Capacitación inicial e inducción al puesto"
   )
   const [receivedDate, setReceivedDate] = React.useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => todayIsoInCuba()
   )
   const [notes, setNotes] = React.useState<string>("")
   const [submitting, setSubmitting] = React.useState(false)
@@ -129,7 +130,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
     "Instrucción inicial de Seguridad y Salud en el Trabajo (SST)"
   )
   const [sstReceivedDate, setSstReceivedDate] = React.useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => todayIsoInCuba()
   )
   const [sstNotes, setSstNotes] = React.useState<string>("")
   const [submittingSstTraining, setSubmittingSstTraining] = React.useState(false)
@@ -139,7 +140,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
   const [selectedEppId, setSelectedEppId] = React.useState<string>("__custom__")
   const [customEppName, setCustomEppName] = React.useState<string>("")
   const [eppDeliveryDate, setEppDeliveryDate] = React.useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => todayIsoInCuba()
   )
   const [eppRenewalDueDate, setEppRenewalDueDate] = React.useState<string>("")
   const [eppQuantity, setEppQuantity] = React.useState<string>("1")
@@ -155,7 +156,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
   >("PERIODICO")
   const [aptitudeStatus, setAptitudeStatus] = React.useState<SstHealthAptitudeStatus>("APTO")
   const [evaluationDate, setEvaluationDate] = React.useState<string>(
-    () => new Date().toISOString().slice(0, 10)
+    () => todayIsoInCuba()
   )
   const [nextReviewDate, setNextReviewDate] = React.useState<string>("")
   const [workRestrictions, setWorkRestrictions] = React.useState<string>("")
@@ -243,9 +244,8 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
   const latestAptitude = sstProfile.healthAptitudes[0] ?? null
 
   const defaultTrainingDate = React.useCallback(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    return hireDate && hireDate > today ? hireDate : today
-  }, [hireDate])
+    return todayIsoInCuba()
+  }, [])
 
   const openRegisterDialog = (notificationId: string | null = null) => {
     setActiveNotificationId(notificationId)
@@ -296,7 +296,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
       "__custom__"
     setSelectedEppId(defaultEpp)
     setCustomEppName("")
-    setEppDeliveryDate(new Date().toISOString().slice(0, 10))
+    setEppDeliveryDate(todayIsoInCuba())
     setEppRenewalDueDate("")
     setEppQuantity("1")
     setEppStatus("ENTREGADO")
@@ -309,7 +309,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
     setEvaluationType(latestAptitude?.evaluation_type ?? "PERIODICO")
     setAptitudeStatus(latestAptitude?.aptitude_status ?? "APTO")
     setEvaluationDate(
-      latestAptitude?.evaluation_date ?? new Date().toISOString().slice(0, 10)
+      latestAptitude?.evaluation_date ?? todayIsoInCuba()
     )
     setNextReviewDate(latestAptitude?.next_review_date ?? "")
     setWorkRestrictions(latestAptitude?.administrative_restrictions ?? "")
@@ -1051,6 +1051,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <SiteCorpInput
                   type="date"
                   min={hireDate || undefined}
+                  max={todayIsoInCuba()}
                   value={receivedDate}
                   onChange={(e) => setReceivedDate(e.target.value)}
                   required
@@ -1135,6 +1136,7 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <SiteCorpInput
                   type="date"
                   min={hireDate || undefined}
+                  max={todayIsoInCuba()}
                   value={sstReceivedDate}
                   onChange={(e) => setSstReceivedDate(e.target.value)}
                   required
@@ -1220,6 +1222,8 @@ export const WorkerAdditionalInfoTab: React.FC<WorkerAdditionalInfoTabProps> = (
                 <Label>Fecha de entrega</Label>
                 <SiteCorpInput
                   type="date"
+                  min={hireDate || undefined}
+                  max={todayIsoInCuba()}
                   value={eppDeliveryDate}
                   onChange={(e) => setEppDeliveryDate(e.target.value)}
                   required

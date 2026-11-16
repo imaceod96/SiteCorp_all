@@ -55,6 +55,8 @@ import type { WorkerCurrentSituation } from "@/shared/components/worker-action-c
 // vencimientos contractuales (módulo Contratos): viven en la capa compartida para que
 // Contratos no dependa de la presentación de Personas.
 
+import { addDaysIsoInCuba } from "@/utils/cuba-date"
+
 interface ChangePositionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -64,11 +66,7 @@ interface ChangePositionDialogProps {
   onSuccess: () => void
 }
 
-const addDays = (isoDate: string, days: number): string => {
-  const d = new Date(`${isoDate}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
+const addDays = (isoDate: string, days: number): string => addDaysIsoInCuba(days, isoDate)
 
 const groupLabel = (sequence: number | null | undefined) =>
   sequence == null ? "—" : `Grupo ${toRomanNumeral(sequence)}`

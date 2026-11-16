@@ -162,7 +162,15 @@ const EntityStaffing = () => {
       setSalaryValuesByGroup(workspace.salaryValuesByGroup)
     } catch (err) {
       console.error("Error loading plantilla operativa:", err)
-      setError(err instanceof Error ? err.message : "Error al cargar la plantilla operativa")
+      if (
+        err instanceof Error &&
+        (err.name === "PermissionCheckUnavailableError" ||
+          err.message === "No se pudo conectar con el servidor")
+      ) {
+        setError("No se pudo conectar con el servidor")
+      } else {
+        setError(err instanceof Error ? err.message : "Error al cargar la plantilla operativa")
+      }
     } finally {
       setLoading(false)
     }
@@ -469,7 +477,10 @@ const EntityStaffing = () => {
         <SiteCorpAlert type="danger" title="Error">
           {error}
         </SiteCorpAlert>
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <SiteCorpButton variant="outline" onClick={() => void loadData()}>
+            Reintentar
+          </SiteCorpButton>
           <SiteCorpButton variant="outline" onClick={() => navigate("/home")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Volver
           </SiteCorpButton>

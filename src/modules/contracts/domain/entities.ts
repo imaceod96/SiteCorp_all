@@ -359,3 +359,19 @@ export interface DocumentGenerationResult {
   missingVariables?: { key: string; label: string }[]
   error?: string
 }
+
+export type ContractDocumentStatus = "PENDIENTE" | "GENERADO" | "ERROR"
+
+export interface PendingContractDocumentRow {
+  contract_id: string
+  worker_id: string
+  worker_name: string
+  worker_identification: string | null
+  organization_entity_id: string
+  contract_type_name: string | null
+  start_date: string | null
+  document_status: ContractDocumentStatus
+  document_error: string | null
+  document_status_updated_at: string
+}
+

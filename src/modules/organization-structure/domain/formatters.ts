@@ -4,6 +4,7 @@ import {
   type PositionWorkInfo,
 } from "./entities"
 import { WEEK_DAYS } from "./rules"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 
 /** Etiqueta completa del día (Lunes…Domingo). */
 export const weekDayLabel = (dayOfWeek: number): string =>
@@ -149,7 +150,7 @@ export function buildAnexo14FileName(entityName: string, date = new Date()): str
       .replace(/_+/g, "_")
       .replace(/^_|_$/g, "")
       .slice(0, 60) || "Entidad"
-  const iso = date.toISOString().slice(0, 10)
+  const iso = todayIsoInCuba(date)
   return `Anexo_14_Plantilla_${safeName}_${iso}.xlsx`
 }
 
@@ -164,7 +165,7 @@ export function buildAnexo14BFileName(entityName: string, date = new Date()): st
       .replace(/_+/g, "_")
       .replace(/^_|_$/g, "")
       .slice(0, 60) || "Entidad"
-  const iso = date.toISOString().slice(0, 10)
+  const iso = todayIsoInCuba(date)
   return `Anexo14B_${safeName}_${iso}.xlsx`
 }
 

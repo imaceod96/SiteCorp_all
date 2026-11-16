@@ -39,23 +39,50 @@ export async function loadEntityPermission(
   return rpcCanAccessEntity(entityId, permissionCode)
 }
 
+export class PermissionCheckUnavailableError extends Error {
+  readonly cause?: unknown
+
+  constructor(message = "No se pudo conectar con el servidor", options?: { cause?: unknown }) {
+    super(message)
+    this.name = "PermissionCheckUnavailableError"
+    this.cause = options?.cause
+  }
+}
+
+export const isPermissionCheckUnavailableError = (
+  error: unknown
+): error is PermissionCheckUnavailableError =>
+  error instanceof PermissionCheckUnavailableError ||
+  (typeof error === "object" &&
+    error !== null &&
+    (error as { name?: string }).name === "PermissionCheckUnavailableError")
+
 /**
- * Permiso interno del solicitante en una entidad SIN propagar fallos.
+ * Permiso interno del solicitante en una entidad con reintento ante fallos transitorios.
  *
- * Es la comprobación que usaban las pantallas que sólo la necesitan para habilitar
- * botones, enlaces de configuración o columnas de la vista: un fallo de la comprobación
- * —o la ausencia de permiso— NUNCA habilita nada y no debe tumbar la pantalla. La
- * autoridad real sigue siendo RLS y las RPC.
+ * Devuelve `false` únicamente cuando el backend responde `false`. Si tras el reintento
+ * persiste un fallo de red o 503, lanza `PermissionCheckUnavailableError` para que la UI
+ * muestre "No se pudo conectar con el servidor" y nunca "No tiene permiso".
  */
 export async function loadEntityPermissionSafe(
   entityId: string,
   permissionCode: string
 ): Promise<boolean> {
-  try {
-    return await rpcCanAccessEntity(entityId, permissionCode)
-  } catch {
-    return false
+  if (!entityId) return false
+  let lastError: unknown
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await rpcCanAccessEntity(entityId, permissionCode)
+    } catch (err) {
+      lastError = err
+      if (attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+      }
+    }
   }
+  throw new PermissionCheckUnavailableError("No se pudo conectar con el servidor", {
+    cause: lastError,
+  })
 }
 
 /** Varios permisos de la misma entidad, resueltos en paralelo. */

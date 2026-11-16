@@ -7,6 +7,7 @@ import {
   IDENTIFICATION_LENGTH,
 } from "@/utils/ci"
 import { CUBA_PROVINCES_FULL, cubaMunicipalityOptions } from "@/data/cuba-locations-full"
+import { todayIsoInCuba } from "@/utils/cuba-date"
 import { createMigratedWorker } from "@/modules/people/application/worker-migration.commands"
 import {
   loadCandidateRegistryCatalogs,
@@ -101,7 +102,7 @@ export function MigratedWorkerDialog({ onSuccess, onCancel }: Props) {
       const startDate = form.employment_start_date.trim()
       if (!startDate) throw new Error("Indica la fecha en la que el trabajador comenzó a trabajar en la entidad.")
       if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) throw new Error("La fecha de incorporación no es válida.")
-      if (startDate > new Date().toISOString().slice(0, 10)) throw new Error("La fecha de incorporación no puede ser futura.")
+      if (startDate > todayIsoInCuba()) throw new Error("La fecha de incorporación no puede ser futura.")
       const balance = form.initial_vacation_balance.trim().replace(/\s/g, "").replace(",", ".")
       if (balance && !/^(?:\d+(?:\.\d+)?|\.\d+)$/.test(balance)) throw new Error("El saldo inicial de vacaciones no es válido.")
       const row: MigrationRow = {

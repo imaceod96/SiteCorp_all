@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { todayIsoInCuba } from '@/utils/cuba-date'
 import {
   addSalaryGroupValue,
   addSalaryGroup as addSalaryGroupCommand,
@@ -189,7 +190,7 @@ export const SalaryProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return await resolveSalaryValueForGroup(
         entityId,
         groupId,
-        effectiveDate || new Date().toISOString().split('T')[0]
+        effectiveDate || todayIsoInCuba()
       )
     } catch (err) {
       console.error('[SalaryContext] Error resolving salary value:', err)

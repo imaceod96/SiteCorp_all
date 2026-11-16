@@ -42,17 +42,14 @@ import {
   type PaymentMethodOption,
 } from "@/modules/contracts"
 import { FileSignature } from "lucide-react"
+import { addDaysIsoInCuba } from "@/utils/cuba-date"
 import type { ChangeContractDialogProps } from "@/shared/components/worker-action-contracts"
 
 // Las props del flujo son un contrato compartido con la página de vencimientos
 // contractuales (módulo Contratos): viven en la capa compartida para que Contratos no
 // dependa de la presentación de Personas.
 
-const addDays = (isoDate: string, days: number): string => {
-  const d = new Date(`${isoDate}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + days)
-  return d.toISOString().slice(0, 10)
-}
+const addDays = (isoDate: string, days: number): string => addDaysIsoInCuba(days, isoDate)
 
 /** Fase 11A.5 — cambio de tipo de contrato: crea un contrato NUEVO con sus propias
  *  condiciones formalizadas. Las condiciones vigentes se precargan para revisión,
