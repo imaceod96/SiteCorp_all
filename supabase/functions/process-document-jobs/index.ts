@@ -295,7 +295,7 @@ async function processSingleJob(supabase: any, job: DocumentJobRow): Promise<{ o
       templateTypeCode = "SC_4_04"
       const { data: certRow, error: certErr } = await supabase
         .from("worker_medical_certificates")
-        .select("id, worker_id, organization_entity_id, certificate_number, start_date, end_date, natural_days, notes")
+        .select("id, worker_id, organization_entity_id, certificate_number, start_date, return_date, days, document_id, notes")
         .eq("id", job.source_id)
         .maybeSingle()
       if (certErr || !certRow) {
@@ -317,10 +317,10 @@ async function processSingleJob(supabase: any, job: DocumentJobRow): Promise<{ o
         nombre_trabajador: fullName,
         ci_trabajador: workerRow?.identification || "",
         codigo_trabajador: workerRow?.code || "",
-        numero_certificado: certRow.certificate_number || "",
+        numero_certificado: certRow.certificate_number || certRow.document_id || "",
         fecha_inicio: formatIsoDate(certRow.start_date),
-        fecha_fin: formatIsoDate(certRow.end_date),
-        dias_naturales: String(certRow.natural_days ?? ""),
+        fecha_fin: formatIsoDate(certRow.return_date),
+        dias_naturales: String(certRow.days ?? ""),
         observaciones: certRow.notes || "",
       }
     }
