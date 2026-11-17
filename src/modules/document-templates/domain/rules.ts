@@ -1,7 +1,8 @@
 import {
-  documentVariableByKey,
-  type DocumentTypeCode,
-} from "./document-variables"
+  documentTypeCodeForTemplateType as sharedDocumentTypeCodeForTemplateType,
+  reconcileTemplateAnalysisWithCatalog as sharedReconcileTemplateAnalysisWithCatalog,
+} from "../../../../supabase/functions/_shared/generation-rules.ts"
+import { documentVariableByKey } from "./document-variables"
 import {
   DOCX_MIME,
   DOC_MIME,
@@ -19,13 +20,8 @@ import {
 /**
  * Plantillas documentales — Reglas PURAS del dominio.
  *
- * Formatos admitidos, detección del formato real de un documento Word, etiquetas legibles
- * y periodos de vigencia. Ninguna de estas funciones consulta Supabase, Storage ni la red:
- * son criterios que se pueden probar sin base de datos.
- *
- * Dos decisiones NO se toman aquí porque son del backend: qué variables son válidas y si
- * una versión puede activarse. La inspección local es un informe RÁPIDO para no subir un
- * archivo inútil; nunca sustituye la verificación del analizador central.
+ * Delega las reglas compartidas (`documentTypeCodeForTemplateType`,
+ * `reconcileTemplateAnalysisWithCatalog`) a `supabase/functions/_shared/generation-rules.ts`.
  */
 
 /**
@@ -40,16 +36,7 @@ export const templateAcceptForType = (typeCode: string | null | undefined): stri
   TEMPLATE_TYPE_USES_XLSX(typeCode) ? `.xlsx,${XLSX_MIME}` : WORD_ACCEPT
 
 /** Código de documento del registro central al que pertenece cada tipo de plantilla. */
-export const documentTypeCodeForTemplateType = (templateTypeCode: string): DocumentTypeCode =>
-  templateTypeCode === "EMPLOYMENT_CONTRACT_ADDENDUM" || templateTypeCode === "ADDENDUM"
-    ? "ADDENDUM"
-    : templateTypeCode === "SC_4_04"
-      ? "SC_4_04"
-      : templateTypeCode === "RESOLUTION"
-        ? "RESOLUTION"
-        : templateTypeCode === "PAYROLL_MOVEMENT"
-          ? "PAYROLL_MOVEMENT"
-          : "CONTRACT"
+export const documentTypeCodeForTemplateType = sharedDocumentTypeCodeForTemplateType
 
 /**
  * Ejemplos de marcadores del catálogo oficial según el tipo de plantilla (G2).
@@ -106,81 +93,13 @@ export const templatePlaceholderExamplesForType = (
 
 /**
  * Reconcilia el análisis devuelto por el backend con el catálogo oficial de dominio
- * (`DOCUMENT_VARIABLES`), garantizando una única fuente de verdad (C2/G1) incluso si la
- * tabla `public.document_variables` remota aún no ha ejecutado la última migración SQL.
+ * (`DOCUMENT_VARIABLES`), garantizando una única fuente de verdad (C2/G1).
  */
 export const reconcileTemplateAnalysisWithCatalog = (
   analysis: DocumentTemplateAnalysis,
   templateTypeCode?: string | null
-): DocumentTemplateAnalysis => {
-  const docType = documentTypeCodeForTemplateType(templateTypeCode || "CONTRACT")
-
-  const recognizedMap = new Map<string, DocumentTemplateAnalysis["recognized"][number]>()
-  for (const item of analysis.recognized || []) {
-    recognizedMap.set(item.key, { ...item })
-  }
-
-  const remainingUnknown: DocumentTemplateAnalysis["unknown_variables"] = []
-  const remainingIncompatible: DocumentTemplateAnalysis["incompatible_variables"] = [
-    ...(analysis.incompatible_variables || []),
-  ]
-
-  for (const item of analysis.unknown_variables || []) {
-    const def = documentVariableByKey(item.key)
-    if (!def) {
-      remainingUnknown.push(item)
-      continue
-    }
-    if (def.documentTypes.includes(docType)) {
-      recognizedMap.set(item.key, {
-        key: item.key,
-        count: item.count,
-        split_runs: 0,
-      })
-    } else if (!remainingIncompatible.some((inc) => inc.key === item.key)) {
-      remainingIncompatible.push({
-        key: item.key,
-        label: def.label,
-        count: item.count,
-      })
-    }
-  }
-
-  // Re-evaluar también `incompatible_variables` por si una variable como `worker.full_name`
-  // ahora es compatible con el tipo documental (G1).
-  const finalIncompatible: DocumentTemplateAnalysis["incompatible_variables"] = []
-  for (const inc of remainingIncompatible) {
-    const def = documentVariableByKey(inc.key)
-    if (def && def.documentTypes.includes(docType)) {
-      recognizedMap.set(inc.key, {
-        key: inc.key,
-        count: inc.count,
-        split_runs: 0,
-      })
-    } else {
-      finalIncompatible.push(inc)
-    }
-  }
-
-  const recognized = Array.from(recognizedMap.values())
-  const requiredVariables = recognized.map((item) => item.key)
-
-  const filteredWarnings = (analysis.warnings || []).filter((w) => {
-    if (recognized.length > 0 && w.includes("no contiene marcadores dinámicos")) {
-      return false
-    }
-    return true
-  })
-
-  return {
-    ...analysis,
-    recognized,
-    unknown_variables: remainingUnknown,
-    incompatible_variables: finalIncompatible,
-    required_variables: requiredVariables,
-    warnings: filteredWarnings,
-  }
-}
+): DocumentTemplateAnalysis =>
+  sharedReconcileTemplateAnalysisWithCatalog(analysis, templateTypeCode)
 
 /**
  * Reconcilia el resultado de `validate_document_template_version` con el catálogo oficial
@@ -337,13 +256,10 @@ export const inspectTemplateFile = async (file: File): Promise<TemplateFileInspe
   const bytes = new Uint8Array(await file.slice(0, 16384).arrayBuffer())
 
   if (startsWithBytes(bytes, OLE2_SIGNATURE)) {
-    // Contenedor OLE/CFB: es la familia Word 97-2003 (.doc).
     return { format: "DOC", extension: "doc", mimeType: DOC_MIME, problem: null }
   }
 
   if (startsWithBytes(bytes, [0x50, 0x4b])) {
-    // Paquete OOXML (ZIP): Excel .xlsx o Word .docx. La pista fiable es la
-    // extensión declarada; el analizador central confirma el formato real.
     if (declaredExtension === "xlsx") {
       return { format: "XLSX", extension: "xlsx", mimeType: XLSX_MIME, problem: null }
     }
@@ -360,9 +276,6 @@ export const inspectTemplateFile = async (file: File): Promise<TemplateFileInspe
 
 /**
  * Inspección usada por la interfaz para validar antes de subir.
- *
- * Un `.doc` se admite y se conserva: el aviso de «no analizable» lo emite el backend tras
- * identificarlo de verdad.
  */
 export const describeTemplateFileProblem = async (file: File): Promise<string | null> =>
   (await inspectTemplateFile(file)).problem
@@ -384,10 +297,6 @@ export const formatTemplateFileSize = (bytes: number | null | undefined): string
 
 /**
  * Variables OBLIGATORIAS de una versión, tal como las determinó el analizador central.
- *
- * Ningún consumidor interpreta el contenido del documento por su cuenta: se lee el análisis
- * ya registrado. Una versión sin análisis no exige nada (la decisión de bloqueo es del motor
- * de generación documental, no de esta regla).
  */
 export const requiredVariableKeys = (
   analysis: Pick<DocumentTemplateAnalysis, "required_variables"> | null | undefined

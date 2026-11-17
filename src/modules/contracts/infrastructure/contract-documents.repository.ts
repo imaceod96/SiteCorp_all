@@ -3,6 +3,7 @@ import { todayIsoInCuba } from "@/utils/cuba-date"
 import {
   documentTypeCodeForContractType,
   fetchGeneratedDocuments,
+  generateSc404Document,
 } from "@/modules/document-generation"
 import { resolveDocumentTemplateVersion } from "@/modules/document-templates"
 import type {
@@ -562,10 +563,33 @@ export const ensureSc404DocumentQueued = async (params: {
       return { generated: false, skipped: true, result: null }
     }
     const outcome = await triggerDocumentGenerationJobs({ kind, sourceId })
+    if (outcome.ok) {
+      return {
+        generated: true,
+        skipped: false,
+        result: { success: true, pdfPath: null, error: null },
+      }
+    }
+
+    const fallback = await generateSc404Document(kind, sourceId)
+    if (fallback.success) {
+      await enqueueDocumentGenerationJob(kind, sourceId, false)
+      notifyDocumentStatusListeners()
+      return {
+        generated: true,
+        skipped: false,
+        result: fallback,
+      }
+    }
+
     return {
-      generated: outcome.ok,
+      generated: false,
       skipped: false,
-      result: { success: outcome.ok, pdfPath: null, error: outcome.error ?? null },
+      result: {
+        success: false,
+        pdfPath: null,
+        error: fallback.error ?? outcome.error ?? null,
+      },
     }
   } catch (err) {
     const message =
