@@ -261,7 +261,7 @@ async function fetchWorkerAssignmentContext(
     rows.find(
       (a) => atDate && a.start_date <= atDate && (!a.end_date || a.end_date >= atDate)
     ) ||
-    rows.find((a) => a.is_current && !a.end_date) ||
+    rows.find((a) => a.is_current) ||
     rows[0] ||
     null
 
