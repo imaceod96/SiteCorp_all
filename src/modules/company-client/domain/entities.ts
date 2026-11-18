@@ -36,6 +36,7 @@ export interface CompanyClient {
   code: string | null
   description: string | null
   isActive: boolean | null
+  isSelfEmployed?: boolean | null
   createdAt: string | null
   updatedAt: string | null
 }
@@ -63,6 +64,7 @@ export interface CompanyClientInput {
   name: string
   description?: string | null
   isActive?: boolean
+  isSelfEmployed?: boolean
 }
 
 /**

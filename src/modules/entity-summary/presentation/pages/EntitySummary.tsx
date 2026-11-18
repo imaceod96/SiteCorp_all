@@ -38,11 +38,14 @@ const entityTypeLabels: Record<string, string> = {
   business_group: "Grupo empresarial",
   company: "Empresa",
   ueb: "UEB / Unidad Empresarial de Base",
+  tcp: "TCP",
+  mipyme: "MIPYME",
+  pyme: "PYME",
 }
 
 const typeIcon = (type: string) => {
   if (type === "business_group") return <Layers className="h-5 w-5" />
-  if (type === "company") return <Building2 className="h-5 w-5" />
+  if (type === "company" || type === "mipyme" || type === "pyme") return <Building2 className="h-5 w-5" />
   return <Factory className="h-5 w-5" />
 }
 

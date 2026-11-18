@@ -32,8 +32,11 @@ function getEntityIcon(type: string) {
     case "business_group":
       return <Network className="h-3.5 w-3.5 shrink-0 text-purple-600 dark:text-purple-400" />
     case "company":
+    case "mipyme":
+    case "pyme":
       return <Building2 className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
     case "ueb":
+    case "tcp":
       return <Layers className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
     default:
       return <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

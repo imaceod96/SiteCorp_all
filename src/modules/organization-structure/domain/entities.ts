@@ -445,7 +445,13 @@ export interface StaffingExportMeta {
 /* ------------------------------------------------------------------ */
 
 /** Tipo de entidad organizativa. Determina qué entidad superior admite. */
-export type OrganizationEntityType = "business_group" | "company" | "ueb"
+export type OrganizationEntityType =
+  | "business_group"
+  | "company"
+  | "ueb"
+  | "tcp"
+  | "mipyme"
+  | "pyme"
 
 /** Régimen de la entidad: determina la escala salarial aplicable. */
 export type OrganizationEntityRegime = "PRESUPUESTADA" | "EMPRESARIAL"

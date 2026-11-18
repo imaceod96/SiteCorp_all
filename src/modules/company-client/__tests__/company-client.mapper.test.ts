@@ -96,6 +96,20 @@ describe("toCompanyClient", () => {
     expect(other.companyClientId).toBe(TENANT_ID)
     expect(other.companyClientId).toBe(fullTenant.id)
   })
+
+  it("mapea is_self_employed cuando está presente (Cuenta propia)", () => {
+    const selfEmployed = toCompanyClient({
+      ...fullTenant,
+      is_self_employed: true,
+    })
+    expect(selfEmployed.isSelfEmployed).toBe(true)
+
+    const standardClient = toCompanyClient({
+      ...fullTenant,
+      is_self_employed: false,
+    })
+    expect(standardClient.isSelfEmployed).toBe(false)
+  })
 })
 
 describe("correspondencia legacy ↔ dominio", () => {

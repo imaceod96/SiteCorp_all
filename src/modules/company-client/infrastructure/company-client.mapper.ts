@@ -31,6 +31,7 @@ export interface LegacyTenantSummary {
   code?: string | null
   description?: string | null
   is_active?: boolean | null
+  is_self_employed?: boolean | null
   created_at?: string | null
   updated_at?: string | null
 }
@@ -46,6 +47,7 @@ export interface LegacyTenantSummary {
 export interface CompanyClientRecord extends LegacyTenantSummary {
   code: string
   is_active: boolean
+  is_self_employed?: boolean
 }
 
 /**
@@ -79,6 +81,9 @@ export function toCompanyClient(tenant: LegacyTenantSummary): CompanyClient {
     code: tenant.code ?? null,
     description: tenant.description ?? null,
     isActive: tenant.is_active ?? null,
+    ...(tenant.is_self_employed !== undefined
+      ? { isSelfEmployed: tenant.is_self_employed }
+      : {}),
     createdAt: tenant.created_at ?? null,
     updatedAt: tenant.updated_at ?? null,
   }

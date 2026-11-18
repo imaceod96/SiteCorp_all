@@ -255,12 +255,15 @@ export type { SaveOrganizationEntityInput } from "./domain/entities"
 export type { OrganizationTree } from "./domain/organization-entities.rules"
 export {
   ENTITY_TYPE_OPTIONS,
+  SELF_EMPLOYED_ENTITY_TYPE_OPTIONS,
   STATUS_OPTIONS,
   buildOrganizationEntityPayload,
   buildOrganizationTree,
   describeEntityError,
   generateEntityCode,
   isParentTypeAllowed,
+  isRootOnlyEntityType,
+  isSelfEmployedEntityType,
   resolveEntityAncestors,
   resolveParentCandidates,
 } from "./domain/organization-entities.rules"

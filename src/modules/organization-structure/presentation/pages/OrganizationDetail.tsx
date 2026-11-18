@@ -70,11 +70,16 @@ const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",
   company: "Empresa",
   ueb: "UEB / Unidad Empresarial de Base",
+  tcp: "TCP",
+  mipyme: "MIPYME",
+  pyme: "PYME",
 }
 
 const typeIcon = (type: OrganizationEntity["entity_type"]) => {
   if (type === "business_group") return <Layers className="h-4 w-4 text-sitecorp-primary" />
-  if (type === "company") return <Building2 className="h-4 w-4 text-sitecorp-primary" />
+  if (type === "company" || type === "mipyme" || type === "pyme") {
+    return <Building2 className="h-4 w-4 text-sitecorp-primary" />
+  }
   return <Factory className="h-4 w-4 text-sitecorp-primary" />
 }
 
