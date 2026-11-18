@@ -139,7 +139,13 @@ const EntitySettingsUsers = () => {
               ? "Grupo empresarial"
               : currentEntity.entity_type === "company"
                 ? "Empresa"
-                : "UEB"}
+                : currentEntity.entity_type === "tcp"
+                  ? "TCP"
+                  : currentEntity.entity_type === "mipyme"
+                    ? "MIPYME"
+                    : currentEntity.entity_type === "pyme"
+                      ? "PYME"
+                      : "UEB"}
           </SiteCorpStatusBadge>
         </div>
       </SiteCorpAlert>

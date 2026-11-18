@@ -73,6 +73,7 @@ export { getCompanyClientById } from "./infrastructure/company-client.repository
 /* Casos de uso de lectura */
 export {
   loadCompanyClients,
+  loadCompanyClientSelfEmployedFlag,
   loadCompanyClientDeletionSummary,
 } from "./application/company-clients.queries"
 

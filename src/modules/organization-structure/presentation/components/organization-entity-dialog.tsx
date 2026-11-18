@@ -13,16 +13,21 @@ import { Building2, Factory, Layers, Plus, ShieldOff } from "lucide-react"
 import { useToast } from "@/shared/hooks/use-toast"
 import {
   ENTITY_TYPE_OPTIONS,
+  SELF_EMPLOYED_ENTITY_TYPE_OPTIONS,
   describeEntityError,
+  isRootOnlyEntityType,
+  isSelfEmployedEntityType,
   loadEntityRegimes,
   resolveParentCandidates,
   saveOrganizationEntity,
   type EntityRegime,
   type OrganizationEntity,
 } from "@/modules/organization-structure"
+import { loadCompanyClientSelfEmployedFlag } from "@/modules/company-client"
 
 /**
- * Alta y edición de una entidad organizativa (Grupo Empresarial → Empresa → UEB).
+ * Alta y edición de una entidad organizativa (Grupo Empresarial → Empresa → UEB,
+ * o TCP / MIPYME / PYME en clientes de Cuenta propia).
  *
  * Toda la lógica de negocio y la persistencia viven en el dominio
  * (`@/domains/organization-structure`): el código autogenerado, la jerarquía válida
@@ -35,7 +40,7 @@ import {
 
 interface OrganizationEntityFormData {
   name: string
-  entity_type: "business_group" | "company" | "ueb"
+  entity_type: "business_group" | "company" | "ueb" | "tcp" | "mipyme" | "pyme"
   regime_id: string | null
   is_active: boolean
   description: string | null
@@ -48,7 +53,7 @@ interface OrganizationEntityFormData {
 // entidad: se gestiona en Entidad → Ajustes → Datos contractuales.
 export const organizationEntitySchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio"),
-  entity_type: z.enum(["business_group", "company", "ueb"]),
+  entity_type: z.enum(["business_group", "company", "ueb", "tcp", "mipyme", "pyme"]),
   regime_id: z.enum(["PRESUPUESTADA", "EMPRESARIAL"]).nullable(),
   is_active: z.boolean().default(true),
   description: z.string().nullable(),
@@ -56,7 +61,7 @@ export const organizationEntitySchema = z.object({
   account_code: z.string().nullable(),
   parent_id: z.string().nullable(),
 }).superRefine((data, ctx) => {
-  if (data.entity_type !== "business_group" && !data.parent_id) {
+  if (!isRootOnlyEntityType(data.entity_type) && !data.parent_id) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["parent_id"],
@@ -86,6 +91,8 @@ interface OrganizationEntityDialogProps {
   defaultRegime?: OrganizationEntity["regime_id"]
   /** Si se abre desde un botón contextual (+ Grupo / + Empresa / + UEB), restringe el tipo */
   lockEntityType?: boolean
+  /** Indica si el cliente propietario es de Cuenta propia (TCP, MIPYME, PYME bajo régimen Empresarial) */
+  isSelfEmployedClient?: boolean
 }
 
 export const OrganizationEntityDialog = ({
@@ -99,6 +106,7 @@ export const OrganizationEntityDialog = ({
   defaultParentId,
   defaultRegime = "PRESUPUESTADA",
   lockEntityType = false,
+  isSelfEmployedClient,
 }: OrganizationEntityDialogProps) => {
   const { currentCompanyClient } = useCurrentCompanyClient()
   const { toast } = useToast()
@@ -111,9 +119,62 @@ export const OrganizationEntityDialog = ({
   const [regimeOptions, setRegimeOptions] = React.useState<EntityRegime[]>([])
   const [loadingRegimes, setLoadingRegimes] = React.useState(false)
   const [regimeLoadError, setRegimeLoadError] = React.useState<string | null>(null)
+  const [loadedSelfEmployedFlag, setLoadedSelfEmployedFlag] = React.useState<boolean | null>(null)
 
   // El cliente activo solo se usa como respaldo; nunca se toma «el primer cliente».
   const effectiveCompanyClientId = companyClientId || currentCompanyClient?.id || ""
+
+  React.useEffect(() => {
+    if (!open) return
+    if (isSelfEmployedClient !== undefined) {
+      setLoadedSelfEmployedFlag(isSelfEmployedClient)
+      return
+    }
+    if (
+      effectiveCompanyClientId &&
+      currentCompanyClient?.id === effectiveCompanyClientId &&
+      currentCompanyClient.is_self_employed !== undefined
+    ) {
+      setLoadedSelfEmployedFlag(currentCompanyClient.is_self_employed === true)
+      return
+    }
+    if (!effectiveCompanyClientId) {
+      setLoadedSelfEmployedFlag(false)
+      return
+    }
+
+    let cancelled = false
+    loadCompanyClientSelfEmployedFlag(effectiveCompanyClientId)
+      .then((flag) => {
+        if (!cancelled) setLoadedSelfEmployedFlag(flag)
+      })
+      .catch(() => {
+        if (!cancelled) setLoadedSelfEmployedFlag(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [open, isSelfEmployedClient, effectiveCompanyClientId, currentCompanyClient])
+
+  const effectiveIsSelfEmployedClient = React.useMemo(() => {
+    if (isSelfEmployedClient !== undefined) return isSelfEmployedClient === true
+    if (editingEntity && isSelfEmployedEntityType(editingEntity.entity_type)) return true
+    if (
+      effectiveCompanyClientId &&
+      currentCompanyClient?.id === effectiveCompanyClientId &&
+      currentCompanyClient.is_self_employed !== undefined
+    ) {
+      return currentCompanyClient.is_self_employed === true
+    }
+    return loadedSelfEmployedFlag === true
+  }, [
+    isSelfEmployedClient,
+    editingEntity,
+    effectiveCompanyClientId,
+    currentCompanyClient,
+    loadedSelfEmployedFlag,
+  ])
 
   const {
     register,
@@ -125,15 +186,15 @@ export const OrganizationEntityDialog = ({
   } = useForm<OrganizationEntityFormDataZod>({
     resolver: zodResolver(organizationEntitySchema),
     defaultValues: {
-          name: "",
-          entity_type: defaultEntityType,
-          regime_id: defaultRegime as "PRESUPUESTADA" | "EMPRESARIAL" | null,
-          is_active: true,
-          description: null,
-          is_sitecorp_account: false,
-          account_code: null,
-          parent_id: null,
-        },
+      name: "",
+      entity_type: defaultEntityType,
+      regime_id: defaultRegime as "PRESUPUESTADA" | "EMPRESARIAL" | null,
+      is_active: true,
+      description: null,
+      is_sitecorp_account: false,
+      account_code: null,
+      parent_id: null,
+    },
   })
 
   React.useEffect(() => {
@@ -143,38 +204,59 @@ export const OrganizationEntityDialog = ({
       pendingSubmit.current = null
 
       if (editingEntity) {
-              reset({
-                name: editingEntity.name,
-                entity_type: editingEntity.entity_type,
-                regime_id: editingEntity.regime_id as "PRESUPUESTADA" | "EMPRESARIAL" | null,
-                is_active: editingEntity.is_active,
-                description: editingEntity.description,
-                is_sitecorp_account: editingEntity.is_sitecorp_account,
-                account_code: editingEntity.account_code,
-                parent_id: editingEntity.parent_id,
-              })
+        reset({
+          name: editingEntity.name,
+          entity_type: editingEntity.entity_type,
+          regime_id: effectiveIsSelfEmployedClient
+            ? "EMPRESARIAL"
+            : (editingEntity.regime_id as "PRESUPUESTADA" | "EMPRESARIAL" | null),
+          is_active: editingEntity.is_active,
+          description: editingEntity.description,
+          is_sitecorp_account: editingEntity.is_sitecorp_account,
+          account_code: editingEntity.account_code,
+          parent_id: effectiveIsSelfEmployedClient ? null : editingEntity.parent_id,
+        })
         // Al editar, el código interno de la entidad se conserva sin cambios
       } else {
-              const parentEntity = defaultParentId
-                ? entities.find((e) => e.id === defaultParentId)
-                : null
-              const effectiveRegime =
-                (parentEntity?.regime_id as "PRESUPUESTADA" | "EMPRESARIAL" | null) ??
-                (defaultRegime as "PRESUPUESTADA" | "EMPRESARIAL" | null) ??
-                "PRESUPUESTADA"
-              reset({
-                name: "",
-                entity_type: defaultEntityType,
-                regime_id: effectiveRegime,
-                is_active: true,
-                description: null,
-                is_sitecorp_account: false,
-                account_code: null,
-                parent_id: defaultParentId ?? null,
-              })
-            }
+        const parentEntity =
+          !effectiveIsSelfEmployedClient && defaultParentId
+            ? entities.find((e) => e.id === defaultParentId)
+            : null
+        const effectiveRegime = effectiveIsSelfEmployedClient
+          ? "EMPRESARIAL"
+          : (parentEntity?.regime_id as "PRESUPUESTADA" | "EMPRESARIAL" | null) ??
+            (defaultRegime as "PRESUPUESTADA" | "EMPRESARIAL" | null) ??
+            "PRESUPUESTADA"
+        const initialEntityType = effectiveIsSelfEmployedClient
+          ? isSelfEmployedEntityType(defaultEntityType)
+            ? defaultEntityType
+            : "tcp"
+          : isSelfEmployedEntityType(defaultEntityType)
+            ? "business_group"
+            : defaultEntityType
+
+        reset({
+          name: "",
+          entity_type: initialEntityType,
+          regime_id: effectiveRegime,
+          is_active: true,
+          description: null,
+          is_sitecorp_account: false,
+          account_code: null,
+          parent_id: effectiveIsSelfEmployedClient ? null : defaultParentId ?? null,
+        })
+      }
     }
-  }, [open, editingEntity, entities, reset, defaultEntityType, defaultParentId, defaultRegime])
+  }, [
+    open,
+    editingEntity,
+    entities,
+    reset,
+    defaultEntityType,
+    defaultParentId,
+    defaultRegime,
+    effectiveIsSelfEmployedClient,
+  ])
 
   // El catálogo de regímenes se lee al abrir el diálogo (catálogo GLOBAL: nunca se filtra
   // por cliente). Si la lectura falla se avisa y el selector queda vacío: jamás se
@@ -236,12 +318,12 @@ export const OrganizationEntityDialog = ({
         data: {
           name: data.name,
           entity_type: data.entity_type,
-          regime_id: data.regime_id,
+          regime_id: effectiveIsSelfEmployedClient ? "EMPRESARIAL" : data.regime_id,
           is_active: data.is_active,
           description: data.description,
           is_sitecorp_account: data.is_sitecorp_account,
           account_code: data.account_code,
-          parent_id: data.parent_id,
+          parent_id: effectiveIsSelfEmployedClient ? null : data.parent_id,
         },
       })
 
@@ -279,6 +361,7 @@ export const OrganizationEntityDialog = ({
 
   const watchedEntityType = watch("entity_type")
   const watchedParentId = watch("parent_id")
+  const watchedRegimeId = watch("regime_id")
 
   // Entidades candidatas a ser la entidad superior: siempre del MISMO cliente
   // (aislamiento por cliente) y coherentes con el tipo (Grupo → Empresa → UEB).
@@ -293,21 +376,29 @@ export const OrganizationEntityDialog = ({
     [entities, editingEntity, effectiveCompanyClientId, watchedEntityType]
   )
 
-  // La entidad superior debe ser coherente con el tipo: los grupos no tienen padre y
-  // al cambiar de tipo se descarta una selección que ya no es válida.
+  // La entidad superior debe ser coherente con el tipo: los grupos y las entidades de
+  // cuenta propia (TCP, MIPYME, PYME) no tienen padre y al cambiar de tipo se descarta
+  // una selección que ya no es válida.
   React.useEffect(() => {
-    if (watchedEntityType === "business_group") {
+    if (isRootOnlyEntityType(watchedEntityType) || effectiveIsSelfEmployedClient) {
       if (watchedParentId) setValue("parent_id", null)
       return
     }
     if (watchedParentId && !filteredParentEntities.some((e) => e.id === watchedParentId)) {
       setValue("parent_id", null)
     }
-  }, [watchedEntityType, watchedParentId, filteredParentEntities, setValue])
+  }, [watchedEntityType, watchedParentId, filteredParentEntities, setValue, effectiveIsSelfEmployedClient])
+
+  // En clientes de Cuenta propia, el régimen siempre es Empresarial (bloqueado).
+  React.useEffect(() => {
+    if (effectiveIsSelfEmployedClient && watchedRegimeId !== "EMPRESARIAL") {
+      setValue("regime_id", "EMPRESARIAL")
+    }
+  }, [effectiveIsSelfEmployedClient, watchedRegimeId, setValue])
 
   // Al seleccionar una entidad superior en modo creación, hereda su régimen por defecto (M9)
   React.useEffect(() => {
-    if (editingEntity || !watchedParentId) return
+    if (editingEntity || !watchedParentId || effectiveIsSelfEmployedClient) return
     const selectedParent = entities.find((e) => e.id === watchedParentId)
     if (
       selectedParent?.regime_id === "PRESUPUESTADA" ||
@@ -315,14 +406,19 @@ export const OrganizationEntityDialog = ({
     ) {
       setValue("regime_id", selectedParent.regime_id)
     }
-  }, [editingEntity, watchedParentId, entities, setValue])
+  }, [editingEntity, watchedParentId, entities, setValue, effectiveIsSelfEmployedClient])
 
   const availableTypeOptions = React.useMemo(() => {
+    const baseOptions = effectiveIsSelfEmployedClient
+      ? SELF_EMPLOYED_ENTITY_TYPE_OPTIONS
+      : ENTITY_TYPE_OPTIONS
+
     if (!editingEntity && lockEntityType) {
-      return ENTITY_TYPE_OPTIONS.filter((opt) => opt.value === defaultEntityType)
+      const matching = baseOptions.filter((opt) => opt.value === defaultEntityType)
+      if (matching.length > 0) return matching
     }
-    return ENTITY_TYPE_OPTIONS
-  }, [editingEntity, lockEntityType, defaultEntityType])
+    return baseOptions
+  }, [editingEntity, lockEntityType, defaultEntityType, effectiveIsSelfEmployedClient])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -372,7 +468,7 @@ export const OrganizationEntityDialog = ({
               <label className="text-sm font-medium text-ink">Tipo *</label>
               <SiteCorpSelect
                 value={watch("entity_type")}
-                disabled={!editingEntity && lockEntityType}
+                disabled={!editingEntity && lockEntityType && availableTypeOptions.length === 1}
                 onValueChange={(value) =>
                   setValue("entity_type", value as OrganizationEntityFormDataZod["entity_type"])
                 }
@@ -389,29 +485,40 @@ export const OrganizationEntityDialog = ({
             <div className="space-y-2 sm:col-span-full">
               <label className="text-sm font-medium text-ink">Régimen *</label>
               <SiteCorpSelect
-                value={watch("regime_id")}
-                onValueChange={(value) =>
+                value={effectiveIsSelfEmployedClient ? "EMPRESARIAL" : watch("regime_id")}
+                onValueChange={(value) => {
+                  if (effectiveIsSelfEmployedClient) return
                   setValue(
                     "regime_id",
                     value as OrganizationEntityFormDataZod["regime_id"]
                   )
-                }
-                disabled={loadingRegimes || regimeOptions.length === 0}
+                }}
+                disabled={effectiveIsSelfEmployedClient || loadingRegimes || regimeOptions.length === 0}
               >
-                {loadingRegimes && <option value="">Cargando regímenes…</option>}
+                {loadingRegimes && !effectiveIsSelfEmployedClient && (
+                  <option value="">Cargando regímenes…</option>
+                )}
+                {effectiveIsSelfEmployedClient && regimeOptions.length === 0 && (
+                  <option value="EMPRESARIAL">Empresarial</option>
+                )}
                 {regimeOptions.map((regime) => (
-                                  <option key={regime.id} value={regime.id}>
-                                    {regime.name}
-                                  </option>
-                                ))}
+                  <option key={regime.id} value={regime.id}>
+                    {regime.name}
+                  </option>
+                ))}
               </SiteCorpSelect>
-              {regimeLoadError && (
+              {effectiveIsSelfEmployedClient && (
+                <p className="text-xs text-muted-foreground">
+                  En clientes de Cuenta propia todas las entidades operan bajo régimen Empresarial.
+                </p>
+              )}
+              {regimeLoadError && !effectiveIsSelfEmployedClient && (
                 <p className="text-xs text-sitecorp-warning">{regimeLoadError}</p>
               )}
             </div>
 
-            {/* Jerarquía: Grupo sin entidad superior; Empresa en un grupo; UEB en una empresa */}
-            {watch("entity_type") !== "business_group" && (
+            {/* Jerarquía: Grupo y entidades de Cuenta propia (TCP, MIPYME, PYME) sin entidad superior; Empresa en un grupo; UEB en una empresa */}
+            {!isRootOnlyEntityType(watch("entity_type")) && !effectiveIsSelfEmployedClient && (
               <div className="space-y-2 sm:col-span-full">
                 <label className="text-sm font-medium text-ink">Entidad superior *</label>
                 <SiteCorpSelect

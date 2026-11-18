@@ -57,11 +57,28 @@ export async function getCompanyClientById(
 export async function selectCompanyClients(): Promise<LegacyTenantSummary[]> {
   const { data, error } = await supabase
     .from(tableName("clients"))
-    .select("id, name, code, description, is_active, created_at, updated_at")
+    .select("id, name, code, description, is_active, is_self_employed, created_at, updated_at")
     .order("name")
 
   if (error) throw error
   return (data as LegacyTenantSummary[] | null) || []
+}
+
+/**
+ * Consulta la bandera `is_self_employed` de un cliente propietario concreto.
+ */
+export async function selectCompanyClientSelfEmployedFlag(
+  companyClientId: CompanyClientId
+): Promise<boolean> {
+  if (!companyClientId) return false
+  const { data, error } = await supabase
+    .from(tableName("clients"))
+    .select("is_self_employed")
+    .eq("id", companyClientId)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as { is_self_employed?: boolean | null } | null)?.is_self_employed === true
 }
 
 /**
@@ -79,6 +96,9 @@ export async function rpcCreateCompanyClient(
     p_name: input.name.trim(),
     p_description: input.description?.trim() || null,
     p_is_active: input.isActive ?? true,
+    ...(input.isSelfEmployed !== undefined
+      ? { p_is_self_employed: input.isSelfEmployed }
+      : {}),
   })
 
   if (error) throw error
@@ -101,6 +121,9 @@ export async function updateCompanyClientRow(
       name: input.name.trim(),
       description: input.description?.trim() || null,
       is_active: input.isActive ?? true,
+      ...(input.isSelfEmployed !== undefined
+        ? { is_self_employed: input.isSelfEmployed }
+        : {}),
     })
     .eq("id", companyClientId)
 

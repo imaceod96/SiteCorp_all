@@ -21,6 +21,12 @@ export function getEntityTypeLabel(type: string): string {
       return "Empresa"
     case "ueb":
       return "UEB"
+    case "tcp":
+      return "TCP"
+    case "mipyme":
+      return "MIPYME"
+    case "pyme":
+      return "PYME"
     default:
       return "Entidad"
   }
@@ -34,8 +40,11 @@ export function getEntityTypeBadgeClasses(type: string): string {
     case "business_group":
       return "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
     case "company":
+    case "mipyme":
+    case "pyme":
       return "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800"
     case "ueb":
+    case "tcp":
       return "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800"
     default:
       return "bg-muted text-muted-foreground border-border"
@@ -107,10 +116,13 @@ export function useAccessibleEntities() {
       }
     })
 
-    // Ordenar raíces por tipo (Grupo -> Empresa -> UEB) y luego por nombre
+    // Ordenar raíces por tipo (Grupo -> Empresa/MIPYME/PYME -> UEB/TCP) y luego por nombre
     const typeOrder: Record<string, number> = {
       business_group: 1,
       company: 2,
+      mipyme: 2,
+      pyme: 2,
+      tcp: 3,
       ueb: 3,
     }
 

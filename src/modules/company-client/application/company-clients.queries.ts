@@ -1,6 +1,7 @@
 import {
   rpcCompanyClientDeletionSummary,
   selectCompanyClients,
+  selectCompanyClientSelfEmployedFlag,
 } from "../infrastructure/company-client.repository"
 import { companyClientDeletionError } from "../domain/rules"
 import { toCompanyClient } from "../infrastructure/company-client.mapper"
@@ -20,6 +21,12 @@ import type { CompanyClient, CompanyClientDeletionSummary, CompanyClientId } fro
 export async function loadCompanyClients(): Promise<CompanyClient[]> {
   const rows = await selectCompanyClients()
   return rows.map(toCompanyClient)
+}
+
+export async function loadCompanyClientSelfEmployedFlag(
+  companyClientId: CompanyClientId
+): Promise<boolean> {
+  return selectCompanyClientSelfEmployedFlag(companyClientId)
 }
 
 /**

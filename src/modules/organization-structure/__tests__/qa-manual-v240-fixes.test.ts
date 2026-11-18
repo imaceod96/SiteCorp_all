@@ -231,4 +231,63 @@ describe("QA Manual de Gestor v2.4.0 — Estructura Organizativa y Antigüedad",
       expect(overnight.effectiveHours).toBe(8)
     })
   })
+
+  describe("Clientes de Cuenta propia — Entidades TCP, MIPYME y PYME bajo régimen Empresarial sin jerarquía", async () => {
+    const {
+      SELF_EMPLOYED_ENTITY_TYPE_OPTIONS,
+      buildOrganizationEntityPayload,
+      generateEntityCode,
+      isParentTypeAllowed,
+      isRootOnlyEntityType,
+      isSelfEmployedEntityType,
+    } = await import("../domain/organization-entities.rules")
+
+    it("expone las opciones TCP, MIPYME y PYME con ortografía estándar", () => {
+      expect(SELF_EMPLOYED_ENTITY_TYPE_OPTIONS).toEqual([
+        { value: "tcp", label: "TCP" },
+        { value: "mipyme", label: "MIPYME" },
+        { value: "pyme", label: "PYME" },
+      ])
+    })
+
+    it("reconoce tcp, mipyme y pyme como tipos de cuenta propia y de nivel raíz sin padre permitido", () => {
+      for (const type of ["tcp", "mipyme", "pyme"] as const) {
+        expect(isSelfEmployedEntityType(type)).toBe(true)
+        expect(isRootOnlyEntityType(type)).toBe(true)
+        expect(isParentTypeAllowed("business_group", type)).toBe(false)
+        expect(isParentTypeAllowed("company", type)).toBe(false)
+        expect(isParentTypeAllowed("mipyme", type)).toBe(false)
+        expect(isParentTypeAllowed(type, "tcp")).toBe(false)
+      }
+      expect(isSelfEmployedEntityType("company")).toBe(false)
+      expect(isRootOnlyEntityType("business_group")).toBe(true)
+      expect(isRootOnlyEntityType("company")).toBe(false)
+    })
+
+    it("genera prefijos TCP-, MIP- y PYM- y fuerza régimen EMPRESARIAL y parent_id null en el payload", () => {
+      expect(generateEntityCode("tcp")).toMatch(/^TCP-[A-Z0-9]{6}$/)
+      expect(generateEntityCode("mipyme")).toMatch(/^MIP-[A-Z0-9]{6}$/)
+      expect(generateEntityCode("pyme")).toMatch(/^PYM-[A-Z0-9]{6}$/)
+
+      const payload = buildOrganizationEntityPayload({
+        editingEntity: null,
+        data: {
+          name: "Panadería San José",
+          entity_type: "mipyme",
+          regime_id: "PRESUPUESTADA",
+          is_active: true,
+          description: "MIPYME privada",
+          is_sitecorp_account: true,
+          account_code: null,
+          parent_id: "some-accidental-parent-id",
+        },
+      })
+
+      expect(payload.regime_id).toBe("EMPRESARIAL")
+      expect(payload.parent_id).toBeNull()
+      expect(payload.code).toMatch(/^MIP-[A-Z0-9]{6}$/)
+      expect(payload.is_sitecorp_account).toBe(true)
+      expect(payload.account_code).toMatch(/^CUENTA-MIP-[A-Z0-9]{6}$/)
+    })
+  })
 })

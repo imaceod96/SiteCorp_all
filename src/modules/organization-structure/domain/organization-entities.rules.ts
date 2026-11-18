@@ -16,12 +16,34 @@ import type {
  * la migración a DDD es un traslado estructural, no un cambio de comportamiento.
  */
 
-/** Opciones de tipo de entidad, en el orden en que se ofrecen. */
+/** Opciones de tipo de entidad para clientes empresariales/estatales clásicos. */
 export const ENTITY_TYPE_OPTIONS: ReadonlyArray<{ value: OrganizationEntityType; label: string }> = [
   { value: "business_group", label: "Grupo empresarial" },
   { value: "company", label: "Empresa" },
   { value: "ueb", label: "UEB" },
 ]
+
+/** Opciones de tipo de entidad para clientes de Cuenta propia (sin jerarquía entre sí). */
+export const SELF_EMPLOYED_ENTITY_TYPE_OPTIONS: ReadonlyArray<{
+  value: OrganizationEntityType
+  label: string
+}> = [
+  { value: "tcp", label: "TCP" },
+  { value: "mipyme", label: "MIPYME" },
+  { value: "pyme", label: "PYME" },
+]
+
+export function isSelfEmployedEntityType(
+  entityType: string | null | undefined
+): boolean {
+  return entityType === "tcp" || entityType === "mipyme" || entityType === "pyme"
+}
+
+export function isRootOnlyEntityType(
+  entityType: string | null | undefined
+): boolean {
+  return entityType === "business_group" || isSelfEmployedEntityType(entityType)
+}
 
 /**
  * Composición de la JERARQUÍA organizativa a partir de las entidades visibles.
@@ -106,10 +128,13 @@ const CODE_PREFIXES: Record<OrganizationEntityType, string> = {
   business_group: "GE",
   company: "EMP",
   ueb: "UEB",
+  tcp: "TCP",
+  mipyme: "MIP",
+  pyme: "PYM",
 }
 
 /**
- * Código interno autogenerado (`GE-XXXXXX`, `EMP-XXXXXX`, `UEB-XXXXXX`).
+ * Código interno autogenerado (`GE-XXXXXX`, `EMP-XXXXXX`, `UEB-XXXXXX`, `TCP-XXXXXX`, `MIP-XXXXXX`, `PYM-XXXXXX`).
  * Se genera en el alta y al cambiar el tipo a Grupo Empresarial; en el resto de
  * ediciones se conserva el código existente.
  */
@@ -118,14 +143,15 @@ export function generateEntityCode(entityType: OrganizationEntityType): string {
   return `${CODE_PREFIXES[entityType]}-${timestamp}`
 }
 
-/** Un grupo empresarial no tiene entidad superior; una empresa cuelga de un grupo. */
+/** Un grupo empresarial o entidad de cuenta propia (TCP, MIPYME, PYME) no tiene entidad superior; una empresa cuelga de un grupo. */
 export function isParentTypeAllowed(
   parentType: OrganizationEntityType,
   entityType: OrganizationEntityType
 ): boolean {
-  if (entityType === "business_group") return false
+  if (isRootOnlyEntityType(entityType)) return false
   if (entityType === "company") return parentType === "business_group"
-  return parentType === "company"
+  if (entityType === "ueb") return parentType === "company"
+  return false
 }
 
 /**
@@ -206,7 +232,7 @@ export function describeEntityError(error: {
  *   · el CÓDIGO interno se autogenera en el alta y al pasar a Grupo Empresarial; en el
  *     resto de ediciones se mantiene el existente;
  *   · `parent_id` siempre es un UUID real o NULL (nunca cadena vacía), y un Grupo
- *     Empresarial nunca tiene entidad superior;
+ *     Empresarial o entidad de Cuenta propia (TCP, MIPYME, PYME) nunca tiene entidad superior;
  *   · la Cuenta SiteCorp es la única fuente de verdad de los módulos internos y su
  *     código se deriva del código interno: se genera al activar y NO se regenera al
  *     reeditar (la operación es idempotente);
@@ -237,10 +263,13 @@ export function buildOrganizationEntityPayload(input: {
       : true
     : false
 
+  const isSelfEmployedType = isSelfEmployedEntityType(data.entity_type)
+
   return {
     ...data,
+    regime_id: isSelfEmployedType ? "EMPRESARIAL" : data.regime_id,
     code: entityCode,
-    parent_id: data.entity_type === "business_group" ? null : data.parent_id || null,
+    parent_id: isRootOnlyEntityType(data.entity_type) ? null : data.parent_id || null,
     is_sitecorp_account: sitecorp,
     account_code: accountCode,
     account_is_active: accountIsActive,

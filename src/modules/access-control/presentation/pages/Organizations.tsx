@@ -64,23 +64,30 @@ interface CompanyClientForm {
   name: string
   description: string
   is_active: boolean
+  is_self_employed: boolean
 }
 
 const emptyCompanyClientForm: CompanyClientForm = {
   name: "",
   description: "",
   is_active: true,
+  is_self_employed: false,
 }
 
 const entityTypeLabels: Record<OrganizationEntity["entity_type"], string> = {
   business_group: "Grupo empresarial",
   company: "Empresa",
   ueb: "UEB / Unidad Empresarial de Base",
+  tcp: "TCP",
+  mipyme: "MIPYME",
+  pyme: "PYME",
 }
 
 const typeIcon = (type: OrganizationEntity["entity_type"]) => {
   if (type === "business_group") return <Layers className="h-4 w-4 text-sitecorp-primary" />
-  if (type === "company") return <Building2 className="h-4 w-4 text-sitecorp-primary" />
+  if (type === "company" || type === "mipyme" || type === "pyme") {
+    return <Building2 className="h-4 w-4 text-sitecorp-primary" />
+  }
   return <Factory className="h-4 w-4 text-sitecorp-primary" />
 }
 
@@ -95,6 +102,7 @@ const toCompanyClientRecord = (companyClient: CompanyClient): CompanyClientRecor
   code: companyClient.code ?? "",
   description: companyClient.description,
   is_active: companyClient.isActive === true,
+  is_self_employed: companyClient.isSelfEmployed === true,
   created_at: companyClient.createdAt ?? undefined,
 })
 
@@ -265,6 +273,7 @@ const Organizations = () => {
       name: companyClient.name,
       description: companyClient.description || "",
       is_active: companyClient.is_active,
+      is_self_employed: companyClient.is_self_employed === true,
     })
     setCompanyClientError(null)
     setCompanyClientDialogOpen(true)
@@ -286,12 +295,14 @@ const Organizations = () => {
           name: companyClientForm.name,
           description: companyClientForm.description,
           isActive: companyClientForm.is_active,
+          isSelfEmployed: companyClientForm.is_self_employed,
         })
       } else {
         await createCompanyClient({
           name: companyClientForm.name,
           description: companyClientForm.description,
           isActive: companyClientForm.is_active,
+          isSelfEmployed: companyClientForm.is_self_employed,
         })
       }
 
@@ -307,13 +318,14 @@ const Organizations = () => {
     }
   }
 
-  const openCreateRootEntity = (companyClientId: string) => {
+  const openCreateRootEntity = (companyClient: CompanyClientRecord) => {
+    const isSelfEmployed = companyClient.is_self_employed === true
     setEditingEntity(null)
-    setEntityDefaultCompanyClient(companyClientId)
+    setEntityDefaultCompanyClient(companyClient.id)
     setEntityDefaultParent(undefined)
-    setEntityDefaultType("business_group")
-    setEntityDefaultRegime("PRESUPUESTADA")
-    setEntityLockType(true)
+    setEntityDefaultType(isSelfEmployed ? "tcp" : "business_group")
+    setEntityDefaultRegime(isSelfEmployed ? "EMPRESARIAL" : "PRESUPUESTADA")
+    setEntityLockType(!isSelfEmployed)
     setEntityDialogOpen(true)
   }
 
@@ -642,6 +654,9 @@ const Organizations = () => {
                         <Landmark className="h-5 w-5 text-sitecorp-primary" />
                         <h3 className="text-base font-semibold text-ink">{companyClient.name}</h3>
                         <SiteCorpStatusBadge status="neutral">{companyClient.code}</SiteCorpStatusBadge>
+                        {companyClient.is_self_employed && (
+                          <SiteCorpStatusBadge status="info">Cuenta propia</SiteCorpStatusBadge>
+                        )}
                         <SiteCorpStatusBadge status={companyClient.is_active ? "success" : "warning"}>
                           {companyClient.is_active ? "Cliente activo" : "Cliente inactivo"}
                         </SiteCorpStatusBadge>
@@ -657,8 +672,9 @@ const Organizations = () => {
                       <SiteCorpButton size="sm" variant="outline" onClick={() => openEditCompanyClient(companyClient)}>
                         <Pencil className="mr-1 h-3.5 w-3.5" /> Editar
                       </SiteCorpButton>
-                      <SiteCorpButton size="sm" variant="outline" onClick={() => openCreateRootEntity(companyClient.id)}>
-                        <Plus className="mr-1 h-3.5 w-3.5" /> Grupo
+                      <SiteCorpButton size="sm" variant="outline" onClick={() => openCreateRootEntity(companyClient)}>
+                        <Plus className="mr-1 h-3.5 w-3.5" />{" "}
+                        {companyClient.is_self_employed ? "Entidad" : "Grupo"}
                       </SiteCorpButton>
                       {canDeleteCompanyClients && (
                         <SiteCorpButton size="sm" variant="outline" onClick={() => openDeleteCompanyClient(companyClient)}>
@@ -671,7 +687,9 @@ const Organizations = () => {
                   <div className="mt-4 space-y-2">
                     {roots.length === 0 ? (
                       <div className="rounded-xl border border-dashed border-border bg-white/70 p-5 text-sm text-muted-foreground">
-                        Este cliente aún no tiene grupos empresariales.
+                        {companyClient.is_self_employed
+                          ? "Este cliente aún no tiene entidades registradas (TCP, MIPYME o PYME)."
+                          : "Este cliente aún no tiene grupos empresariales."}
                       </div>
                     ) : (
                       roots.map((root) => renderEntity(root, 0))
@@ -693,7 +711,8 @@ const Organizations = () => {
             </DialogTitle>
             <DialogDescription>
               Un cliente es un árbol organizativo aislado técnicamente y agrupa sus grupos
-              empresariales, empresas y UEB. No sustituye a las cuentas SiteCorp de cada entidad.
+              empresariales, empresas y UEB (o TCP, MIPYME y PYME si es de Cuenta propia). No
+              sustituye a las cuentas SiteCorp de cada entidad.
             </DialogDescription>
           </DialogHeader>
 
@@ -745,15 +764,54 @@ const Organizations = () => {
               />
             </div>
 
-            <label className="flex items-center gap-2 text-sm font-medium text-ink">
-              <Checkbox
-                checked={companyClientForm.is_active}
-                onCheckedChange={(checked) =>
-                  setCompanyClientForm((current) => ({ ...current, is_active: checked === true }))
-                }
-              />
-              Cliente activo
-            </label>
+            <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3.5">
+              <label className="flex items-center gap-2.5 text-sm font-medium text-ink">
+                <Checkbox
+                  checked={companyClientForm.is_active}
+                  onCheckedChange={(checked) =>
+                    setCompanyClientForm((current) => ({ ...current, is_active: checked === true }))
+                  }
+                />
+                Cliente activo
+              </label>
+
+              {(() => {
+                const editingClientHasEntities = editingCompanyClient
+                  ? entities.some((entity) => entity.tenant_id === editingCompanyClient.id)
+                  : false
+                return (
+                  <div className="border-t border-border pt-3">
+                    <label className="flex items-start gap-2.5 text-sm font-medium text-ink">
+                      <Checkbox
+                        id="company-client-self-employed"
+                        checked={companyClientForm.is_self_employed}
+                        disabled={editingClientHasEntities}
+                        onCheckedChange={(checked) =>
+                          setCompanyClientForm((current) => ({
+                            ...current,
+                            is_self_employed: checked === true,
+                          }))
+                        }
+                      />
+                      <div className="space-y-1">
+                        <span>Cuenta propia</span>
+                        <p className="text-xs font-normal text-muted-foreground">
+                          Todas las entidades de este cliente operarán bajo régimen Empresarial y
+                          usarán las categorías TCP, MIPYME o PYME sin dependencia jerárquica entre
+                          sí.
+                        </p>
+                        {editingClientHasEntities && (
+                          <p className="text-xs font-normal text-sitecorp-warning">
+                            No se puede modificar esta opción porque el cliente ya tiene entidades
+                            creadas.
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                )
+              })()}
+            </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
               <SiteCorpButton
@@ -784,6 +842,9 @@ const Organizations = () => {
         defaultParentId={entityDefaultParent}
         defaultRegime={entityDefaultRegime}
         lockEntityType={entityLockType}
+        isSelfEmployedClient={
+          companyClients.find((c) => c.id === entityDefaultCompanyClient)?.is_self_employed === true
+        }
       />
 
       <EntityUsersDialog
